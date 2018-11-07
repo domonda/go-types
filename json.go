@@ -44,7 +44,7 @@ func CanMarshalJSON(t reflect.Type) bool {
 
 // JSON is a []byte slice that implements the interfaces:
 // json.Marshaler, json.Unmarshaler, driver.Value, sql.Scanner.
-// It's nil value it is marshalled as the JSON value "null"
+// Its nil value it is marshalled as the JSON value "null"
 // and the SQL NULL value.
 type JSON []byte
 
