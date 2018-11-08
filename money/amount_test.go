@@ -40,14 +40,9 @@ var amountTable = map[string]Amount{
 }
 
 var invalidAmounts = []string{
-	".5",
-	",5",
-	"5.",
-	"5,",
 	"1,234,56",
 	"1000,234,560",
 	"10,2340,560",
-	"10.2340,560",
 
 	"3",
 	"666",
@@ -114,47 +109,6 @@ func Test_String(t *testing.T) {
 		str := amount.String()
 		if str != refstr {
 			t.Errorf("%v to string is '%s' but should be '%s'", float64(amount), str, refstr)
-		}
-	}
-}
-
-var germanGroupedTable = map[Amount]string{
-	0:          "0,00",
-	12:         "12,00",
-	123:        "123,00",
-	1234:       "1.234,00",
-	12345.09:   "12.345,09",
-	123456.09:  "123.456,09",
-	1234567.09: "1.234.567,09",
-}
-
-func Test_Amount_GermanGroupedString(t *testing.T) {
-	for amount, refstr := range germanGroupedTable {
-		str := amount.GermanGroupedString()
-		if str != refstr {
-			t.Errorf("Amount %s should be '%s' but is '%s'", amount, refstr, str)
-		}
-	}
-}
-
-var germanTable = map[Amount]string{
-	0:          "0,00",
-	0.1:        "0,10",
-	0.99:       "0,99",
-	-0.99:      "-0,99",
-	12:         "12,00",
-	123:        "123,00",
-	1234:       "1234,00",
-	12345.09:   "12345,09",
-	123456.09:  "123456,09",
-	1234567.09: "1234567,09",
-}
-
-func Test_Amount_GermanString(t *testing.T) {
-	for amount, refstr := range germanTable {
-		str := amount.GermanString()
-		if str != refstr {
-			t.Errorf("Amount %s should be '%s' but is '%s'", amount, refstr, str)
 		}
 	}
 }

@@ -9,8 +9,8 @@ import (
 	"unicode"
 
 	"github.com/domonda/errors"
-	"github.com/guregu/null"
 
+	"github.com/domonda/go-types/strfmt"
 	"github.com/domonda/go-types/strutil"
 )
 
@@ -68,45 +68,32 @@ func StringIsAmount(str string, acceptInt bool) bool {
 
 // ParseAmount tries to parse an Amount from str.
 func ParseAmount(str string, acceptInt bool) (Amount, error) {
-	switch {
-	case commaAmountRegex.MatchString(str):
-		// fmt.Println("commaAmountRegex:", str)
-		str = strings.Replace(str, ",", ".", 1)
-
-	case commaPointsAmountRegex.MatchString(str):
-		// fmt.Println("commaPointsAmountRegex:", str)
-		str = strings.Replace(str, ".", "", -1)
-		str = strings.Replace(str, ",", ".", 1)
-
-	case pointAmountRegex.MatchString(str):
-		// fmt.Println("pointAmountRegex:", str)
-		// no changes needed
-
-	case pointCommasAmountRegex.MatchString(str):
-		// fmt.Println("pointCommasAmountRegex:", str)
-		str = strings.Replace(str, ",", "", -1)
-
-	case acceptInt && intAmountRegex.MatchString(str):
-		// no changes needed
-
-	default:
-		return 0, errors.Errorf("Can't parse as money.Amount: '%s'", str)
-	}
-
-	val, err := strconv.ParseFloat(str, 64)
+	f, _, decimalSep, err := strfmt.ParseFloatInfo(str)
 	if err != nil {
-		return 0, errors.Errorf("Can't parse as money.Amount: '%s'", str)
+		return 0, err
 	}
-	return Amount(val), nil
+	if decimalSep == 0 && !acceptInt {
+		return 0, errors.Errorf("Integers not accepted as money.Amount: %#v", str)
+	}
+	return Amount(f), nil
+}
+
+// AmountFromPtr returns an Amount pointed by the pointer,
+// or 0.0 if the pointer is nil.
+func AmountFromPtr(a *Amount) Amount {
+	if a != nil {
+		return *a
+	}
+	return 0
 }
 
 // AssignString implements strfmt.StringAssignable
 func (a *Amount) AssignString(str string) error {
-	parsed, err := ParseAmount(str, true)
+	f, err := strfmt.ParseFloat(str)
 	if err != nil {
 		return err
 	}
-	*a = parsed
+	*a = Amount(f)
 	return nil
 }
 
@@ -182,45 +169,18 @@ func (a Amount) String() string {
 	return b.String()
 }
 
-// StringPrecision formats the amount with decimals precision.
-// -1 for decimals returns the minimum number of decimals
-func (a Amount) StringPrecision(decimals int) string {
-	return strconv.FormatFloat(float64(a), 'f', decimals, 64)
-}
-
-// GermanString returns the amount formatted with German comma
-func (a Amount) GermanString() string {
-	return strings.Replace(a.String(), ".", ",", 1)
-}
-
-// GermanStringPrecision formats the amount with decimals precision and a German comma.
-// -1 for decimals returns the minimum number of decimals
-func (a Amount) GermanStringPrecision(decimals int) string {
-	return strings.Replace(a.StringPrecision(decimals), ".", ",", 1)
-}
-
-// GermanGroupedString returns the amount formatted
-func (a Amount) GermanGroupedString() string {
-	s := a.String()
-	lenS := len(s)
-	numPoints := ((lenS - 1) / 3) - 1
-	// fmt.Println(s, numPoints)
-	b := make([]byte, lenS+numPoints)
-	for is, ib := 0, 0; is < lenS; is++ {
-		if is == lenS-3 {
-			b[ib] = ','
-		} else {
-			b[ib] = s[is]
-		}
-		// fmt.Println(string(b[ib]))
-		ib++
-		if is < lenS-6 && (lenS-is)%3 == 1 {
-			b[ib] = '.'
-			// fmt.Println(string(b[ib]))
-			ib++
-		}
-	}
-	return string(b)
+// Format formats the Amount similar to strconv.FormatFloat with the 'f' format option,
+// but with decimalSep as decemal separator instead of a point
+// and optional grouping of the integer part.
+// Valid values for decimalSep are '.' and ','.
+// If groupSep is not zero, then the integer part of the number is grouped
+// with groupSep between every group of 3 digits.
+// Valid values for groupSep are [0, ',', '.'] and groupSep must be different from  decimalSep.
+// precision controls the number of digits (excluding the exponent).
+// The special precision -1 uses the smallest number of digits
+// necessary such that ParseFloat will return f exactly.
+func (a Amount) Format(f float64, groupSep, decimalSep byte, precision int) string {
+	return strfmt.FormatFloat(float64(a), groupSep, decimalSep, precision)
 }
 
 // BigFloat returns m as a new big.Float
@@ -236,13 +196,6 @@ func (a *Amount) Equal(b *Amount) bool {
 		return false
 	}
 	return *a == *b
-}
-
-func (a *Amount) NullFloat() null.Float {
-	if a == nil {
-		return null.Float{}
-	}
-	return null.FloatFrom(float64(*a))
 }
 
 // Copysign returns an Amount with the magnitude
@@ -286,12 +239,4 @@ func (a Amount) ValidAndHasSign(sign int) bool {
 		return a < 0
 	}
 	return true
-}
-
-// AmountFromPtr returns an Amount pointed by the pointer
-func AmountFromPtr(a *Amount) Amount {
-	if a != nil {
-		return *a
-	}
-	return 0
 }
