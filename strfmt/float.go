@@ -9,27 +9,28 @@ import (
 
 // FormatFloat formats a float similar to strconv.FormatFloat with the 'f' format option,
 // but with decimalSep as decemal separator instead of a point
-// and optional grouping of the integer part.
+// and optional thousands grouping of the integer part.
 // Valid values for decimalSep are '.' and ','.
-// If groupSep is not zero, then the integer part of the number is grouped
-// with groupSep between every group of 3 digits.
-// Valid values for groupSep are [0, ',', '.'] and groupSep must be different from  decimalSep.
+// If thousandsSep is not zero, then the integer part of the number is grouped
+// with thousandsSep between every group of 3 digits from right to left.
+// Valid values for thousandsSep are [0, ',', '.', '\''] and thousandsSep must be different from  decimalSep.
 // precision controls the number of digits (excluding the exponent).
 // The special precision -1 uses the smallest number of digits
 // necessary such that ParseFloat will return f exactly.
-func FormatFloat(f float64, groupSep, decimalSep byte, precision int) string {
-	if groupSep != 0 && groupSep != '.' && groupSep != ',' && groupSep != ' ' {
-		panic("invalid groupSep")
+// See: https://en.wikipedia.org/wiki/Decimal_separator
+func FormatFloat(f float64, thousandsSep, decimalSep byte, precision int) string {
+	if thousandsSep != 0 && thousandsSep != '.' && thousandsSep != ',' && thousandsSep != ' ' && thousandsSep != '\'' {
+		panic("invalid thousandsSep")
 	}
 	if decimalSep != '.' && decimalSep != ',' {
 		panic("invalid decimalSep")
 	}
-	if groupSep == decimalSep {
-		panic("groupSep == decimalSep")
+	if thousandsSep == decimalSep {
+		panic("thousandsSep == decimalSep")
 	}
 
 	str := strconv.FormatFloat(f, 'f', precision, 64)
-	if groupSep != 0 {
+	if thousandsSep != 0 {
 		pointPos := strings.IndexByte(str, '.')
 		if pointPos == -1 {
 			pointPos = len(str)
@@ -52,7 +53,7 @@ func FormatFloat(f float64, groupSep, decimalSep byte, precision int) string {
 
 		b.WriteString(str[:firstGroupLen])
 		for i := 0; i < numGroupSeps; i++ {
-			b.WriteByte(groupSep)
+			b.WriteByte(thousandsSep)
 			start := firstGroupLen + i*3
 			b.WriteString(str[start : start+3])
 		}
@@ -73,14 +74,18 @@ func FormatFloat(f float64, groupSep, decimalSep byte, precision int) string {
 }
 
 // ParseFloat parses float string compatible with FormatFloat.
+// If a separator was not detected, then zero will be returned for thousandsSep or decimalSep.
+// See: https://en.wikipedia.org/wiki/Decimal_separator
 func ParseFloat(str string) (float64, error) {
 	f, _, _, err := ParseFloatInfo(str)
 	return f, err
 }
 
 // ParseFloatInfo parses float string compatible with FormatFloat
-// and returns the detected integer group separator and decimal separator characters.
-func ParseFloatInfo(str string) (f float64, groupSep, decimalSep byte, err error) {
+// and returns the detected integer thousands separator and decimal separator characters.
+// If a separator was not detected, then zero will be returned for thousandsSep or decimalSep.
+// See: https://en.wikipedia.org/wiki/Decimal_separator
+func ParseFloatInfo(str string) (f float64, thousandsSep, decimalSep byte, err error) {
 	var (
 		lastDigitIndex    = -1
 		lastNonDigitIndex = -1
@@ -93,11 +98,49 @@ func ParseFloatInfo(str string) (f float64, groupSep, decimalSep byte, err error
 		lastGroupingIndex int
 	)
 
-	var floatBuilder strings.Builder
+	floatBuilder := strings.Builder{}
 	floatBuilder.Grow(len(str))
 
 	for i, r := range str {
 		switch {
+		case r >= '0' && r <= '9':
+			// floatBuilder.WriteByte(byte(r))
+			lastDigitIndex = i
+
+		case r == '.' || r == ',' || r == '\'':
+			if pointWritten {
+				// No further separator runes allowed after point
+				return 0, 0, 0, errors.Errorf("Can't parse %#v as float", str)
+			}
+
+			// Write everything after the lastNonDigitIndex and before current index
+			floatBuilder.WriteString(str[lastNonDigitIndex+1 : i])
+			lastNonDigitIndex = i
+
+			if !hasGrouping {
+				// This is the first decimal rune, just save it
+				hasGrouping = true
+				lastGroupingRune = r
+				lastGroupingIndex = i
+			} else {
+				// It's a further decimal rune, has to be 3 bytes since last decimal rune
+				if i-(lastGroupingIndex+1) != 3 {
+					return 0, 0, 0, errors.Errorf("Can't parse %#v as float", str)
+				}
+				if r == lastGroupingRune {
+					// If it's the same decimal rune, then just save it
+					lastGroupingRune = r
+					lastGroupingIndex = i
+				} else {
+					// If it's a different decimal rune, then we have
+					// reached the decimal separator
+					floatBuilder.WriteByte('.')
+					pointWritten = true
+					thousandsSep = byte(lastGroupingRune)
+					decimalSep = byte(r)
+				}
+			}
+
 		case r == ' ':
 			if pointWritten {
 				// No further separator runes allowed after point
@@ -128,47 +171,6 @@ func ParseFloatInfo(str string) (f float64, groupSep, decimalSep byte, err error
 					return 0, 0, 0, errors.Errorf("Can't parse %#v as float", str)
 				}
 			}
-
-		case r == '.' || r == ',':
-			if pointWritten {
-				// No further separator runes allowed after point
-				return 0, 0, 0, errors.Errorf("Can't parse %#v as float", str)
-			}
-
-			// Write everything after the lastNonDigitIndex and before current index
-			floatBuilder.WriteString(str[lastNonDigitIndex+1 : i])
-			lastNonDigitIndex = i
-
-			if !hasGrouping {
-				// This is the first decimal rune, just save it
-				hasGrouping = true
-				lastGroupingRune = r
-				lastGroupingIndex = i
-			} else {
-				// It's a further decimal rune, has to be 3 bytes since last decimal rune
-				if i-(lastGroupingIndex+1) != 3 {
-					return 0, 0, 0, errors.Errorf("Can't parse %#v as float", str)
-				}
-				if r == lastGroupingRune {
-					// If it's the same decimal rune, then just save it
-					lastGroupingRune = r
-					lastGroupingIndex = i
-				} else {
-					// If it's a different decimal rune, then we have
-					// reached the decimal separator
-					floatBuilder.WriteByte('.')
-					pointWritten = true
-					groupSep = byte(lastGroupingRune)
-					decimalSep = byte(r)
-				}
-			}
-
-		case r >= '0' && r <= '9':
-			// floatBuilder.WriteByte(byte(r))
-			lastDigitIndex = i
-
-			// case unicode.IsSpace(r):
-			// 	continue
 
 		case r == '-' || r == '+':
 			if i > 0 {
@@ -207,10 +209,9 @@ func ParseFloatInfo(str string) (f float64, groupSep, decimalSep byte, err error
 		floatBuilder.WriteString(str[lastNonDigitIndex+1 : lastDigitIndex+1])
 	}
 
-	// floatStr := floatBuilder.String()
 	f, err = strconv.ParseFloat(floatBuilder.String(), 64)
 	if err != nil {
 		return 0, 0, 0, err
 	}
-	return f, groupSep, decimalSep, nil
+	return f, thousandsSep, decimalSep, nil
 }
