@@ -6,10 +6,9 @@ import (
 	"unicode/utf8"
 
 	"github.com/domonda/errors"
-	"github.com/guregu/null"
-
+	"github.com/domonda/go-types/country"
 	"github.com/domonda/go-types/strutil"
-	"github.com/domonda/go-types/types/country"
+	"github.com/guregu/null"
 )
 
 var (
@@ -82,7 +81,9 @@ func StringIsBIC(str string) bool {
 	return BIC(str).Valid()
 }
 
-// BIC is a SWIFT Business Identifier Code
+// BIC is a SWIFT Business Identifier Code.
+// BIC implements the database/sql.Scanner and database/sql/driver.Valuer interfaces,
+// and will treat an empty string BIC as SQL NULL value.
 type BIC string
 
 // AssignString implements strfmt.StringAssignable

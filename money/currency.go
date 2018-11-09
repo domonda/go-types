@@ -15,6 +15,8 @@ func StringIsCurrency(str string) bool {
 }
 
 // Currency is holds a 3 character ISO 4217 alphabetic code.
+// Currency implements the database/sql.Scanner and database/sql/driver.Valuer interfaces,
+// and will treat an empty string Currency as SQL NULL value.
 // The main difference between Currency and NullCurrency is:
 // Currency("").Valid() == false
 // NullCurrency("").Valid() == true

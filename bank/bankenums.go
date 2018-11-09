@@ -9,7 +9,9 @@ import (
 ///////////////////////////////////////////////////////////////////////////////
 // AccountType
 
-// AccountType holds the type of a bank account
+// AccountType holds the type of a bank account.
+// AccountType implements the database/sql.Scanner and database/sql/driver.Valuer interfaces,
+// and will treat an empty string AccountType as SQL NULL value.
 type AccountType string
 
 var (

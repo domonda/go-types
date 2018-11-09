@@ -39,7 +39,7 @@ const (
 
 // Date represents a the day of calender date
 // Date implements the database/sql.Scanner and database/sql/driver.Valuer interfaces,
-// and will treat an empty string or the zero date "0001-01-01" (see IsZero) as SQL NULL.
+// and will treat an empty string or the zero dates "0000-00-00" and "0001-01-01" (see IsZero) as SQL NULL.
 type Date string
 
 // Of returns a normalized Date for the given year, month, and day.

@@ -5,7 +5,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/domonda/go-types/types/language"
+	"github.com/domonda/go-types/language"
 )
 
 func NewFinder(lang ...language.Code) *Finder {

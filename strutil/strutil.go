@@ -10,14 +10,24 @@ import (
 	"unicode/utf8"
 )
 
-// assert panics if any assumption is false
-func assert(assumptions ...bool) {
+// panicIfNot panics if any assumption is false
+func panicIfNot(assumptions ...bool) {
 	for _, assumption := range assumptions {
 		if !assumption {
 			panic("assert false")
 		}
 	}
 }
+
+// func toUpperCaseLettersAndDigits(str string) string {
+// 	var b strings.Builder
+// 	for _, r := range str {
+// 		if unicode.IsDigit(r) || unicode.IsLetter(r) {
+// 			b.WriteRune(unicode.ToUpper(r))
+// 		}
+// 	}
+// 	return b.String()
+// }
 
 // IsRuneFunc is function pionter for specifiying if a rune matches a criteria
 type IsRuneFunc func(rune) bool
@@ -50,7 +60,7 @@ func SplitAndTrimIndex(str []byte, isSplitRune, isTrimRune IsRuneFunc) (indices 
 						wordEnd = onlyTrimsSince
 					}
 					if wordEnd > wordStart {
-						// assert(wordStart >= 0)
+						// panicIfNot(wordStart >= 0)
 						indices = append(indices, []int{wordStart, wordEnd})
 					}
 					inTrimmedWord = false
@@ -69,7 +79,7 @@ func SplitAndTrimIndex(str []byte, isSplitRune, isTrimRune IsRuneFunc) (indices 
 				}
 			}
 		} else {
-			// assert(inTrimmedWord == false)
+			// panicIfNot(inTrimmedWord == false)
 			if !isSplit {
 				inWord = true
 				if !isTrim {
@@ -94,7 +104,7 @@ func SplitAndTrimIndex(str []byte, isSplitRune, isTrimRune IsRuneFunc) (indices 
 			wordEnd = onlyTrimsSince
 		}
 		if wordEnd > wordStart {
-			assert(wordStart >= 0)
+			panicIfNot(wordStart >= 0)
 			indices = append(indices, []int{wordStart, wordEnd})
 		}
 	}

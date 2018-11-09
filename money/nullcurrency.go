@@ -8,6 +8,8 @@ import (
 
 // NullCurrency holds a 3 character ISO 4217 alphabetic code,
 // or an empty string as valid value representing NULL in SQL databases.
+// NullCurrency implements the database/sql.Scanner and database/sql/driver.Valuer interfaces,
+// and will treat an empty string NullCurrency as SQL NULL value.
 // The main difference between Currency and NullCurrency is:
 // Currency("").Valid() == false
 // NullCurrency("").Valid() == true

@@ -1,10 +1,15 @@
 package language
 
 import (
+	"database/sql/driver"
 	"strings"
+
+	"github.com/guregu/null"
 )
 
-// Code according to ISO 639-1 Code
+// Code according to ISO 639-1 Code.
+// Code implements the database/sql.Scanner and database/sql/driver.Valuer interfaces,
+// and will treat an empty string Code as SQL NULL value.
 type Code string
 
 func (lc Code) Valid() bool {
@@ -23,6 +28,29 @@ func (lc Code) Normalized() Code {
 
 func (lc Code) LanguageName() string {
 	return codeNames[lc]
+}
+
+// Scan implements the database/sql.Scanner interface.
+func (lc *Code) Scan(value interface{}) error {
+	var ns null.String
+	err := ns.Scan(value)
+	if err != nil {
+		return err
+	}
+	if ns.Valid {
+		*lc = Code(ns.String)
+	} else {
+		*lc = ""
+	}
+	return nil
+}
+
+// Value implements the driver database/sql/driver.Valuer interface.
+func (lc Code) Value() (driver.Value, error) {
+	if lc == "" {
+		return nil, nil
+	}
+	return string(lc), nil
 }
 
 var codeNames = map[Code]string{

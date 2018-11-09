@@ -1,4 +1,4 @@
-package types
+package sqlarray
 
 import (
 	"database/sql/driver"
@@ -8,14 +8,14 @@ import (
 	"github.com/domonda/errors"
 )
 
-// FloatArray implements the sql.Scanner and driver.Valuer interfaces
-// for a slice of float64.
+// Ints implements the sql.Scanner and driver.Valuer interfaces
+// for a slice of int64.
 // A nil slice is mapped to the SQL NULL value,
 // and a non nil zero length slice to an empty SQL array '{}'.
-type FloatArray []float64
+type Ints []int64
 
 // Value implements the database/sql/driver.Valuer interface
-func (a FloatArray) Value() (driver.Value, error) {
+func (a Ints) Value() (driver.Value, error) {
 	if a == nil {
 		return nil, nil
 	}
@@ -26,14 +26,14 @@ func (a FloatArray) Value() (driver.Value, error) {
 		if i > 0 {
 			b.WriteByte(',')
 		}
-		b.WriteString(strconv.FormatFloat(a[i], 'f', -1, 64))
+		b.WriteString(strconv.FormatInt(a[i], 10))
 	}
 	b.WriteByte('}')
 	return b.String(), nil
 }
 
 // Scan implements the sql.Scanner interface.
-func (a *FloatArray) Scan(src interface{}) error {
+func (a *Ints) Scan(src interface{}) error {
 	switch src := src.(type) {
 	case []byte:
 		return a.scanBytes(src)
@@ -46,24 +46,24 @@ func (a *FloatArray) Scan(src interface{}) error {
 		return nil
 	}
 
-	return errors.Errorf("Can't convert %T to FloatArray", src)
+	return errors.Errorf("Can't convert %T to sqlarray.Ints", src)
 }
 
-func (a *FloatArray) scanBytes(src []byte) (err error) {
+func (a *Ints) scanBytes(src []byte) (err error) {
 	if len(src) == 0 {
 		*a = nil
 	}
 
 	if src[0] != '{' || src[len(src)-1] != '}' {
-		return errors.Errorf("Can't parse '%s' as FloatArray", string(src))
+		return errors.Errorf("Can't parse '%s' as sqlarray.Ints", string(src))
 	}
 
 	elements := strings.Split(string(src[1:len(src)-1]), ",")
-	newArray := make(FloatArray, len(elements))
+	newArray := make(Ints, len(elements))
 	for i, elem := range elements {
-		newArray[i], err = strconv.ParseFloat(elem, 64)
+		newArray[i], err = strconv.ParseInt(elem, 10, 64)
 		if err != nil {
-			return errors.Wrapf(err, "Can't parse '%s' as FloatArray", string(src))
+			return errors.Wrapf(err, "Can't parse '%s' as sqlarray.Ints", string(src))
 		}
 	}
 	*a = newArray

@@ -9,7 +9,6 @@ import (
 	"unicode"
 
 	"github.com/domonda/errors"
-
 	"github.com/domonda/go-types/strfmt"
 	"github.com/domonda/go-types/strutil"
 )
@@ -41,6 +40,33 @@ var (
 	commaAmountRegex       = regexp.MustCompile(commaAmountR)
 	commaPointsAmountRegex = regexp.MustCompile(commaPointsAmountR)
 )
+
+const (
+	intNumberR         = `^\-?\d+$`
+	commaNumberR       = `^\-?\d+,\d+$`
+	commaPointsNumberR = `^\-?\d{1,3}(?:\.\d{3})*(?:,\d+)?$`
+	pointNumberR       = `^\-?\d+\.\d+$`
+	pointCommasNumberR = `^\-?\d{1,3}(?:,\d{3})*(?:\.\d+)?$`
+)
+
+// var (
+// 	numberRegex = regexp.MustCompile(
+// 		intNumberR +
+// 			`|` +
+// 			commaNumberR +
+// 			`|` +
+// 			commaPointsNumberR +
+// 			`|` +
+// 			pointNumberR +
+// 			`|` +
+// 			pointCommasNumberR)
+
+// 	intNumberRegex         = regexp.MustCompile(intNumberR)
+// 	pointNumberRegex       = regexp.MustCompile(pointNumberR)
+// 	pointCommasNumberRegex = regexp.MustCompile(pointCommasNumberR)
+// 	commaNumberRegex       = regexp.MustCompile(commaNumberR)
+// 	commaPointsNumberRegex = regexp.MustCompile(commaPointsNumberR)
+// )
 
 func isAmountSplitRune(r rune) bool {
 	return unicode.IsSpace(r) || r == ':'
@@ -78,13 +104,12 @@ func ParseAmount(str string, acceptInt bool) (Amount, error) {
 	return Amount(f), nil
 }
 
-// AmountFromPtr returns an Amount pointed by the pointer,
-// or 0.0 if the pointer is nil.
-func AmountFromPtr(a *Amount) Amount {
-	if a != nil {
-		return *a
+// AmountFromPtr dereferences ptr or returns nilVal if it is nil
+func AmountFromPtr(ptr *Amount, nilVal Amount) Amount {
+	if ptr == nil {
+		return nilVal
 	}
-	return 0
+	return *ptr
 }
 
 // AssignString implements strfmt.StringAssignable

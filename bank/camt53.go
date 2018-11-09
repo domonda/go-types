@@ -3,11 +3,10 @@ package bank
 import (
 	"time"
 
+	"github.com/domonda/go-types/date"
+	"github.com/domonda/go-types/money"
 	command "github.com/ungerik/go-command"
 	fs "github.com/ungerik/go-fs"
-
-	"github.com/domonda/go-types/types/date"
-	"github.com/domonda/go-types/types/money"
 )
 
 type CAMT53 struct {

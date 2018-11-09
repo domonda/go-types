@@ -3,8 +3,6 @@ package vat
 import (
 	"strings"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
 )
 
 var validVATIDs = []string{
@@ -55,32 +53,16 @@ func Test_VATIDValid(t *testing.T) {
 	}
 }
 
-func Test_VATIDOnlineCheck(t *testing.T) {
-	result, err := ID("ATU67554568").OnlineCheck()
-	if err != nil {
-		t.Fatalf("vat.ID.OnlineCheck() error: %s", err)
-	}
-	assert.True(t, result.Valid, "VATIDOnlineCheckResult.Valid")
-	assert.NotEmpty(t, result.Name, "VATIDOnlineCheckResult.Name")
-	assert.NotEmpty(t, result.AddressLines, "VATIDOnlineCheckResult.AddressLines")
-
-	result, err = ID("ATU10223006").OnlineCheck()
-	if err != nil {
-		t.Fatalf("vat.ID.OnlineCheck() error: %s", err)
-	}
-	assert.False(t, result.Valid, "vat.IDOnlineCheckResult.Valid")
-}
-
 var vatidTestIndices = map[string][][]int{
-	"":                                         nil,
-	"ATU.10223006":                             nil,
-	"ATU10223006":                              [][]int{[]int{0, 11}},
-	"  ATU10223006":                            [][]int{[]int{2, 13}},
-	"UID: ATU10223006":                         [][]int{[]int{5, 16}},
-	"UID AT U 10223006":                        [][]int{[]int{4, 17}},
-	"UID:AT U 10223006":                        [][]int{[]int{4, 17}},
-	"ATU10223006 ":                             [][]int{[]int{0, 11}},
-	"ATU10223006 ATU 10223006":                 [][]int{[]int{0, 11}, []int{12, 24}},
+	"":                         nil,
+	"ATU.10223006":             nil,
+	"ATU10223006":              [][]int{[]int{0, 11}},
+	"  ATU10223006":            [][]int{[]int{2, 13}},
+	"UID: ATU10223006":         [][]int{[]int{5, 16}},
+	"UID AT U 10223006":        [][]int{[]int{4, 17}},
+	"UID:AT U 10223006":        [][]int{[]int{4, 17}},
+	"ATU10223006 ":             [][]int{[]int{0, 11}},
+	"ATU10223006 ATU 10223006": [][]int{[]int{0, 11}, []int{12, 24}},
 	" AT U 10223006 ATU10223006 ATU 10223006 ": [][]int{[]int{1, 14}, []int{15, 26}, []int{27, 39}},
 	"USt-IdNr. DE 136725570":                   [][]int{[]int{10, 22}},
 }

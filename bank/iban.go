@@ -9,10 +9,9 @@ import (
 	"unicode"
 
 	"github.com/domonda/errors"
-	"github.com/guregu/null"
-
+	"github.com/domonda/go-types/country"
 	"github.com/domonda/go-types/strutil"
-	"github.com/domonda/go-types/types/country"
+	"github.com/guregu/null"
 )
 
 var ibanRegex = regexp.MustCompile(`^([A-Z]{2})(\d{2})([A-Z\d]{8,30})$`)
@@ -57,7 +56,9 @@ func (ibanFinder) FindAllIndex(str []byte, n int) (result [][]int) {
 	return result
 }
 
-// IBAN is a International Bank Account Number
+// IBAN is a International Bank Account Number.
+// IBAN implements the database/sql.Scanner and database/sql/driver.Valuer interfaces,
+// and will treat an empty string IBAN as SQL NULL value.
 type IBAN string
 
 // AssignString implements strfmt.StringAssignable
