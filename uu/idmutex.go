@@ -1,21 +1,20 @@
-package uuidmtx
+package uu
 
 import (
 	"sync"
-
-	uuid "github.com/ungerik/go-uuid"
 )
 
-type Mutex struct {
+// IDMutex allows mutex locking per UUID
+type IDMutex struct {
 	mapMutex  sync.RWMutex
-	idMutexes map[uuid.UUID]*sync.Mutex
+	idMutexes map[ID]*sync.Mutex
 }
 
-func New() *Mutex {
-	return &Mutex{idMutexes: make(map[uuid.UUID]*sync.Mutex)}
+func NewIDMutex() *IDMutex {
+	return &IDMutex{idMutexes: make(map[ID]*sync.Mutex)}
 }
 
-func (m *Mutex) Lock(id uuid.UUID) {
+func (m *IDMutex) Lock(id ID) {
 	m.mapMutex.Lock()
 	idMutex, ok := m.idMutexes[id]
 	if !ok {
@@ -27,7 +26,7 @@ func (m *Mutex) Lock(id uuid.UUID) {
 	idMutex.Lock()
 }
 
-func (m *Mutex) Unlock(id uuid.UUID) {
+func (m *IDMutex) Unlock(id ID) {
 	m.mapMutex.RLock()
 	idMutex, ok := m.idMutexes[id]
 	m.mapMutex.RUnlock()
