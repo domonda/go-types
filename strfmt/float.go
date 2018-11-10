@@ -1,6 +1,7 @@
 package strfmt
 
 import (
+	"math"
 	"strconv"
 	"strings"
 
@@ -30,7 +31,7 @@ func FormatFloat(f float64, thousandsSep, decimalSep byte, precision int) string
 	}
 
 	str := strconv.FormatFloat(f, 'f', precision, 64)
-	if thousandsSep != 0 {
+	if thousandsSep != 0 && math.Abs(f) >= 1000 {
 		pointPos := strings.IndexByte(str, '.')
 		if pointPos == -1 {
 			pointPos = len(str)
