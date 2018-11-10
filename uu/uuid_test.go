@@ -472,8 +472,8 @@ func TestScanNil(t *testing.T) {
 	}
 }
 
-func TestIDV1(t *testing.T) {
-	u := IDV1()
+func TestIDv1(t *testing.T) {
+	u := IDv1()
 
 	if u.Version() != 1 {
 		t.Errorf("UUIDv1 generated with incorrect version: %d", u.Version())
@@ -483,8 +483,8 @@ func TestIDV1(t *testing.T) {
 		t.Errorf("UUIDv1 generated with incorrect variant: %d", u.Variant())
 	}
 
-	u1 := IDV1()
-	u2 := IDV1()
+	u1 := IDv1()
+	u2 := IDv1()
 
 	if u1 == u2 {
 		t.Errorf("UUIDv1 generated two equal UUIDs: %s and %s", u1, u2)
@@ -493,8 +493,8 @@ func TestIDV1(t *testing.T) {
 	oldFunc := epochFunc
 	epochFunc = func() uint64 { return 0 }
 
-	u3 := IDV1()
-	u4 := IDV1()
+	u3 := IDv1()
+	u4 := IDv1()
 
 	if u3 == u4 {
 		t.Errorf("UUIDv1 generated two equal UUIDs: %s and %s", u3, u4)
@@ -503,8 +503,8 @@ func TestIDV1(t *testing.T) {
 	epochFunc = oldFunc
 }
 
-func TestIDV2(t *testing.T) {
-	u1 := IDV2(IDDomainPerson)
+func TestIDv2(t *testing.T) {
+	u1 := IDv2(IDDomainPerson)
 
 	if u1.Version() != 2 {
 		t.Errorf("UUIDv2 generated with incorrect version: %d", u1.Version())
@@ -514,7 +514,7 @@ func TestIDV2(t *testing.T) {
 		t.Errorf("UUIDv2 generated with incorrect variant: %d", u1.Variant())
 	}
 
-	u2 := IDV2(IDDomainGroup)
+	u2 := IDv2(IDDomainGroup)
 
 	if u2.Version() != 2 {
 		t.Errorf("UUIDv2 generated with incorrect version: %d", u2.Version())
@@ -525,8 +525,8 @@ func TestIDV2(t *testing.T) {
 	}
 }
 
-func TestIDV3(t *testing.T) {
-	u := IDV3(NamespaceDNS, "www.example.com")
+func TestIDv3(t *testing.T) {
+	u := IDv3(NamespaceDNS, "www.example.com")
 
 	if u.Version() != 3 {
 		t.Errorf("UUIDv3 generated with incorrect version: %d", u.Version())
@@ -540,31 +540,31 @@ func TestIDV3(t *testing.T) {
 		t.Errorf("UUIDv3 generated incorrectly: %s", u.String())
 	}
 
-	u = IDV3(NamespaceDNS, "python.org")
+	u = IDv3(NamespaceDNS, "python.org")
 
 	if u.String() != "6fa459ea-ee8a-3ca4-894e-db77e160355e" {
 		t.Errorf("UUIDv3 generated incorrectly: %s", u.String())
 	}
 
-	u1 := IDV3(NamespaceDNS, "golang.org")
-	u2 := IDV3(NamespaceDNS, "golang.org")
+	u1 := IDv3(NamespaceDNS, "golang.org")
+	u2 := IDv3(NamespaceDNS, "golang.org")
 	if u1 != u2 {
 		t.Errorf("UUIDv3 generated different UUIDs for same namespace and name: %s and %s", u1, u2)
 	}
 
-	u3 := IDV3(NamespaceDNS, "example.com")
+	u3 := IDv3(NamespaceDNS, "example.com")
 	if u1 == u3 {
 		t.Errorf("UUIDv3 generated same UUIDs for different names in same namespace: %s and %s", u1, u2)
 	}
 
-	u4 := IDV3(NamespaceURL, "golang.org")
+	u4 := IDv3(NamespaceURL, "golang.org")
 	if u1 == u4 {
 		t.Errorf("UUIDv3 generated same UUIDs for sane names in different namespaces: %s and %s", u1, u4)
 	}
 }
 
-func TestIDV4(t *testing.T) {
-	u := IDV4()
+func TestIDv4(t *testing.T) {
+	u := IDv4()
 
 	if u.Version() != 4 {
 		t.Errorf("UUIDv4 generated with incorrect version: %d", u.Version())
@@ -575,8 +575,8 @@ func TestIDV4(t *testing.T) {
 	}
 }
 
-func TestIDV5(t *testing.T) {
-	u := IDV5(NamespaceDNS, "www.example.com")
+func TestIDv5(t *testing.T) {
+	u := IDv5(NamespaceDNS, "www.example.com")
 
 	if u.Version() != 5 {
 		t.Errorf("UUIDv5 generated with incorrect version: %d", u.Version())
@@ -586,24 +586,24 @@ func TestIDV5(t *testing.T) {
 		t.Errorf("UUIDv5 generated with incorrect variant: %d", u.Variant())
 	}
 
-	u = IDV5(NamespaceDNS, "python.org")
+	u = IDv5(NamespaceDNS, "python.org")
 
 	if u.String() != "886313e1-3b8a-5372-9b90-0c9aee199e5d" {
 		t.Errorf("UUIDv5 generated incorrectly: %s", u.String())
 	}
 
-	u1 := IDV5(NamespaceDNS, "golang.org")
-	u2 := IDV5(NamespaceDNS, "golang.org")
+	u1 := IDv5(NamespaceDNS, "golang.org")
+	u2 := IDv5(NamespaceDNS, "golang.org")
 	if u1 != u2 {
 		t.Errorf("UUIDv5 generated different UUIDs for same namespace and name: %s and %s", u1, u2)
 	}
 
-	u3 := IDV5(NamespaceDNS, "example.com")
+	u3 := IDv5(NamespaceDNS, "example.com")
 	if u1 == u3 {
 		t.Errorf("UUIDv5 generated same UUIDs for different names in same namespace: %s and %s", u1, u2)
 	}
 
-	u4 := IDV5(NamespaceURL, "golang.org")
+	u4 := IDv5(NamespaceURL, "golang.org")
 	if u1 == u4 {
 		t.Errorf("UUIDv3 generated same UUIDs for sane names in different namespaces: %s and %s", u1, u4)
 	}

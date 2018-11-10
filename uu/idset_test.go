@@ -9,7 +9,7 @@ import (
 func Test_Less(t *testing.T) {
 	input := make([]ID, 64)
 	for i := range input {
-		input[i] = IDV4()
+		input[i] = IDv4()
 	}
 	sortedRef := make([]ID, len(input))
 	for i := range input {

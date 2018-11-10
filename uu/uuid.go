@@ -377,8 +377,8 @@ func getStorage() (uint64, uint16, []byte) {
 	return timeNow, clockSequence, hardwareAddr[:]
 }
 
-// IDV1 returns an ID based on current timestamp and MAC address.
-func IDV1() (id ID) {
+// IDv1 returns an ID based on current timestamp and MAC address.
+func IDv1() (id ID) {
 	timeNow, clockSeq, hardwareAddr := getStorage()
 
 	binary.BigEndian.PutUint32(id[0:], uint32(timeNow))
@@ -394,8 +394,8 @@ func IDV1() (id ID) {
 	return id
 }
 
-// IDV2 returns DCE Security UUID based on POSIX UID/GID.
-func IDV2(domain byte) (id ID) {
+// IDv2 returns DCE Security UUID based on POSIX UID/GID.
+func IDv2(domain byte) (id ID) {
 	timeNow, clockSeq, hardwareAddr := getStorage()
 
 	switch domain {
@@ -418,24 +418,24 @@ func IDV2(domain byte) (id ID) {
 	return id
 }
 
-// IDV3 returns an ID based on MD5 hash of namespace UUID and name.
-func IDV3(ns ID, name string) ID {
+// IDv3 returns an ID based on MD5 hash of namespace UUID and name.
+func IDv3(ns ID, name string) ID {
 	id := idFromHash(md5.New(), ns, name)
 	id.SetVersion(3)
 	id.SetVariant()
 	return id
 }
 
-// IDV4 returns random generated UUID.
-func IDV4() (id ID) {
+// IDv4 returns random generated UUID.
+func IDv4() (id ID) {
 	safeRandom(id[:])
 	id.SetVersion(4)
 	id.SetVariant()
 	return id
 }
 
-// IDV5 returns an ID based on SHA-1 hash of namespace UUID and name.
-func IDV5(ns ID, name string) ID {
+// IDv5 returns an ID based on SHA-1 hash of namespace UUID and name.
+func IDv5(ns ID, name string) ID {
 	id := idFromHash(sha1.New(), ns, name)
 	id.SetVersion(5)
 	id.SetVariant()
