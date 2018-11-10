@@ -194,6 +194,14 @@ func (a Amount) String() string {
 	return b.String()
 }
 
+// StringOr returns ptr.String() or nilVal if ptr is nil.
+func (ptr *Amount) StringOr(nilVal string) string {
+	if ptr == nil {
+		return nilVal
+	}
+	return ptr.String()
+}
+
 // Format formats the Amount similar to strconv.FormatFloat with the 'f' format option,
 // but with decimalSep as decemal separator instead of a point
 // and optional grouping of the integer part.
@@ -204,7 +212,7 @@ func (a Amount) String() string {
 // precision controls the number of digits (excluding the exponent).
 // The special precision -1 uses the smallest number of digits
 // necessary such that ParseFloat will return f exactly.
-func (a Amount) Format(f float64, groupSep, decimalSep byte, precision int) string {
+func (a Amount) Format(groupSep, decimalSep byte, precision int) string {
 	return strfmt.FormatFloat(float64(a), groupSep, decimalSep, precision)
 }
 
