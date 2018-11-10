@@ -124,7 +124,7 @@ func (s *IDSlice) Scan(value interface{}) (err error) {
 		return nil
 	}
 
-	return errors.Errorf("Can't scan value '%#v' of type %T as uuid.Slice", value, value)
+	return errors.Errorf("Can't scan value '%#v' of type %T as uu.IDSlice", value, value)
 }
 
 func (s *IDSlice) scanBytes(src []byte) (err error) {
@@ -134,7 +134,7 @@ func (s *IDSlice) scanBytes(src []byte) (err error) {
 	}
 
 	if len(src) < 2 || src[0] != '{' || src[len(src)-1] != '}' {
-		return errors.Errorf("Can't parse %#v as uuid.Slice", string(src))
+		return errors.Errorf("Can't parse %#v as uu.IDSlice", string(src))
 	}
 
 	ids := make([]ID, 0, 16)

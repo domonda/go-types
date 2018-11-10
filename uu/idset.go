@@ -125,7 +125,7 @@ func (set *IDSet) Scan(value interface{}) (err error) {
 		return nil
 	}
 
-	return errors.Errorf("Can't scan value '%#v' of type %T as uuid.Set", value, value)
+	return errors.Errorf("Can't scan value '%#v' of type %T as uu.IDSet", value, value)
 }
 
 func (set *IDSet) scanBytes(src []byte) (err error) {
@@ -135,7 +135,7 @@ func (set *IDSet) scanBytes(src []byte) (err error) {
 	}
 
 	if len(src) < 2 || src[0] != '{' || src[len(src)-1] != '}' {
-		return errors.Errorf("Can't parse %#v as uuid.Set", string(src))
+		return errors.Errorf("Can't parse %#v as uu.IDSet", string(src))
 	}
 
 	ids := make(IDSlice, 0, 16)

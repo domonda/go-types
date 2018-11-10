@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	uuid "github.com/ungerik/go-uuid"
+	"github.com/domonda/go-types/uu"
 )
 
 func Ptr(ptr *string, strForNil ...string) string {
@@ -23,7 +23,7 @@ func TimePtr(ptr *time.Time, strForNil ...string) string {
 	return ptr.String()
 }
 
-func UUIDPtr(ptr *uuid.UUID, strForNil ...string) string {
+func UUIDPtr(ptr *uu.ID, strForNil ...string) string {
 	if ptr == nil {
 		return strings.Join(strForNil, "")
 	}

@@ -55,6 +55,8 @@ const (
 	IDDomainOrg
 )
 
+const IDRegex = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+
 // Difference in 100-nanosecond intervals between
 // UUID epoch (October 15, 1582) and Unix epoch (January 1, 1970).
 const epochStart = 122192928000000000
@@ -301,6 +303,15 @@ func (id *ID) Scan(src interface{}) error {
 	}
 
 	return fmt.Errorf("cannot convert %T to uu.ID", src)
+}
+
+// IDFromPtr returns the dereferenced value of ptr,
+// or nilVal if ptr is nil.
+func IDFromPtr(ptr *ID, nilVal ID) ID {
+	if ptr == nil {
+		return nilVal
+	}
+	return *ptr
 }
 
 // IDFromBytes returns an ID converted from raw byte slice input.
