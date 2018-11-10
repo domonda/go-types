@@ -203,7 +203,7 @@ func (ptr *Amount) StringOr(nilVal string) string {
 }
 
 // Format formats the Amount similar to strconv.FormatFloat with the 'f' format option,
-// but with decimalSep as decemal separator instead of a point
+// but with decimalSep as decimal separator instead of a point
 // and optional grouping of the integer part.
 // Valid values for decimalSep are '.' and ','.
 // If groupSep is not zero, then the integer part of the number is grouped

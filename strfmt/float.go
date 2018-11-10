@@ -8,7 +8,7 @@ import (
 )
 
 // FormatFloat formats a float similar to strconv.FormatFloat with the 'f' format option,
-// but with decimalSep as decemal separator instead of a point
+// but with decimalSep as decimal separator instead of a point
 // and optional thousands grouping of the integer part.
 // Valid values for decimalSep are '.' and ','.
 // If thousandsSep is not zero, then the integer part of the number is grouped
