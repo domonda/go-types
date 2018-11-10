@@ -67,7 +67,13 @@ func FormatFloat(f float64, thousandsSep, decimalSep byte, precision int) string
 	}
 
 	if decimalSep != '.' {
-		return strings.Replace(str, ".", string(decimalSep), 1)
+		for i, c := range str {
+			if c == '.' {
+				b := []byte(str)
+				b[i] = decimalSep
+				return string(b)
+			}
+		}
 	}
 
 	return str
@@ -104,7 +110,6 @@ func ParseFloatInfo(str string) (f float64, thousandsSep, decimalSep byte, err e
 	for i, r := range str {
 		switch {
 		case r >= '0' && r <= '9':
-			// floatBuilder.WriteByte(byte(r))
 			lastDigitIndex = i
 
 		case r == '.' || r == ',' || r == '\'':
