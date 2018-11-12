@@ -21,13 +21,13 @@ import (
 // See: https://en.wikipedia.org/wiki/Decimal_separator
 func FormatFloat(f float64, thousandsSep, decimalSep byte, precision int) string {
 	if thousandsSep != 0 && thousandsSep != '.' && thousandsSep != ',' && thousandsSep != ' ' && thousandsSep != '\'' {
-		panic("invalid thousandsSep")
+		panic(errors.Errorf("invalid thousandsSep: %#v", string(thousandsSep)))
 	}
 	if decimalSep != '.' && decimalSep != ',' {
-		panic("invalid decimalSep")
+		panic(errors.Errorf("invalid decimalSep: %#v", string(decimalSep)))
 	}
 	if thousandsSep == decimalSep {
-		panic("thousandsSep == decimalSep")
+		panic(errors.Errorf("thousandsSep == decimalSep: %#v", string(thousandsSep)))
 	}
 
 	str := strconv.FormatFloat(f, 'f', precision, 64)
@@ -113,8 +113,7 @@ func ParseFloatInfo(str string) (f float64, thousandsSep, decimalSep byte, err e
 
 		case r == '.' || r == ',' || r == '\'':
 			if pointWritten {
-				// No further separator runes allowed after point
-				return 0, 0, 0, errors.Errorf("Can't parse %#v as float", str)
+				return 0, 0, 0, errors.Errorf("No further separators allowed after decimal separator: %#v", str)
 			}
 
 			// Write everything after the lastNonDigitIndex and before current index
@@ -122,21 +121,21 @@ func ParseFloatInfo(str string) (f float64, thousandsSep, decimalSep byte, err e
 			lastNonDigitIndex = i
 
 			if !hasGrouping {
-				// This is the first decimal rune, just save it
+				// This is the first separator rune, just save it
 				hasGrouping = true
 				lastGroupingRune = r
 				lastGroupingIndex = i
 			} else {
-				// It's a further decimal rune, has to be 3 bytes since last decimal rune
+				// It's a further separator rune, has to be 3 bytes since last separator rune
 				if i-(lastGroupingIndex+1) != 3 {
-					return 0, 0, 0, errors.Errorf("Can't parse %#v as float", str)
+					return 0, 0, 0, errors.Errorf("Separators have to be 3 characters apart: %#v", str)
 				}
 				if r == lastGroupingRune {
-					// If it's the same decimal rune, then just save it
+					// If it's the same separator rune, then just save it
 					lastGroupingRune = r
 					lastGroupingIndex = i
 				} else {
-					// If it's a different decimal rune, then we have
+					// If it's a different separator rune, then we have
 					// reached the decimal separator
 					floatBuilder.WriteByte('.')
 					pointWritten = true
@@ -147,8 +146,7 @@ func ParseFloatInfo(str string) (f float64, thousandsSep, decimalSep byte, err e
 
 		case r == ' ':
 			if pointWritten {
-				// No further separator runes allowed after point
-				return 0, 0, 0, errors.Errorf("Can't parse %#v as float", str)
+				return 0, 0, 0, errors.Errorf("No further separators allowed after decimal separator: %#v", str)
 			}
 
 			// Write everything after the lastNonDigitIndex and before current index
@@ -156,37 +154,36 @@ func ParseFloatInfo(str string) (f float64, thousandsSep, decimalSep byte, err e
 			lastNonDigitIndex = i
 
 			if !hasGrouping {
-				// This is the first decimal rune, just save it
+				// This is the first separator rune, just save it
 				hasGrouping = true
 				lastGroupingRune = r
 				lastGroupingIndex = i
 			} else {
-				// It's a further decimal rune, has to be 3 bytes since last decimal rune
+				// It's a further separator rune, has to be 3 bytes since last separator rune
 				if i-(lastGroupingIndex+1) != 3 {
-					return 0, 0, 0, errors.Errorf("Can't parse %#v as float", str)
+					return 0, 0, 0, errors.Errorf("Separators have to be 3 characters apart: %#v", str)
 				}
 				if r == lastGroupingRune {
-					// If it's the same decimal rune, then just save it
+					// If it's the same separator rune, then just save it
 					lastGroupingRune = r
 					lastGroupingIndex = i
 				} else {
-					// Spaces only are used as separators,
-					// the the last separator was not a space, something is wrong
-					return 0, 0, 0, errors.Errorf("Can't parse %#v as float", str)
+					// Spaces only are used as thousands separators.
+					// If the the last separator was not a space, something is wrong
+					return 0, 0, 0, errors.Errorf("Space can not be used after another thousands separator: %#v", str)
 				}
 			}
 
 		case r == '-' || r == '+':
 			if i > 0 {
-				return 0, 0, 0, errors.Errorf("Can't parse %#v as float", str)
+				return 0, 0, 0, errors.Errorf("Sign can only be used as first character: %#v", str)
 			}
 			floatBuilder.WriteByte(byte(r))
 			lastNonDigitIndex = i
 
 		case r == 'e':
 			if i == 0 || eWritten {
-				// e can't be the first rune or be repeated
-				return 0, 0, 0, errors.Errorf("Can't parse %#v as float", str)
+				return 0, 0, 0, errors.Errorf("e can't be the first or a repeating character: %#v", str)
 			}
 			if hasGrouping && !pointWritten {
 				floatBuilder.WriteByte('.')
@@ -200,7 +197,7 @@ func ParseFloatInfo(str string) (f float64, thousandsSep, decimalSep byte, err e
 			eWritten = true
 
 		default:
-			return 0, 0, 0, errors.Errorf("Can't parse %#v as float", str)
+			return 0, 0, 0, errors.Errorf("Invalid rune '%s' in %#v", string(r), str)
 		}
 	}
 
