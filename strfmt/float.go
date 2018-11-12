@@ -70,9 +70,7 @@ func FormatFloat(f float64, thousandsSep, decimalSep byte, precision int) string
 	if decimalSep != '.' {
 		for i, c := range str {
 			if c == '.' {
-				b := []byte(str)
-				b[i] = decimalSep
-				return string(b)
+				return str[:i] + string(decimalSep) + str[i+1:]
 			}
 		}
 	}

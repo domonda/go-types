@@ -25,13 +25,6 @@ func TimeOrNil(timePtr *time.Time) interface{} {
 	return *timePtr
 }
 
-// func Int64OrNil(i *int64) interface{} {
-// 	if i == nil {
-// 		return nil
-// 	}
-// 	return *i
-// }
-
 // NullTimeFromPtr returns null.Time from a time.Time pointer.
 // The zero time.Time value is also considere null.
 func NullTimeFromPtr(timePtr *time.Time) (nt null.Time) {
