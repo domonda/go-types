@@ -18,14 +18,20 @@ func (cc Code) CountryName() string {
 	return countryMap[cc]
 }
 
+// AssignString tries to parse and assign the passed
+// source string as value of the implementing object.
+// It returns an error if source could not be parsed.
+// If the source string could be parsed, but was not
+// in the expeced normalized format, then false is
+// returned for normalized and nil for err.
 // AssignString implements strfmt.StringAssignable
-func (cc *Code) AssignString(str string) error {
-	normalized := Code(strings.ToUpper(str))
-	if !normalized.Valid() {
-		return errors.Errorf("Invalid country code: %#v", str)
+func (cc *Code) AssignString(source string) (normalized bool, err error) {
+	newCC := Code(strings.ToUpper(source))
+	if !newCC.Valid() {
+		return false, errors.Errorf("Invalid country code: %#v", source)
 	}
-	*cc = normalized
-	return nil
+	*cc = newCC
+	return newCC == Code(source), nil
 }
 
 const (

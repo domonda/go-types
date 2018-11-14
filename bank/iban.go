@@ -8,10 +8,11 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/guregu/null"
+
 	"github.com/domonda/errors"
 	"github.com/domonda/go-types/country"
 	"github.com/domonda/go-types/strutil"
-	"github.com/guregu/null"
 )
 
 var ibanRegex = regexp.MustCompile(`^([A-Z]{2})(\d{2})([A-Z\d]{8,30})$`)
@@ -61,14 +62,20 @@ func (ibanFinder) FindAllIndex(str []byte, n int) (result [][]int) {
 // and will treat an empty string IBAN as SQL NULL value.
 type IBAN string
 
+// AssignString tries to parse and assign the passed
+// source string as value of the implementing object.
+// It returns an error if source could not be parsed.
+// If the source string could be parsed, but was not
+// in the expeced normalized format, then false is
+// returned for normalized and nil for err.
 // AssignString implements strfmt.StringAssignable
-func (iban *IBAN) AssignString(str string) error {
-	normalized, err := IBAN(str).Normalized()
+func (iban *IBAN) AssignString(source string) (normalized bool, err error) {
+	newIBAN, err := IBAN(source).Normalized()
 	if err != nil {
-		return err
+		return false, err
 	}
-	*iban = normalized
-	return nil
+	*iban = newIBAN
+	return newIBAN == IBAN(source), nil
 }
 
 // Valid returns if this is a valid SWIFT Business Identifier Code

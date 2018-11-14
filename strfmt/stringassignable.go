@@ -1,8 +1,11 @@
 package strfmt
 
 type StringAssignable interface {
-	// AssignString tries to parse and assign the passed string
-	// as value of the implementing object, or return an error
-	// if the string could not be parsed as valid value.
-	AssignString(string) error
+	// AssignString tries to parse and assign the passed
+	// source string as value of the implementing object.
+	// It returns an error if source could not be parsed.
+	// If the source string could be parsed, but was not
+	// in the expeced normalized format, then false is
+	// returned for normalized and nil for err.
+	AssignString(source string) (normalized bool, err error)
 }

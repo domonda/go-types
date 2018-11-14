@@ -6,6 +6,6 @@ type StringFormatter interface {
 	// json.Marshaler
 	// json.Unmarshaler
 
-	ReflectAssignString(val reflect.Value, str string) error
-	FormatString(val interface{}) (string, error)
+	Assigntring(dest reflect.Value, str string) error
+	FormatString(val reflect.Value) (string, error)
 }

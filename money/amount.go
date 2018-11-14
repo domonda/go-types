@@ -112,14 +112,20 @@ func AmountFromPtr(ptr *Amount, nilVal Amount) Amount {
 	return *ptr
 }
 
+// AssignString tries to parse and assign the passed
+// source string as value of the implementing object.
+// It returns an error if source could not be parsed.
+// If the source string could be parsed, but was not
+// in the expeced normalized format, then false is
+// returned for normalized and nil for err.
 // AssignString implements strfmt.StringAssignable
-func (a *Amount) AssignString(str string) error {
-	f, err := strfmt.ParseFloat(str)
+func (a *Amount) AssignString(source string) (normalized bool, err error) {
+	f, err := strfmt.ParseFloat(source)
 	if err != nil {
-		return err
+		return false, err
 	}
 	*a = Amount(f)
-	return nil
+	return true, nil
 }
 
 // Cents returns the amount rounded to cents

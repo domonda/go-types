@@ -5,10 +5,11 @@ import (
 	"regexp"
 	"unicode/utf8"
 
+	"github.com/guregu/null"
+
 	"github.com/domonda/errors"
 	"github.com/domonda/go-types/country"
 	"github.com/domonda/go-types/strutil"
-	"github.com/guregu/null"
 )
 
 var (
@@ -86,14 +87,20 @@ func StringIsBIC(str string) bool {
 // and will treat an empty string BIC as SQL NULL value.
 type BIC string
 
+// AssignString tries to parse and assign the passed
+// source string as value of the implementing object.
+// It returns an error if source could not be parsed.
+// If the source string could be parsed, but was not
+// in the expeced normalized format, then false is
+// returned for normalized and nil for err.
 // AssignString implements strfmt.StringAssignable
-func (bic *BIC) AssignString(str string) error {
-	err := BIC(str).Validate()
+func (bic *BIC) AssignString(source string) (normalized bool, err error) {
+	err = BIC(source).Validate()
 	if err != nil {
-		return err
+		return false, err
 	}
-	*bic = BIC(str)
-	return nil
+	*bic = BIC(source)
+	return true, nil
 }
 
 // Valid returns if this is a valid SWIFT Business Identifier Code

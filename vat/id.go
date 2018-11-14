@@ -4,10 +4,11 @@ import (
 	"database/sql/driver"
 	"unicode"
 
+	"github.com/guregu/null"
+
 	"github.com/domonda/errors"
 	"github.com/domonda/go-types/country"
 	"github.com/domonda/go-types/strutil"
-	"github.com/guregu/null"
 )
 
 // ID is a european VAT ID.
@@ -49,14 +50,20 @@ func isVATIDTrimRune(r rune) bool {
 	return unicode.IsPunct(r)
 }
 
+// AssignString tries to parse and assign the passed
+// source string as value of the implementing object.
+// It returns an error if source could not be parsed.
+// If the source string could be parsed, but was not
+// in the expeced normalized format, then false is
+// returned for normalized and nil for err.
 // AssignString implements strfmt.StringAssignable
-func (id *ID) AssignString(str string) error {
-	normalized, err := ID(str).Normalized()
+func (id *ID) AssignString(source string) (normalized bool, err error) {
+	newID, err := ID(source).Normalized()
 	if err != nil {
-		return err
+		return false, err
 	}
-	*id = normalized
-	return nil
+	*id = newID
+	return newID == ID(source), nil
 }
 
 // Scan implements the database/sql.Scanner interface.
