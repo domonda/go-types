@@ -15,6 +15,7 @@ var (
 	emptyInterfaceTye = reflect.TypeOf((*interface{})(nil)).Elem()
 )
 
+// CanMarshalJSON returns if a type can be marshalled as JSON
 func CanMarshalJSON(t reflect.Type) bool {
 	if t == emptyInterfaceTye {
 		return true
@@ -48,16 +49,19 @@ func CanMarshalJSON(t reflect.Type) bool {
 // and the SQL NULL value.
 type JSON []byte
 
-func MarshalJSON(v interface{}) (JSON, error) {
-	return json.Marshal(v)
+func MarshalJSON(ptr interface{}) (JSON, error) {
+	return json.Marshal(ptr)
 }
 
-func (j *JSON) Unmarshal(v interface{}) error {
-	return json.Unmarshal(*j, v)
+// Unmarshal the JSON of j to outPtr
+func (j JSON) Unmarshal(outPtr interface{}) error {
+	return json.Unmarshal(j, outPtr)
 }
 
 // MarshalJSON returns j as the JSON encoding of j.
 // MarshalJSON implements encoding/json.Marshaler
+// See the package function MarshalJSON to marshal
+// a struct into JSON
 func (j JSON) MarshalJSON() ([]byte, error) {
 	if j == nil {
 		return []byte("null"), nil
@@ -65,13 +69,14 @@ func (j JSON) MarshalJSON() ([]byte, error) {
 	return j, nil
 }
 
-// UnmarshalJSON sets *j to a copy of data.
+// UnmarshalJSON sets *j to a copy of sourceJSON.
 // UnarshalJSON implements encoding/json.Unmarshaler
-func (j *JSON) UnmarshalJSON(data []byte) error {
+// See method Unmarshal for unmarshalling into a struct.
+func (j *JSON) UnmarshalJSON(sourceJSON []byte) error {
 	if j == nil {
 		return errors.New("UnmarshalJSON on nil pointer")
 	}
-	*j = append((*j)[0:0], data...)
+	*j = append((*j)[0:0], sourceJSON...)
 	return nil
 }
 
