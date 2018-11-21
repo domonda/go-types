@@ -49,13 +49,23 @@ func CanMarshalJSON(t reflect.Type) bool {
 // and the SQL NULL value.
 type JSON []byte
 
-func MarshalJSON(ptr interface{}) (JSON, error) {
-	return json.Marshal(ptr)
+func MarshalJSON(source interface{}) (JSON, error) {
+	return json.Marshal(source)
 }
 
-// Unmarshal the JSON of j to outPtr
-func (j JSON) Unmarshal(outPtr interface{}) error {
-	return json.Unmarshal(j, outPtr)
+// MarshalFrom marshalles source as JSON and sets it
+// at j when there was no error.
+func (j *JSON) MarshalFrom(source interface{}) error {
+	data, err := json.Marshal(source)
+	if err == nil {
+		*j = data
+	}
+	return err
+}
+
+// UnmarshalTo unmashalles the JSON of j to dest
+func (j JSON) UnmarshalTo(dest interface{}) error {
+	return json.Unmarshal(j, dest)
 }
 
 // MarshalJSON returns j as the JSON encoding of j.
