@@ -19,6 +19,8 @@ func (lc Code) Valid() bool {
 
 func (lc Code) Normalized() Code {
 	// TODO normalize 3 letter codes https://en.wikipedia.org/wiki/List_of_ISO_639-1_codes
+	// TODO normalize BCP-47 language codes, such as "en-US" or "sr-Latn"
+	// http://www.unicode.org/reports/tr35/#Unicode_locale_identifier.
 	normalized := Code(strings.ToLower(string(lc)))
 	if _, ok := codeNames[normalized]; !ok {
 		return ""
