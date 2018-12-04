@@ -1,6 +1,7 @@
 package types
 
 import (
+	"bytes"
 	"database/sql/driver"
 	"encoding"
 	"encoding/json"
@@ -13,6 +14,7 @@ var (
 	jsonMarshalerType = reflect.TypeOf((*json.Marshaler)(nil)).Elem()
 	textMarshalerType = reflect.TypeOf((*encoding.TextMarshaler)(nil)).Elem()
 	emptyInterfaceTye = reflect.TypeOf((*interface{})(nil)).Elem()
+	nullStr           = []byte("null")
 )
 
 // CanMarshalJSON returns if a type can be marshalled as JSON
@@ -43,10 +45,14 @@ func CanMarshalJSON(t reflect.Type) bool {
 	return kind == reflect.Struct || kind == reflect.Map || kind == reflect.Slice
 }
 
-// JSON is a []byte slice that implements the interfaces:
+// JSON is a []byte slice containing JSON text or nil
+// as the representation of the JSON "null" value.
+// that implements the interfaces:
 // json.Marshaler, json.Unmarshaler, driver.Value, sql.Scanner.
-// Its nil value it is marshalled as the JSON value "null"
-// and the SQL NULL value.
+// The nil value of the type JSON is marshalled as
+// the JSON "null" and SQL NULL values.
+// The JSON "null" and SQL NULL values are unmarshalled
+// as nil value ot the type JSON.
 type JSON []byte
 
 func MarshalJSON(source interface{}) (JSON, error) {
@@ -56,9 +62,13 @@ func MarshalJSON(source interface{}) (JSON, error) {
 // MarshalFrom marshalles source as JSON and sets it
 // at j when there was no error.
 func (j *JSON) MarshalFrom(source interface{}) error {
-	data, err := json.Marshal(source)
+	jsonBytes, err := json.Marshal(source)
 	if err == nil {
-		*j = data
+		if bytes.Equal(jsonBytes, nullStr) {
+			*j = nil
+		} else {
+			*j = jsonBytes
+		}
 	}
 	return err
 }
@@ -74,7 +84,7 @@ func (j JSON) UnmarshalTo(dest interface{}) error {
 // a struct into JSON
 func (j JSON) MarshalJSON() ([]byte, error) {
 	if j == nil {
-		return []byte("null"), nil
+		return nullStr, nil
 	}
 	return j, nil
 }
@@ -86,12 +96,19 @@ func (j *JSON) UnmarshalJSON(sourceJSON []byte) error {
 	if j == nil {
 		return errors.New("UnmarshalJSON on nil pointer")
 	}
-	*j = append((*j)[0:0], sourceJSON...)
+	if sourceJSON == nil || bytes.Equal(sourceJSON, nullStr) {
+		*j = nil
+	} else {
+		*j = append((*j)[0:0], sourceJSON...)
+	}
 	return nil
 }
 
 // Valid reports whether j is a valid JSON encoding.
 func (j JSON) Valid() bool {
+	if j == nil {
+		return true
+	}
 	return json.Valid(j)
 }
 
@@ -103,14 +120,25 @@ func (j JSON) Value() (driver.Value, error) {
 // Scan stores the src in *j. No validation is done.
 func (j *JSON) Scan(src interface{}) error {
 	switch t := src.(type) {
-	case string:
-		// Converting from string does a copy
-		*j = JSON(t)
-	case []byte:
-		// Need to copy because, src will be gone after call
-		*j = append((*j)[0:0], t...)
 	case nil:
 		*j = nil
+
+	case string:
+		if t == "null" {
+			*j = nil
+		} else {
+			// Converting from string does a copy
+			*j = JSON(t)
+		}
+
+	case []byte:
+		if bytes.Equal(t, nullStr) {
+			*j = nil
+		} else {
+			// Need to copy because, src will be gone after call
+			*j = append((*j)[0:0], t...)
+		}
+
 	default:
 		return errors.New("Incompatible type for JSON")
 	}
