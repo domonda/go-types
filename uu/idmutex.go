@@ -6,7 +6,7 @@ import (
 
 // IDMutex allows mutex locking per UUID
 type IDMutex struct {
-	mapMutex  sync.RWMutex
+	mapMutex  sync.Mutex
 	idMutexes map[ID]*sync.Mutex
 }
 
@@ -27,9 +27,10 @@ func (m *IDMutex) Lock(id ID) {
 }
 
 func (m *IDMutex) Unlock(id ID) {
-	m.mapMutex.RLock()
+	m.mapMutex.Lock()
 	idMutex, ok := m.idMutexes[id]
-	m.mapMutex.RUnlock()
+	// delete(m.idMutexes, id) // TODO think and test if this causes problems
+	m.mapMutex.Unlock()
 
 	if !ok {
 		panic("Unlock called for non locked UUID: " + id.String())
