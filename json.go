@@ -99,6 +99,7 @@ func (j *JSON) UnmarshalJSON(sourceJSON []byte) error {
 	if sourceJSON == nil || bytes.Equal(sourceJSON, nullStr) {
 		*j = nil
 	} else {
+		// Use append trick to make a copy of sourceJSON
 		*j = append((*j)[0:0], sourceJSON...)
 	}
 	return nil
@@ -119,24 +120,25 @@ func (j JSON) Value() (driver.Value, error) {
 
 // Scan stores the src in *j. No validation is done.
 func (j *JSON) Scan(src interface{}) error {
-	switch t := src.(type) {
+	switch x := src.(type) {
 	case nil:
 		*j = nil
 
 	case string:
-		if t == "null" {
+		if x == "null" {
 			*j = nil
 		} else {
 			// Converting from string does a copy
-			*j = JSON(t)
+			*j = JSON(x)
 		}
 
 	case []byte:
-		if bytes.Equal(t, nullStr) {
+		if bytes.Equal(x, nullStr) {
 			*j = nil
 		} else {
-			// Need to copy because, src will be gone after call
-			*j = append((*j)[0:0], t...)
+			// Need to copy because, src will be gone after call.
+			// Use append trick to make a copy of src bytes
+			*j = append((*j)[0:0], x...)
 		}
 
 	default:
@@ -151,4 +153,11 @@ func (j JSON) String() string {
 		return "null"
 	}
 	return string(j)
+}
+
+// Clone returns a copy of j
+func (j JSON) Clone() JSON {
+	clone := make(JSON, len(j))
+	copy(clone, j)
+	return clone
 }
