@@ -147,7 +147,8 @@ func (j *JSON) Scan(src interface{}) error {
 	return nil
 }
 
-// String returns the JSON as string
+// String returns the JSON as string.
+// String implements the fmt.Stringer interface.
 func (j JSON) String() string {
 	if j == nil {
 		return "null"

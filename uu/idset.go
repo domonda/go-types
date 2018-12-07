@@ -15,6 +15,7 @@ import (
 // with the nil map value used as SQL NULL
 type IDSet map[ID]struct{}
 
+// String implements the fmt.Stringer interface.
 func (set IDSet) String() string {
 	return fmt.Sprintf("set%v", set.SortedSlice())
 }

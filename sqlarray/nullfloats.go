@@ -3,6 +3,7 @@ package sqlarray
 import (
 	"database/sql"
 	"database/sql/driver"
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -28,6 +29,12 @@ func (a NullFloats) Floats() []float64 {
 		}
 	}
 	return floats
+}
+
+// String implements the fmt.Stringer interface.
+func (a NullFloats) String() string {
+	value, _ := a.Value()
+	return fmt.Sprintf("NullFloats%v", value)
 }
 
 // Value implements the database/sql/driver.Valuer interface

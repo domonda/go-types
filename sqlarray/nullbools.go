@@ -3,6 +3,7 @@ package sqlarray
 import (
 	"database/sql"
 	"database/sql/driver"
+	"fmt"
 	"strings"
 
 	"github.com/domonda/errors"
@@ -27,6 +28,12 @@ func (a NullBools) Bools() []bool {
 		}
 	}
 	return bools
+}
+
+// String implements the fmt.Stringer interface.
+func (a NullBools) String() string {
+	value, _ := a.Value()
+	return fmt.Sprintf("NullBools%v", value)
 }
 
 // Value implements the database/sql/driver.Valuer interface

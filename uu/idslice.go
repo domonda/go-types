@@ -46,6 +46,7 @@ func (s IDSlice) Set() IDSet {
 	return set
 }
 
+// String implements the fmt.Stringer interface.
 func (s IDSlice) String() string {
 	return "[" + strings.Join(s.Strings(), ",") + "]"
 }

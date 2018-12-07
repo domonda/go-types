@@ -173,6 +173,7 @@ func (id ID) Bytes() []byte {
 
 // String returns the canonical string representation of he UUID:
 // xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+// String implements the fmt.Stringer interface.
 func (id ID) String() string {
 	buf := make([]byte, 36)
 

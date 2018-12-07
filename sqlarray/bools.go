@@ -8,4 +8,4 @@ import (
 // for a slice of bool.
 // A nil slice is mapped to the SQL NULL value,
 // and a non nil zero length slice to an empty SQL array '{}'.
-type Bools pq.BoolArray
+type Bools = pq.BoolArray

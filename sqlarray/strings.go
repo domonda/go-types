@@ -8,4 +8,4 @@ import (
 // for a slice of string.
 // A nil slice is mapped to the SQL NULL value,
 // and a non nil zero length slice to an empty SQL array '{}'.
-type Strings pq.StringArray
+type Strings = pq.StringArray

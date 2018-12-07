@@ -14,6 +14,7 @@ func NewCurrencyAmount(currency Currency, amount Amount) *CurrencyAmount {
 	return &CurrencyAmount{Currency: currency, Amount: amount}
 }
 
+// String implements the fmt.Stringer interface.
 func (ca *CurrencyAmount) String() string {
 	return fmt.Sprintf("%s %.2f", ca.Currency, ca.Amount)
 }

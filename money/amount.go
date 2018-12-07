@@ -167,6 +167,7 @@ func (a Amount) RoundToCents() Amount {
 }
 
 // String returns the amount formatted to two decimal places
+// String implements the fmt.Stringer interface.
 func (a Amount) String() string {
 	neg := a < 0
 	s := strconv.FormatInt(a.Abs().Cents(), 10)

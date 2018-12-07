@@ -2,6 +2,7 @@ package sqlarray
 
 import (
 	"database/sql/driver"
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -13,6 +14,12 @@ import (
 // A nil slice is mapped to the SQL NULL value,
 // and a non nil zero length slice to an empty SQL array '{}'.
 type Floats []float64
+
+// String implements the fmt.Stringer interface.
+func (a Floats) String() string {
+	value, _ := a.Value()
+	return fmt.Sprintf("Floats%v", value)
+}
 
 // Value implements the database/sql/driver.Valuer interface
 func (a Floats) Value() (driver.Value, error) {
