@@ -17,6 +17,22 @@ import (
 // for every slice element may lead to poor performance.
 type NullFloats []*float64
 
+// Floats returns a float64 slice where all non NULL
+// elements of a are set, and all NULL elements are 0.
+func (a NullFloats) Floats() []float64 {
+	if len(a) == 0 {
+		return nil
+	}
+
+	floats := make([]float64, len(a))
+	for i, ptr := range a {
+		if ptr != nil {
+			floats[i] = *a[i]
+		}
+	}
+	return floats
+}
+
 // Value implements the database/sql/driver.Valuer interface
 func (a NullFloats) Value() (driver.Value, error) {
 	if a == nil {

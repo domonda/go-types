@@ -17,6 +17,22 @@ import (
 // for every slice element may lead to poor performance.
 type NullInts []*int64
 
+// Ints returns a int64 slice where all non NULL
+// elements of a are set, and all NULL elements are 0.
+func (a NullInts) Ints() []int64 {
+	if len(a) == 0 {
+		return nil
+	}
+
+	ints := make([]int64, len(a))
+	for i, ptr := range a {
+		if ptr != nil {
+			ints[i] = *a[i]
+		}
+	}
+	return ints
+}
+
 // Value implements the database/sql/driver.Valuer interface
 func (a NullInts) Value() (driver.Value, error) {
 	if a == nil {
