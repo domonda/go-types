@@ -15,8 +15,7 @@ import (
 // and a non nil zero length slice to an empty SQL array '{}'.
 type NullInts []sql.NullInt64
 
-// Ints returns a int64 slice where all non NULL
-// elements of a are set, and all NULL elements are 0.
+// Ints returns all NullInts elements as []int64 with NULL elements set to 0.
 func (a NullInts) Ints() []int64 {
 	if len(a) == 0 {
 		return nil

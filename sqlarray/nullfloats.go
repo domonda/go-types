@@ -15,8 +15,7 @@ import (
 // and a non nil zero length slice to an empty SQL array '{}'.
 type NullFloats []sql.NullFloat64
 
-// Floats returns a float64 slice where all non NULL
-// elements of a are set, and all NULL elements are 0.
+// Floats returns all NullFloats elements as []float64 with NULL elements set to 0.
 func (a NullFloats) Floats() []float64 {
 	if len(a) == 0 {
 		return nil

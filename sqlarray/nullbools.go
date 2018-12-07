@@ -8,10 +8,13 @@ import (
 	"github.com/domonda/errors"
 )
 
+// NullBools implements the sql.Scanner and driver.Valuer interfaces
+// for a slice of sql.NullBool.
+// A nil slice is mapped to the SQL NULL value,
+// and a non nil zero length slice to an empty SQL array '{}'.
 type NullBools []sql.NullBool
 
-// Bools returns a bool slice where all non NULL
-// elements of a are set, and all NULL elements are false.
+// Bools returns all NullBools elements as []float64 with NULL elements set to false.
 func (a NullBools) Bools() []bool {
 	if len(a) == 0 {
 		return nil
