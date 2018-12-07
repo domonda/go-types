@@ -1,6 +1,7 @@
 package sqlarray
 
 import (
+	"database/sql"
 	"database/sql/driver"
 	"strconv"
 	"strings"
@@ -9,13 +10,10 @@ import (
 )
 
 // NullInts implements the sql.Scanner and driver.Valuer interfaces
-// for a slice of int64 pointers.
+// for a slice of sql.NullInt64.
 // A nil slice is mapped to the SQL NULL value,
 // and a non nil zero length slice to an empty SQL array '{}'.
-// A nil int64 pointer element is mapped to SQL NULL.
-// Note that allocating many individual memory chunks
-// for every slice element may lead to poor performance.
-type NullInts []*int64
+type NullInts []sql.NullInt64
 
 // Ints returns a int64 slice where all non NULL
 // elements of a are set, and all NULL elements are 0.
@@ -25,9 +23,9 @@ func (a NullInts) Ints() []int64 {
 	}
 
 	ints := make([]int64, len(a))
-	for i, ptr := range a {
-		if ptr != nil {
-			ints[i] = *a[i]
+	for i, n := range a {
+		if n.Valid {
+			ints[i] = n.Int64
 		}
 	}
 	return ints
@@ -41,14 +39,14 @@ func (a NullInts) Value() (driver.Value, error) {
 
 	var b strings.Builder
 	b.WriteByte('{')
-	for i, intPtr := range a {
+	for i, n := range a {
 		if i > 0 {
 			b.WriteByte(',')
 		}
-		if intPtr == nil {
-			b.WriteString("NULL")
+		if n.Valid {
+			b.WriteString(strconv.FormatInt(n.Int64, 10))
 		} else {
-			b.WriteString(strconv.FormatInt(*intPtr, 10))
+			b.WriteString("NULL")
 		}
 	}
 	b.WriteByte('}')
@@ -89,7 +87,7 @@ func (a *NullInts) scanBytes(src []byte) error {
 			if err != nil {
 				return errors.Wrapf(err, "Can't parse '%s' as sqlarray.NullInts", string(src))
 			}
-			newArray[i] = &val
+			newArray[i] = sql.NullInt64{Valid: true, Int64: val}
 		}
 	}
 	*a = newArray

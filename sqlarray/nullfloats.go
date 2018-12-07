@@ -1,6 +1,7 @@
 package sqlarray
 
 import (
+	"database/sql"
 	"database/sql/driver"
 	"strconv"
 	"strings"
@@ -9,13 +10,10 @@ import (
 )
 
 // NullFloats implements the sql.Scanner and driver.Valuer interfaces
-// for a slice of float64 pointers.
+// for a slice of sql.NullFloat64.
 // A nil slice is mapped to the SQL NULL value,
 // and a non nil zero length slice to an empty SQL array '{}'.
-// A nil float64 pointer element is mapped to SQL NULL.
-// Note that allocating many individual memory chunks
-// for every slice element may lead to poor performance.
-type NullFloats []*float64
+type NullFloats []sql.NullFloat64
 
 // Floats returns a float64 slice where all non NULL
 // elements of a are set, and all NULL elements are 0.
@@ -25,9 +23,9 @@ func (a NullFloats) Floats() []float64 {
 	}
 
 	floats := make([]float64, len(a))
-	for i, ptr := range a {
-		if ptr != nil {
-			floats[i] = *a[i]
+	for i, n := range a {
+		if n.Valid {
+			floats[i] = n.Float64
 		}
 	}
 	return floats
@@ -41,14 +39,14 @@ func (a NullFloats) Value() (driver.Value, error) {
 
 	var b strings.Builder
 	b.WriteByte('{')
-	for i, floatPtr := range a {
+	for i, n := range a {
 		if i > 0 {
 			b.WriteByte(',')
 		}
-		if floatPtr == nil {
-			b.WriteString("NULL")
+		if n.Valid {
+			b.WriteString(strconv.FormatFloat(n.Float64, 'f', -1, 64))
 		} else {
-			b.WriteString(strconv.FormatFloat(*floatPtr, 'f', -1, 64))
+			b.WriteString("NULL")
 		}
 	}
 	b.WriteByte('}')
@@ -89,7 +87,7 @@ func (a *NullFloats) scanBytes(src []byte) error {
 			if err != nil {
 				return errors.Wrapf(err, "Can't parse '%s' as sqlarray.NullFloats", string(src))
 			}
-			newArray[i] = &val
+			newArray[i] = sql.NullFloat64{Valid: true, Float64: val}
 		}
 	}
 	*a = newArray
