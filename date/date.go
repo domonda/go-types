@@ -237,8 +237,11 @@ func (date Date) MidnightTime() time.Time {
 // Format return date.MidnightTime().Format(layout),
 // or an empty string if date is also empty.
 func (date Date) Format(layout string) string {
-	if date == "" {
+	if date == "" || layout == "" {
 		return ""
+	}
+	if layout == Format {
+		return string(date)
 	}
 	return date.MidnightTime().Format(layout)
 }
