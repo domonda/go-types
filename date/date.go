@@ -222,12 +222,25 @@ func (date Date) TimeUTC(hour, minute, second int) time.Time {
 	return date.Time(hour, minute, second, time.UTC)
 }
 
-// MidnightTime returns the midnight (00:00) time.Time of date.
+// MidnightTime returns the midnight (00:00) time.Time of date in UTC.
 func (date Date) MidnightTime() time.Time {
 	if date.IsZero() {
 		return time.Time{}
 	}
 	t, err := time.Parse(Format, string(date))
+	if err != nil {
+		return time.Time{}
+	}
+	return t
+}
+
+// MidnightTime returns the midnight (00:00) time.Time of date
+// in the given location.
+func (date Date) MidnightTimeInLocation(loc *time.Location) time.Time {
+	if date.IsZero() {
+		return time.Time{}
+	}
+	t, err := time.ParseInLocation(Format, string(date), loc)
 	if err != nil {
 		return time.Time{}
 	}
