@@ -82,50 +82,70 @@ func Parse(layout, value string) (Date, error) {
 	return OfTime(t), nil
 }
 
-// RangeOfPeriod returns the dates [from, until] for a period defined
-// in the format year YYYY, year and month YYYY-MM or year and quarter YYYY-Qn.
-// from is the first day of the month of the period,
-// until is the last day of the month of the period.
+// RangeOfPeriod returns the dates [from, until] for a period
+// defined in one the following formats:
+// period of a month of a year: YYYY-MM,
+// period of a quarter of a year: YYYY-Qn,
+// period of a half year: YYYY-Hn,
+// period of full year: YYYY.
+// The returned from Date is the first day of the month of the period,
+// the returned until Date is the last day of the month of the period.
 // Exmaples:
 // Period of June 2018: RangeOfPeriod("2018-06") == Date("2018-06-01"), Date("2018-06-30"), nil
-// Period of Q3 2018: RangeOfPeriod("2018-Q3") == Date("2018-06-01"), Date("2018-08-31"), nil
-// Period of 2018: RangeOfPeriod("2018") == Date("2018-01-01"), Date("2018-12-31"), nil
+// Period of Q3 2018: RangeOfPeriod("2018-Q3") == Date("2018-07-01"), Date("2018-09-30"), nil
+// Period of second half of 2018: RangeOfPeriod("2018-H2") == Date("2018-07-01"), Date("2018-12-31"), nil
+// Period of year 2018: RangeOfPeriod("2018") == Date("2018-07-01"), Date("2018-12-31"), nil
 func RangeOfPeriod(period string) (from, until Date, err error) {
+	if len(period) != 4 && len(period) != 7 {
+		return "", "", errors.Errorf("invalid period format, not 4 or 7 chars long: %#v", period)
+	}
+
 	if len(period) == 4 {
 		year, err := strconv.Atoi(period)
 		if err != nil || year <= 0 {
-			return "", "", errors.Errorf("Invalid period format: %#v", period)
+			return "", "", errors.Errorf("invalid period format: %#v", period)
 		}
 		from = Date(period + "-01-01")
 		until = Date(period + "-12-31")
 		return from, until, nil
 	}
 
-	if strings.Contains(period, "Q") {
-		var (
-			year    int
-			quarter int
-		)
-		n, err := fmt.Sscanf(period, "%d-Q%d", &year, &quarter)
-		if n != 2 || err != nil {
-			return "", "", errors.Errorf("Invalid period format: %#v", period)
+	if period[4] != '-' {
+		return "", "", errors.Errorf("invalid period format, expected '-' after year: %#v", period)
+	}
+
+	year, err := strconv.Atoi(period[:4])
+	if err != nil {
+		return "", "", errors.Errorf("invalid period format, can't parse year: %#v", period)
+	}
+
+	switch period[5] {
+	case 'Q', 'q':
+		quarter, err := strconv.Atoi(period[6:])
+		if err != nil || quarter < 1 || quarter > 4 {
+			return "", "", errors.Errorf("invalid period format, can't parse quarter: %#v", period)
 		}
-		from = Of(year, time.Month(quarter-1)*3, 1)
-		until = Of(year, time.Month(quarter)*3, 0) // 0th day is the last day of the previous month
+		from = Of(year, time.Month(quarter-1)*3+1, 1)
+		until = Of(year, time.Month(quarter)*3+1, 0) // 0th day is the last day of the previous month
+		return from, until, nil
+
+	case 'H', 'h':
+		half, err := strconv.Atoi(period[6:])
+		if err != nil || half < 1 || half > 2 {
+			return "", "", errors.Errorf("invalid period format, can't parse half-year: %#v", period)
+		}
+		from = Of(year, time.Month(half-1)*6+1, 1)
+		until = Of(year, time.Month(half)*6+1, 0) // 0th day is the last day of the previous month
 		return from, until, nil
 	}
 
-	var (
-		year  int
-		month time.Month
-	)
-	n, err := fmt.Sscanf(period, "%d-%d", &year, &month)
-	if n != 2 || err != nil {
-		return "", "", errors.Errorf("Invalid period format: %#v", period)
+	month, err := strconv.Atoi(period[5:])
+	if err != nil || month < 1 || month > 12 {
+		return "", "", errors.Errorf("invalid period format, can't parse month: %#v", period)
 	}
 
-	from = Of(year, month, 1)
-	until = Of(year, month+1, 0) // 0th day is the last day of the previous month
+	from = Of(year, time.Month(month), 1)
+	until = Of(year, time.Month(month)+1, 0) // 0th day is the last day of the previous month
 	return from, until, nil
 }
 
