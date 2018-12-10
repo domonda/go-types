@@ -19,6 +19,10 @@ func (ca *CurrencyAmount) String() string {
 	return fmt.Sprintf("%s %.2f", ca.Currency, ca.Amount)
 }
 
+func (ca *CurrencyAmount) GoString() string {
+	return fmt.Sprintf("{Currency: %#v, Amount: %#v}", ca.Currency, ca.Amount)
+}
+
 func (ca *CurrencyAmount) GermanString() string {
 	return strings.Replace(ca.String(), ".", ",", 1)
 }
