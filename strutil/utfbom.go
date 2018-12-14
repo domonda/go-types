@@ -5,8 +5,9 @@ import (
 	"encoding/binary"
 	"unicode/utf16"
 
-	"github.com/domonda/errors"
 	"golang.org/x/text/encoding/unicode/utf32"
+
+	"github.com/domonda/errors"
 )
 
 type BOM string
@@ -104,6 +105,27 @@ func (bom BOM) DecodeRemaining(data []byte) (str string, err error) {
 	}
 
 	return "", errors.Errorf("Unsupported BOM: %s", bom)
+}
+
+func (bom BOM) Bytes() []byte {
+	switch bom {
+	case BOMUTF8:
+		return bomUTF8
+
+	case BOMUTF16LittleEndian:
+		return bomUTF16LittleEndian
+
+	case BOMUTF16BigEndian:
+		return bomUTF16BigEndian
+
+	case BOMUTF32LittleEndian:
+		return bomUTF32LittleEndian
+
+	case BOMUTF32BigEndian:
+		return bomUTF32BigEndian
+	}
+
+	return nil
 }
 
 func DecodeUTFWithOptionalBOM(b []byte) (str string, err error) {
