@@ -18,14 +18,14 @@ func RandomStringBytes(length int) []byte {
 	if length < 0 {
 		panic("invalid length for RandomStringBytes")
 	}
-	numRandomBytes := (length*6 + 7) / 8
-	encodedLen := base64.RawURLEncoding.EncodedLen(numRandomBytes)
-	randomBytes := make([]byte, numRandomBytes)
+	randomBytesLen := (length*6 + 7) / 8
+	randomBytes := make([]byte, randomBytesLen)
 	_, err := rand.Read(randomBytes)
 	if err != nil {
 		panic(err)
 	}
-	result := make([]byte, encodedLen)
-	base64.RawURLEncoding.Encode(result, randomBytes)
-	return result[:length]
+	encodedLen := base64.RawURLEncoding.EncodedLen(randomBytesLen)
+	encoded := make([]byte, encodedLen)
+	base64.RawURLEncoding.Encode(encoded, randomBytes)
+	return encoded[:length]
 }
