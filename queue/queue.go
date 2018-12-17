@@ -2,18 +2,25 @@ package queue
 
 import "sync"
 
+var (
+	ChanLen           = 32
+	InitialBufferSize = 8
+)
+
 type Queue interface {
 	Add(items ...interface{})
 	Next() <-chan interface{}
+	Len() int
+	Cap() int
 	Close()
 }
 
 func New() Queue {
 	q := &queue{
-		buffer: buffer{
-			items: make([]interface{}, 16),
+		channel: make(chan interface{}, ChanLen),
+		buffer: ringBuffer{
+			items: make([]interface{}, InitialBufferSize),
 		},
-		channel: make(chan interface{}, 16),
 	}
 	q.bufferCond = sync.NewCond(&q.mutex)
 	go q.channelPump()
@@ -21,10 +28,10 @@ func New() Queue {
 }
 
 type queue struct {
-	mutex      sync.Mutex
+	mutex      sync.RWMutex
 	bufferCond *sync.Cond
 	channel    chan interface{}
-	buffer     buffer
+	buffer     ringBuffer
 	closed     bool
 }
 
@@ -88,6 +95,20 @@ func (q *queue) Add(items ...interface{}) {
 
 func (q *queue) Next() <-chan interface{} {
 	return q.channel
+}
+
+func (q *queue) Len() int {
+	q.mutex.RLock()
+	defer q.mutex.RUnlock()
+
+	return len(q.channel) + q.buffer.count
+}
+
+func (q *queue) Cap() int {
+	q.mutex.RLock()
+	defer q.mutex.RUnlock()
+
+	return cap(q.channel) + len(q.buffer.items)
 }
 
 func (q *queue) Close() {
