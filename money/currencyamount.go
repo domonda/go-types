@@ -19,29 +19,45 @@ func (ca *CurrencyAmount) String() string {
 	return fmt.Sprintf("%s %.2f", ca.Currency, ca.Amount)
 }
 
+func (ca *CurrencyAmount) Format(currencyFirst bool, thousandsSep, decimalSep byte, precision int) string {
+	amountStr := ca.Amount.Format(thousandsSep, decimalSep, precision)
+	if ca.Currency == "" {
+		return amountStr
+	}
+	if currencyFirst {
+		return string(ca.Currency) + " " + amountStr
+	}
+	return amountStr + " " + string(ca.Currency)
+}
+
 func (ca *CurrencyAmount) GoString() string {
 	return fmt.Sprintf("{Currency: %#v, Amount: %#v}", ca.Currency, ca.Amount)
 }
 
-func (ca *CurrencyAmount) GermanString() string {
-	return strings.Replace(ca.String(), ".", ",", 1)
-}
+func ParseCurrencyAmount(str string, acceptInt bool) (result CurrencyAmount, err error) {
+	str = strings.TrimSpace(str)
 
-func (ca *CurrencyAmount) StringCurrencyAfterAmount() string {
-	return fmt.Sprintf("%.2f %s", ca.Amount, ca.Currency)
-}
-
-func (ca *CurrencyAmount) GermanStringCurrencyAfterAmount() string {
-	return strings.Replace(ca.StringCurrencyAfterAmount(), ".", ",", 1)
-}
-
-func ParseCurrencyAmount(currency, amount string, acceptInt bool) (result CurrencyAmount, err error) {
-	result.Currency, err = NormalizeCurrency(currency)
-	if err != nil {
-		return CurrencyAmount{}, err
+	// Find first separator between currency and amount
+	if pos := strings.IndexAny(str, " .,'-+0123456789"); pos != -1 {
+		// Try parsing string until separator as currency
+		result.Currency, err = NormalizeCurrency(str[:pos])
+		if err == nil {
+			// Set str to remaining amount part
+			str = strings.TrimLeft(str[pos:], " ")
+		} else {
+			// If currency was not at string start, try from end
+			pos = strings.LastIndexAny(str, " .,'-+0123456789")
+			if pos != -1 && len(str)-pos > 0 {
+				result.Currency, err = NormalizeCurrency(str[pos+1:])
+				if err == nil {
+					// Set str to remaining amount part
+					str = strings.TrimRight(str[:pos+1], " ")
+				}
+			}
+		}
 	}
 
-	result.Amount, err = ParseAmount(amount, acceptInt)
+	result.Amount, err = ParseAmount(str, acceptInt)
 	if err != nil {
 		return CurrencyAmount{}, err
 	}

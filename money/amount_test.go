@@ -40,20 +40,24 @@ var amountTable = map[string]Amount{
 }
 
 var invalidAmounts = []string{
+	"EUR 123",
+	"1234.123.12,0",
 	"1,234,56",
-	"1000,234,560",
 	"10,2340,560",
+	// "1000,234,560",
+}
 
-	"3",
-	"666",
-	"123,4",
-	"123.4",
-	"1.2345",
-	"1000000.8989",
-	"1,2345",
-	"1000000,8989",
-	"1,234,567",
-	"1.234.567",
+var nonStandardFormatted = map[string]Amount{
+	"3":            3,
+	"666":          666,
+	"123,4":        123.4,
+	"123.4":        123.4,
+	"1.2345":       1.2345,
+	"1,2345":       1.2345,
+	"1000000.8989": 1000000.8989,
+	"1000000,8989": 1000000.8989,
+	"1,234,567":    1234567,
+	"1.234.567":    1234567,
 }
 
 func Test_ParseAmount(t *testing.T) {
@@ -70,6 +74,15 @@ func Test_ParseAmount(t *testing.T) {
 		amount, err := ParseAmount(str, false)
 		if err == nil {
 			t.Errorf("Parsed invalid amount '%s' as %f", str, amount)
+		}
+	}
+	for str, refAmount := range nonStandardFormatted {
+		amount, err := ParseAmount(str, true)
+		if err != nil {
+			t.Errorf("Could not parse amount %s because of error: '%s'", str, err)
+		}
+		if amount != refAmount {
+			t.Errorf("Parsed '%s' amount %f != %f", str, amount, refAmount)
 		}
 	}
 }

@@ -3,98 +3,19 @@ package money
 import (
 	"math"
 	"math/big"
-	"regexp"
 	"strconv"
 	"strings"
-	"unicode"
 
 	"github.com/domonda/errors"
 	"github.com/domonda/go-types/strfmt"
-	"github.com/domonda/go-types/strutil"
 )
 
 // Amount adds money related methods to float64
 type Amount float64
 
-const (
-	intAmountR         = `^\-?\d+$`
-	commaAmountR       = `^\-?\d+,\d{2}$`
-	commaPointsAmountR = `^\-?\d{1,3}(?:\.\d{3})*(?:,\d{2})$`
-	pointAmountR       = `^\-?\d+\.\d{2}$`
-	pointCommasAmountR = `^\-?\d{1,3}(?:,\d{3})*(?:\.\d{2})$`
-)
-
-var (
-	amountRegex = regexp.MustCompile(
-		commaAmountR +
-			`|` +
-			commaPointsAmountR +
-			`|` +
-			pointAmountR +
-			`|` +
-			pointCommasAmountR)
-
-	intAmountRegex         = regexp.MustCompile(intAmountR)
-	pointAmountRegex       = regexp.MustCompile(pointAmountR)
-	pointCommasAmountRegex = regexp.MustCompile(pointCommasAmountR)
-	commaAmountRegex       = regexp.MustCompile(commaAmountR)
-	commaPointsAmountRegex = regexp.MustCompile(commaPointsAmountR)
-)
-
-const (
-	intNumberR         = `^\-?\d+$`
-	commaNumberR       = `^\-?\d+,\d+$`
-	commaPointsNumberR = `^\-?\d{1,3}(?:\.\d{3})*(?:,\d+)?$`
-	pointNumberR       = `^\-?\d+\.\d+$`
-	pointCommasNumberR = `^\-?\d{1,3}(?:,\d{3})*(?:\.\d+)?$`
-)
-
-// var (
-// 	numberRegex = regexp.MustCompile(
-// 		intNumberR +
-// 			`|` +
-// 			commaNumberR +
-// 			`|` +
-// 			commaPointsNumberR +
-// 			`|` +
-// 			pointNumberR +
-// 			`|` +
-// 			pointCommasNumberR)
-
-// 	intNumberRegex         = regexp.MustCompile(intNumberR)
-// 	pointNumberRegex       = regexp.MustCompile(pointNumberR)
-// 	pointCommasNumberRegex = regexp.MustCompile(pointCommasNumberR)
-// 	commaNumberRegex       = regexp.MustCompile(commaNumberR)
-// 	commaPointsNumberRegex = regexp.MustCompile(commaPointsNumberR)
-// )
-
-func isAmountSplitRune(r rune) bool {
-	return unicode.IsSpace(r) || r == ':'
-}
-
-var isAmountTrimRune = strutil.IsRune('.', ',', ';')
-
-var AmountFinder amountFinder
-
-type amountFinder struct{}
-
-func (amountFinder) FindAllIndex(str []byte, n int) (indices [][]int) {
-	for _, pos := range strutil.SplitAndTrimIndex(str, isAmountSplitRune, isAmountTrimRune) {
-		if amountRegex.Match(str[pos[0]:pos[1]]) {
-			indices = append(indices, pos)
-		}
-	}
-	return indices
-}
-
-// StringIsAmount returns if str can be parsed as Amount.
-func StringIsAmount(str string, acceptInt bool) bool {
-	return amountRegex.MatchString(str) || (acceptInt && intAmountRegex.MatchString(str))
-}
-
 // ParseAmount tries to parse an Amount from str.
 func ParseAmount(str string, acceptInt bool) (Amount, error) {
-	f, _, decimalSep, err := strfmt.ParseFloatInfo(str)
+	f, _, decimalSep, _, err := strfmt.ParseFloatDetails(str)
 	if err != nil {
 		return 0, err
 	}
@@ -169,36 +90,38 @@ func (a Amount) RoundToCents() Amount {
 // String returns the amount formatted to two decimal places
 // String implements the fmt.Stringer interface.
 func (a Amount) String() string {
-	neg := a < 0
-	s := strconv.FormatInt(a.Abs().Cents(), 10)
+	return a.Format(0, '.', 2)
 
-	l := len(s) + 1
-	if l < 4 {
-		l = 4
-	}
-	if neg {
-		l++
-	}
-	var b strings.Builder
-	b.Grow(l)
+	// neg := a < 0
+	// s := strconv.FormatInt(a.Abs().Cents(), 10)
 
-	if neg {
-		b.WriteByte('-')
-	}
-	switch len(s) {
-	case 1:
-		b.WriteString("0.0")
-		b.WriteString(s)
-	case 2:
-		b.WriteString("0.")
-		b.WriteString(s)
-	default:
-		b.WriteString(s[:len(s)-2])
-		b.WriteByte('.')
-		b.WriteString(s[len(s)-2:])
-	}
+	// l := len(s) + 1
+	// if l < 4 {
+	// 	l = 4
+	// }
+	// if neg {
+	// 	l++
+	// }
+	// var b strings.Builder
+	// b.Grow(l)
 
-	return b.String()
+	// if neg {
+	// 	b.WriteByte('-')
+	// }
+	// switch len(s) {
+	// case 1:
+	// 	b.WriteString("0.0")
+	// 	b.WriteString(s)
+	// case 2:
+	// 	b.WriteString("0.")
+	// 	b.WriteString(s)
+	// default:
+	// 	b.WriteString(s[:len(s)-2])
+	// 	b.WriteByte('.')
+	// 	b.WriteString(s[len(s)-2:])
+	// }
+
+	// return b.String()
 }
 
 // StringOr returns ptr.String() or nilVal if ptr is nil.
@@ -213,14 +136,14 @@ func (ptr *Amount) StringOr(nilVal string) string {
 // but with decimalSep as decimal separator instead of a point
 // and optional grouping of the integer part.
 // Valid values for decimalSep are '.' and ','.
-// If groupSep is not zero, then the integer part of the number is grouped
-// with groupSep between every group of 3 digits.
-// Valid values for groupSep are [0, ',', '.'] and groupSep must be different from  decimalSep.
+// If thousandsSep is not zero, then the integer part of the number is grouped
+// with thousandsSep between every group of 3 digits.
+// Valid values for thousandsSep are [0, ',', '.'] and thousandsSep must be different from  decimalSep.
 // precision controls the number of digits (excluding the exponent).
 // The special precision -1 uses the smallest number of digits
 // necessary such that ParseFloat will return f exactly.
-func (a Amount) Format(groupSep, decimalSep byte, precision int) string {
-	return strfmt.FormatFloat(float64(a), groupSep, decimalSep, precision)
+func (a Amount) Format(thousandsSep, decimalSep byte, precision int) string {
+	return strfmt.FormatFloat(float64(a), thousandsSep, decimalSep, precision, true)
 }
 
 // BigFloat returns m as a new big.Float
