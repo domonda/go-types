@@ -7,23 +7,21 @@ import (
 	"unicode/utf16"
 )
 
-func DecodeUTF16Runes(b []byte, order binary.ByteOrder) ([]rune, error) {
-	if len(b)%2 == 1 {
-		return nil, errors.New("odd length of UTF-16 string")
+func decodeUTF16Runes(b []byte, order binary.ByteOrder) []rune {
+	numRunes := len(b) / 2
+	u16s := make([]uint16, numRunes)
+	for i := 0; i < numRunes; i++ {
+		u16s[i] = order.Uint16(b[i*2:])
 	}
-	u16s := make([]uint16, 0, len(b)/2)
-	for i, j := 0, len(b); i < j; i += 2 {
-		u16s = append(u16s, order.Uint16(b[i:]))
-	}
-	return utf16.Decode(u16s), nil
+	return utf16.Decode(u16s)
 }
 
 func DecodeUTF16(b []byte, order binary.ByteOrder) ([]byte, error) {
-	runes, err := DecodeUTF16Runes(b, order)
-	if err != nil {
-		return nil, err
+	if len(b)&1 != 0 {
+		return nil, errors.New("odd length of UTF-16 string")
 	}
-	var buf bytes.Buffer
+	runes := decodeUTF16Runes(b, order)
+	buf := bytes.Buffer{}
 	buf.Grow(len(runes))
 	for _, r := range runes {
 		buf.WriteRune(r)
@@ -32,9 +30,8 @@ func DecodeUTF16(b []byte, order binary.ByteOrder) ([]byte, error) {
 }
 
 func DecodeUTF16String(b []byte, order binary.ByteOrder) (string, error) {
-	runes, err := DecodeUTF16Runes(b, order)
-	if err != nil {
-		return "", err
+	if len(b)&1 != 0 {
+		return "", errors.New("odd length of UTF-16 string")
 	}
-	return string(runes), nil
+	return string(decodeUTF16Runes(b, order)), nil
 }
