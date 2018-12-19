@@ -26,6 +26,14 @@ var currencyIntAmountTable = map[string]CurrencyAmount{
 }
 
 var currencyAmountTable = map[string]CurrencyAmount{
+	"EUR -12,34": CurrencyAmount{"EUR", -12.34},
+	"EUR +12,34": CurrencyAmount{"EUR", 12.34},
+	"EUR-12,34":  CurrencyAmount{"EUR", -12.34},
+	"EUR+12,34":  CurrencyAmount{"EUR", 12.34},
+	"EUR -12.34": CurrencyAmount{"EUR", -12.34},
+	"EUR +12.34": CurrencyAmount{"EUR", 12.34},
+	"EUR-12.34":  CurrencyAmount{"EUR", -12.34},
+	"EUR+12.34":  CurrencyAmount{"EUR", 12.34},
 
 	"EUR1.234": CurrencyAmount{"EUR", 1.234},
 	"1.234EUR": CurrencyAmount{"EUR", 1.234},
