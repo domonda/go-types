@@ -137,6 +137,14 @@ func (id ID) Normalized() (ID, error) {
 	return ID(normalized), nil
 }
 
+func (id ID) NormalizedOrEmpty() ID {
+	normalized, err := id.Normalized()
+	if err != nil {
+		return ""
+	}
+	return normalized
+}
+
 func vatidCheckSumAT(id string) bool {
 	nonSpaceCount := 0
 	sum := 0
