@@ -47,6 +47,14 @@ func EmptyStringToNil(str string) interface{} {
 	return str
 }
 
+// StringToPtrEmptyToNil returns a pointer to str or nil if it str is empty.
+func StringToPtrEmptyToNil(str string) *string {
+	if str == "" {
+		return nil
+	}
+	return &str
+}
+
 // StringToNullString returns correct null.String
 func StringToNullString(str string) null.String {
 	if str == "" {

@@ -118,6 +118,11 @@ func (j JSON) Value() (driver.Value, error) {
 	return []byte(j), nil
 }
 
+// IsEmpty returns true if j is nil, or an empty JSON value like "", "{}", or "[]"
+func (j JSON) IsEmpty() bool {
+	return len(j) == 0 || string(j) == "{}" || string(j) == "[]"
+}
+
 // Scan stores the src in *j. No validation is done.
 func (j *JSON) Scan(src interface{}) error {
 	switch x := src.(type) {
