@@ -100,7 +100,7 @@ func (j *JSON) UnmarshalJSON(sourceJSON []byte) error {
 		*j = nil
 	} else {
 		// Use append trick to make a copy of sourceJSON
-		*j = append((*j)[0:0], sourceJSON...)
+		*j = append(JSON(nil), sourceJSON...)
 	}
 	return nil
 }
@@ -143,7 +143,7 @@ func (j *JSON) Scan(src interface{}) error {
 		} else {
 			// Need to copy because, src will be gone after call.
 			// Use append trick to make a copy of src bytes
-			*j = append((*j)[0:0], x...)
+			*j = append(JSON(nil), x...)
 		}
 
 	default:
