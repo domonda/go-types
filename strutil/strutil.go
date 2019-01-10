@@ -29,7 +29,7 @@ func panicIfNot(assumptions ...bool) {
 // 	return b.String()
 // }
 
-// IsRuneFunc is function pionter for specifiying if a rune matches a criteria
+// IsRuneFunc is function pionter for specifying if a rune matches a criteria
 type IsRuneFunc func(rune) bool
 
 // SplitAndTrimIndex first splits str into words not containing isSplitRune,

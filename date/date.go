@@ -8,11 +8,10 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/jinzhu/now"
-
 	"github.com/domonda/errors"
 	"github.com/domonda/go-types/language"
 	"github.com/domonda/go-types/strutil"
+	"github.com/jinzhu/now"
 )
 
 // Normalize returns str as normalized Date or an error.
@@ -185,7 +184,7 @@ func FromUntilFromYearAndMonths(year, months string) (fromDate, untilDate Date, 
 // source string as value of the implementing object.
 // It returns an error if source could not be parsed.
 // If the source string could be parsed, but was not
-// in the expeced normalized format, then false is
+// in the expected normalized format, then false is
 // returned for normalized and nil for err.
 // AssignString implements strfmt.StringAssignable
 func (date *Date) AssignString(source string) (normalized bool, err error) {

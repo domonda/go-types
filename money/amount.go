@@ -37,7 +37,7 @@ func AmountFromPtr(ptr *Amount, nilVal Amount) Amount {
 // source string as value of the implementing object.
 // It returns an error if source could not be parsed.
 // If the source string could be parsed, but was not
-// in the expeced normalized format, then false is
+// in the expected normalized format, then false is
 // returned for normalized and nil for err.
 // AssignString implements strfmt.StringAssignable
 func (a *Amount) AssignString(source string) (normalized bool, err error) {
@@ -176,7 +176,7 @@ func (a Amount) Abs() Amount {
 	return Amount(math.Abs(float64(a)))
 }
 
-// Valid returns if a is not infinit or NaN
+// Valid returns if a is not infinite or NaN
 func (a Amount) Valid() bool {
 	return !math.IsNaN(float64(a)) && !math.IsInf(float64(a), 0)
 }

@@ -8,11 +8,10 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/guregu/null"
-
 	"github.com/domonda/errors"
 	"github.com/domonda/go-types/country"
 	"github.com/domonda/go-types/strutil"
+	"github.com/guregu/null"
 )
 
 var ibanRegex = regexp.MustCompile(`^([A-Z]{2})(\d{2})([A-Z\d]{8,30})$`)
@@ -66,7 +65,7 @@ type IBAN string
 // source string as value of the implementing object.
 // It returns an error if source could not be parsed.
 // If the source string could be parsed, but was not
-// in the expeced normalized format, then false is
+// in the expected normalized format, then false is
 // returned for normalized and nil for err.
 // AssignString implements strfmt.StringAssignable
 func (iban *IBAN) AssignString(source string) (normalized bool, err error) {

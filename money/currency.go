@@ -4,9 +4,8 @@ import (
 	"database/sql/driver"
 	"strings"
 
-	"github.com/guregu/null"
-
 	"github.com/domonda/errors"
+	"github.com/guregu/null"
 )
 
 // StringIsCurrency returns if a string can be parsed as Currency.
@@ -32,7 +31,7 @@ func NormalizeCurrency(str string) (Currency, error) {
 // source string as value of the implementing object.
 // It returns an error if source could not be parsed.
 // If the source string could be parsed, but was not
-// in the expeced normalized format, then false is
+// in the expected normalized format, then false is
 // returned for normalized and nil for err.
 // AssignString implements strfmt.StringAssignable
 func (c *Currency) AssignString(source string) (normalized bool, err error) {
