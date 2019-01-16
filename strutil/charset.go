@@ -10,6 +10,8 @@ import (
 	fs "github.com/ungerik/go-fs"
 	"golang.org/x/text/encoding"
 	"golang.org/x/text/encoding/charmap"
+
+	"github.com/domonda/errors"
 )
 
 var sharedEncodings = map[string]encoding.Encoding{
@@ -32,6 +34,14 @@ func FindEncoding(name string) encoding.Encoding {
 		}
 	}
 	return sharedEncodings[name]
+}
+
+func MustFindEncoding(name string) encoding.Encoding {
+	enc := FindEncoding(name)
+	if enc == nil {
+		panic(errors.Errorf("encoding not found: '%s'", name))
+	}
+	return enc
 }
 
 func AllEncodingNames() (names []string) {
