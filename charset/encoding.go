@@ -1,6 +1,8 @@
 package charset
 
 import (
+	"bytes"
+	"strings"
 	"sync"
 
 	"golang.org/x/text/encoding"
@@ -17,6 +19,9 @@ type Encoding interface {
 }
 
 func GetEncoding(name string) (Encoding, error) {
+	if n := strings.ToUpper(name); n == "UTF-8" || n == "UTF8" {
+		return UTF8Encoding{}, nil
+	}
 	enc, name := findEncoding(name)
 	if enc == nil {
 		return nil, errors.Errorf("encoding not found: '%s'", name)
@@ -30,6 +35,52 @@ func MustGetEncoding(name string) Encoding {
 		panic(err)
 	}
 	return enc
+}
+
+func AutoDecode(data []byte, keyWords []string) (str []byte, enc string, err error) {
+	bom, data := SplitBOM(data)
+	if bom != NoBOM {
+		str, err = bom.Decode(data)
+		if err != nil {
+			return nil, "", err
+		}
+		return str, bom.String(), nil
+	}
+
+	var (
+		iso8859   = MustGetEncoding("ISO 8859-1")
+		macintosh = MustGetEncoding("Macintosh")
+	)
+
+	utf8Score := 0
+	iso8859Score := 0
+	macintoshScore := 0
+
+	iso8859Bytes, _ := iso8859.Decode(data)
+	macintoshBytes, _ := macintosh.Decode(data)
+
+	for _, keyWord := range keyWords {
+		key := []byte(keyWord)
+		utf8Score += bytes.Count(data, key)
+		iso8859Score += bytes.Count(iso8859Bytes, key)
+		macintoshScore += bytes.Count(macintoshBytes, key)
+	}
+
+	// t.Log(docCSV, accountConfig.ConfigName, utf8Score, iso8859Score, macintoshScore)
+
+	switch {
+	case iso8859Score > 0 && iso8859Score > utf8Score && iso8859Score > macintoshScore:
+		data = iso8859Bytes
+		enc = "ISO 8859-1"
+
+	case macintoshScore > 0 && macintoshScore > utf8Score && macintoshScore > iso8859Score:
+		data = macintoshBytes
+		enc = "Macintosh"
+
+	default:
+		enc = "UTF-8"
+	}
+	return data, enc, nil
 }
 
 type encodingImpl struct {
@@ -47,10 +98,7 @@ func (e *encodingImpl) Encode(utf8Str []byte) (encodedStr []byte, err error) {
 
 	if e.encoder == nil {
 		e.encoder = e.encoding.NewEncoder()
-	} else {
-		e.encoder.Reset()
 	}
-
 	return e.encoder.Bytes(utf8Str)
 }
 
@@ -60,10 +108,7 @@ func (e *encodingImpl) Decode(encodedStr []byte) (utf8Str []byte, err error) {
 
 	if e.decoder == nil {
 		e.decoder = e.encoding.NewDecoder()
-	} else {
-		e.decoder.Reset()
 	}
-
 	return e.decoder.Bytes(utf8Str)
 }
 
@@ -72,5 +117,5 @@ func (e *encodingImpl) Name() string {
 }
 
 func (e *encodingImpl) String() string {
-	return e.name + " Encoding"
+	return e.Name() + " Encoding"
 }

@@ -85,6 +85,21 @@ func DecodeStringWithBOM(b []byte) (string, error) {
 	return bom.DecodeString(data)
 }
 
+func (bom BOM) Encoding() (Encoding, error) {
+	switch bom {
+	case NoBOM, BOMUTF8:
+		return UTF8Encoding{}, nil
+
+	case BOMUTF16LittleEndian, BOMUTF16BigEndian:
+		return NewUTF16Encoding(bom.Endian()), nil
+
+	case BOMUTF32LittleEndian, BOMUTF32BigEndian:
+		return NewUTF32Encoding(bom.Endian()), nil
+	}
+
+	return nil, errors.Errorf("unsupported BOM: %v", []byte(bom))
+}
+
 func (bom BOM) Decode(data []byte) ([]byte, error) {
 	dataBOM, data := SplitBOM(data)
 	if dataBOM != NoBOM && dataBOM != bom {
