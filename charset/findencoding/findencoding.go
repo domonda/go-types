@@ -14,7 +14,7 @@ import (
 var PrintFileWithAllEncodingsArgs struct {
 	command.ArgsDef
 
-	File fs.File `arg:"file"`
+	File fs.FileReader `arg:"file"`
 }
 
 func PrintFileWithAllEncodings(file fs.FileReader) error {
