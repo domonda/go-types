@@ -1,4 +1,4 @@
-package utf
+package charset
 
 import (
 	"bytes"
@@ -75,12 +75,12 @@ func SplitBOM(b []byte) (BOM, []byte) {
 	return bom, b[len(bom):]
 }
 
-func Decode(b []byte) ([]byte, error) {
+func DecodeWithBOM(b []byte) ([]byte, error) {
 	bom, data := SplitBOM(b)
 	return bom.Decode(data)
 }
 
-func DecodeString(b []byte) (string, error) {
+func DecodeStringWithBOM(b []byte) (string, error) {
 	bom, data := SplitBOM(b)
 	return bom.DecodeString(data)
 }

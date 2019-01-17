@@ -448,3 +448,57 @@ var transliterations = map[rune]string{
 	'Œ': "OE",
 	'œ': "oe",
 }
+
+// SanitizeLineEndings converts all line endings to just '\n'
+func SanitizeLineEndings(text string) string {
+	// var (
+	// 	needsCopy = false
+	// 	buf bytes.Buffer
+	// 	lastByte byte
+	// )
+
+	// for i, b := range text {
+
+	// TODO optimized version
+
+	// 	lastByte = b
+	// }
+
+	// if needsCopy {
+	// 	return buf.Bytes()
+	// }
+	// return text
+
+	text = strings.Replace(text, "\r\n", "\n", -1)
+	text = strings.Replace(text, "\n\r", "\n", -1)
+	text = strings.Replace(text, "\r", "\n", -1)
+
+	return text
+}
+
+// SanitizeLineEndingsBytes converts all line endings to just '\n'
+func SanitizeLineEndingsBytes(text []byte) []byte {
+	// var (
+	// 	needsCopy = false
+	// 	buf bytes.Buffer
+	// 	lastByte byte
+	// )
+
+	// for i, b := range text {
+
+	// TODO optimized version
+
+	// 	lastByte = b
+	// }
+
+	// if needsCopy {
+	// 	return buf.Bytes()
+	// }
+	// return text
+
+	text = bytes.Replace(text, []byte{'\r', '\n'}, []byte{'\n'}, -1)
+	text = bytes.Replace(text, []byte{'\n', '\r'}, []byte{'\n'}, -1)
+	text = bytes.Replace(text, []byte{'\r'}, []byte{'\n'}, -1)
+
+	return text
+}

@@ -1,4 +1,4 @@
-package utf
+package charset
 
 import (
 	"encoding/binary"
