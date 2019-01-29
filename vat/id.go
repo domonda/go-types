@@ -7,12 +7,11 @@ import (
 	"github.com/domonda/errors"
 	"github.com/domonda/go-types/country"
 	"github.com/domonda/go-types/strutil"
-	"github.com/guregu/null"
 )
 
 // ID is a european VAT ID.
 // ID implements the database/sql.Scanner and database/sql/driver.Valuer interfaces,
-// and will treat an empty string ID as SQL NULL value.
+// and will treat an empty ID string as SQL NULL value.
 type ID string
 
 // NormalizeVATID returns str as normalized VAT ID or an error.
@@ -67,15 +66,15 @@ func (id *ID) AssignString(source string) (normalized bool, err error) {
 
 // Scan implements the database/sql.Scanner interface.
 func (id *ID) Scan(value interface{}) error {
-	var ns null.String
-	err := ns.Scan(value)
-	if err != nil {
-		return err
-	}
-	if ns.Valid {
-		*id = ID(ns.String)
-	} else {
+	switch x := value.(type) {
+	case string:
+		*id = ID(x)
+	case []byte:
+		*id = ID(x)
+	case nil:
 		*id = ""
+	default:
+		return errors.Errorf("can't scan SQL value of type %T as vat.ID", value)
 	}
 	return nil
 }

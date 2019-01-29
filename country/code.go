@@ -1,6 +1,7 @@
 package country
 
 import (
+	"database/sql/driver"
 	"strings"
 
 	"github.com/domonda/errors"
@@ -9,13 +10,36 @@ import (
 // Code according ISO 3166-1 alpha 2
 type Code string
 
-func (cc Code) Valid() bool {
-	_, ok := countryMap[cc]
+func (c Code) Valid() bool {
+	_, ok := countryMap[c]
 	return ok
 }
 
-func (cc Code) CountryName() string {
-	return countryMap[cc]
+func (c Code) CountryName() string {
+	return countryMap[c]
+}
+
+// Scan implements the database/sql.Scanner interface.
+func (c *Code) Scan(value interface{}) error {
+	switch x := value.(type) {
+	case string:
+		*c = Code(x)
+	case []byte:
+		*c = Code(x)
+	case nil:
+		*c = ""
+	default:
+		return errors.Errorf("can't scan SQL value of type %T as country.Code", value)
+	}
+	return nil
+}
+
+// Value implements the driver database/sql/driver.Valuer interface.
+func (c Code) Value() (driver.Value, error) {
+	if c == "" {
+		return nil, nil
+	}
+	return string(c), nil
 }
 
 // AssignString tries to parse and assign the passed
@@ -25,13 +49,13 @@ func (cc Code) CountryName() string {
 // in the expected normalized format, then false is
 // returned for normalized and nil for err.
 // AssignString implements strfmt.StringAssignable
-func (cc *Code) AssignString(source string) (normalized bool, err error) {
-	newCC := Code(strings.ToUpper(source))
-	if !newCC.Valid() {
+func (c *Code) AssignString(source string) (normalized bool, err error) {
+	newCode := Code(strings.ToUpper(source))
+	if !newCode.Valid() {
 		return false, errors.Errorf("Invalid country code: %#v", source)
 	}
-	*cc = newCC
-	return newCC == Code(source), nil
+	*c = newCode
+	return newCode == Code(source), nil
 }
 
 const (

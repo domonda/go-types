@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/domonda/errors"
-	"github.com/guregu/null"
 )
 
 // StringIsCurrency returns if a string can be parsed as Currency.
@@ -16,7 +15,7 @@ func StringIsCurrency(str string) bool {
 
 // Currency is holds a 3 character ISO 4217 alphabetic code.
 // Currency implements the database/sql.Scanner and database/sql/driver.Valuer interfaces,
-// and will treat an empty string Currency as SQL NULL value.
+// and will treat an empty Currency string as SQL NULL value.
 // The main difference between Currency and NullCurrency is:
 // Currency("").Valid() == false
 // NullCurrency("").Valid() == true
@@ -101,15 +100,15 @@ func (c Currency) Normalized() (Currency, error) {
 
 // Scan implements the database/sql.Scanner interface.
 func (c *Currency) Scan(value interface{}) error {
-	var ns null.String
-	err := ns.Scan(value)
-	if err != nil {
-		return err
-	}
-	if ns.Valid {
-		*c = Currency(ns.String)
-	} else {
+	switch x := value.(type) {
+	case string:
+		*c = Currency(x)
+	case []byte:
+		*c = Currency(x)
+	case nil:
 		*c = ""
+	default:
+		return errors.Errorf("can't scan SQL value of type %T as Currency", value)
 	}
 	return nil
 }

@@ -3,13 +3,13 @@ package money
 import (
 	"database/sql/driver"
 
-	"github.com/guregu/null"
+	"github.com/domonda/errors"
 )
 
 // NullCurrency holds a 3 character ISO 4217 alphabetic code,
 // or an empty string as valid value representing NULL in SQL databases.
 // NullCurrency implements the database/sql.Scanner and database/sql/driver.Valuer interfaces,
-// and will treat an empty string NullCurrency as SQL NULL value.
+// and will treat an empty NullCurrency string as SQL NULL value.
 // The main difference between Currency and NullCurrency is:
 // Currency("").Valid() == false
 // NullCurrency("").Valid() == true
@@ -50,15 +50,15 @@ func (c NullCurrency) Normalized() (NullCurrency, error) {
 
 // Scan implements the database/sql.Scanner interface.
 func (c *NullCurrency) Scan(value interface{}) error {
-	var ns null.String
-	err := ns.Scan(value)
-	if err != nil {
-		return err
-	}
-	if ns.Valid {
-		*c = NullCurrency(ns.String)
-	} else {
+	switch x := value.(type) {
+	case string:
+		*c = NullCurrency(x)
+	case []byte:
+		*c = NullCurrency(x)
+	case nil:
 		*c = ""
+	default:
+		return errors.Errorf("can't scan SQL value of type %T as NullCurrency", value)
 	}
 	return nil
 }

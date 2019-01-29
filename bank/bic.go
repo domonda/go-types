@@ -2,71 +2,10 @@ package bank
 
 import (
 	"database/sql/driver"
-	"regexp"
-	"unicode/utf8"
 
 	"github.com/domonda/errors"
 	"github.com/domonda/go-types/country"
-	"github.com/domonda/go-types/strutil"
-	"github.com/guregu/null"
 )
-
-var (
-	bicFindRegex  = regexp.MustCompile(`[A-Z]{4}([A-Z]{2})[A-Z2-9][A-NP-Z0-9](?:XXX|[A-WY-Z0-9][A-Z0-9]{2})?`)
-	bicExactRegex = regexp.MustCompile(`^([A-Z]{4})([A-Z]{2})([A-Z2-9][A-NP-Z0-9])(XXX|[A-WY-Z0-9][A-Z0-9]{2})?$`)
-)
-
-const (
-	BICMinLength = 8
-	BICMaxLength = 11
-)
-
-var BICFinder bicFinder
-
-type bicFinder struct{}
-
-func (bicFinder) FindAllIndex(str []byte, n int) [][]int {
-	// fmt.Println(string(str))
-	indices := bicFindRegex.FindAllSubmatchIndex(str, n)
-	if len(indices) == 0 {
-		return nil
-	}
-	result := make([][]int, 0, len(indices))
-	for _, matchIndices := range indices {
-		if len(matchIndices) != 2*2 {
-			panic(errors.Errorf("Expected 4 match indices but len(matchIndices) = %d", len(matchIndices)))
-		}
-		// for _, i := range matchIndices {
-		// 	if i < 0 || i > len(str) {
-		// 		fmt.Println("bicFinder invalid index", i, len(str))
-		// 		continue
-		// 	}
-		// }
-		bic := str[matchIndices[0]:matchIndices[1]]
-		countryCode := country.Code(str[matchIndices[2]:matchIndices[3]])
-		_, isValidCountry := ibanCountryLengthMap[countryCode]
-		_, isFalse := falseBICs[BIC(bic)]
-		if isValidCountry && !isFalse && bicExactRegex.Match(bic) {
-			// BIC must also be surrounded by line bounds,
-			// or a separator rune
-			if matchIndices[0] > 0 {
-				r, _ := utf8.DecodeLastRune(str[:matchIndices[0]])
-				if !strutil.IsWordSeparator(r) {
-					continue
-				}
-			}
-			if matchIndices[1] < len(str) {
-				r, _ := utf8.DecodeRune(str[matchIndices[1]:])
-				if !strutil.IsWordSeparator(r) {
-					continue
-				}
-			}
-
-			result = append(result, matchIndices[:2])
-		}
-	}
-	return result
-}
 
 // ValidateBIC returns str as valid BIC or an error.
 func ValidateBIC(str string) (BIC, error) {
@@ -82,8 +21,8 @@ func StringIsBIC(str string) bool {
 }
 
 // BIC is a SWIFT Business Identifier Code.
-// BIC implements the database/sql.Scanner and database/sql/driver.Valuer interfaces,
-// and will treat an empty string BIC as SQL NULL value.
+// BIC implements the database/sql.Scanner and database/sql/driver.Valuer interfaces
+// and will treat an empty BIC string as SQL NULL value.
 type BIC string
 
 // AssignString tries to parse and assign the passed
@@ -174,16 +113,15 @@ func (bic BIC) ReceiverPaisFees() bool {
 
 // Scan implements the database/sql.Scanner interface.
 func (bic *BIC) Scan(value interface{}) error {
-	// fmt.Println("BIC.Scan", value)
-	var ns null.String
-	err := ns.Scan(value)
-	if err != nil {
-		return err
-	}
-	if ns.Valid {
-		*bic = BIC(ns.String)
-	} else {
+	switch x := value.(type) {
+	case string:
+		*bic = BIC(x)
+	case []byte:
+		*bic = BIC(x)
+	case nil:
 		*bic = ""
+	default:
+		return errors.Errorf("can't scan SQL value of type %T as BIC", value)
 	}
 	return nil
 }

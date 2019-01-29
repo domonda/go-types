@@ -11,7 +11,6 @@ import (
 	"github.com/domonda/errors"
 	"github.com/domonda/go-types/country"
 	"github.com/domonda/go-types/strutil"
-	"github.com/guregu/null"
 )
 
 var ibanRegex = regexp.MustCompile(`^([A-Z]{2})(\d{2})([A-Z\d]{8,30})$`)
@@ -32,33 +31,9 @@ func StringIsIBAN(str string) bool {
 	return err == nil
 }
 
-var IBANFinder ibanFinder
-
-type ibanFinder struct{}
-
-func (ibanFinder) FindAllIndex(str []byte, n int) (result [][]int) {
-	strLen := len(str)
-	max := strLen - IBANMinLength
-	for i := 0; i <= max; i++ {
-		countryCode := country.Code(str[i : i+2])
-		countryLength, found := ibanCountryLengthMap[countryCode]
-		if found {
-			end := i + countryLength
-			if end <= strLen {
-				if IBAN(str[i:end]).Valid() {
-					result = append(result, []int{i, end})
-					i = end - 1
-					continue
-				}
-			}
-		}
-	}
-	return result
-}
-
 // IBAN is a International Bank Account Number.
 // IBAN implements the database/sql.Scanner and database/sql/driver.Valuer interfaces,
-// and will treat an empty string IBAN as SQL NULL value.
+// and will treat an empty IBAN string as SQL NULL value.
 type IBAN string
 
 // AssignString tries to parse and assign the passed
@@ -204,15 +179,15 @@ func (iban IBAN) isCheckSumValid() bool {
 
 // Scan implements the database/sql.Scanner interface.
 func (iban *IBAN) Scan(value interface{}) error {
-	var ns null.String
-	err := ns.Scan(value)
-	if err != nil {
-		return err
-	}
-	if ns.Valid {
-		*iban = IBAN(ns.String)
-	} else {
+	switch x := value.(type) {
+	case string:
+		*iban = IBAN(x)
+	case []byte:
+		*iban = IBAN(x)
+	case nil:
 		*iban = ""
+	default:
+		return errors.Errorf("can't scan SQL value of type %T as IBAN", value)
 	}
 	return nil
 }

@@ -3,7 +3,7 @@ package bank
 import (
 	"database/sql/driver"
 
-	"github.com/guregu/null"
+	"github.com/domonda/errors"
 )
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -27,15 +27,15 @@ func (t AccountType) Valid() bool {
 
 // Scan implements the database/sql.Scanner interface.
 func (t *AccountType) Scan(value interface{}) error {
-	var ns null.String
-	err := ns.Scan(value)
-	if err != nil {
-		return err
-	}
-	if ns.Valid {
-		*t = AccountType(ns.String)
-	} else {
+	switch x := value.(type) {
+	case string:
+		*t = AccountType(x)
+	case []byte:
+		*t = AccountType(x)
+	case nil:
 		*t = ""
+	default:
+		return errors.Errorf("can't scan SQL value of type %T as AccountType", value)
 	}
 	return nil
 }
