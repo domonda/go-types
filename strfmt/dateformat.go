@@ -38,7 +38,7 @@ func (f *DateFormat) AssignString(dest reflect.Value, str string) error {
 			tPtr = &t
 		}
 		if tPtr.IsZero() {
-			return errors.Errorf("Can't assign zero time")
+			return errors.Errorf("can't assign zero time")
 		}
 		// if !f.TimeZone.IsLocal() {
 		// 	*tPtr = tPtr.In(f.TimeZone.Get())
@@ -91,7 +91,7 @@ func (f *DateFormat) FormatString(val reflect.Value) (string, error) {
 		return x.Format(f.Layout), nil
 	}
 
-	return "", errors.Errorf("Could not format as date string: %T", val)
+	return "", errors.Errorf("could not format as date string: %T", val)
 }
 
 type dateOrTime interface {

@@ -76,7 +76,7 @@ func (a *NullBools) Scan(src interface{}) error {
 		return nil
 	}
 
-	return errors.Errorf("Can't convert %T to sqlarray.NullBools", src)
+	return errors.Errorf("can't convert %T to sqlarray.NullBools", src)
 }
 
 func (a *NullBools) scanBytes(src []byte) error {
@@ -85,7 +85,7 @@ func (a *NullBools) scanBytes(src []byte) error {
 	}
 
 	if src[0] != '{' || src[len(src)-1] != '}' {
-		return errors.Errorf("Can't parse '%s' as sqlarray.NullBools", string(src))
+		return errors.Errorf("can't parse '%s' as sqlarray.NullBools", string(src))
 	}
 
 	elements := strings.Split(string(src[1:len(src)-1]), ",")

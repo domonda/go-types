@@ -73,7 +73,7 @@ func (a *NullFloats) Scan(src interface{}) error {
 		return nil
 	}
 
-	return errors.Errorf("Can't convert %T to sqlarray.NullFloats", src)
+	return errors.Errorf("can't convert %T to sqlarray.NullFloats", src)
 }
 
 func (a *NullFloats) scanBytes(src []byte) error {
@@ -82,7 +82,7 @@ func (a *NullFloats) scanBytes(src []byte) error {
 	}
 
 	if src[0] != '{' || src[len(src)-1] != '}' {
-		return errors.Errorf("Can't parse '%s' as sqlarray.NullFloats", string(src))
+		return errors.Errorf("can't parse '%s' as sqlarray.NullFloats", string(src))
 	}
 
 	elements := strings.Split(string(src[1:len(src)-1]), ",")

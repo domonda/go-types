@@ -52,7 +52,7 @@ func (c Code) Value() (driver.Value, error) {
 func (c *Code) AssignString(source string) (normalized bool, err error) {
 	newCode := Code(strings.ToUpper(source))
 	if !newCode.Valid() {
-		return false, errors.Errorf("Invalid country code: %#v", source)
+		return false, errors.Errorf("invalid country code: %#v", source)
 	}
 	*c = newCode
 	return newCode == Code(source), nil

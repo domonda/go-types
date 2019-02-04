@@ -53,7 +53,7 @@ func (a *Floats) Scan(src interface{}) error {
 		return nil
 	}
 
-	return errors.Errorf("Can't convert %T to Floats", src)
+	return errors.Errorf("can't convert %T to Floats", src)
 }
 
 func (a *Floats) scanBytes(src []byte) (err error) {
@@ -62,7 +62,7 @@ func (a *Floats) scanBytes(src []byte) (err error) {
 	}
 
 	if src[0] != '{' || src[len(src)-1] != '}' {
-		return errors.Errorf("Can't parse '%s' as Floats", string(src))
+		return errors.Errorf("can't parse '%s' as Floats", string(src))
 	}
 
 	elements := strings.Split(string(src[1:len(src)-1]), ",")

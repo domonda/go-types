@@ -203,11 +203,11 @@ func (iban IBAN) Value() (driver.Value, error) {
 func (iban *IBAN) BankAndAccountNumbers() (bankNr, accountNr string, err error) {
 	country := iban.CountryCode()
 	if country == "" {
-		return "", "", errors.Errorf("Invalid IBAN: '%s'", *iban)
+		return "", "", errors.Errorf("invalid IBAN: '%s'", *iban)
 	}
 	getNumbers, found := bankAndAccountNumbers[country]
 	if !found {
-		return "", "", errors.Errorf("Can't extract bank and account numbers from IBAN: '%s'", *iban)
+		return "", "", errors.Errorf("can't extract bank and account numbers from IBAN: '%s'", *iban)
 	}
 	bankNr, accountNr = getNumbers(string(*iban))
 	return bankNr, accountNr, nil

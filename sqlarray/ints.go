@@ -53,7 +53,7 @@ func (a *Ints) Scan(src interface{}) error {
 		return nil
 	}
 
-	return errors.Errorf("Can't convert %T to sqlarray.Ints", src)
+	return errors.Errorf("can't convert %T to sqlarray.Ints", src)
 }
 
 func (a *Ints) scanBytes(src []byte) (err error) {
@@ -62,7 +62,7 @@ func (a *Ints) scanBytes(src []byte) (err error) {
 	}
 
 	if src[0] != '{' || src[len(src)-1] != '}' {
-		return errors.Errorf("Can't parse '%s' as sqlarray.Ints", string(src))
+		return errors.Errorf("can't parse '%s' as sqlarray.Ints", string(src))
 	}
 
 	elements := strings.Split(string(src[1:len(src)-1]), ",")

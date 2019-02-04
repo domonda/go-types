@@ -409,7 +409,7 @@ func (date *Date) Scan(value interface{}) (err error) {
 		return nil
 	}
 
-	return errors.Errorf("Can't scan value '%#v' of type %T as data.Date", value, value)
+	return errors.Errorf("can't scan value '%#v' of type %T as data.Date", value, value)
 }
 
 // Value implements the driver database/sql/driver.Valuer interface.
@@ -557,7 +557,7 @@ func normalizeDate(str string, langHint language.Code) (string, error) {
 			expandVal2ToFullYear()
 		}
 		if !validDay(val1) || !validYear(val2) {
-			return "", errors.Errorf("Invalid date: '%s'", str)
+			return "", errors.Errorf("invalid date: '%s'", str)
 		}
 		// m DD YYYY
 		return fmt.Sprintf("%s-%02d-%s", parts[2], month0, parts[1]), nil
@@ -574,14 +574,14 @@ func normalizeDate(str string, langHint language.Code) (string, error) {
 
 	case len0 == 2 && month1 != 0 && len2 == 4:
 		if !validDay(val0) || !validYear(val2) {
-			return "", errors.Errorf("Invalid date: '%s'", str)
+			return "", errors.Errorf("invalid date: '%s'", str)
 		}
 		// DD m YYYY
 		return fmt.Sprintf("%s-%02d-%s", parts[2], month1, parts[0]), nil
 
 	case len0 == 4 && month1 != 0 && len2 == 2:
 		if !validYear(val0) || !validDay(val2) {
-			return "", errors.Errorf("Invalid date: '%s'", str)
+			return "", errors.Errorf("invalid date: '%s'", str)
 		}
 		// YYYY m DD
 		return fmt.Sprintf("%s-%02d-%s", parts[0], month1, parts[2]), nil
@@ -603,7 +603,7 @@ func normalizeDate(str string, langHint language.Code) (string, error) {
 
 	case len0 == 4 && len1 == 2 && len2 == 2:
 		if !validYear(val0) || !validMonth(val1) || !validDay(val2) {
-			return "", errors.Errorf("Invalid date: '%s'", str)
+			return "", errors.Errorf("invalid date: '%s'", str)
 		}
 		return strings.Join(parts, "-"), nil
 
@@ -619,7 +619,7 @@ func normalizeDate(str string, langHint language.Code) (string, error) {
 			// DD MM YYYY
 		}
 		if !validDay(val0) || !validMonth(val1) || !validYear(val2) {
-			return "", errors.Errorf("Invalid date: '%s'", str)
+			return "", errors.Errorf("invalid date: '%s'", str)
 		}
 		// DD MM YYYY
 		parts[0], parts[2] = parts[2], parts[0]
@@ -627,7 +627,7 @@ func normalizeDate(str string, langHint language.Code) (string, error) {
 		return strings.Join(parts, "-"), nil
 	}
 
-	return "", errors.Errorf("Invalid date: '%s'", str)
+	return "", errors.Errorf("invalid date: '%s'", str)
 }
 
 func validYear(year int) bool {
