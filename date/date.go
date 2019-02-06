@@ -8,10 +8,11 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/jinzhu/now"
+
 	"github.com/domonda/errors"
 	"github.com/domonda/go-types/language"
 	"github.com/domonda/go-types/strutil"
-	"github.com/jinzhu/now"
 )
 
 // Normalize returns str as normalized Date or an error.
@@ -30,6 +31,10 @@ func StringIsDate(str string, lang ...language.Code) bool {
 const (
 	// Format used for the Date type, compatible with time.Time.Format()
 	Format = "2006-01-02"
+
+	// Null is an empty string and will be treatet as SQL NULL.
+	// date.Null.IsZero() == true
+	Null Date = ""
 
 	Length = 10 // len("2006-01-02")
 
@@ -52,14 +57,14 @@ func Of(year int, month time.Month, day int) Date {
 
 func OfTime(t time.Time) Date {
 	if t.IsZero() {
-		return ""
+		return Null
 	}
 	return Date(t.Format(Format))
 }
 
 func OfTimePtr(t *time.Time) Date {
 	if t == nil {
-		return ""
+		return Null
 	}
 	return OfTime(*t)
 }
@@ -405,7 +410,7 @@ func (date *Date) Scan(value interface{}) (err error) {
 		return nil
 
 	case nil:
-		*date = ""
+		*date = Null
 		return nil
 	}
 

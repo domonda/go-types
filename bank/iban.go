@@ -18,6 +18,10 @@ var ibanRegex = regexp.MustCompile(`^([A-Z]{2})(\d{2})([A-Z\d]{8,30})$`)
 const (
 	IBANMinLength = 15
 	IBANMaxLength = 32
+
+	// NullIBAN is an empty string and will be treatet as SQL NULL.
+	// bank.NullIBAN.Valid() == false
+	NullIBAN IBAN = ""
 )
 
 // NormalizeIBAN returns str as normalized IBAN or an error.
@@ -185,7 +189,7 @@ func (iban *IBAN) Scan(value interface{}) error {
 	case []byte:
 		*iban = IBAN(x)
 	case nil:
-		*iban = ""
+		*iban = NullIBAN
 	default:
 		return errors.Errorf("can't scan SQL value of type %T as IBAN", value)
 	}
@@ -194,7 +198,7 @@ func (iban *IBAN) Scan(value interface{}) error {
 
 // Value implements the driver database/sql/driver.Valuer interface.
 func (iban IBAN) Value() (driver.Value, error) {
-	if iban == "" {
+	if iban == NullIBAN {
 		return nil, nil
 	}
 	return string(iban), nil

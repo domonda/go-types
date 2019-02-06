@@ -72,7 +72,7 @@ func (id *ID) Scan(value interface{}) error {
 	case []byte:
 		*id = ID(x)
 	case nil:
-		*id = ""
+		*id = Null
 	default:
 		return errors.Errorf("can't scan SQL value of type %T as vat.ID", value)
 	}
@@ -81,7 +81,7 @@ func (id *ID) Scan(value interface{}) error {
 
 // Value implements the driver database/sql/driver.Valuer interface.
 func (id ID) Value() (driver.Value, error) {
-	if id == "" {
+	if id == Null {
 		return nil, nil
 	}
 	return string(id), nil
@@ -99,7 +99,7 @@ func (id ID) ValidAndNormalized() bool {
 
 func (id ID) CountryCode() country.Code {
 	if !id.Valid() {
-		return ""
+		return country.Null
 	}
 	code := country.Code(id[:2])
 	if code == "EL" {
@@ -138,7 +138,7 @@ func (id ID) Normalized() (ID, error) {
 func (id ID) NormalizedOrEmpty() ID {
 	normalized, err := id.Normalized()
 	if err != nil {
-		return ""
+		return Null
 	}
 	return normalized
 }
