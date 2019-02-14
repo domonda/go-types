@@ -92,6 +92,11 @@ func (id ID) Valid() bool {
 	return err == nil
 }
 
+func (id ID) Validate() error {
+	_, err := id.Normalized()
+	return err
+}
+
 func (id ID) ValidAndNormalized() bool {
 	norm, err := id.Normalized()
 	return err == nil && id == norm
