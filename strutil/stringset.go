@@ -27,7 +27,10 @@ func (set StringSet) Sorted() (s []string) {
 }
 
 func (set StringSet) String() string {
-	return "[" + strings.Join(set.Sorted(), ",") + "]"
+	if len(set) == 0 {
+		return `[]`
+	}
+	return `["` + strings.Join(set.Sorted(), `", "`) + `"]`
 }
 
 func (set StringSet) AddSlice(s []string) {
