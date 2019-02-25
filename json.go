@@ -115,6 +115,9 @@ func (j JSON) Valid() bool {
 
 // Value returns j as a SQL value.
 func (j JSON) Value() (driver.Value, error) {
+	if len(j) == 0 {
+		return nil, nil
+	}
 	return []byte(j), nil
 }
 
