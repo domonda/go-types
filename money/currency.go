@@ -16,9 +16,9 @@ func StringIsCurrency(str string) bool {
 // Currency is holds a 3 character ISO 4217 alphabetic code.
 // Currency implements the database/sql.Scanner and database/sql/driver.Valuer interfaces,
 // and will treat an empty Currency string as SQL NULL value.
-// The main difference between Currency and NullCurrency is:
+// The main difference between Currency and NullableCurrency is:
 // Currency("").Valid() == false
-// NullCurrency("").Valid() == true
+// NullableCurrency("").Valid() == true
 type Currency string
 
 // NormalizeCurrency returns str as normalized Currency or an error.
@@ -51,10 +51,10 @@ func (c *Currency) GetOrDefault(defaultVal Currency) Currency {
 	return *c
 }
 
-// NullCurrency returns c as NullCurrency where
-// NullCurrency("").Valid() == true
-func (c Currency) NullCurrency() NullCurrency {
-	return NullCurrency(c)
+// NullableCurrency returns c as NullableCurrency where
+// NullableCurrency("").Valid() == true
+func (c Currency) NullableCurrency() NullableCurrency {
+	return NullableCurrency(c)
 }
 
 // Valid returns true if c is a valid 3 character ISO 4217 alphabetic code.

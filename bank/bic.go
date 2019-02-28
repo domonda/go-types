@@ -29,6 +29,9 @@ const NullBIC BIC = ""
 // and will treat an empty BIC string as SQL NULL value.
 type BIC string
 
+// NullableBIC is a BIC value which can hold an emtpy string ("") as the null value.
+type NullableBIC = BIC
+
 // AssignString tries to parse and assign the passed
 // source string as value of the implementing object.
 // It returns an error if source could not be parsed.

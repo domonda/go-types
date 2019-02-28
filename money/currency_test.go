@@ -45,5 +45,5 @@ func Test_NormalizeCurrency(t *testing.T) {
 
 func Test_NullCurrency(t *testing.T) {
 	assert.False(t, Currency("").Valid())
-	assert.True(t, NullCurrency("").Valid())
+	assert.True(t, NullableCurrency("").Valid())
 }
