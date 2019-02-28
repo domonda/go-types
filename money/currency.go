@@ -51,6 +51,12 @@ func (c *Currency) GetOrDefault(defaultVal Currency) Currency {
 	return *c
 }
 
+// NullCurrency returns c as NullCurrency where
+// NullCurrency("").Valid() == true
+func (c Currency) NullCurrency() NullCurrency {
+	return NullCurrency(c)
+}
+
 // Valid returns true if c is a valid 3 character ISO 4217 alphabetic code.
 func (c Currency) Valid() bool {
 	_, valid := currencyCodeToName[c]

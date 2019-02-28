@@ -25,7 +25,6 @@ func (c *NullCurrency) GetOrDefault(defaultVal NullCurrency) NullCurrency {
 }
 
 // Valid returns true if c is an empty string, or a valid 3 character ISO 4217 alphabetic code.
-// Safe to call on a nil pointer.
 func (c NullCurrency) Valid() bool {
 	return c == "" || Currency(c).Valid()
 }
