@@ -40,6 +40,9 @@ func StringIsIBAN(str string) bool {
 // and will treat an empty IBAN string as SQL NULL value.
 type IBAN string
 
+// NullableIBAN is a IBAN value which can hold an emtpy string ("") as the null value.
+type NullableIBAN = IBAN
+
 // AssignString tries to parse and assign the passed
 // source string as value of the implementing object.
 // It returns an error if source could not be parsed.
