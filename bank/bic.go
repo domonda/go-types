@@ -20,9 +20,8 @@ func StringIsBIC(str string) bool {
 	return BIC(str).Valid()
 }
 
-// NullBIC is an empty string and will be treatet as SQL NULL.
-// bank.NullBIC.Valid() == false
-const NullBIC BIC = ""
+// BICNull is an empty string and will be treatet as SQL NULL.
+const BICNull = ""
 
 // BIC is a SWIFT Business Identifier Code.
 // BIC implements the database/sql.Scanner and database/sql/driver.Valuer interfaces
@@ -126,7 +125,7 @@ func (bic *BIC) Scan(value interface{}) error {
 	case []byte:
 		*bic = BIC(x)
 	case nil:
-		*bic = NullBIC
+		*bic = BICNull
 	default:
 		return errors.Errorf("can't scan SQL value of type %T as BIC", value)
 	}
@@ -135,7 +134,7 @@ func (bic *BIC) Scan(value interface{}) error {
 
 // Value implements the driver database/sql/driver.Valuer interface.
 func (bic BIC) Value() (driver.Value, error) {
-	if bic == NullBIC {
+	if bic == BICNull {
 		return nil, nil
 	}
 	return string(bic), nil

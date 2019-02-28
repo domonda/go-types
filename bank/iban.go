@@ -19,9 +19,8 @@ const (
 	IBANMinLength = 15
 	IBANMaxLength = 32
 
-	// NullIBAN is an empty string and will be treatet as SQL NULL.
-	// bank.NullIBAN.Valid() == false
-	NullIBAN IBAN = ""
+	// IBANNull is an empty string and will be treatet as SQL NULL.
+	IBANNull = ""
 )
 
 // NormalizeIBAN returns str as normalized IBAN or an error.
@@ -192,7 +191,7 @@ func (iban *IBAN) Scan(value interface{}) error {
 	case []byte:
 		*iban = IBAN(x)
 	case nil:
-		*iban = NullIBAN
+		*iban = IBANNull
 	default:
 		return errors.Errorf("can't scan SQL value of type %T as IBAN", value)
 	}
@@ -201,7 +200,7 @@ func (iban *IBAN) Scan(value interface{}) error {
 
 // Value implements the driver database/sql/driver.Valuer interface.
 func (iban IBAN) Value() (driver.Value, error) {
-	if iban == NullIBAN {
+	if iban == IBANNull {
 		return nil, nil
 	}
 	return string(iban), nil
