@@ -63,7 +63,8 @@ func StringToNullString(str string) null.String {
 	return null.StringFrom(str)
 }
 
-// PtrFromString returns a pointer to a string
+// PtrFromString returns the address of a string
+// or nil if the string is empty.
 func PtrFromString(str string) *string {
 	if str == "" {
 		return nil

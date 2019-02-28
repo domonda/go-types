@@ -7,7 +7,7 @@ import (
 )
 
 func TestNullDate(t *testing.T) {
-	var n NullDate
+	var n NullableDate
 	assert.True(t, n.Valid(), "empty NullDate is valid")
 	assert.NoError(t, n.Validate(), "empty NullDate is valid")
 

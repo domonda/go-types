@@ -32,10 +32,6 @@ const (
 	// Format used for the Date type, compatible with time.Time.Format()
 	Format = "2006-01-02"
 
-	// Null is an empty string and will be treatet as SQL NULL.
-	// date.Null.IsZero() == true
-	Null Date = ""
-
 	Length = 10 // len("2006-01-02")
 
 	// MinLength is the minimum length of a valid date
@@ -57,14 +53,14 @@ func Of(year int, month time.Month, day int) Date {
 
 func OfTime(t time.Time) Date {
 	if t.IsZero() {
-		return Null
+		return Null.Date
 	}
 	return Date(t.Format(Format))
 }
 
 func OfTimePtr(t *time.Time) Date {
 	if t == nil {
-		return Null
+		return Null.Date
 	}
 	return OfTime(*t)
 }
@@ -215,9 +211,9 @@ func (date Date) BetweenExcl(after, before Date) bool {
 	return t.After(after.MidnightTime()) && t.Before(before.MidnightTime())
 }
 
-// NullDate returns date as NullDate
-func (date Date) NullDate() NullDate {
-	return NullDate{date}
+// NullableDate returns date as NullableDate
+func (date Date) NullableDate() NullableDate {
+	return NullableDate{date}
 }
 
 // Valid returns if the format of the date is correct, see Format
@@ -415,7 +411,7 @@ func (date *Date) Scan(value interface{}) (err error) {
 		return nil
 
 	case nil:
-		*date = Null
+		*date = Null.Date
 		return nil
 	}
 
