@@ -285,9 +285,6 @@ func (id *ID) UnmarshalBinary(data []byte) (err error) {
 
 // Value implements the driver.Valuer interface.
 func (id ID) Value() (driver.Value, error) {
-	if id == IDNil {
-		return nil, nil
-	}
 	return id.String(), nil
 }
 
