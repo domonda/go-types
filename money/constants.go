@@ -1,5 +1,10 @@
 package money
 
+// CurrencyNull represents the SQL NULL for Currency and NullableCurrency.
+// Currency(CurrencyNull).Valid() == false
+// NullableCurrency(CurrencyNull).Valid() == true
+const CurrencyNull = ""
+
 const (
 	AED Currency = "AED" // United Arab Emirates Dirham
 	AFN Currency = "AFN" // Afghanistan Afghani

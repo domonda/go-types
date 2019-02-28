@@ -26,13 +26,13 @@ func (c *NullableCurrency) GetOrDefault(defaultVal NullableCurrency) NullableCur
 
 // Valid returns true if c is an empty string, or a valid 3 character ISO 4217 alphabetic code.
 func (c NullableCurrency) Valid() bool {
-	return c == "" || Currency(c).Valid()
+	return c == CurrencyNull || Currency(c).Valid()
 }
 
 // Valid returns true if c is nil, an empty string, or a valid 3 character ISO 4217 alphabetic code.
 // Safe to call on a nil pointer.
 func (c *NullableCurrency) ValidPtr() bool {
-	if c == nil || *c == "" {
+	if c == nil || *c == CurrencyNull {
 		return true
 	}
 	return Currency(*c).Valid()
@@ -40,7 +40,7 @@ func (c *NullableCurrency) ValidPtr() bool {
 
 // Normalized normalizes a currency string
 func (c NullableCurrency) Normalized() (NullableCurrency, error) {
-	if c == "" {
+	if c == CurrencyNull {
 		return c, nil
 	}
 	norm, err := Currency(c).Normalized()
@@ -55,7 +55,7 @@ func (c *NullableCurrency) Scan(value interface{}) error {
 	case []byte:
 		*c = NullableCurrency(x)
 	case nil:
-		*c = ""
+		*c = CurrencyNull
 	default:
 		return errors.Errorf("can't scan SQL value of type %T as NullableCurrency", value)
 	}
@@ -64,7 +64,7 @@ func (c *NullableCurrency) Scan(value interface{}) error {
 
 // Value implements the driver database/sql/driver.Valuer interface.
 func (c NullableCurrency) Value() (driver.Value, error) {
-	if c == "" {
+	if c == CurrencyNull {
 		return nil, nil
 	}
 	return string(c), nil

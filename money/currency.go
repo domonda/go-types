@@ -112,7 +112,7 @@ func (c *Currency) Scan(value interface{}) error {
 	case []byte:
 		*c = Currency(x)
 	case nil:
-		*c = ""
+		*c = CurrencyNull
 	default:
 		return errors.Errorf("can't scan SQL value of type %T as Currency", value)
 	}
@@ -121,7 +121,7 @@ func (c *Currency) Scan(value interface{}) error {
 
 // Value implements the driver database/sql/driver.Valuer interface.
 func (c Currency) Value() (driver.Value, error) {
-	if c == "" {
+	if c == CurrencyNull {
 		return nil, nil
 	}
 	return string(c), nil
