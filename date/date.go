@@ -215,6 +215,11 @@ func (date Date) BetweenExcl(after, before Date) bool {
 	return t.After(after.MidnightTime()) && t.Before(before.MidnightTime())
 }
 
+// NullDate returns date as NullDate
+func (date Date) NullDate() NullDate {
+	return NullDate{date}
+}
+
 // Valid returns if the format of the date is correct, see Format
 func (date Date) Valid() bool {
 	return date.Validate() == nil
