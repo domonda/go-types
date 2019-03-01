@@ -12,10 +12,6 @@ const (
 
 	// IDMaxLength is the maximum length of a VAT ID
 	IDMaxLength = 14 + 2 // allow 2 spaces
-
-	// Null is an empty string and will be treatet as SQL NULL.
-	// vat.Null.Valid() == false
-	Null ID = ""
 )
 
 // https://de.wikipedia.org/wiki/Umsatzsteuer-Identifikationsnummer
