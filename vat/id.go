@@ -97,9 +97,26 @@ func (id ID) Validate() error {
 	return err
 }
 
+// ValidateNormalized returns an error if the id is not valid,
+// or valid but not normalized.
+func (id ID) ValidateNormalized() error {
+	norm, err := id.Normalized()
+	if err != nil {
+		return err
+	}
+	if id != norm {
+		return errors.Errorf("VAT ID valid but not normalized: '%s'", id)
+	}
+	return nil
+}
+
 func (id ID) ValidAndNormalized() bool {
 	norm, err := id.Normalized()
 	return err == nil && id == norm
+}
+
+func (id ID) NullableID() NullableID {
+	return NullableID{id}
 }
 
 func (id ID) CountryCode() country.Code {
