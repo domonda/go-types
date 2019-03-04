@@ -5,8 +5,8 @@ import (
 	"testing"
 )
 
-func TestNullIDValueNil(t *testing.T) {
-	u := NullID{}
+func TestNullableIDValueNil(t *testing.T) {
+	u := NullableID{}
 
 	val, err := u.Value()
 	if err != nil {
@@ -18,18 +18,18 @@ func TestNullIDValueNil(t *testing.T) {
 	}
 }
 
-func TestNullIDScanValid(t *testing.T) {
+func TestNullableIDScanValid(t *testing.T) {
 	u := ID{0x6b, 0xa7, 0xb8, 0x10, 0x9d, 0xad, 0x11, 0xd1, 0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4, 0x30, 0xc8}
 	s1 := "6ba7b810-9dad-11d1-80b4-00c04fd430c8"
 
-	u1 := NullID{}
+	u1 := NullableID{}
 	err := u1.Scan(s1)
 	if err != nil {
-		t.Errorf("Error unmarshaling NullID: %s", err)
+		t.Errorf("Error unmarshaling NullableID: %s", err)
 	}
 
 	if !u1.Valid {
-		t.Errorf("NullID should be valid")
+		t.Errorf("NullableID should be valid")
 	}
 
 	if u != u1.ID {
@@ -37,34 +37,34 @@ func TestNullIDScanValid(t *testing.T) {
 	}
 }
 
-func TestNullIDScanNil(t *testing.T) {
-	u := NullID{ID{0x6b, 0xa7, 0xb8, 0x10, 0x9d, 0xad, 0x11, 0xd1, 0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4, 0x30, 0xc8}, true}
+func TestNullableIDScanNil(t *testing.T) {
+	u := NullableID{ID{0x6b, 0xa7, 0xb8, 0x10, 0x9d, 0xad, 0x11, 0xd1, 0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4, 0x30, 0xc8}, true}
 
 	err := u.Scan(nil)
 	if err != nil {
-		t.Errorf("Error unmarshaling NullID: %s", err)
+		t.Errorf("Error unmarshaling NullableID: %s", err)
 	}
 
 	if u.Valid {
-		t.Errorf("NullID should not be valid")
+		t.Errorf("NullableID should not be valid")
 	}
 
 	if u.ID != IDNil {
-		t.Errorf("NullID value should be equal to Nil: %v", u)
+		t.Errorf("NullableID value should be equal to Nil: %v", u)
 	}
 }
 
-func TestNullID_MarshalUnmarshalJSON(t *testing.T) {
-	u := NullID{ID{0x6b, 0xa7, 0xb8, 0x10, 0x9d, 0xad, 0x11, 0xd1, 0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4, 0x30, 0xc8}, true}
-	var u2 NullID
+func TestNullableID_MarshalUnmarshalJSON(t *testing.T) {
+	u := NullableID{ID{0x6b, 0xa7, 0xb8, 0x10, 0x9d, 0xad, 0x11, 0xd1, 0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4, 0x30, 0xc8}, true}
+	var u2 NullableID
 
 	data, err := json.Marshal(&u)
 	if err != nil {
-		t.Errorf("Error JSON marshaling NullID: %s", err)
+		t.Errorf("Error JSON marshaling NullableID: %s", err)
 	}
 	err = json.Unmarshal(data, &u2)
 	if err != nil {
-		t.Errorf("Error JSON unmarshaling NullID: %s", err)
+		t.Errorf("Error JSON unmarshaling NullableID: %s", err)
 	}
 	if u2 != u {
 		t.Errorf("JSON marshalling and unmarshalling produced a different UUID")
@@ -75,21 +75,21 @@ func TestNullID_MarshalUnmarshalJSON(t *testing.T) {
 
 	data, err = json.Marshal(&u)
 	if err != nil {
-		t.Errorf("Error JSON marshaling NullID: %s", err)
+		t.Errorf("Error JSON marshaling NullableID: %s", err)
 	}
 	err = json.Unmarshal(data, &u2)
 	if err != nil {
-		t.Errorf("Error JSON unmarshaling NullID: %s", err)
+		t.Errorf("Error JSON unmarshaling NullableID: %s", err)
 	}
 	if u2 != u {
 		t.Errorf("JSON marshalling and unmarshalling produced a different UUID")
 	}
 }
 
-func TestNullID_MarshalJSON(t *testing.T) {
+func TestNullableID_MarshalJSON(t *testing.T) {
 	var testStruct struct {
-		U ID     `json:"u"`
-		N NullID `json:"n"`
+		U ID         `json:"u"`
+		N NullableID `json:"n"`
 	}
 	data, err := json.Marshal(&testStruct)
 	if err != nil {
@@ -111,10 +111,10 @@ func TestNullID_MarshalJSON(t *testing.T) {
 	}
 }
 
-func TestNullID_UnmarshalJSON(t *testing.T) {
+func TestNullableID_UnmarshalJSON(t *testing.T) {
 	type testStruct struct {
-		U ID     `json:"u"`
-		N NullID `json:"n"`
+		U ID         `json:"u"`
+		N NullableID `json:"n"`
 	}
 	var out *testStruct
 	err := json.Unmarshal([]byte(`{"u":"00000000-0000-0000-0000-000000000000","n":null}`), &out)
