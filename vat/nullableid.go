@@ -19,3 +19,7 @@ func (n NullableID) Validate() error {
 	}
 	return n.ID.Validate()
 }
+
+func (n NullableID) String() string {
+	return string(n.ID)
+}

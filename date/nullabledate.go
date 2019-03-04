@@ -25,3 +25,7 @@ func (n NullableDate) Validate() error {
 	}
 	return n.Date.Validate()
 }
+
+func (n NullableDate) String() string {
+	return string(n.Date)
+}
