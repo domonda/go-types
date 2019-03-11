@@ -26,6 +26,8 @@ var validVATIDs = map[string]string{
 	"DE 1367 25570":   "DE136725570",
 	"NO916634773":     "NO916634773",
 	"NO 916634773":    "NO916634773",
+	"CHE-123.456.788": "CHE123456788",
+	"CHE123456788":    "CHE123456788",
 }
 
 var invalidVATIDs = []ID{

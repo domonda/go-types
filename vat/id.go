@@ -60,7 +60,7 @@ func (id ID) Normalized() (ID, error) {
 	if !found {
 		return "", errors.Errorf("VAT ID '%s' has an unsupported country code: '%s'", id, countryCode)
 	}
-	normalized := strutil.RemoveRunesString(string(id), unicode.IsSpace)
+	normalized := strutil.RemoveRunesString(string(id), unicode.IsSpace, unicode.IsPunct)
 	if !regex.MatchString(normalized) {
 		return "", errors.Errorf("VAT ID '%s' has an invalid format", id)
 	}
