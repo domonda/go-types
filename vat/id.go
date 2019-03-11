@@ -58,7 +58,7 @@ func (id ID) Normalized() (ID, error) {
 	countryCode := country.Code(id[:2])
 	regex, found := vatidRegex[countryCode]
 	if !found {
-		return "", errors.Errorf("VAT ID '%s' has an invalid country code: '%s'", id, countryCode)
+		return "", errors.Errorf("VAT ID '%s' has an unsupported country code: '%s'", id, countryCode)
 	}
 	normalized := strutil.RemoveRunesString(string(id), unicode.IsSpace)
 	if !regex.MatchString(normalized) {

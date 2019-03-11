@@ -5,25 +5,27 @@ import (
 	"testing"
 )
 
-var validVATIDs = []string{
-	"ATU10223006", "ATU10223006", // Example
-	"ATU67554568", "ATU67554568", // Real
-	"ATU68765099", "ATU68765099", // Real
-	"ATU46983509", "ATU46983509", // Real
-	"ATU65785527", "ATU65785527", // Real
-	"DE111111125", "DE111111125", // Example
-	"DE 167015661", "DE167015661",
-	"ATU 10223006", "ATU10223006",
-	"AT U 10223006", "ATU10223006",
-	"GB123456789012", "GB123456789012",
-	"GB 123456789012", "GB123456789012",
-	"GBGD001", "GBGD001",
-	"GBHA599", "GBHA599",
-	"GB GD001", "GBGD001",
-	"GB HA599", "GBHA599",
-	"IE9S99999L", "IE9S99999L",
-	"IE 9999999LI", "IE9999999LI",
-	"DE 1367 25570", "DE136725570",
+var validVATIDs = map[string]string{
+	"ATU10223006":     "ATU10223006", // Example
+	"ATU67554568":     "ATU67554568", // Real
+	"ATU68765099":     "ATU68765099", // Real
+	"ATU46983509":     "ATU46983509", // Real
+	"ATU65785527":     "ATU65785527", // Real
+	"DE111111125":     "DE111111125", // Example
+	"DE 167015661":    "DE167015661",
+	"ATU 10223006":    "ATU10223006",
+	"AT U 10223006":   "ATU10223006",
+	"GB123456789012":  "GB123456789012",
+	"GB 123456789012": "GB123456789012",
+	"GBGD001":         "GBGD001",
+	"GBHA599":         "GBHA599",
+	"GB GD001":        "GBGD001",
+	"GB HA599":        "GBHA599",
+	"IE9S99999L":      "IE9S99999L",
+	"IE 9999999LI":    "IE9999999LI",
+	"DE 1367 25570":   "DE136725570",
+	"NO916634773":     "NO916634773",
+	"NO 916634773":    "NO916634773",
 }
 
 var invalidVATIDs = []ID{
@@ -34,8 +36,7 @@ var invalidVATIDs = []ID{
 }
 
 func Test_NormalizeVATID(t *testing.T) {
-	for i := 0; i < len(validVATIDs); i += 2 {
-		testID, refID := validVATIDs[i], validVATIDs[i+1]
+	for testID, refID := range validVATIDs {
 		result, err := NormalizeVATID(testID)
 		if err != nil {
 			t.Errorf("NormalizeVATID(%s): %s", testID, err)
