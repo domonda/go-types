@@ -138,5 +138,9 @@ func (n *NullableID) Scan(value interface{}) error {
 
 // Value implements the driver database/sql/driver.Valuer interface.
 func (n NullableID) Value() (driver.Value, error) {
-	return string(n.NormalizedUnchecked()), nil
+	normalized := n.NormalizedUnchecked()
+	if normalized == Null {
+		return nil, nil
+	}
+	return string(normalized), nil
 }
