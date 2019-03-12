@@ -171,23 +171,29 @@ func (id ID) Bytes() []byte {
 	return id[:]
 }
 
-// String returns the canonical string representation of he UUID:
+// StringBytes returns the canonical string representation of the UUID as byte slice:
+// xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+func (id ID) StringBytes() []byte {
+	b := make([]byte, 36)
+
+	hex.Encode(b[0:8], id[0:4])
+	b[8] = dash
+	hex.Encode(b[9:13], id[4:6])
+	b[13] = dash
+	hex.Encode(b[14:18], id[6:8])
+	b[18] = dash
+	hex.Encode(b[19:23], id[8:10])
+	b[23] = dash
+	hex.Encode(b[24:], id[10:])
+
+	return b
+}
+
+// String returns the canonical string representation of the UUID:
 // xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 // String implements the fmt.Stringer interface.
 func (id ID) String() string {
-	buf := make([]byte, 36)
-
-	hex.Encode(buf[0:8], id[0:4])
-	buf[8] = dash
-	hex.Encode(buf[9:13], id[4:6])
-	buf[13] = dash
-	hex.Encode(buf[14:18], id[6:8])
-	buf[18] = dash
-	hex.Encode(buf[19:23], id[8:10])
-	buf[23] = dash
-	hex.Encode(buf[24:], id[10:])
-
-	return string(buf)
+	return string(id.StringBytes())
 }
 
 // Hex returns the hex representation without dashes of the UUID
