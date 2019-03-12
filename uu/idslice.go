@@ -135,7 +135,7 @@ func (s *IDSlice) scanBytes(src []byte) (err error) {
 	}
 
 	if len(src) < 2 || src[0] != '{' || src[len(src)-1] != '}' {
-		return errors.Errorf("can't parse %#v as uu.IDSlice", string(src))
+		return errors.Errorf("can't parse '%s' as uu.IDSlice", string(src))
 	}
 
 	ids := make([]ID, 0, 16)
@@ -162,7 +162,7 @@ func (s IDSlice) Value() (driver.Value, error) {
 	}
 
 	var b strings.Builder
-	b.WriteString(`'{`)
+	b.WriteByte('{')
 	for i, id := range s {
 		if i > 0 {
 			b.WriteByte(',')
@@ -171,7 +171,7 @@ func (s IDSlice) Value() (driver.Value, error) {
 		b.WriteString(id.String())
 		b.WriteByte('"')
 	}
-	b.WriteString(`}'`)
+	b.WriteByte('}')
 
 	return b.String(), nil
 }
