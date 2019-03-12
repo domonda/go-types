@@ -50,7 +50,7 @@ var vatidRegex = map[country.Code]*regexp.Regexp{
 }
 
 // https://www.bmf.gv.at/egovernment/fon/fuer-softwarehersteller/BMF_UID_Konstruktionsregeln.pdf
-var vatidCheckSum = map[country.Code]func(string) bool{
+var vatidCheckSum = map[country.Code]func(ID) bool{
 	"AT": vatidCheckSumAT,
 	"DE": vatidCheckSumDE,
 }

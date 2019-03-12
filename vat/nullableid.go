@@ -14,6 +14,11 @@ var Null NullableID
 // is considered valid by the Valid() and Validate() methods.
 type NullableID string
 
+// NormalizedUnchecked returns a generic normalized version of ID without performing any format checks.
+func (n NullableID) NormalizedUnchecked() NullableID {
+	return NullableID(ID(n).NormalizedUnchecked())
+}
+
 // Normalized returns the id in normalized form,
 // or an error if the VAT ID is not Null and not valid.
 func (n NullableID) Normalized() (NullableID, error) {
@@ -118,30 +123,20 @@ func (n *NullableID) AssignString(source string) (normalized bool, err error) {
 
 // Scan implements the database/sql.Scanner interface.
 func (n *NullableID) Scan(value interface{}) error {
-	var newID NullableID
 	switch x := value.(type) {
 	case string:
-		newID = NullableID(x)
+		*n = NullableID(x).NormalizedUnchecked()
 	case []byte:
-		newID = NullableID(x)
+		*n = NullableID(x).NormalizedUnchecked()
 	case nil:
-		// newID = Null
+		*n = Null
 	default:
 		return errors.Errorf("can't scan SQL value of type %T as vat.NullableID", value)
 	}
-	newID, err := newID.Normalized()
-	if err != nil {
-		return err
-	}
-	*n = newID
 	return nil
 }
 
 // Value implements the driver database/sql/driver.Valuer interface.
 func (n NullableID) Value() (driver.Value, error) {
-	if n == Null {
-		return nil, nil
-	}
-	norm, err := ID(n).Normalized()
-	return string(norm), err
+	return string(n.NormalizedUnchecked()), nil
 }

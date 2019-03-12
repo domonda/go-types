@@ -17,6 +17,13 @@ func (c Code) Valid() bool {
 	return ok
 }
 
+func (c Code) Validate() error {
+	if !c.Valid() {
+		return errors.Errorf("invalid country code: '%s'", c)
+	}
+	return nil
+}
+
 func (c Code) CountryName() string {
 	return countryMap[c]
 }

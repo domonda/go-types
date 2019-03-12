@@ -27,18 +27,7 @@ func StringIsVATID(str string) bool {
 
 // BytesAreVATID returns if a byte string is a valid VAT ID
 func BytesAreVATID(str []byte) bool {
-	l := len(str)
-	if l < IDMinLength || l > IDMaxLength {
-		return false
-	}
-	countryCode := country.Code(str[:2])
-	regex, found := vatidRegex[countryCode]
-	// return found && regex.Match(str)
-	if !found || !regex.Match(str) {
-		return false
-	}
-	check, found := vatidCheckSum[countryCode]
-	return !found || check(string(str))
+	return ID(str).Valid()
 }
 
 func isVATIDSplitRune(r rune) bool {
@@ -49,26 +38,46 @@ func isVATIDTrimRune(r rune) bool {
 	return unicode.IsPunct(r)
 }
 
+// NormalizedUnchecked returns a generic normalized version of ID without performing any format checks.
+func (id ID) NormalizedUnchecked() ID {
+	return ID(strutil.RemoveRunesString(string(id), unicode.IsSpace, unicode.IsPunct))
+}
+
 // Normalized returns the id in normalized form,
 // or an error if the VAT ID is not valid.
 func (id ID) Normalized() (ID, error) {
-	if len(id) < IDMinLength {
+	normalized := id.NormalizedUnchecked()
+
+	// Check length
+	if len(normalized) < IDMinLength {
 		return "", errors.Errorf("VAT ID '%s' is too short", id)
 	}
-	countryCode := country.Code(id[:2])
+	if len(normalized) > IDMaxLength {
+		return "", errors.Errorf("VAT ID '%s' is too long", id)
+	}
+
+	// Check country code
+	countryCode := country.Code(normalized[:2])
+	if !countryCode.Valid() {
+		return "", errors.Errorf("VAT ID '%s' has an invalid country code: '%s'", id, countryCode)
+	}
+
+	// Check format with country specific regex
 	regex, found := vatidRegex[countryCode]
 	if !found {
 		return "", errors.Errorf("VAT ID '%s' has an unsupported country code: '%s'", id, countryCode)
 	}
-	normalized := strutil.RemoveRunesString(string(id), unicode.IsSpace, unicode.IsPunct)
-	if !regex.MatchString(normalized) {
+	if !regex.MatchString(string(normalized)) {
 		return "", errors.Errorf("VAT ID '%s' has an invalid format", id)
 	}
+
+	// Test check-sum if a function is available for the country
 	check, found := vatidCheckSum[countryCode]
 	if found && !check(normalized) {
 		return "", errors.Errorf("VAT ID '%s' has an invalid check-sum", id)
 	}
-	return ID(normalized), nil
+
+	return normalized, nil
 }
 
 // NormalizedOrNull returns the id in normalized form
@@ -160,32 +169,25 @@ func (id *ID) AssignString(source string) (normalized bool, err error) {
 
 // Scan implements the database/sql.Scanner interface.
 func (id *ID) Scan(value interface{}) error {
-	var newID ID
 	switch x := value.(type) {
 	case string:
-		newID = ID(x)
+		*id = ID(x).NormalizedUnchecked()
 	case []byte:
-		newID = ID(x)
+		*id = ID(x).NormalizedUnchecked()
 	case nil:
 		return errors.New("can't scan SQL NULL as vat.ID")
 	default:
 		return errors.Errorf("can't scan SQL value of type %T as vat.ID", value)
 	}
-	newID, err := newID.Normalized()
-	if err != nil {
-		return err
-	}
-	*id = newID
 	return nil
 }
 
 // Value implements the driver database/sql/driver.Valuer interface.
 func (id ID) Value() (driver.Value, error) {
-	norm, err := id.Normalized()
-	return string(norm), err
+	return string(id.NormalizedUnchecked()), nil
 }
 
-func vatidCheckSumAT(id string) bool {
+func vatidCheckSumAT(id ID) bool {
 	nonSpaceCount := 0
 	sum := 0
 	for _, r := range id {
@@ -211,7 +213,7 @@ func vatidCheckSumAT(id string) bool {
 	return false
 }
 
-func vatidCheckSumDE(id string) bool {
+func vatidCheckSumDE(id ID) bool {
 	nonSpaceCount := 0
 	P := 10
 	for _, r := range id {

@@ -15,6 +15,7 @@ var validVATIDs = map[string]string{
 	"DE 167015661":    "DE167015661",
 	"ATU 10223006":    "ATU10223006",
 	"AT U 10223006":   "ATU10223006",
+	"ATU.10223006":    "ATU10223006",
 	"GB123456789012":  "GB123456789012",
 	"GB 123456789012": "GB123456789012",
 	"GBGD001":         "GBGD001",
@@ -33,7 +34,6 @@ var validVATIDs = map[string]string{
 var invalidVATIDs = []ID{
 	"atu12345678",
 	"AT/U.12345678",
-	"ATU.12345678",
 	" ATU12345678 ",
 }
 
@@ -58,7 +58,6 @@ func Test_VATIDValid(t *testing.T) {
 
 var vatidTestIndices = map[string][][]int{
 	"":                         nil,
-	"ATU.10223006":             nil,
 	"ATU10223006":              [][]int{[]int{0, 11}},
 	"  ATU10223006":            [][]int{[]int{2, 13}},
 	"UID: ATU10223006":         [][]int{[]int{5, 16}},
