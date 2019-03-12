@@ -184,7 +184,11 @@ func (id *ID) Scan(value interface{}) error {
 
 // Value implements the driver database/sql/driver.Valuer interface.
 func (id ID) Value() (driver.Value, error) {
-	return string(id.NormalizedUnchecked()), nil
+	normalized := id.NormalizedUnchecked()
+	if normalized == "" {
+		return nil, nil
+	}
+	return string(normalized), nil
 }
 
 func vatidCheckSumAT(id ID) bool {
