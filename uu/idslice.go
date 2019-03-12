@@ -162,7 +162,7 @@ func (s IDSlice) Value() (driver.Value, error) {
 	}
 
 	var b strings.Builder
-	b.WriteByte('{')
+	b.WriteString(`'{`)
 	for i, id := range s {
 		if i > 0 {
 			b.WriteByte(',')
@@ -171,7 +171,7 @@ func (s IDSlice) Value() (driver.Value, error) {
 		b.WriteString(id.String())
 		b.WriteByte('"')
 	}
-	b.WriteByte('}')
+	b.WriteString(`}'`)
 
 	return b.String(), nil
 }
