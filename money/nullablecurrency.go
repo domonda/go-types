@@ -29,6 +29,11 @@ func (c NullableCurrency) Valid() bool {
 	return c == CurrencyNull || Currency(c).Valid()
 }
 
+// ValidAndNotNull returns if the currency is valid and not Null.
+func (c NullableCurrency) ValidAndNotNull() bool {
+	return Currency(c).Valid()
+}
+
 // Valid returns true if c is nil, an empty string, or a valid 3 character ISO 4217 alphabetic code.
 // Safe to call on a nil pointer.
 func (c *NullableCurrency) ValidPtr() bool {
@@ -82,4 +87,8 @@ func (c NullableCurrency) Symbol() string {
 // EnglishName returns the english name of the currency
 func (c NullableCurrency) EnglishName() string {
 	return currencyCodeToName[Currency(c)]
+}
+
+func (c NullableCurrency) Currency() Currency {
+	return Currency(c)
 }
