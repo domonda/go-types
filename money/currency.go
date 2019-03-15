@@ -104,6 +104,22 @@ func (c Currency) Normalized() (Currency, error) {
 	return Currency(str), nil
 }
 
+// NormalizedOrNull returns the normalized currency or CurrencyNull
+// if it was not a valid currency.
+func (c Currency) NormalizedOrNull() NullableCurrency {
+	norm, err := c.Normalized()
+	if err != nil {
+		return CurrencyNull
+	}
+	return NullableCurrency(norm)
+}
+
+// IsEUR returns if the currency can be normalized as Euro.
+func (c Currency) IsEUR() bool {
+	norm, _ := c.Normalized()
+	return norm == EUR
+}
+
 // Scan implements the database/sql.Scanner interface.
 func (c *Currency) Scan(value interface{}) error {
 	switch x := value.(type) {
