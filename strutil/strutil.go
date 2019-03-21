@@ -325,6 +325,27 @@ func writeSafeFileNameRune(buf *bytes.Buffer, i int, r rune, lastWasPlaceholder 
 	}
 }
 
+// MakeValidFileName replaces invalid filename characters with '_'.
+// See also SanitizeFileName that does more than just replacing characters.
+func MakeValidFileName(name string) string {
+	name = strings.TrimSpace(name)
+	i := strings.IndexAny(name, "\\/:*\"<>|\n\r\t")
+	for i != -1 {
+		if i > 0 && i < len(name)-1 {
+			name = name[:i] + "_" + name[i+1:]
+		} else {
+			name = name[:i] + name[i+1:]
+		}
+		i = strings.IndexAny(name, "\\/:*\"<>|\n\r\t")
+	}
+	if name == "" {
+		return "_"
+	}
+	return name
+}
+
+// SanitizeFileName creates a nice sane filename.
+// It does more than just replacing invalid characters.
 func SanitizeFileName(name string) string {
 	name = strings.TrimSpace(name)
 	if strings.IndexAny(name, "%+") != -1 {

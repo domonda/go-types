@@ -71,26 +71,45 @@ func Test_SplitAndTrimIndex(t *testing.T) {
 	}
 }
 
-var filenameTable = map[string]string{
-	"": "",
-
-	"image.JpG": "image.jpeg",
-	"image.Tif": "image.tiff",
-
-	"/var/log/file.txt":  "var-log-file.txt",
-	"Hello World!":       "Hello_World-",
-	"Hello World!!!":     "Hello_World-",
-	"Hello World!!!.jpg": "Hello_World-.jpeg",
-	"-500_600x100-":      "-500_600x100-",
-	"../Back\\Path":      "Back-Path",
-	"Nix__da~!6%+^?.":    "Nix__da-6-",
-}
-
 func Test_SanitizeFileName(t *testing.T) {
+	filenameTable := map[string]string{
+		"": "",
+
+		"image.JpG": "image.jpeg",
+		"image.Tif": "image.tiff",
+
+		"/var/log/file.txt":  "var-log-file.txt",
+		"Hello World!":       "Hello_World-",
+		"Hello World!!!":     "Hello_World-",
+		"Hello World!!!.jpg": "Hello_World-.jpeg",
+		"-500_600x100-":      "-500_600x100-",
+		"../Back\\Path":      "Back-Path",
+		"Nix__da~!6%+^?.":    "Nix__da-6-",
+	}
+
 	for filename, expected := range filenameTable {
 		result := SanitizeFileName(filename)
 		if result != expected {
 			t.Errorf("SanitizeFileName('%s') returned '%s', expected '%s'", filename, result, expected)
+		}
+	}
+}
+
+func Test_MakeValidFileName(t *testing.T) {
+	filenameTable := map[string]string{
+		"":             "_",
+		"image.jpeg":   "image.jpeg",
+		"Hello World!": "Hello World!",
+
+		"../Back\\Path":                    ".._Back_Path",
+		"\nHello/Darkness<my>old\\Friend:": "Hello_Darkness_my_old_Friend",
+		":nix>":                            "nix",
+	}
+
+	for filename, expected := range filenameTable {
+		result := MakeValidFileName(filename)
+		if result != expected {
+			t.Errorf("MakeValidFileName('%s') returned '%s', expected '%s'", filename, result, expected)
 		}
 	}
 }
