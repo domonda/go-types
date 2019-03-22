@@ -51,26 +51,37 @@ func Of(year int, month time.Month, day int) Date {
 	return OfTime(time.Date(year, month, day, 0, 0, 0, 0, time.Local))
 }
 
+// OfTime returns the date part of the passed time.Time
+// or an empty string if t.IsZero().
 func OfTime(t time.Time) Date {
 	if t.IsZero() {
-		return Null.Date
+		return ""
 	}
 	return Date(t.Format(Format))
 }
 
-func OfTimePtr(t *time.Time) Date {
-	if t == nil {
-		return Null.Date
+// OfTimePtr returns the date part of the passed time.Time
+// or Null (an empty string) if t is nil or t.IsZero().
+func OfTimePtr(t *time.Time) NullableDate {
+	if t == nil || t.IsZero() {
+		return Null
 	}
-	return OfTime(*t)
+	return NullableDate(OfTime(*t))
 }
 
+// OfToday returns the date of today in the local timezone.
 func OfToday() Date {
 	return OfTime(time.Now())
 }
 
+// OfTodayUTC returns the date of today in the UTC timezone.
 func OfTodayUTC() Date {
 	return OfTime(time.Now().UTC())
+}
+
+// OfTodayUTC returns the date of today in the timezone of the passed location.
+func OfTodayIn(loc *time.Location) Date {
+	return OfTime(time.Now().In(loc))
 }
 
 // Parse returns the date part from time.Parse(layout, value)
@@ -213,17 +224,21 @@ func (date Date) BetweenExcl(after, before Date) bool {
 
 // NullableDate returns date as NullableDate
 func (date Date) NullableDate() NullableDate {
-	return NullableDate{date}
+	if date.IsZero() {
+		return Null
+	}
+	return NullableDate(date)
+}
+
+// Validate returns an error if the date is not in a valid, normalizeable format.
+func (date Date) Validate() error {
+	_, err := date.Normalized()
+	return err
 }
 
 // Valid returns if the format of the date is correct, see Format
 func (date Date) Valid() bool {
 	return date.Validate() == nil
-}
-
-func (date Date) Validate() error {
-	_, err := date.Normalized()
-	return err
 }
 
 func (date Date) ValidAndNormalized() bool {
@@ -284,9 +299,9 @@ func (date Date) Format(layout string) string {
 	return date.MidnightTime().Format(layout)
 }
 
-// MidnightTime returns the midnight (00:00) time.Time of date,
+// MidnightTimePtrOrNil returns the address of a midnight (00:00) time.Time of date,
 // or nil if date.IsZero() returns true.
-func (date Date) MidnightTimeOrNil() *time.Time {
+func (date Date) MidnightTimePtrOrNil() *time.Time {
 	if date.IsZero() {
 		return nil
 	}
@@ -397,7 +412,7 @@ func (date *Date) Scan(value interface{}) (err error) {
 	switch x := value.(type) {
 	case string:
 		d := Date(x)
-		if d != "" {
+		if !d.IsZero() {
 			d, err = d.Normalized()
 			if err != nil {
 				return err
@@ -411,7 +426,7 @@ func (date *Date) Scan(value interface{}) (err error) {
 		return nil
 
 	case nil:
-		*date = Null.Date
+		*date = ""
 		return nil
 	}
 
@@ -423,13 +438,47 @@ func (date Date) Value() (driver.Value, error) {
 	if date.IsZero() {
 		return nil, nil
 	}
-	return string(date), nil
+	normalized, err := date.Normalized()
+	if err != nil {
+		return nil, err
+	}
+	return string(normalized), nil
 }
 
-// IsZero returns true when the date is "", "0001-01-01", or "0000-00-00".
+// MarshalJSON returns the date as normalized string or the JSON null value if n.IsZero().
+// An invalid non zero date string will be returned as is without an error.
+// MarshalJSON implements encoding/json.Marshaler
+func (date Date) MarshalJSON() ([]byte, error) {
+	if date.IsZero() {
+		return []byte("null"), nil
+	}
+	norm, err := date.Normalized()
+	if err != nil {
+		return []byte(date), nil
+	}
+	return []byte(norm), nil
+}
+
+// UnmarshalJSON normalizes sourceJSON and sets it at *date,
+// The JSON null value or a zero date will result in setting and empty string
+// instead of returning an error.
+// UnarshalJSON implements encoding/json.Unmarshaler
+func (date *Date) UnmarshalJSON(sourceJSON []byte) error {
+	if date == nil {
+		return errors.New("UnmarshalJSON on nil pointer")
+	}
+	norm, err := NullableDate(sourceJSON).Normalized()
+	if err != nil {
+		return err
+	}
+	*date = Date(norm)
+	return nil
+}
+
+// IsZero returns true when the date is any of ["", "0000-00-00", "0001-01-01", "null", "NULL"]
 // "0001-01-01" is treated as zero because it's the zero value of time.Time.
 func (date Date) IsZero() bool {
-	return date == "" || date == "0000-00-00" || date == "0001-01-01"
+	return date == "" || date == "0000-00-00" || date == "0001-01-01" || date == "null" || date == "NULL"
 }
 
 func (date Date) IsToday() bool {

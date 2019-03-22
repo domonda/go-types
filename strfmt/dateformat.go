@@ -54,6 +54,14 @@ func (f *DateFormat) AssignString(dest reflect.Value, str string) error {
 		}
 		return nil
 
+	case *date.NullableDate:
+		if tPtr == nil {
+			*ptr = date.Null
+		} else {
+			*ptr = date.OfTime(*tPtr).NullableDate()
+		}
+		return nil
+
 	case *time.Time:
 		if tPtr == nil {
 			*ptr = time.Time{}

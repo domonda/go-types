@@ -11,9 +11,9 @@ func TestNullDate(t *testing.T) {
 	assert.True(t, n.Valid(), "empty NullDate is valid")
 	assert.NoError(t, n.Validate(), "empty NullDate is valid")
 
-	n.Date = "0001-01-01"
+	n = "0001-01-01"
 	assert.True(t, n.Valid(), "empty NullDate is valid")
 	assert.NoError(t, n.Validate(), "empty NullDate is valid")
 
-	assert.Empty(t, n.NormalizedOrEmpty())
+	assert.Empty(t, n.NormalizedOrNull())
 }
