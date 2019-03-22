@@ -468,8 +468,7 @@ func isDateTrimRune(r rune) bool {
 // or an error if the format can't be detected.
 // The first given lang argument is used as language hint.
 func (date Date) Normalized(lang ...language.Code) (Date, error) {
-	str := strings.ToLower(strings.TrimFunc(string(date), isDateTrimRune))
-	return normalizeAndCheckDate(str, getLangHint(lang))
+	return normalizeAndCheckDate(string(date), getLangHint(lang))
 }
 
 func normalizeAndCheckDate(str string, langHint language.Code) (Date, error) {
@@ -485,13 +484,20 @@ func normalizeAndCheckDate(str string, langHint language.Code) (Date, error) {
 }
 
 func normalizeDate(str string, langHint language.Code) (string, error) {
-	if len(str) < MinLength {
-		return "", errors.Errorf("Too short for a date: '%s'", str)
+	trimmed := strings.ToLower(strings.TrimFunc(str, isDateTrimRune))
+
+	if len(trimmed) < MinLength {
+		return "", errors.Errorf("too short for a date: '%s'", str)
 	}
+
+	if len(trimmed) > 10 && trimmed[10] == 't' {
+		// Use date part of this date-time format: "2006-01-02T15:04:05"
+		trimmed = trimmed[:10]
+	}
+
 	langHint = langHint.Normalized()
 
-	parts := strings.FieldsFunc(str, isDateSeparatorRune)
-	// fmt.Println("XXX", parts)
+	parts := strings.FieldsFunc(trimmed, isDateSeparatorRune)
 	if len(parts) == 4 {
 		i := strutil.IndexInStrings("of", parts)
 		if i > 0 && i <= 2 {
