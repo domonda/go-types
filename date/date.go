@@ -445,33 +445,24 @@ func (date Date) Value() (driver.Value, error) {
 	return string(normalized), nil
 }
 
-// MarshalJSON returns the date as normalized string or the JSON null value if n.IsZero().
-// An invalid non zero date string will be returned as is without an error.
-// MarshalJSON implements encoding/json.Marshaler
-func (date Date) MarshalJSON() ([]byte, error) {
-	if date.IsZero() {
-		return []byte("null"), nil
-	}
-	norm, err := date.Normalized()
-	if err != nil {
-		return []byte(date), nil
-	}
-	return []byte(norm), nil
-}
-
 // UnmarshalJSON normalizes sourceJSON and sets it at *date,
-// The JSON null value or a zero date will result in setting and empty string
-// instead of returning an error.
+// A zero date will result in setting and empty string
+// instead of returning an error (see IsZero).
 // UnarshalJSON implements encoding/json.Unmarshaler
 func (date *Date) UnmarshalJSON(sourceJSON []byte) error {
 	if date == nil {
-		return errors.New("UnmarshalJSON on nil pointer")
+		return errors.New("called UnmarshalJSON on nil pointer")
 	}
-	norm, err := NullableDate(sourceJSON).Normalized()
+	if len(sourceJSON) < 2 || sourceJSON[0] != '"' || sourceJSON[len(sourceJSON)-1] != '"' {
+		return errors.New("sourceJSON is not a quoted string")
+	}
+	// Remove quotes
+	sourceJSON = sourceJSON[1 : len(sourceJSON)-1]
+	norm, err := Date(sourceJSON).Normalized()
 	if err != nil {
 		return err
 	}
-	*date = Date(norm)
+	*date = norm
 	return nil
 }
 

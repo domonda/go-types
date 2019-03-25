@@ -120,26 +120,21 @@ func (n NullableDate) Date() Date {
 	return Date(n)
 }
 
-// MarshalJSON returns the date as normalized string or the JSON null value if n.IsZero().
-// An invalid non zero date string will be returned as is without an error.
-// MarshalJSON implements encoding/json.Marshaler
-func (n NullableDate) MarshalJSON() ([]byte, error) {
-	if n.IsZero() {
-		return []byte("null"), nil
-	}
-	norm, err := n.Normalized()
-	if err != nil {
-		return []byte(n), nil
-	}
-	return []byte(norm), nil
-}
-
 // UnmarshalJSON normalizes sourceJSON and sets it at *n,
-// The JSON null value or a zero dates will result in setting Null as date.
+// The JSON null value or a zero dates will result in setting Null as date
+// instead of returning an error (see IsZero).
 // UnarshalJSON implements encoding/json.Unmarshaler
 func (n *NullableDate) UnmarshalJSON(sourceJSON []byte) error {
 	if n == nil {
-		return errors.New("UnmarshalJSON on nil pointer")
+		return errors.New("called UnmarshalJSON on nil pointer")
+	}
+	if len(sourceJSON) < 2 {
+		// Neither `null` nor some string in quotes like `""`
+		return errors.New("sourceJSON too short")
+	}
+	// Remove quotes if sourceJSON is not the JSON null value
+	if sourceJSON[0] == '"' && sourceJSON[len(sourceJSON)-1] == '"' {
+		sourceJSON = sourceJSON[1 : len(sourceJSON)-1]
 	}
 	norm, err := NullableDate(sourceJSON).Normalized()
 	if err != nil {
