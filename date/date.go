@@ -445,31 +445,11 @@ func (date Date) Value() (driver.Value, error) {
 	return string(normalized), nil
 }
 
-// // UnmarshalJSON normalizes sourceJSON and sets it at *date,
-// // A zero date will result in setting and empty string
-// // instead of returning an error (see IsZero).
-// // UnarshalJSON implements encoding/json.Unmarshaler
-// func (date *Date) UnmarshalJSON(sourceJSON []byte) error {
-// 	if date == nil {
-// 		return errors.New("called UnmarshalJSON on nil pointer")
-// 	}
-// 	if len(sourceJSON) < 2 || sourceJSON[0] != '"' || sourceJSON[len(sourceJSON)-1] != '"' {
-// 		return errors.New("sourceJSON is not a quoted string")
-// 	}
-// 	// Remove quotes
-// 	sourceJSON = sourceJSON[1 : len(sourceJSON)-1]
-// 	norm, err := Date(sourceJSON).Normalized()
-// 	if err != nil {
-// 		return err
-// 	}
-// 	*date = norm
-// 	return nil
-// }
-
-// IsZero returns true when the date is any of ["", "0000-00-00", "0001-01-01", "null", "NULL"]
+// IsZero returns true when the date is any of ["", "0000-00-00", "0001-01-01"]
 // "0001-01-01" is treated as zero because it's the zero value of time.Time.
+// "0000-00-00" may be the zero value of other date implementations.
 func (date Date) IsZero() bool {
-	return date == "" || date == "0000-00-00" || date == "0001-01-01" || date == "null" || date == "NULL"
+	return date == "" || date == "0000-00-00" || date == "0001-01-01"
 }
 
 func (date Date) IsToday() bool {
