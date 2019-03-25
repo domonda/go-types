@@ -1,6 +1,7 @@
 package date
 
 import (
+	"encoding/json"
 	"fmt"
 	"testing"
 	"time"
@@ -294,4 +295,26 @@ func Test_YearMonthDay(t *testing.T) {
 	assert.Equal(t, 2010, year)
 	assert.Equal(t, time.Month(12), month)
 	assert.Equal(t, 31, day)
+}
+
+func Test_Date_UnmarshalJSON(t *testing.T) {
+	sourceJSON := `{
+		"empty": "",
+		"null": null,
+		"notNull": "2012-12-12",
+		"invalid": "Not a date!"
+	}`
+	s := struct {
+		Empty   Date `json:"empty"`
+		Null    Date `json:"null"`
+		NotNull Date `json:"notNull"`
+		Invalid Date `json:"invalid"`
+	}{}
+	err := json.Unmarshal([]byte(sourceJSON), &s)
+	assert.NoError(t, err, "json.Unmarshal")
+	assert.Equal(t, Date(""), s.Empty, "empty JSON string is Null")
+	assert.Equal(t, Date(""), s.Null, "JSON null value as Null")
+	assert.Equal(t, Date("2012-12-12"), s.NotNull, "valid Date")
+	assert.Equal(t, Date("Not a date!"), s.Invalid, "invalid Date parsed as is, without error")
+	assert.False(t, s.Invalid.Valid(), "invalid Date parsed as is, not valid")
 }
