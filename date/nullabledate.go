@@ -119,3 +119,42 @@ func (n NullableDate) IsZero() bool {
 func (n NullableDate) Date() Date {
 	return Date(n)
 }
+
+// MidnightTime returns the midnight (00:00) time.Time of the date in UTC,
+// or a zero time.Time value if the date is not valid.
+func (n NullableDate) MidnightTime() time.Time {
+	if n.IsZero() {
+		return time.Time{}
+	}
+	t, err := time.Parse(Format, string(n))
+	if err != nil {
+		return time.Time{}
+	}
+	return t
+}
+
+// MidnightTime returns the midnight (00:00) time.Time of the date
+// in the given location,
+// or a zero time.Time value if the date is not valid.
+func (n NullableDate) MidnightTimeInLocation(loc *time.Location) time.Time {
+	if n.IsZero() {
+		return time.Time{}
+	}
+	t, err := time.ParseInLocation(Format, string(n), loc)
+	if err != nil {
+		return time.Time{}
+	}
+	return t
+}
+
+// Format returns n.MidnightTime().Format(layout),
+// or an empty string if n is Null or layout is an empty string.
+func (n NullableDate) Format(layout string) string {
+	if n == Null || layout == "" {
+		return ""
+	}
+	if layout == Format {
+		return string(n)
+	}
+	return n.MidnightTime().Format(layout)
+}

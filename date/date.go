@@ -262,7 +262,8 @@ func (date Date) TimeUTC(hour, minute, second int) time.Time {
 	return date.Time(hour, minute, second, time.UTC)
 }
 
-// MidnightTime returns the midnight (00:00) time.Time of date in UTC.
+// MidnightTime returns the midnight (00:00) time.Time of the date in UTC,
+// or a zero time.Time value if the date is not valid.
 func (date Date) MidnightTime() time.Time {
 	if date.IsZero() {
 		return time.Time{}
@@ -274,8 +275,9 @@ func (date Date) MidnightTime() time.Time {
 	return t
 }
 
-// MidnightTime returns the midnight (00:00) time.Time of date
-// in the given location.
+// MidnightTime returns the midnight (00:00) time.Time of the date
+// in the given location,
+// or a zero time.Time value if the date is not valid.
 func (date Date) MidnightTimeInLocation(loc *time.Location) time.Time {
 	if date.IsZero() {
 		return time.Time{}
@@ -287,8 +289,8 @@ func (date Date) MidnightTimeInLocation(loc *time.Location) time.Time {
 	return t
 }
 
-// Format return date.MidnightTime().Format(layout),
-// or an empty string if date is also empty.
+// Format returns date.MidnightTime().Format(layout),
+// or an empty string if date or layout are an empty string.
 func (date Date) Format(layout string) string {
 	if date == "" || layout == "" {
 		return ""
