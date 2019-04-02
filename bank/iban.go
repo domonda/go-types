@@ -112,12 +112,12 @@ func (iban IBAN) NormalizedOrUnchanged() IBAN {
 	return normalized
 }
 
-func (iban IBAN) NormalizedOrEmpty() IBAN {
+func (iban IBAN) NormalizedOrNull() NullableIBAN {
 	normalized, err := iban.Normalized()
 	if err != nil {
-		return ""
+		return IBANNull
 	}
-	return normalized
+	return NullableIBAN(normalized)
 }
 
 // NormalizedWithSpaces returns the iban in normalized form with spaces every 4 characters,
