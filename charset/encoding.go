@@ -62,7 +62,7 @@ func (e *encodingImpl) Decode(encodedStr []byte) (utf8Str []byte, err error) {
 	if e.decoder == nil {
 		e.decoder = e.encoding.NewDecoder()
 	}
-	return e.decoder.Bytes(utf8Str)
+	return e.decoder.Bytes(encodedStr)
 }
 
 func (e *encodingImpl) Name() string {

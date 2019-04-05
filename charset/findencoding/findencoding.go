@@ -51,6 +51,9 @@ func PrintFileWithAllEncodings(file fs.FileReader) error {
 			if err != nil {
 				return err
 			}
+			if cm.String() == "IBM Code Page 037" {
+				continue
+			}
 			print(cm.String(), string(decoded))
 		}
 	}
