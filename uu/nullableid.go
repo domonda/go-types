@@ -17,7 +17,10 @@ type NullableID struct {
 
 // NullableIDFrom creates a new valid NullableID
 func NullableIDFrom(id ID) NullableID {
-	return NewNullableID(id, true)
+	return NullableID{
+		ID:    id,
+		Valid: id != IDNil,
+	}
 }
 
 // NullableIDFromString creates a new valid NullableID
@@ -146,7 +149,7 @@ func (u *NullableID) UnmarshalText(text []byte) (err error) {
 		return nil
 	}
 	u.ID, err = IDFromBytes(text)
-	u.Valid = err == nil
+	u.Valid = err == nil && u.ID != IDNil
 	return err
 }
 
