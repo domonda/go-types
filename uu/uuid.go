@@ -166,6 +166,10 @@ func (id ID) Valid() bool {
 	return v >= 1 && v <= 5 && id.Variant() != IDVariantInvalid
 }
 
+func (id ID) Nullable() NullableID {
+	return NullableID{ID: id}
+}
+
 // Bytes returns bytes slice representation of UUID.
 func (id ID) Bytes() []byte {
 	return id[:]

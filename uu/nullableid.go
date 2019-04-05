@@ -8,28 +8,20 @@ import (
 	"reflect"
 )
 
+var IDNull = NullableID{IDNil}
+
 // NullableID can be used with the standard sql package to represent a
 // ID value that can be NULL in the database
 type NullableID struct {
-	ID    ID
-	Valid bool
-}
-
-// NullableIDFrom creates a new valid NullableID
-func NullableIDFrom(id ID) NullableID {
-	return NullableID{
-		ID:    id,
-		Valid: id != IDNil,
-	}
+	ID
 }
 
 // NullableIDFromString creates a new valid NullableID
 func NullableIDFromString(s string) (n NullableID, err error) {
 	n.ID, err = IDFromString(s)
 	if err != nil {
-		return NullableID{}, err
+		return IDNull, err
 	}
-	n.Valid = true
 	return n, nil
 }
 
@@ -37,37 +29,28 @@ func NullableIDFromString(s string) (n NullableID, err error) {
 func NullableIDFromBytes(s []byte) (n NullableID, err error) {
 	n.ID, err = IDFromBytes(s)
 	if err != nil {
-		return NullableID{}, err
+		return IDNull, err
 	}
-	n.Valid = true
 	return n, nil
 }
 
 // NullableIDFromPtr creates a new NullableID that be null if ptr is nil.
 func NullableIDFromPtr(ptr *ID) NullableID {
 	if ptr == nil {
-		return NullableID{}
+		return IDNull
 	}
-	return NewNullableID(*ptr, true)
+	return NullableID{*ptr}
 }
 
-// NewNullableID creates a new NullableID
-func NewNullableID(u ID, valid bool) NullableID {
-	return NullableID{
-		ID:    u,
-		Valid: valid,
-	}
-}
-
-// SetValid changes this NullableID's value and also sets it to be non-null.
-func (u *NullableID) SetValid(v ID) {
-	u.ID = v
-	u.Valid = true
+// Valid returns if Variant and Version of this UUID are supported.
+// A Nil UUID is also valid.
+func (u NullableID) Valid() bool {
+	return u == IDNull || u.ID.Valid()
 }
 
 // Ptr returns a pointer to this NullableID's value, or a nil pointer if this NullableID is null.
 func (u NullableID) Ptr() *ID {
-	if !u.Valid {
+	if u == IDNull {
 		return nil
 	}
 	return &u.ID
@@ -75,7 +58,7 @@ func (u NullableID) Ptr() *ID {
 
 // Value implements the driver.Valuer interface.
 func (u NullableID) Value() (driver.Value, error) {
-	if !u.Valid {
+	if u == IDNull {
 		return nil, nil
 	}
 	// Delegate to ID Value function
@@ -85,12 +68,10 @@ func (u NullableID) Value() (driver.Value, error) {
 // Scan implements the sql.Scanner interface.
 func (u *NullableID) Scan(src interface{}) error {
 	if src == nil {
-		u.ID, u.Valid = IDNil, false
+		*u = IDNull
 		return nil
 	}
-
 	// Delegate to ID Scan function
-	u.Valid = true
 	return u.ID.Scan(src)
 }
 
@@ -112,20 +93,18 @@ func (u *NullableID) UnmarshalJSON(data []byte) (err error) {
 			u.ID, err = IDFromString(n.String)
 		}
 	case nil:
-		u.ID = IDNil
-		u.Valid = false
+		*u = IDNull
 		return nil
 	default:
 		err = fmt.Errorf("json: cannot unmarshal %v into Go value of type uuid.NullString", reflect.TypeOf(v).Name())
 	}
-	u.Valid = err == nil
 	return err
 }
 
 // MarshalJSON implements json.Marshaler.
 // It will encode null if Valid == false.
 func (u NullableID) MarshalJSON() ([]byte, error) {
-	if !u.Valid {
+	if u == IDNull {
 		return []byte("null"), nil
 	}
 	return json.Marshal(u.ID.String())
@@ -134,7 +113,7 @@ func (u NullableID) MarshalJSON() ([]byte, error) {
 // MarshalText implements encoding.TextMarshaler.
 // It will encode a blank string when this String is null.
 func (u NullableID) MarshalText() ([]byte, error) {
-	if !u.Valid {
+	if u == IDNull {
 		return []byte{}, nil
 	}
 	return []byte(u.ID.String()), nil
@@ -144,19 +123,17 @@ func (u NullableID) MarshalText() ([]byte, error) {
 // It will unmarshal to a null String if the input is a blank string.
 func (u *NullableID) UnmarshalText(text []byte) (err error) {
 	if len(text) == 0 {
-		u.ID = IDNil
-		u.Valid = false
+		*u = IDNull
 		return nil
 	}
 	u.ID, err = IDFromBytes(text)
-	u.Valid = err == nil && u.ID != IDNil
 	return err
 }
 
 // String returns the ID as string if Valid == true,
 // or "null" if Valid == false.
 func (u NullableID) String() string {
-	if !u.Valid {
+	if u == IDNull {
 		return "null"
 	}
 	return u.ID.String()
