@@ -1,4 +1,4 @@
-package sqlarray
+package notnull
 
 import (
 	"database/sql"
@@ -9,14 +9,14 @@ import (
 	"github.com/domonda/errors"
 )
 
-// NullBools implements the sql.Scanner and driver.Valuer interfaces
+// NullBoolArray implements the sql.Scanner and driver.Valuer interfaces
 // for a slice of sql.NullBool.
 // A nil slice is mapped to the SQL NULL value,
 // and a non nil zero length slice to an empty SQL array '{}'.
-type NullBools []sql.NullBool
+type NullBoolArray []sql.NullBool
 
-// Bools returns all NullBools elements as []float64 with NULL elements set to false.
-func (a NullBools) Bools() []bool {
+// Bools returns all NullBoolArray elements as []float64 with NULL elements set to false.
+func (a NullBoolArray) Bools() []bool {
 	if len(a) == 0 {
 		return nil
 	}
@@ -31,13 +31,13 @@ func (a NullBools) Bools() []bool {
 }
 
 // String implements the fmt.Stringer interface.
-func (a NullBools) String() string {
+func (a NullBoolArray) String() string {
 	value, _ := a.Value()
-	return fmt.Sprintf("NullBools%v", value)
+	return fmt.Sprintf("NullBoolArray%v", value)
 }
 
 // Value implements the database/sql/driver.Valuer interface
-func (a NullBools) Value() (driver.Value, error) {
+func (a NullBoolArray) Value() (driver.Value, error) {
 	if a == nil {
 		return nil, nil
 	}
@@ -63,7 +63,7 @@ func (a NullBools) Value() (driver.Value, error) {
 }
 
 // Scan implements the sql.Scanner interface
-func (a *NullBools) Scan(src interface{}) error {
+func (a *NullBoolArray) Scan(src interface{}) error {
 	switch src := src.(type) {
 	case []byte:
 		return a.scanBytes(src)
@@ -76,20 +76,20 @@ func (a *NullBools) Scan(src interface{}) error {
 		return nil
 	}
 
-	return errors.Errorf("can't convert %T to sqlarray.NullBools", src)
+	return errors.Errorf("can't convert %T to sqlarray.NullBoolArray", src)
 }
 
-func (a *NullBools) scanBytes(src []byte) error {
+func (a *NullBoolArray) scanBytes(src []byte) error {
 	if len(src) == 0 {
 		*a = nil
 	}
 
 	if src[0] != '{' || src[len(src)-1] != '}' {
-		return errors.Errorf("can't parse '%s' as sqlarray.NullBools", string(src))
+		return errors.Errorf("can't parse '%s' as sqlarray.NullBoolArray", string(src))
 	}
 
 	elements := strings.Split(string(src[1:len(src)-1]), ",")
-	newArray := make(NullBools, len(elements))
+	newArray := make(NullBoolArray, len(elements))
 	for i, elem := range elements {
 		switch elem {
 		case "t":

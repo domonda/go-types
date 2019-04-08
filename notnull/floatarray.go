@@ -1,7 +1,8 @@
-package sqlarray
+package notnull
 
 import (
 	"database/sql/driver"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -9,24 +10,19 @@ import (
 	"github.com/domonda/errors"
 )
 
-// Floats implements the sql.Scanner and driver.Valuer interfaces
+// FloatArray implements the sql.Scanner and driver.Valuer interfaces
 // for a slice of float64.
-// A nil slice is mapped to the SQL NULL value,
-// and a non nil zero length slice to an empty SQL array '{}'.
-type Floats []float64
+// A nil slice is mapped to an empty SLQ or JSON array.
+type FloatArray []float64
 
 // String implements the fmt.Stringer interface.
-func (a Floats) String() string {
+func (a FloatArray) String() string {
 	value, _ := a.Value()
-	return fmt.Sprintf("Floats%v", value)
+	return fmt.Sprintf("FloatArray%v", value)
 }
 
 // Value implements the database/sql/driver.Valuer interface
-func (a Floats) Value() (driver.Value, error) {
-	if a == nil {
-		return nil, nil
-	}
-
+func (a FloatArray) Value() (driver.Value, error) {
 	var b strings.Builder
 	b.WriteByte('{')
 	for i := range a {
@@ -40,7 +36,7 @@ func (a Floats) Value() (driver.Value, error) {
 }
 
 // Scan implements the sql.Scanner interface.
-func (a *Floats) Scan(src interface{}) error {
+func (a *FloatArray) Scan(src interface{}) error {
 	switch src := src.(type) {
 	case []byte:
 		return a.scanBytes(src)
@@ -53,27 +49,36 @@ func (a *Floats) Scan(src interface{}) error {
 		return nil
 	}
 
-	return errors.Errorf("can't convert %T to Floats", src)
+	return errors.Errorf("can't convert %T to FloatArray", src)
 }
 
-func (a *Floats) scanBytes(src []byte) (err error) {
+func (a *FloatArray) scanBytes(src []byte) (err error) {
 	if len(src) == 0 {
 		*a = nil
 	}
 
 	if src[0] != '{' || src[len(src)-1] != '}' {
-		return errors.Errorf("can't parse '%s' as Floats", string(src))
+		return errors.Errorf("can't parse '%s' as FloatArray", string(src))
 	}
 
 	elements := strings.Split(string(src[1:len(src)-1]), ",")
-	newArray := make(Floats, len(elements))
+	newArray := make(FloatArray, len(elements))
 	for i, elem := range elements {
 		newArray[i], err = strconv.ParseFloat(elem, 64)
 		if err != nil {
-			return errors.Wrapf(err, "Can't parse '%s' as Floats", string(src))
+			return errors.Wrapf(err, "Can't parse '%s' as FloatArray", string(src))
 		}
 	}
 	*a = newArray
 
 	return nil
+}
+
+// MarshalJSON returns a as the JSON encoding of a.
+// MarshalJSON implements encoding/json.Marshaler.
+func (a FloatArray) MarshalJSON() ([]byte, error) {
+	if len(a) == 0 {
+		return []byte("[]"), nil
+	}
+	return json.Marshal([]float64(a))
 }
