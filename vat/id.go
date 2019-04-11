@@ -128,11 +128,11 @@ func (id ID) NullableID() NullableID {
 }
 
 // CountryCode returns the country.Code of the VAT ID,
-// or country.Null if the id is not valid.
+// or country.Invalid if the id is not valid.
 func (id ID) CountryCode() country.Code {
 	norm, err := id.Normalized()
 	if err != nil {
-		return country.Null
+		return country.Invalid
 	}
 	code := country.Code(norm[:2])
 	if code == "EL" {

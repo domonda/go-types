@@ -1,10 +1,6 @@
 package country
 
 const (
-	// Null is an empty string and will be treatet as SQL NULL.
-	// country.Null.Valid() == false
-	Null Code = ""
-
 	AF Code = "AF"
 	AX Code = "AX"
 	AL Code = "AL"

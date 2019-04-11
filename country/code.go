@@ -7,9 +7,12 @@ import (
 	"github.com/domonda/errors"
 )
 
+const Invalid Code = ""
+
 // Code for a country according ISO 3166-1 alpha 2.
 // Code implements the database/sql.Scanner and database/sql/driver.Valuer interfaces,
 // and will treat an empty Code string as SQL NULL.
+// See NullableCode
 type Code string
 
 func (c Code) Valid() bool {
@@ -19,7 +22,7 @@ func (c Code) Valid() bool {
 
 func (c Code) Validate() error {
 	if !c.Valid() {
-		return errors.Errorf("invalid country code: '%s'", c)
+		return errors.Errorf("invalid country-code: '%s'", c)
 	}
 	return nil
 }
@@ -36,7 +39,7 @@ func (c *Code) Scan(value interface{}) error {
 	case []byte:
 		*c = Code(x)
 	case nil:
-		*c = Null
+		*c = Invalid
 	default:
 		return errors.Errorf("can't scan SQL value of type %T as country.Code", value)
 	}
@@ -45,7 +48,7 @@ func (c *Code) Scan(value interface{}) error {
 
 // Value implements the driver database/sql/driver.Valuer interface.
 func (c Code) Value() (driver.Value, error) {
-	if c == Null {
+	if c == Invalid {
 		return nil, nil
 	}
 	return string(c), nil
@@ -61,7 +64,7 @@ func (c Code) Value() (driver.Value, error) {
 func (c *Code) AssignString(source string) (normalized bool, err error) {
 	newCode := Code(strings.ToUpper(source))
 	if !newCode.Valid() {
-		return false, errors.Errorf("invalid country code: %#v", source)
+		return false, errors.Errorf("invalid country-code: '%s'", source)
 	}
 	*c = newCode
 	return newCode == Code(source), nil
