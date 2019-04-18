@@ -43,6 +43,7 @@ func Test_ParseFloat(t *testing.T) {
 		"123 456 789":      {123456789, ' ', 0, 0, false},
 		"1000000.8989":     {1000000.8989, 0, '.', 4, false},
 		"1000000,8989":     {1000000.8989, 0, ',', 4, false},
+		"158,00 ":          {158, 0, ',', 2, false},
 	}
 
 	for str, ref := range validDecimalFloats {

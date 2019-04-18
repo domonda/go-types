@@ -153,6 +153,8 @@ func ParseFloatDetails(str string) (f float64, thousandsSep, decimalSep byte, de
 		lastGroupingIndex int
 	)
 
+	str = strings.TrimSpace(str)
+
 	floatBuilder := strings.Builder{}
 	floatBuilder.Grow(len(str))
 
