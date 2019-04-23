@@ -1,4 +1,4 @@
-package sqlarray
+package nullable
 
 import (
 	"database/sql"
@@ -10,35 +10,35 @@ import (
 	"github.com/domonda/errors"
 )
 
-// NullInts implements the sql.Scanner and driver.Valuer interfaces
-// for a slice of sql.NullInt64.
+// NullFloatArray implements the sql.Scanner and driver.Valuer interfaces
+// for a slice of sql.NullFloat64.
 // A nil slice is mapped to the SQL NULL value,
 // and a non nil zero length slice to an empty SQL array '{}'.
-type NullInts []sql.NullInt64
+type NullFloatArray []sql.NullFloat64
 
-// Ints returns all NullInts elements as []int64 with NULL elements set to 0.
-func (a NullInts) Ints() []int64 {
+// Floats returns all NullFloatArray elements as []float64 with NULL elements set to 0.
+func (a NullFloatArray) Floats() []float64 {
 	if len(a) == 0 {
 		return nil
 	}
 
-	ints := make([]int64, len(a))
+	floats := make([]float64, len(a))
 	for i, n := range a {
 		if n.Valid {
-			ints[i] = n.Int64
+			floats[i] = n.Float64
 		}
 	}
-	return ints
+	return floats
 }
 
 // String implements the fmt.Stringer interface.
-func (a NullInts) String() string {
+func (a NullFloatArray) String() string {
 	value, _ := a.Value()
-	return fmt.Sprintf("NullInts%v", value)
+	return fmt.Sprintf("NullFloatArray%v", value)
 }
 
 // Value implements the database/sql/driver.Valuer interface
-func (a NullInts) Value() (driver.Value, error) {
+func (a NullFloatArray) Value() (driver.Value, error) {
 	if a == nil {
 		return nil, nil
 	}
@@ -50,7 +50,7 @@ func (a NullInts) Value() (driver.Value, error) {
 			b.WriteByte(',')
 		}
 		if n.Valid {
-			b.WriteString(strconv.FormatInt(n.Int64, 10))
+			b.WriteString(strconv.FormatFloat(n.Float64, 'f', -1, 64))
 		} else {
 			b.WriteString("NULL")
 		}
@@ -60,7 +60,7 @@ func (a NullInts) Value() (driver.Value, error) {
 }
 
 // Scan implements the sql.Scanner interface
-func (a *NullInts) Scan(src interface{}) error {
+func (a *NullFloatArray) Scan(src interface{}) error {
 	switch src := src.(type) {
 	case []byte:
 		return a.scanBytes(src)
@@ -73,27 +73,27 @@ func (a *NullInts) Scan(src interface{}) error {
 		return nil
 	}
 
-	return errors.Errorf("can't convert %T to sqlarray.NullInts", src)
+	return errors.Errorf("can't convert %T to sqlarray.NullFloatArray", src)
 }
 
-func (a *NullInts) scanBytes(src []byte) error {
+func (a *NullFloatArray) scanBytes(src []byte) error {
 	if len(src) == 0 {
 		*a = nil
 	}
 
 	if src[0] != '{' || src[len(src)-1] != '}' {
-		return errors.Errorf("can't parse '%s' as sqlarray.NullInts", string(src))
+		return errors.Errorf("can't parse '%s' as sqlarray.NullFloatArray", string(src))
 	}
 
 	elements := strings.Split(string(src[1:len(src)-1]), ",")
-	newArray := make(NullInts, len(elements))
+	newArray := make(NullFloatArray, len(elements))
 	for i, elem := range elements {
 		if elem != "NULL" && elem != "null" {
-			val, err := strconv.ParseInt(elem, 10, 64)
+			val, err := strconv.ParseFloat(elem, 64)
 			if err != nil {
-				return errors.Wrapf(err, "Can't parse '%s' as sqlarray.NullInts", string(src))
+				return errors.Wrapf(err, "Can't parse '%s' as sqlarray.NullFloatArray", string(src))
 			}
-			newArray[i] = sql.NullInt64{Valid: true, Int64: val}
+			newArray[i] = sql.NullFloat64{Valid: true, Float64: val}
 		}
 	}
 	*a = newArray
