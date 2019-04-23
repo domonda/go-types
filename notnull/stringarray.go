@@ -9,9 +9,9 @@ import (
 
 // StringArray implements the sql.Scanner, driver.Valuer, and encoding/json.Marshaler interfaces
 // for a slice of strings.
-// The nil default value of StringArray is returned as an empty (non null) array
+// The nil default value of the slice is returned as an empty (non null) array
 // for SQL and JSON.
-// Use NullableStringArray if the nil value should be treated as SQL and JSON null.
+// Use nullable.StringArray if the nil value should be treated as SQL and JSON null.
 type StringArray []string
 
 // Scan implements the sql.Scanner interface.

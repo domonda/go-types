@@ -73,7 +73,7 @@ func (a *NullIntArray) Scan(src interface{}) error {
 		return nil
 	}
 
-	return errors.Errorf("can't convert %T to sqlarray.NullIntArray", src)
+	return errors.Errorf("can't convert %T to NullIntArray", src)
 }
 
 func (a *NullIntArray) scanBytes(src []byte) error {
@@ -82,7 +82,7 @@ func (a *NullIntArray) scanBytes(src []byte) error {
 	}
 
 	if src[0] != '{' || src[len(src)-1] != '}' {
-		return errors.Errorf("can't parse '%s' as sqlarray.NullIntArray", string(src))
+		return errors.Errorf("can't parse '%s' as NullIntArray", string(src))
 	}
 
 	elements := strings.Split(string(src[1:len(src)-1]), ",")
@@ -91,7 +91,7 @@ func (a *NullIntArray) scanBytes(src []byte) error {
 		if elem != "NULL" && elem != "null" {
 			val, err := strconv.ParseInt(elem, 10, 64)
 			if err != nil {
-				return errors.Wrapf(err, "Can't parse '%s' as sqlarray.NullIntArray", string(src))
+				return errors.Wrapf(err, "Can't parse '%s' as NullIntArray", string(src))
 			}
 			newArray[i] = sql.NullInt64{Valid: true, Int64: val}
 		}

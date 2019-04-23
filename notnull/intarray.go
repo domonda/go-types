@@ -12,8 +12,9 @@ import (
 
 // IntArray implements the sql.Scanner and driver.Valuer interfaces
 // for a slice of int64.
-// A nil slice is mapped to the SQL NULL value,
-// and a non nil zero length slice to an empty SQL array '{}'.
+// The nil default value of the slice is returned as an empty (non null) array
+// for SQL and JSON.
+// Use nullable.IntArray if the nil value should be treated as SQL and JSON null.
 type IntArray []int64
 
 // String implements the fmt.Stringer interface.
@@ -50,7 +51,7 @@ func (a *IntArray) Scan(src interface{}) error {
 		return nil
 	}
 
-	return errors.Errorf("can't convert %T to sqlarray.IntArray", src)
+	return errors.Errorf("can't convert %T to IntArray", src)
 }
 
 func (a *IntArray) scanBytes(src []byte) (err error) {
@@ -59,7 +60,7 @@ func (a *IntArray) scanBytes(src []byte) (err error) {
 	}
 
 	if src[0] != '{' || src[len(src)-1] != '}' {
-		return errors.Errorf("can't parse '%s' as sqlarray.IntArray", string(src))
+		return errors.Errorf("can't parse '%s' as IntArray", string(src))
 	}
 
 	elements := strings.Split(string(src[1:len(src)-1]), ",")
@@ -67,7 +68,7 @@ func (a *IntArray) scanBytes(src []byte) (err error) {
 	for i, elem := range elements {
 		newArray[i], err = strconv.ParseInt(elem, 10, 64)
 		if err != nil {
-			return errors.Wrapf(err, "Can't parse '%s' as sqlarray.IntArray", string(src))
+			return errors.Wrapf(err, "Can't parse '%s' as IntArray", string(src))
 		}
 	}
 	*a = newArray

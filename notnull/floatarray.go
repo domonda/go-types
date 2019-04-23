@@ -12,7 +12,9 @@ import (
 
 // FloatArray implements the sql.Scanner and driver.Valuer interfaces
 // for a slice of float64.
-// A nil slice is mapped to an empty SLQ or JSON array.
+// The nil default value of the slice is returned as an empty (non null) array
+// for SQL and JSON.
+// Use nullable.FloatArray if the nil value should be treated as SQL and JSON null.
 type FloatArray []float64
 
 // String implements the fmt.Stringer interface.

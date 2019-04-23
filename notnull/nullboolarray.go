@@ -11,11 +11,12 @@ import (
 
 // NullBoolArray implements the sql.Scanner and driver.Valuer interfaces
 // for a slice of sql.NullBool.
-// A nil slice is mapped to the SQL NULL value,
-// and a non nil zero length slice to an empty SQL array '{}'.
+// The nil default value of the slice is returned as an empty (non null) array
+// for SQL and JSON.
+// Use nullable.NullBoolArray if the nil value should be treated as SQL and JSON null.
 type NullBoolArray []sql.NullBool
 
-// Bools returns all NullBoolArray elements as []float64 with NULL elements set to false.
+// Bools returns all NullBoolArray elements as []bool with NULL elements set to false.
 func (a NullBoolArray) Bools() []bool {
 	if len(a) == 0 {
 		return nil
@@ -38,10 +39,6 @@ func (a NullBoolArray) String() string {
 
 // Value implements the database/sql/driver.Valuer interface
 func (a NullBoolArray) Value() (driver.Value, error) {
-	if a == nil {
-		return nil, nil
-	}
-
 	var b strings.Builder
 	b.WriteByte('{')
 	for i := range a {
@@ -76,7 +73,7 @@ func (a *NullBoolArray) Scan(src interface{}) error {
 		return nil
 	}
 
-	return errors.Errorf("can't convert %T to sqlarray.NullBoolArray", src)
+	return errors.Errorf("can't convert %T to NullBoolArray", src)
 }
 
 func (a *NullBoolArray) scanBytes(src []byte) error {
@@ -85,7 +82,7 @@ func (a *NullBoolArray) scanBytes(src []byte) error {
 	}
 
 	if src[0] != '{' || src[len(src)-1] != '}' {
-		return errors.Errorf("can't parse '%s' as sqlarray.NullBoolArray", string(src))
+		return errors.Errorf("can't parse '%s' as NullBoolArray", string(src))
 	}
 
 	elements := strings.Split(string(src[1:len(src)-1]), ",")
