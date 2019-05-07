@@ -13,16 +13,22 @@ import (
 // Amount adds money related methods to float64
 type Amount float64
 
-// ParseAmount tries to parse an Amount from str.
-func ParseAmount(str string, acceptInt bool) (Amount, error) {
-	f, _, decimalSep, _, err := strfmt.ParseFloatDetails(str)
+// ParseAmount parses an amount from str with acceptedDecimals.
+// If acceptedDecimals is empty, then any decimal number is accepted.
+func ParseAmount(str string, acceptedDecimals ...int) (Amount, error) {
+	f, _, _, decimals, err := strfmt.ParseFloatDetails(str)
 	if err != nil {
 		return 0, err
 	}
-	if decimalSep == 0 && !acceptInt {
-		return 0, errors.Errorf("Integers not accepted as money.Amount: %#v", str)
+	if len(acceptedDecimals) == 0 {
+		return Amount(f), nil
 	}
-	return Amount(f), nil
+	for _, accepted := range acceptedDecimals {
+		if decimals == accepted {
+			return Amount(f), nil
+		}
+	}
+	return 0, errors.Errorf("parsing %q returned %d decimals wich is not in accepted list of %v", str, decimals, acceptedDecimals)
 }
 
 // AmountFromPtr dereferences ptr or returns nilVal if it is nil

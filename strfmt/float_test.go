@@ -10,13 +10,13 @@ type floatInfo struct {
 	f            float64
 	thousandsSep byte
 	decimalSep   byte
-	precision    int
+	decimals     int
 	padPrecision bool
 }
 
 func Test_ParseFloat(t *testing.T) {
 	// Variations with leading + and - are created automatically, don't put them here
-	var validDecimalFloats = map[string]floatInfo{
+	validDecimalFloats := map[string]floatInfo{
 		"100":              {100, 0, 0, 0, false},
 		"100.9":            {100.9, 0, '.', 1, false},
 		"1e6":              {1e6, 0, 0, 0, false},
@@ -46,53 +46,44 @@ func Test_ParseFloat(t *testing.T) {
 		"158,00 ":          {158, 0, ',', 2, false},
 	}
 
+	testFunc := func(str string, refFloat float64, refThousandsSep, refDecimalSep byte, refDecimals int) func(*testing.T) {
+		return func(t *testing.T) {
+			parsed, thousandsSep, decimalSep, decimals, err := ParseFloatDetails(str)
+			assert.NoError(t, err)
+			assert.Equal(t, refFloat, parsed, "ParseFloatDetails(%#v)", str)
+			assert.Equal(t, string(refThousandsSep), string(thousandsSep), "ParseFloatDetails(%#v)", str)
+			assert.Equal(t, string(refDecimalSep), string(decimalSep), "ParseFloatDetails(%#v)", str)
+			assert.Equal(t, refDecimals, decimals, "ParseFloatDetails(%#v)", str)
+		}
+	}
+
 	for str, ref := range validDecimalFloats {
-		// standard
-		parsed, thousandsSep, decimalSep, decimals, err := ParseFloatDetails(str)
-		assert.NoError(t, err)
-		assert.Equal(t, ref.f, parsed, "ParseFloatDetails(%#v)", str)
-		assert.Equal(t, string(ref.thousandsSep), string(thousandsSep), "ParseFloatDetails(%#v)", str)
-		assert.Equal(t, string(ref.decimalSep), string(decimalSep), "ParseFloatDetails(%#v)", str)
-		assert.Equal(t, ref.precision, decimals, "ParseFloatDetails(%#v)", str)
+		t.Run("no sign", testFunc(str, ref.f, ref.thousandsSep, ref.decimalSep, ref.decimals))
 
-		// plus in front
-		parsed, thousandsSep, decimalSep, decimals, err = ParseFloatDetails("+" + str)
-		assert.NoError(t, err)
-		assert.Equal(t, +ref.f, parsed, "ParseFloatDetails(%#v)", "+"+str)
-		assert.Equal(t, string(ref.thousandsSep), string(thousandsSep), "ParseFloatDetails(%#v)", "+"+str)
-		assert.Equal(t, string(ref.decimalSep), string(decimalSep), "ParseFloatDetails(%#v)", "+"+str)
-		assert.Equal(t, ref.precision, decimals, "ParseFloatDetails(%#v)", "+"+str)
+		t.Run("plus in front", testFunc("+"+str, ref.f, ref.thousandsSep, ref.decimalSep, ref.decimals))
+		t.Run("plus in front with space", testFunc("+ "+str, ref.f, ref.thousandsSep, ref.decimalSep, ref.decimals))
+		t.Run("plus on end", testFunc(str+"+", ref.f, ref.thousandsSep, ref.decimalSep, ref.decimals))
+		t.Run("plus on end with space", testFunc(str+" +", ref.f, ref.thousandsSep, ref.decimalSep, ref.decimals))
 
-		// minus in front
-		parsed, thousandsSep, decimalSep, decimals, err = ParseFloatDetails("-" + str)
-		assert.NoError(t, err)
-		assert.Equal(t, -ref.f, parsed, "ParseFloatDetails(%#v)", "-"+str)
-		assert.Equal(t, string(ref.thousandsSep), string(thousandsSep), "ParseFloatDetails(%#v)", "-"+str)
-		assert.Equal(t, string(ref.decimalSep), string(decimalSep), "ParseFloatDetails(%#v)", "-"+str)
-		assert.Equal(t, ref.precision, decimals, "ParseFloatDetails(%#v)", "-"+str)
-
-		// plus on end
-		parsed, thousandsSep, decimalSep, decimals, err = ParseFloatDetails(str + "+")
-		assert.NoError(t, err)
-		assert.Equal(t, +ref.f, parsed, "ParseFloatDetails(%#v)", str+"+")
-		assert.Equal(t, string(ref.thousandsSep), string(thousandsSep), "ParseFloatDetails(%#v)", str+"+")
-		assert.Equal(t, string(ref.decimalSep), string(decimalSep), "ParseFloatDetails(%#v)", str+"+")
-		assert.Equal(t, ref.precision, decimals, "ParseFloatDetails(%#v)", str+"+")
-
-		// minus on end
-		parsed, thousandsSep, decimalSep, decimals, err = ParseFloatDetails(str + "-")
-		assert.NoError(t, err)
-		assert.Equal(t, -ref.f, parsed, "ParseFloatDetails(%#v)", str+"-")
-		assert.Equal(t, string(ref.thousandsSep), string(thousandsSep), "ParseFloatDetails(%#v)", str+"-")
-		assert.Equal(t, string(ref.decimalSep), string(decimalSep), "ParseFloatDetails(%#v)", str+"-")
-		assert.Equal(t, ref.precision, decimals, "ParseFloatDetails(%#v)", str+"-")
+		t.Run("minus in front", testFunc("-"+str, -ref.f, ref.thousandsSep, ref.decimalSep, ref.decimals))
+		t.Run("minus in front with space", testFunc("- "+str, -ref.f, ref.thousandsSep, ref.decimalSep, ref.decimals))
+		t.Run("minus on end", testFunc(str+"-", -ref.f, ref.thousandsSep, ref.decimalSep, ref.decimals))
+		t.Run("minus on end with space", testFunc(str+" -", -ref.f, ref.thousandsSep, ref.decimalSep, ref.decimals))
 	}
 }
 
 func Test_ParseFloat_invalid(t *testing.T) {
-	var invalidDecimalFloats = []string{
+	invalidDecimalFloats := []string{
 		"xxx",
 		"e3",
+		"--1",
+		"1--",
+		"++1",
+		"1++",
+		"-+1",
+		"1-+",
+		"+-1",
+		"1+-",
 		"1ee6",
 		"123+456",
 		"12-3456",
@@ -122,7 +113,7 @@ func Test_ParseFloat_invalid(t *testing.T) {
 }
 
 func Test_FormatFloat(t *testing.T) {
-	var formatFloatValues = map[floatInfo]string{
+	formatFloatValues := map[floatInfo]string{
 		{1234, 0, '.', -1, false}: "1234",
 		{1234, 0, ',', -1, false}: "1234",
 
@@ -235,11 +226,11 @@ func Test_FormatFloat(t *testing.T) {
 	}
 
 	for info, ref := range formatFloatValues {
-		str := FormatFloat(info.f, info.thousandsSep, info.decimalSep, info.precision, info.padPrecision)
-		assert.Equal(t, ref, str, "FormatFloat(%#v, '%s', '%s', %#v, %#v)", info.f, string(info.thousandsSep), string(info.decimalSep), info.precision, info.padPrecision)
+		str := FormatFloat(info.f, info.thousandsSep, info.decimalSep, info.decimals, info.padPrecision)
+		assert.Equal(t, ref, str, "FormatFloat(%#v, '%s', '%s', %#v, %#v)", info.f, string(info.thousandsSep), string(info.decimalSep), info.decimals, info.padPrecision)
 
-		str = FormatFloat(-info.f, info.thousandsSep, info.decimalSep, info.precision, info.padPrecision)
-		assert.Equal(t, "-"+ref, str, "FormatFloat(%#v, '%s', '%s', %#v, %#v)", -info.f, string(info.thousandsSep), string(info.decimalSep), info.precision, info.padPrecision)
+		str = FormatFloat(-info.f, info.thousandsSep, info.decimalSep, info.decimals, info.padPrecision)
+		assert.Equal(t, "-"+ref, str, "FormatFloat(%#v, '%s', '%s', %#v, %#v)", -info.f, string(info.thousandsSep), string(info.decimalSep), info.decimals, info.padPrecision)
 	}
 }
 
@@ -254,7 +245,7 @@ func Test_FormatFloat_invalid(t *testing.T) {
 
 	for _, info := range formatFloatValues {
 		assert.Panics(t, func() {
-			FormatFloat(info.f, info.thousandsSep, info.decimalSep, info.precision, info.padPrecision)
+			FormatFloat(info.f, info.thousandsSep, info.decimalSep, info.decimals, info.padPrecision)
 		})
 	}
 }

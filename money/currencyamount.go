@@ -34,7 +34,9 @@ func (ca *CurrencyAmount) GoString() string {
 	return fmt.Sprintf("{Currency: %#v, Amount: %#v}", ca.Currency, ca.Amount)
 }
 
-func ParseCurrencyAmount(str string, acceptInt bool) (result CurrencyAmount, err error) {
+// ParseCurrencyAmount parses a currency and an amount from str with acceptedDecimals.
+// If acceptedDecimals is empty, then any decimal number is accepted.
+func ParseCurrencyAmount(str string, acceptedDecimals ...int) (result CurrencyAmount, err error) {
 	str = strings.TrimSpace(str)
 
 	// Find first separator between currency and amount
@@ -57,7 +59,7 @@ func ParseCurrencyAmount(str string, acceptInt bool) (result CurrencyAmount, err
 		}
 	}
 
-	result.Amount, err = ParseAmount(str, acceptInt)
+	result.Amount, err = ParseAmount(str, acceptedDecimals...)
 	if err != nil {
 		return CurrencyAmount{}, err
 	}

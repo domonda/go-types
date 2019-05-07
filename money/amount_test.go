@@ -62,7 +62,7 @@ var nonStandardFormatted = map[string]Amount{
 
 func Test_ParseAmount(t *testing.T) {
 	for str, refAmount := range amountTable {
-		amount, err := ParseAmount(str, false)
+		amount, err := ParseAmount(str, 2)
 		if err != nil {
 			t.Errorf("Could not parse amount %s because of error: '%s'", str, err)
 		}
@@ -71,13 +71,13 @@ func Test_ParseAmount(t *testing.T) {
 		}
 	}
 	for _, str := range invalidAmounts {
-		amount, err := ParseAmount(str, false)
+		amount, err := ParseAmount(str, 2)
 		if err == nil {
 			t.Errorf("Parsed invalid amount '%s' as %f", str, amount)
 		}
 	}
 	for str, refAmount := range nonStandardFormatted {
-		amount, err := ParseAmount(str, true)
+		amount, err := ParseAmount(str)
 		if err != nil {
 			t.Errorf("Could not parse amount %s because of error: '%s'", str, err)
 		}

@@ -140,6 +140,7 @@ func ParseFloat(str string) (float64, error) {
 // If a separator was not detected, then zero will be returned for thousandsSep or decimalSep.
 // See: https://en.wikipedia.org/wiki/Decimal_separator
 func ParseFloatDetails(str string) (f float64, thousandsSep, decimalSep byte, decimals int, err error) {
+
 	var (
 		lastDigitIndex    = -1
 		lastNonDigitIndex = -1
@@ -151,44 +152,58 @@ func ParseFloatDetails(str string) (f float64, thousandsSep, decimalSep byte, de
 		numGroupingRunes  int
 		lastGroupingRune  rune
 		lastGroupingIndex int
+
+		skipFirst int // skip first bytes of str
+		skipLast  int // skip last bytes of str
+
+		floatBuilder strings.Builder
 	)
 
 	str = strings.TrimSpace(str)
 
-	floatBuilder := strings.Builder{}
 	floatBuilder.Grow(len(str))
 
 	// detect the sign, allowed positions are start and end
 	for i, r := range str {
 		switch {
 		case r == '-':
-			if i != 0 && i != (len(str)-1) {
-				return 0, 0, 0, 0, errors.Errorf("minus can only be used as first or last character: %#v", str)
+			switch {
+			case i == 0:
+				skipFirst = 1
+			case i == len(str)-1:
+				skipLast = 1
+			default:
+				return 0, 0, 0, 0, errors.Errorf("minus can only be used as first or last character: %q", str)
 			}
 			floatBuilder.WriteByte(byte(r))
 			numMinus = 1
+
 		case r == '+':
-			if i != 0 && i != (len(str)-1) {
-				return 0, 0, 0, 0, errors.Errorf("plus can only be used as first or last character: %#v", str)
+			switch {
+			case i == 0:
+				skipFirst = 1
+			case i == len(str)-1:
+				skipLast = 1
+			default:
+				return 0, 0, 0, 0, errors.Errorf("plus can only be used as first or last character: %q", str)
 			}
 		}
 	}
 
 	// remove the sign from the string and trim space in case the removal left one
-	str = strings.TrimSpace(strings.ReplaceAll(strings.ReplaceAll(str, "-", ""), "+", ""))
-
-	for i, r := range str {
+	trimmedSignsStr := strings.TrimSpace(str[skipFirst : len(str)-skipLast])
+	for i, r := range trimmedSignsStr {
 		switch {
 		case r >= '0' && r <= '9':
 			lastDigitIndex = i
 
 		case r == '.' || r == ',' || r == '\'':
 			if pointWritten {
-				return 0, 0, 0, 0, errors.Errorf("no further separators allowed after decimal separator: %#v", str)
+				return 0, 0, 0, 0, errors.Errorf("no further separators allowed after decimal separator: %q", str)
 			}
 
 			// Write everything after the lastNonDigitIndex and before current index
-			floatBuilder.WriteString(str[lastNonDigitIndex+1 : i])
+			floatBuilder.WriteString(trimmedSignsStr[lastNonDigitIndex+1 : i])
 
 			if numGroupingRunes == 0 {
 				// This is the first grouping rune, just save it
@@ -198,13 +213,13 @@ func ParseFloatDetails(str string) (f float64, thousandsSep, decimalSep byte, de
 			} else {
 				// It's a further grouping rune, has to be 3 bytes since last grouping rune
 				if i-(lastGroupingIndex+1) != 3 {
-					return 0, 0, 0, 0, errors.Errorf("thousands separators have to be 3 characters apart: %#v", str)
+					return 0, 0, 0, 0, errors.Errorf("thousands separators have to be 3 characters apart: %q", str)
 				}
 				numGroupingRunes++
 				if r == lastGroupingRune {
 					if numGroupingRunes == 2 {
 						if floatBuilder.Len()-numMinus > 6 {
-							return 0, 0, 0, 0, errors.Errorf("thousands separators have to be 3 characters apart: %#v", str)
+							return 0, 0, 0, 0, errors.Errorf("thousands separators have to be 3 characters apart: %q", str)
 						}
 					}
 					// If it's the same grouping rune, then just save it
@@ -223,11 +238,11 @@ func ParseFloatDetails(str string) (f float64, thousandsSep, decimalSep byte, de
 
 		case r == ' ':
 			if pointWritten {
-				return 0, 0, 0, 0, errors.Errorf("no further separators allowed after decimal separator: %#v", str)
+				return 0, 0, 0, 0, errors.Errorf("no further separators allowed after decimal separator: %q", str)
 			}
 
 			// Write everything after the lastNonDigitIndex and before current index
-			floatBuilder.WriteString(str[lastNonDigitIndex+1 : i])
+			floatBuilder.WriteString(trimmedSignsStr[lastNonDigitIndex+1 : i])
 
 			if numGroupingRunes == 0 {
 
@@ -238,14 +253,14 @@ func ParseFloatDetails(str string) (f float64, thousandsSep, decimalSep byte, de
 			} else {
 				// It's a further grouping rune, has to be 3 bytes since last grouping rune
 				if i-(lastGroupingIndex+1) != 3 {
-					return 0, 0, 0, 0, errors.Errorf("thousands separators have to be 3 characters apart: %#v", str)
+					return 0, 0, 0, 0, errors.Errorf("thousands separators have to be 3 characters apart: %q", str)
 				}
 
 				numGroupingRunes++
 				if r == lastGroupingRune {
 					if numGroupingRunes == 2 {
 						if floatBuilder.Len()-numMinus > 6 {
-							return 0, 0, 0, 0, errors.Errorf("thousands separators have to be 3 characters apart: %#v", str)
+							return 0, 0, 0, 0, errors.Errorf("thousands separators have to be 3 characters apart: %q", str)
 						}
 					}
 					// If it's the same grouping rune, then just save it
@@ -254,21 +269,21 @@ func ParseFloatDetails(str string) (f float64, thousandsSep, decimalSep byte, de
 				} else {
 					// Spaces only are used as thousands separators.
 					// If the the last separator was not a space, something is wrong
-					return 0, 0, 0, 0, errors.Errorf("space can not be used after another thousands separator: %#v", str)
+					return 0, 0, 0, 0, errors.Errorf("space can not be used after another thousands separator: %q", str)
 				}
 			}
 			lastNonDigitIndex = i
 
 		case r == 'e':
 			if i == 0 || eWritten {
-				return 0, 0, 0, 0, errors.Errorf("e can't be the first or a repeating character: %#v", str)
+				return 0, 0, 0, 0, errors.Errorf("e can't be the first or a repeating character: %q", str)
 			}
 			if numGroupingRunes > 0 && !pointWritten {
 				floatBuilder.WriteByte('.')
 				pointWritten = true
 				decimalSep = '.'
 			}
-			floatBuilder.WriteString(str[lastNonDigitIndex+1 : i])
+			floatBuilder.WriteString(trimmedSignsStr[lastNonDigitIndex+1 : i])
 			lastNonDigitIndex = i
 
 			floatBuilder.WriteByte('e')
@@ -285,7 +300,7 @@ func ParseFloatDetails(str string) (f float64, thousandsSep, decimalSep byte, de
 			// then it was pure integer grouping, so the last there
 			// have to be 3 bytes since last grouping rune
 			if lastDigitIndex-lastGroupingIndex != 3 {
-				return 0, 0, 0, 0, errors.Errorf("thousands separators have to be 3 characters apart: %#v", str)
+				return 0, 0, 0, 0, errors.Errorf("thousands separators have to be 3 characters apart: %q", str)
 			}
 			thousandsSep = byte(lastGroupingRune)
 		} else {
@@ -295,7 +310,7 @@ func ParseFloatDetails(str string) (f float64, thousandsSep, decimalSep byte, de
 		}
 	}
 	if lastDigitIndex >= lastNonDigitIndex {
-		floatBuilder.WriteString(str[lastNonDigitIndex+1 : lastDigitIndex+1])
+		floatBuilder.WriteString(trimmedSignsStr[lastNonDigitIndex+1 : lastDigitIndex+1])
 	}
 
 	floatStr := floatBuilder.String()
