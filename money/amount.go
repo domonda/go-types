@@ -13,8 +13,8 @@ import (
 // Amount adds money related methods to float64
 type Amount float64
 
-// ParseAmount parses an amount from str with acceptedDecimals.
-// If acceptedDecimals is empty, then any decimal number is accepted.
+// ParseAmount parses an amount from str accepting only certain decimal digit counts.
+// If no acceptedDecimals are passed, then any decimal digit count is accepted.
 func ParseAmount(str string, acceptedDecimals ...int) (Amount, error) {
 	f, _, _, decimals, err := strfmt.ParseFloatDetails(str)
 	if err != nil {
