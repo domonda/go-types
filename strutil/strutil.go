@@ -523,3 +523,13 @@ func SanitizeLineEndingsBytes(text []byte) []byte {
 
 	return text
 }
+
+// SliceContains returns if the passed string slice contains str.
+func SliceContains(slice []string, str string) bool {
+	for _, s := range slice {
+		if s == str {
+			return true
+		}
+	}
+	return false
+}
