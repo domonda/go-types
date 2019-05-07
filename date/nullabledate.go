@@ -21,6 +21,12 @@ var Null NullableDate
 // NullableDate("").Valid() == true
 type NullableDate string
 
+// NormalizeNullable returns str as normalized NullableDate or an error.
+// The first given lang argument is used as language hint.
+func NormalizeNullable(str string, lang ...language.Code) (NullableDate, error) {
+	return NullableDate(str).Normalized(lang...)
+}
+
 // Valid returns if the format of the date is correct, see Format
 // n.IsZero() is valid
 func (n NullableDate) Valid() bool {
