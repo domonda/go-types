@@ -158,6 +158,25 @@ func ParseFloatDetails(str string) (f float64, thousandsSep, decimalSep byte, de
 	floatBuilder := strings.Builder{}
 	floatBuilder.Grow(len(str))
 
+	// detect the sign, allowed positions are start and end
+	for i, r := range str {
+		switch {
+		case r == '-':
+			if i != 0 && i != (len(str)-1) {
+				return 0, 0, 0, 0, errors.Errorf("minus can only be used as first or last character: %#v", str)
+			}
+			floatBuilder.WriteByte(byte(r))
+			numMinus = 1
+		case r == '+':
+			if i != 0 && i != (len(str)-1) {
+				return 0, 0, 0, 0, errors.Errorf("plus can only be used as first or last character: %#v", str)
+			}
+		}
+	}
+
+	// remove the sign from the string and trim space in case the removal left one
+	str = strings.TrimSpace(strings.ReplaceAll(strings.ReplaceAll(str, "-", ""), "+", ""))
+
 	for i, r := range str {
 		switch {
 		case r >= '0' && r <= '9':
@@ -237,20 +256,6 @@ func ParseFloatDetails(str string) (f float64, thousandsSep, decimalSep byte, de
 					// If the the last separator was not a space, something is wrong
 					return 0, 0, 0, 0, errors.Errorf("space can not be used after another thousands separator: %#v", str)
 				}
-			}
-			lastNonDigitIndex = i
-
-		case r == '-':
-			if i > 0 {
-				return 0, 0, 0, 0, errors.Errorf("minus can only be used as first character: %#v", str)
-			}
-			floatBuilder.WriteByte(byte(r))
-			numMinus = 1
-			lastNonDigitIndex = i
-
-		case r == '+':
-			if i > 0 {
-				return 0, 0, 0, 0, errors.Errorf("plus can only be used as first character: %#v", str)
 			}
 			lastNonDigitIndex = i
 

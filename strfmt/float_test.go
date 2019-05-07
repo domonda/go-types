@@ -47,6 +47,7 @@ func Test_ParseFloat(t *testing.T) {
 	}
 
 	for str, ref := range validDecimalFloats {
+		// standard
 		parsed, thousandsSep, decimalSep, decimals, err := ParseFloatDetails(str)
 		assert.NoError(t, err)
 		assert.Equal(t, ref.f, parsed, "ParseFloatDetails(%#v)", str)
@@ -54,6 +55,7 @@ func Test_ParseFloat(t *testing.T) {
 		assert.Equal(t, string(ref.decimalSep), string(decimalSep), "ParseFloatDetails(%#v)", str)
 		assert.Equal(t, ref.precision, decimals, "ParseFloatDetails(%#v)", str)
 
+		// plus in front
 		parsed, thousandsSep, decimalSep, decimals, err = ParseFloatDetails("+" + str)
 		assert.NoError(t, err)
 		assert.Equal(t, +ref.f, parsed, "ParseFloatDetails(%#v)", "+"+str)
@@ -61,12 +63,29 @@ func Test_ParseFloat(t *testing.T) {
 		assert.Equal(t, string(ref.decimalSep), string(decimalSep), "ParseFloatDetails(%#v)", "+"+str)
 		assert.Equal(t, ref.precision, decimals, "ParseFloatDetails(%#v)", "+"+str)
 
+		// minus in front
 		parsed, thousandsSep, decimalSep, decimals, err = ParseFloatDetails("-" + str)
 		assert.NoError(t, err)
 		assert.Equal(t, -ref.f, parsed, "ParseFloatDetails(%#v)", "-"+str)
 		assert.Equal(t, string(ref.thousandsSep), string(thousandsSep), "ParseFloatDetails(%#v)", "-"+str)
 		assert.Equal(t, string(ref.decimalSep), string(decimalSep), "ParseFloatDetails(%#v)", "-"+str)
 		assert.Equal(t, ref.precision, decimals, "ParseFloatDetails(%#v)", "-"+str)
+
+		// plus on end
+		parsed, thousandsSep, decimalSep, decimals, err = ParseFloatDetails(str + "+")
+		assert.NoError(t, err)
+		assert.Equal(t, +ref.f, parsed, "ParseFloatDetails(%#v)", str+"+")
+		assert.Equal(t, string(ref.thousandsSep), string(thousandsSep), "ParseFloatDetails(%#v)", str+"+")
+		assert.Equal(t, string(ref.decimalSep), string(decimalSep), "ParseFloatDetails(%#v)", str+"+")
+		assert.Equal(t, ref.precision, decimals, "ParseFloatDetails(%#v)", str+"+")
+
+		// minus on end
+		parsed, thousandsSep, decimalSep, decimals, err = ParseFloatDetails(str + "-")
+		assert.NoError(t, err)
+		assert.Equal(t, -ref.f, parsed, "ParseFloatDetails(%#v)", str+"-")
+		assert.Equal(t, string(ref.thousandsSep), string(thousandsSep), "ParseFloatDetails(%#v)", str+"-")
+		assert.Equal(t, string(ref.decimalSep), string(decimalSep), "ParseFloatDetails(%#v)", str+"-")
+		assert.Equal(t, ref.precision, decimals, "ParseFloatDetails(%#v)", str+"-")
 	}
 }
 
