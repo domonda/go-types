@@ -470,6 +470,38 @@ var transliterations = map[rune]string{
 	'œ': "oe",
 }
 
+func ReplaceUmlauteWithHTMLEntities(str string) string {
+	for umlaut, entity := range umlautHTMLEntities {
+		str = strings.ReplaceAll(str, umlaut, entity)
+	}
+	return str
+}
+
+var umlautHTMLEntities = map[string]string{
+	"Ä": "&Auml;",
+	"ä": "&auml;",
+	"Ë": "&Euml;",
+	"ë": "&euml;",
+	"Ï": "&Iuml;",
+	"ï": "&iuml;",
+	"Ö": "&Ouml;",
+	"ö": "&ouml;",
+	"Ü": "&Uuml;",
+	"ü": "&uuml;",
+	"Ÿ": "&Yuml;",
+	"ÿ": "&yuml;",
+	"ß": "&szlig;",
+	"á": "&aacute;",
+	"€": "&euro;",
+	"²": "&sup2;",
+	"°": "&deg;",
+	"©": "&copy;",
+	"®": "&reg;",
+	"„": "&bdquo;",
+	"“": "&ldquo;",
+	"”": "&rdquo;",
+}
+
 // SanitizeLineEndings converts all line endings to just '\n'
 func SanitizeLineEndings(text string) string {
 	// var (
@@ -524,10 +556,30 @@ func SanitizeLineEndingsBytes(text []byte) []byte {
 	return text
 }
 
-// SliceContains returns if the passed string slice contains str.
-func SliceContains(slice []string, str string) bool {
-	for _, s := range slice {
+// StringIn returns if str is in (equals any of) strs.
+func StringIn(str string, strs []string) bool {
+	for _, s := range strs {
 		if s == str {
+			return true
+		}
+	}
+	return false
+}
+
+// SubStringIn returns if subString is equal or a substring of any of strs.
+func SubStringIn(subString string, strs []string) bool {
+	for _, s := range strs {
+		if strings.Contains(s, subString) {
+			return true
+		}
+	}
+	return false
+}
+
+// StringContainsAny returns if str is a sub string in any of subStrings.
+func StringContainsAny(str string, subStrings []string) bool {
+	for _, subString := range subStrings {
+		if strings.Contains(str, subString) {
 			return true
 		}
 	}

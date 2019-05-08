@@ -36,9 +36,9 @@ func String(str string, config *StringConfig, dest reflect.Value) error {
 	case reflect.Bool:
 		s := strings.TrimSpace(str)
 		switch {
-		case strutil.SliceContains(config.TrueStrings, s):
+		case strutil.StringIn(s, config.TrueStrings):
 			dest.SetBool(true)
-		case strutil.SliceContains(config.FalseStrings, s):
+		case strutil.StringIn(s, config.FalseStrings):
 			dest.SetBool(false)
 		default:
 			return errors.Errorf("can't assign %q as bool", str)
