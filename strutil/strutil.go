@@ -470,37 +470,33 @@ var transliterations = map[rune]string{
 	'œ': "oe",
 }
 
-func ReplaceUmlauteWithHTMLEntities(str string) string {
-	for umlaut, entity := range umlautHTMLEntities {
-		str = strings.ReplaceAll(str, umlaut, entity)
-	}
-	return str
-}
-
-var umlautHTMLEntities = map[string]string{
-	"Ä": "&Auml;",
-	"ä": "&auml;",
-	"Ë": "&Euml;",
-	"ë": "&euml;",
-	"Ï": "&Iuml;",
-	"ï": "&iuml;",
-	"Ö": "&Ouml;",
-	"ö": "&ouml;",
-	"Ü": "&Uuml;",
-	"ü": "&uuml;",
-	"Ÿ": "&Yuml;",
-	"ÿ": "&yuml;",
-	"ß": "&szlig;",
-	"á": "&aacute;",
-	"€": "&euro;",
-	"²": "&sup2;",
-	"°": "&deg;",
-	"©": "&copy;",
-	"®": "&reg;",
-	"„": "&bdquo;",
-	"“": "&ldquo;",
-	"”": "&rdquo;",
-}
+// var umlautHTMLEntities = map[string]string{
+// 	"Ä": "&Auml;",
+// 	"ä": "&auml;",
+// 	"Ë": "&Euml;",
+// 	"ë": "&euml;",
+// 	"Ï": "&Iuml;",
+// 	"ï": "&iuml;",
+// 	"Ö": "&Ouml;",
+// 	"ö": "&ouml;",
+// 	"Ü": "&Uuml;",
+// 	"ü": "&uuml;",
+// 	"Ÿ": "&Yuml;",
+// 	"ÿ": "&yuml;",
+// 	"ß": "&szlig;",
+// 	"á": "&aacute;",
+// 	"€": "&euro;", // https://app.domonda.com/document/6c98230c-4c19-4e41-9860-08b6a6bc3c17
+// 	"£": "",
+// 	"–": "&ndash;",
+// 	"•": "&bull;",
+// 	"²": "&sup2;",
+// 	"°": "&deg;",
+// 	"©": "&copy;",
+// 	"®": "&reg;",
+// 	"„": "&bdquo;",
+// 	"“": "&ldquo;",
+// 	"”": "&rdquo;",
+// }
 
 // SanitizeLineEndings converts all line endings to just '\n'
 func SanitizeLineEndings(text string) string {
