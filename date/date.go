@@ -36,6 +36,10 @@ const (
 
 	// MinLength is the minimum length of a valid date
 	MinLength = 6
+
+	// Invalid holds an empty string Date.
+	// See NullableDate for where an empty string is a valid value.
+	Invalid Date = ""
 )
 
 // Date represents a the day of calender date
@@ -319,12 +323,20 @@ func (date Date) NormalizedOrUnchanged(lang ...language.Code) Date {
 	return normalized
 }
 
-func (date Date) NormalizedOrEmpty(lang ...language.Code) Date {
+// func (date Date) NormalizedOrInvalid(lang ...language.Code) Date {
+// 	normalized, err := date.Normalized(lang...)
+// 	if err != nil {
+// 		return Invalid
+// 	}
+// 	return normalized
+// }
+
+func (date Date) NormalizedOrNull(lang ...language.Code) NullableDate {
 	normalized, err := date.Normalized(lang...)
 	if err != nil {
-		return ""
+		return Null
 	}
-	return normalized
+	return NullableDate(normalized)
 }
 
 func (date Date) After(other Date) bool {
