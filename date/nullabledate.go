@@ -27,6 +27,15 @@ func NormalizeNullable(str string, lang ...language.Code) (NullableDate, error) 
 	return NullableDate(str).Normalized(lang...)
 }
 
+// MustNullable returns str as normalized NullableDate or panics if str is not neither a valid Date nor Null ("").
+func MustNullable(str string) NullableDate {
+	d, err := NullableDate(str).Normalized()
+	if err != nil {
+		panic(err)
+	}
+	return d
+}
+
 // Valid returns if the format of the date is correct, see Format
 // n.IsZero() is valid
 func (n NullableDate) Valid() bool {

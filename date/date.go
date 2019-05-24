@@ -47,6 +47,15 @@ const (
 // and will treat an empty string or the zero dates "0000-00-00" and "0001-01-01" (see IsZero) as SQL NULL.
 type Date string
 
+// Must returns str as normalized Date or panics if str is not a valid Date.
+func Must(str string) Date {
+	d, err := Date(str).Normalized()
+	if err != nil {
+		panic(err)
+	}
+	return d
+}
+
 // Of returns a normalized Date for the given year, month, and day.
 // The month, day values may be outside
 // their usual ranges and will be normalized during the conversion.
