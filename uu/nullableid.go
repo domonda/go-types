@@ -48,6 +48,15 @@ func (u NullableID) Valid() bool {
 	return u == IDNull || u.ID.Valid()
 }
 
+// Validate returns an error if the Variant and Version of this UUID are not supported.
+// A Nil UUID is also valid.
+func (u NullableID) Validate() error {
+	if u == IDNull {
+		return nil
+	}
+	return u.ID.Validate()
+}
+
 // Ptr returns a pointer to this NullableID's value, or a nil pointer if this NullableID is null.
 func (u NullableID) Ptr() *ID {
 	if u == IDNull {

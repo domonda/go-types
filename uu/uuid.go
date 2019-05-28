@@ -32,6 +32,7 @@ import (
 	"database/sql/driver"
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"hash"
 	"net"
@@ -166,6 +167,18 @@ func (id ID) Valid() bool {
 	return v >= 1 && v <= 5 && id.Variant() != IDVariantInvalid
 }
 
+// Validate returns an error if the Variant and Version of this UUID are not supported.
+// A Nil UUID is not valid.
+func (id ID) Validate() error {
+	if v := id.Version(); v < 1 || v > 5 {
+		return fmt.Errorf("invalid UUID version: %d", v)
+	}
+	if id.Variant() == IDVariantInvalid {
+		return errors.New("invalid UUID variant")
+	}
+	return nil
+}
+
 func (id ID) Nullable() NullableID {
 	return NullableID{ID: id}
 }
@@ -284,7 +297,8 @@ func (id ID) MarshalBinary() (data []byte, err error) {
 }
 
 // UnmarshalBinary implements the encoding.BinaryUnmarshaler interface.
-// It will return error if the slice isn't 16 bytes long.
+// It will return error if the slice isn't 16 bytes long,
+// but does not check the validity of the UUID.
 func (id *ID) UnmarshalBinary(data []byte) (err error) {
 	if len(data) != 16 {
 		return fmt.Errorf("uu.ID must be exactly 16 bytes long, got %d bytes", len(data))
