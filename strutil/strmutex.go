@@ -17,8 +17,8 @@ func NewStrMutex() *StrMutex {
 
 func (m *StrMutex) Lock(str string) {
 	m.mapMutex.Lock()
-	strMutex, ok := m.strMutexes[str]
-	if !ok {
+	strMutex := m.strMutexes[str]
+	if strMutex == nil {
 		strMutex = new(sync.Mutex)
 		m.strMutexes[str] = strMutex
 	}
@@ -29,13 +29,14 @@ func (m *StrMutex) Lock(str string) {
 
 func (m *StrMutex) Unlock(str string) {
 	m.mapMutex.Lock()
-	strMutex, ok := m.strMutexes[str]
-	// delete(m.strMutexes, str) // TODO not thread safe!
+	strMutex := m.strMutexes[str]
+	// TODO: delete is not thread safe!
+	// delete is only safe when no thread is waiting for an unlock anymore
+	// delete(m.strMutexes, str)
 	m.mapMutex.Unlock()
 
-	if !ok {
+	if strMutex == nil {
 		panic(fmt.Sprintf("Unlock called for non locked string: %q", str))
 	}
-
 	strMutex.Unlock()
 }
