@@ -1,6 +1,9 @@
 package strutil
 
-import "sync"
+import (
+	"fmt"
+	"sync"
+)
 
 // StrMutex allows mutex locking per UUID
 type StrMutex struct {
@@ -31,7 +34,7 @@ func (m *StrMutex) Unlock(str string) {
 	m.mapMutex.Unlock()
 
 	if !ok {
-		panic("Unlock called for non locked string: " + str)
+		panic(fmt.Sprintf("Unlock called for non locked string: %q", str))
 	}
 
 	strMutex.Unlock()
