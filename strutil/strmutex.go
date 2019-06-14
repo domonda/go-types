@@ -30,7 +30,7 @@ func (m *StrMutex) Lock(str string) {
 func (m *StrMutex) Unlock(str string) {
 	m.mapMutex.Lock()
 	strMutex, ok := m.strMutexes[str]
-	// delete(m.strMutexes, id) TODO
+	// delete(m.strMutexes, str) // TODO not thread safe!
 	m.mapMutex.Unlock()
 
 	if !ok {
