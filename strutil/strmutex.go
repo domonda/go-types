@@ -5,38 +5,52 @@ import (
 	"sync"
 )
 
-// StrMutex allows mutex locking per UUID
+// StrMutex manages a unique mutex for every locked string key.
+// The mutex for a key exists as long as there are any locks
+// waiting to be unlocked.
+// This is equivalent to declaring a mutex variable for every key,
+// except that the key and the number of mutexes are dynamic.
 type StrMutex struct {
-	mapMutex   sync.Mutex
-	strMutexes map[string]*sync.Mutex
+	locksMtx sync.Mutex
+	locks    map[string]*locker
 }
 
+type locker struct {
+	mutex sync.Mutex
+	count int
+}
+
+// NewStrMutex returns a new StrMutex
 func NewStrMutex() *StrMutex {
-	return &StrMutex{strMutexes: make(map[string]*sync.Mutex)}
+	return &StrMutex{locks: make(map[string]*locker)}
 }
 
-func (m *StrMutex) Lock(str string) {
-	m.mapMutex.Lock()
-	strMutex := m.strMutexes[str]
-	if strMutex == nil {
-		strMutex = new(sync.Mutex)
-		m.strMutexes[str] = strMutex
+// Lock the mutex for a given key.
+func (m *StrMutex) Lock(key string) {
+	m.locksMtx.Lock()
+	lock := m.locks[key]
+	if lock == nil {
+		lock = new(locker)
+		m.locks[key] = lock
 	}
-	m.mapMutex.Unlock()
+	lock.count++
+	m.locksMtx.Unlock()
 
-	strMutex.Lock()
+	lock.mutex.Lock()
 }
 
-func (m *StrMutex) Unlock(str string) {
-	m.mapMutex.Lock()
-	strMutex := m.strMutexes[str]
-	// TODO: delete is not thread safe!
-	// delete is only safe when no thread is waiting for an unlock anymore
-	// delete(m.strMutexes, str)
-	m.mapMutex.Unlock()
+// Unlock the mutex for a given key.
+func (m *StrMutex) Unlock(key string) {
+	m.locksMtx.Lock()
+	defer m.locksMtx.Unlock()
 
-	if strMutex == nil {
-		panic(fmt.Sprintf("Unlock called for non locked string: %q", str))
+	lock := m.locks[key]
+	if lock == nil {
+		panic(fmt.Sprintf("Unlock called for non locked key: %q", key))
 	}
-	strMutex.Unlock()
+	lock.count--
+	if lock.count == 0 {
+		delete(m.locks, key)
+	}
+	lock.mutex.Unlock()
 }

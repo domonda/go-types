@@ -1,4 +1,4 @@
-package strutil
+package uu
 
 import (
 	"math/rand"
@@ -9,9 +9,11 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func Test_StrMutex(t *testing.T) {
-	strMutex := NewStrMutex()
-	assert.Panics(t, func() { strMutex.Unlock("test") }, "not locked string should panic")
+func Test_IDMutex(t *testing.T) {
+	uuid := IDMustFromString("946521d6-9aef-4bb1-8a19-e0fc0c7e3665")
+
+	idMutex := NewIDMutex()
+	assert.Panics(t, func() { idMutex.Unlock(uuid) }, "not locked string should panic")
 
 	numParallel := 100
 	numAccess := 1000
@@ -20,9 +22,9 @@ func Test_StrMutex(t *testing.T) {
 
 	testFunc := func() {
 		for i := 0; i < numAccess; i++ {
-			strMutex.Lock("test")
+			idMutex.Lock(uuid)
 			time.Sleep(time.Nanosecond * time.Duration(rand.Intn(100)))
-			strMutex.Unlock("test")
+			idMutex.Unlock(uuid)
 			time.Sleep(1)
 		}
 		wg.Done()
