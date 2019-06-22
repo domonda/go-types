@@ -96,3 +96,15 @@ func (set StringSet) Diff(other StringSet) StringSet {
 	}
 	return diff
 }
+
+func (set StringSet) Equal(other StringSet) bool {
+	if len(set) != len(other) {
+		return false
+	}
+	for str := range set {
+		if !other.Contains(str) {
+			return false
+		}
+	}
+	return true
+}

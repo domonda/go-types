@@ -109,6 +109,18 @@ func (set IDSet) Diff(other IDSet) IDSet {
 	return diff
 }
 
+func (set IDSet) Equal(other IDSet) bool {
+	if len(set) != len(other) {
+		return false
+	}
+	for id := range set {
+		if !other.Contains(id) {
+			return false
+		}
+	}
+	return true
+}
+
 // Scan implements the database/sql.Scanner interface
 // with the nil map value used as SQL NULL.
 // Does *set = make(Set) if *set == nil
