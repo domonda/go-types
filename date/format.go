@@ -1,4 +1,4 @@
-package strfmt
+package date
 
 import (
 	"reflect"
@@ -9,22 +9,35 @@ import (
 	reflection "github.com/ungerik/go-reflection"
 
 	"github.com/domonda/errors"
-	"github.com/domonda/go-types/date"
+	"github.com/domonda/go-types/language"
 )
 
-type DateFormat struct {
+type Format struct {
 	Layout     string `json:"layout"`
 	NilString  string `json:"nilString"`
 	ZeroString string `json:"zeroString"`
 }
 
-func (f *DateFormat) AssignString(dest reflect.Value, str string) error {
+func (f *Format) Format(date Date) string {
+	return date.Format(f.Layout)
+}
+
+// Parse implements the strfmt.Parser interface
+func (f *Format) Parse(str string, langHints ...language.Code) (normalized string, err error) {
+	date, err := Normalize(str, langHints...)
+	if err != nil {
+		return "", err
+	}
+	return f.Format(date), nil
+}
+
+func (f *Format) AssignString(dest reflect.Value, str string) error {
 	str = strings.TrimSpace(str)
 
 	tPtr := new(time.Time)
 	if str != "" {
 		if f.Layout == "" {
-			d, err := date.Normalize(str)
+			d, err := Normalize(str)
 			if err != nil {
 				return err
 			}
@@ -46,19 +59,19 @@ func (f *DateFormat) AssignString(dest reflect.Value, str string) error {
 	}
 
 	switch ptr := dest.Addr().Interface().(type) {
-	case *date.Date:
+	case *Date:
 		if tPtr == nil {
 			*ptr = ""
 		} else {
-			*ptr = date.OfTime(*tPtr)
+			*ptr = OfTime(*tPtr)
 		}
 		return nil
 
-	case *date.NullableDate:
+	case *NullableDate:
 		if tPtr == nil {
-			*ptr = date.Null
+			*ptr = Null
 		} else {
-			*ptr = date.OfTime(*tPtr).NullableDate()
+			*ptr = OfTime(*tPtr).NullableDate()
 		}
 		return nil
 
@@ -82,13 +95,22 @@ func (f *DateFormat) AssignString(dest reflect.Value, str string) error {
 		}
 		return nil
 	}
-	return errors.Errorf("AssignString destination type not supported: %T", dest.Interface())
+
+	return errors.Errorf("AssignString destination type not supported: %s", dest.Type())
 }
 
-func (f *DateFormat) FormatString(val reflect.Value) (string, error) {
+func (f *Format) FormatString(val reflect.Value) (string, error) {
 	v := reflection.DerefValue(val)
 	if reflection.IsNil(v) {
 		return f.NilString, nil
+	}
+
+	type dateOrTime interface {
+		// Format as implemented by time.Time and Date
+		Format(layout string) string
+
+		// IsZero as implemented by time.Time and Date
+		IsZero() bool
 	}
 
 	switch x := val.Interface().(type) {
@@ -99,13 +121,5 @@ func (f *DateFormat) FormatString(val reflect.Value) (string, error) {
 		return x.Format(f.Layout), nil
 	}
 
-	return "", errors.Errorf("could not format as date string: %T", val)
-}
-
-type dateOrTime interface {
-	// Format as implemented by time.Time and date.Date
-	Format(layout string) string
-
-	// IsZero as implemented by time.Time and date.Date
-	IsZero() bool
+	return "", errors.Errorf("could not format as date string: %s", val.Type())
 }

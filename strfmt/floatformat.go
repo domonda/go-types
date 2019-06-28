@@ -20,8 +20,8 @@ func (ff *FloatFormat) Format(f float64) string {
 	return FormatFloat(f, ff.ThousandsSep, ff.DecimalSep, ff.Precision, ff.PadPrecision)
 }
 
-// Normalize implements the Normalizer interface
-func (ff *FloatFormat) Normalize(str string, langHints ...language.Code) (normalized string, err error) {
+// Parse implements the Parser interface
+func (ff *FloatFormat) Parse(str string, langHints ...language.Code) (normalized string, err error) {
 	f, err := ParseFloat(str)
 	if err != nil {
 		return "", err

@@ -2,10 +2,8 @@ package strfmt
 
 import "reflect"
 
+// split in two?
 type StringFormatter interface {
-	// json.Marshaler
-	// json.Unmarshaler
-
 	Assigntring(dest reflect.Value, str string) error
 	FormatString(val reflect.Value) (string, error)
 }

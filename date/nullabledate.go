@@ -141,7 +141,7 @@ func (n NullableDate) MidnightTime() time.Time {
 	if n.IsZero() {
 		return time.Time{}
 	}
-	t, err := time.Parse(Format, string(n))
+	t, err := time.Parse(Layout, string(n))
 	if err != nil {
 		return time.Time{}
 	}
@@ -155,7 +155,7 @@ func (n NullableDate) MidnightTimeInLocation(loc *time.Location) time.Time {
 	if n.IsZero() {
 		return time.Time{}
 	}
-	t, err := time.ParseInLocation(Format, string(n), loc)
+	t, err := time.ParseInLocation(Layout, string(n), loc)
 	if err != nil {
 		return time.Time{}
 	}
@@ -168,7 +168,7 @@ func (n NullableDate) Format(layout string) string {
 	if n == Null || layout == "" {
 		return ""
 	}
-	if layout == Format {
+	if layout == Layout {
 		return string(n)
 	}
 	return n.MidnightTime().Format(layout)

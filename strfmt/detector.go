@@ -3,23 +3,23 @@ package strfmt
 import "github.com/domonda/go-types/language"
 
 type Detector struct {
-	normalizers map[string]Normalizer
+	parsers map[string]Parser
 }
 
 func NewDetector() *Detector {
 	return &Detector{
-		normalizers: make(map[string]Normalizer),
+		parsers: make(map[string]Parser),
 	}
 }
 
-func (td *Detector) Register(name string, normalizer Normalizer) {
-	td.normalizers[name] = normalizer
+func (td *Detector) Register(name string, parser Parser) {
+	td.parsers[name] = parser
 }
 
 func (td *Detector) Detect(str string, langHints ...language.Code) map[string]string {
 	detected := make(map[string]string)
-	for name, normalizer := range td.normalizers {
-		normalized, err := normalizer.Normalize(str, langHints...)
+	for name, parser := range td.parsers {
+		normalized, err := parser.Parse(str, langHints...)
 		if err == nil {
 			detected[name] = normalized
 		}

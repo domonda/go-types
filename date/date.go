@@ -29,8 +29,8 @@ func StringIsDate(str string, lang ...language.Code) bool {
 }
 
 const (
-	// Format used for the Date type, compatible with time.Time.Format()
-	Format = "2006-01-02"
+	// Layout used for the Date type, compatible with time.Time.Format()
+	Layout = "2006-01-02"
 
 	Length = 10 // len("2006-01-02")
 
@@ -70,7 +70,7 @@ func OfTime(t time.Time) Date {
 	if t.IsZero() {
 		return ""
 	}
-	return Date(t.Format(Format))
+	return Date(t.Format(Layout))
 }
 
 // OfTimePtr returns the date part of the passed time.Time
@@ -255,7 +255,7 @@ func (date Date) Valid() bool {
 }
 
 func (date Date) ValidAndNormalized() bool {
-	_, err := time.Parse(Format, string(date))
+	_, err := time.Parse(Layout, string(date))
 	return err == nil
 }
 
@@ -281,7 +281,7 @@ func (date Date) MidnightTime() time.Time {
 	if date.IsZero() {
 		return time.Time{}
 	}
-	t, err := time.Parse(Format, string(date))
+	t, err := time.Parse(Layout, string(date))
 	if err != nil {
 		return time.Time{}
 	}
@@ -295,7 +295,7 @@ func (date Date) MidnightTimeInLocation(loc *time.Location) time.Time {
 	if date.IsZero() {
 		return time.Time{}
 	}
-	t, err := time.ParseInLocation(Format, string(date), loc)
+	t, err := time.ParseInLocation(Layout, string(date), loc)
 	if err != nil {
 		return time.Time{}
 	}
@@ -308,7 +308,7 @@ func (date Date) Format(layout string) string {
 	if date == "" || layout == "" {
 		return ""
 	}
-	if layout == Format {
+	if layout == Layout {
 		return string(date)
 	}
 	return date.MidnightTime().Format(layout)
@@ -519,7 +519,7 @@ func normalizeAndCheckDate(str string, langHint language.Code) (Date, error) {
 	if err != nil {
 		return "", err
 	}
-	_, err = time.Parse(Format, normalized)
+	_, err = time.Parse(Layout, normalized)
 	if err != nil {
 		return "", err
 	}
