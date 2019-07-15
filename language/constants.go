@@ -1,5 +1,7 @@
 package language
 
+// https://iso639-3.sil.org/code_tables/download_tables
+
 const (
 	// Null is an empty string and will be treatet as SQL NULL.
 	// language.Null.Valid() == false

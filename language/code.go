@@ -7,7 +7,7 @@ import (
 	"github.com/domonda/errors"
 )
 
-// Code according to ISO 639-1 Code.
+// Code in its normalized form a ISO 639-1 two character language code.
 // Code implements the database/sql.Scanner and database/sql/driver.Valuer interfaces,
 // and will treat an empty Code string as SQL NULL value.
 type Code string
