@@ -19,6 +19,10 @@ func (c NullableCode) Valid() bool {
 	return c == Null || Code(c).Valid()
 }
 
+func (c NullableCode) ValidAndNotNull() bool {
+	return Code(c).Valid()
+}
+
 func (c NullableCode) Validate() error {
 	if !c.Valid() {
 		return errors.Errorf("invalid country-code: '%s'", c)
@@ -26,8 +30,21 @@ func (c NullableCode) Validate() error {
 	return nil
 }
 
+func (c NullableCode) Normalized() (NullableCode, error) {
+	normalized := NullableCode(strings.ToUpper(string(c)))
+	err := normalized.Validate()
+	if err != nil {
+		return Null, err
+	}
+	return normalized, nil
+}
+
 func (c NullableCode) CountryName() string {
 	return Code(c).CountryName()
+}
+
+func (c NullableCode) Code() Code {
+	return Code(c)
 }
 
 // Scan implements the database/sql.Scanner interface.

@@ -27,6 +27,15 @@ func (c Code) Validate() error {
 	return nil
 }
 
+func (c Code) Normalized() (Code, error) {
+	normalized := Code(strings.ToUpper(string(c)))
+	err := normalized.Validate()
+	if err != nil {
+		return Invalid, err
+	}
+	return normalized, nil
+}
+
 func (c Code) CountryName() string {
 	return countryMap[c]
 }
