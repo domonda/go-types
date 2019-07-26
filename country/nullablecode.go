@@ -75,7 +75,7 @@ func (c NullableCode) MarshalJSON() ([]byte, error) {
 	if c == Null {
 		return []byte("null"), nil
 	}
-	return []byte(c), nil
+	return []byte(`"` + c + `"`), nil
 }
 
 // AssignString tries to parse and assign the passed
