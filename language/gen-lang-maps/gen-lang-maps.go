@@ -14,9 +14,13 @@ import (
 	"github.com/ungerik/go-fs/fsimpl"
 )
 
+// https://iso639-3.sil.org/code_tables/download_tables
+// http://www.loc.gov/standards/iso639-2/ISO-639-2_utf-8.txt
+
 func main() {
 	iso6393URL := "https://iso639-3.sil.org/sites/iso639-3/files/downloads/iso-639-3_Code_Tables_20190408.zip"
 
+	log.Println("Downloading", iso6393URL)
 	response, err := http.Get(iso6393URL)
 	if err != nil {
 		log.Fatal(err)
