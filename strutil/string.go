@@ -73,7 +73,7 @@ func PtrFromString(str string) *string {
 }
 
 // IndexInStrings returns the index of where str
-// can be found in slice.
+// can be found in slice, or -1 if it was not found.
 func IndexInStrings(str string, slice []string) int {
 	for i := range slice {
 		if str == slice[i] {
