@@ -247,7 +247,7 @@ func (id *ID) UnmarshalText(text []byte) (err error) {
 
 	if len(text) == 32 {
 		_, err = hex.Decode(id[:], text)
-		return err
+		return fmt.Errorf("uu.ID hex decoding error: %s", err)
 	}
 
 	t := text[:]
@@ -281,7 +281,7 @@ func (id *ID) UnmarshalText(text []byte) (err error) {
 
 		_, err = hex.Decode(b[:byteGroup/2], t[:byteGroup])
 		if err != nil {
-			return err
+			return fmt.Errorf("uu.ID hex decoding error: %s", err)
 		}
 
 		t = t[byteGroup:]
