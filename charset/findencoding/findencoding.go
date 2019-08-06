@@ -14,13 +14,20 @@ import (
 var PrintFileWithAllEncodingsArgs struct {
 	command.ArgsDef
 
-	File fs.FileReader `arg:"file"`
+	File     fs.FileReader `arg:"file"`
+	MaxBytes int           `arg:"maxLines" desc:"print max bytes per char-set if > 0"`
 }
 
-func PrintFileWithAllEncodings(file fs.FileReader) error {
+func PrintFileWithAllEncodings(file fs.FileReader, maxBytes int) error {
 	sourceData, err := file.ReadAll()
 	if err != nil {
 		return err
+	}
+	if maxBytes == 0 {
+		maxBytes = 1024 * 1024
+	}
+	if len(sourceData) > maxBytes {
+		sourceData = sourceData[:maxBytes]
 	}
 
 	print := func(charset string, str string) {
