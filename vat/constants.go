@@ -27,7 +27,7 @@ var vatidRegex = map[country.Code]*regexp.Regexp{
 	"DK": regexp.MustCompile(`^DK\s??\d{8}$`),
 	"EE": regexp.MustCompile(`^EE\s??\d{9}$`),
 	"EL": regexp.MustCompile(`^EL\s??\d{9}$`), // greece GR
-	"ES": regexp.MustCompile(`^ES\s??X\s??\d{7}X$`),
+	"ES": regexp.MustCompile(`^ES\s??[0-9A-Z]\s??\d{7}[0-9A-Z]$`),
 	"FI": regexp.MustCompile(`^FI\s??\d{8}$`),
 	"FR": regexp.MustCompile(`^FR\s??[0-9A-Z][0-9A-Z]\s??\d{9}$`),
 	"GB": regexp.MustCompile(`^GB\s??(?:\d{9})|(?:\d{12})|(?:GD\d{3})|(?:HA\d{3})$`),
