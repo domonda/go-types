@@ -108,6 +108,7 @@ func Parse(layout, value string) (Date, error) {
 
 // RangeOfPeriod returns the dates [from, until] for a period
 // defined in one the following formats:
+// period of a ISO 8601 week of a year: YYYY-Wnn
 // period of a month of a year: YYYY-MM,
 // period of a quarter of a year: YYYY-Qn,
 // period of a half year: YYYY-Hn,
@@ -119,15 +120,16 @@ func Parse(layout, value string) (Date, error) {
 // Period of Q3 2018: RangeOfPeriod("2018-Q3") == Date("2018-07-01"), Date("2018-09-30"), nil
 // Period of second half of 2018: RangeOfPeriod("2018-H2") == Date("2018-07-01"), Date("2018-12-31"), nil
 // Period of year 2018: RangeOfPeriod("2018") == Date("2018-07-01"), Date("2018-12-31"), nil
+// Period of week 1 2019: RangeOfPeriod("2019-W01") == Date("2018-12-31"), Date("2019-01-06"), nil
 func RangeOfPeriod(period string) (from, until Date, err error) {
-	if len(period) != 4 && len(period) != 7 {
-		return "", "", errors.Errorf("invalid period format, not 4 or 7 chars long: %#v", period)
+	if len(period) != 4 && len(period) != 7 && len(period) != 8 {
+		return "", "", errors.Errorf("invalid period format length: %q", period)
 	}
 
 	if len(period) == 4 {
 		year, err := strconv.Atoi(period)
 		if err != nil || year <= 0 {
-			return "", "", errors.Errorf("invalid period format: %#v", period)
+			return "", "", errors.Errorf("invalid period format: %q", period)
 		}
 		from = Date(period + "-01-01")
 		until = Date(period + "-12-31")
@@ -135,19 +137,27 @@ func RangeOfPeriod(period string) (from, until Date, err error) {
 	}
 
 	if period[4] != '-' {
-		return "", "", errors.Errorf("invalid period format, expected '-' after year: %#v", period)
+		return "", "", errors.Errorf("invalid period format, expected '-' after year: %q", period)
 	}
 
 	year, err := strconv.Atoi(period[:4])
 	if err != nil {
-		return "", "", errors.Errorf("invalid period format, can't parse year: %#v", period)
+		return "", "", errors.Errorf("invalid period format, can't parse year: %q", period)
 	}
 
 	switch period[5] {
+	case 'W', 'w':
+		week, err := strconv.Atoi(period[6:])
+		if err != nil || week < 1 || week > 53 {
+			return "", "", errors.Errorf("invalid period format, can't parse week: %q", period)
+		}
+		from, until = YearWeek(year, week)
+		return from, until, nil
+
 	case 'Q', 'q':
 		quarter, err := strconv.Atoi(period[6:])
 		if err != nil || quarter < 1 || quarter > 4 {
-			return "", "", errors.Errorf("invalid period format, can't parse quarter: %#v", period)
+			return "", "", errors.Errorf("invalid period format, can't parse quarter: %q", period)
 		}
 		from = Of(year, time.Month(quarter-1)*3+1, 1)
 		until = Of(year, time.Month(quarter)*3+1, 0) // 0th day is the last day of the previous month
@@ -156,7 +166,7 @@ func RangeOfPeriod(period string) (from, until Date, err error) {
 	case 'H', 'h':
 		half, err := strconv.Atoi(period[6:])
 		if err != nil || half < 1 || half > 2 {
-			return "", "", errors.Errorf("invalid period format, can't parse half-year: %#v", period)
+			return "", "", errors.Errorf("invalid period format, can't parse half-year: %q", period)
 		}
 		from = Of(year, time.Month(half-1)*6+1, 1)
 		until = Of(year, time.Month(half)*6+1, 0) // 0th day is the last day of the previous month
@@ -165,12 +175,38 @@ func RangeOfPeriod(period string) (from, until Date, err error) {
 
 	month, err := strconv.Atoi(period[5:])
 	if err != nil || month < 1 || month > 12 {
-		return "", "", errors.Errorf("invalid period format, can't parse month: %#v", period)
+		return "", "", errors.Errorf("invalid period format, can't parse month: %q", period)
 	}
 
 	from = Of(year, time.Month(month), 1)
 	until = Of(year, time.Month(month)+1, 0) // 0th day is the last day of the previous month
 	return from, until, nil
+}
+
+// YearWeek returns the dates of Monday and Sunday of an ISO 8601 week.
+func YearWeek(year, week int) (monday, sunday Date) {
+	t := time.Date(year, 0, 0, 0, 0, 0, 0, time.Local)
+	isoYear, isoWeek := t.ISOWeek()
+
+	// iterate back to Monday
+	for t.Weekday() != time.Monday {
+		t = t.AddDate(0, 0, -1)
+		isoYear, isoWeek = t.ISOWeek()
+	}
+
+	// iterate forward to the first day of the first week
+	for isoYear < year {
+		t = t.AddDate(0, 0, 7)
+		isoYear, isoWeek = t.ISOWeek()
+	}
+
+	// iterate forward to the first day of the given week
+	for isoWeek < week {
+		t = t.AddDate(0, 0, 7)
+		isoYear, isoWeek = t.ISOWeek()
+	}
+
+	return OfTime(t), OfTime(t.AddDate(0, 0, 6))
 }
 
 func FromUntilFromYearAndMonths(year, months string) (fromDate, untilDate Date, err error) {
