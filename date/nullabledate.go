@@ -162,6 +162,15 @@ func (n NullableDate) MidnightTimeInLocation(loc *time.Location) time.Time {
 	return t
 }
 
+// ISOWeek returns the ISO 8601 year and week number in which the date occurs.
+// Week ranges from 1 to 53. Jan 01 to Jan 03 of year n might belong to
+// week 52 or 53 of year n-1, and Dec 29 to Dec 31 might belong to week 1
+// of year n+1.
+func (n NullableDate) ISOWeek() (year, week int) {
+	// Date.ISOWeek can handle zero/null
+	return Date(n).ISOWeek()
+}
+
 // Format returns n.MidnightTime().Format(layout),
 // or an empty string if n is Null or layout is an empty string.
 func (n NullableDate) Format(layout string) string {

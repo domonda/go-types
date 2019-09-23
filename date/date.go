@@ -466,6 +466,18 @@ func (date Date) YearMonthDay() (year int, month time.Month, day int) {
 	return year, time.Month(monthInt), day
 }
 
+// ISOWeek returns the ISO 8601 year and week number in which the date occurs.
+// Week ranges from 1 to 53. Jan 01 to Jan 03 of year n might belong to
+// week 52 or 53 of year n-1, and Dec 29 to Dec 31 might belong to week 1
+// of year n+1.
+func (date Date) ISOWeek() (year, week int) {
+	t := date.MidnightTime()
+	if t.IsZero() {
+		return 0, 0
+	}
+	return t.ISOWeek()
+}
+
 // Scan implements the database/sql.Scanner interface.
 func (date *Date) Scan(value interface{}) (err error) {
 	switch x := value.(type) {
