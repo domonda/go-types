@@ -242,12 +242,15 @@ func (id ID) MarshalText() (text []byte, err error) {
 // "urn:uuid:6ba7b810-9dad-11d1-80b4-00c04fd430c8"
 func (id *ID) UnmarshalText(text []byte) (err error) {
 	if len(text) < 32 {
-		return fmt.Errorf("uu.ID string too short: %s", text)
+		return fmt.Errorf("uu.ID string too short: %q", text)
 	}
 
 	if len(text) == 32 {
 		_, err = hex.Decode(id[:], text)
-		return fmt.Errorf("uu.ID hex decoding error: %s", err)
+		if err != nil {
+			return fmt.Errorf("uu.ID hex decoding error: %w", err)
+		}
+		return nil
 	}
 
 	t := text[:]
@@ -271,17 +274,17 @@ func (id *ID) UnmarshalText(text []byte) (err error) {
 		}
 
 		if len(t) < byteGroup {
-			return fmt.Errorf("uu.ID string too short: %s", text)
+			return fmt.Errorf("uu.ID string too short: %q", text)
 		}
 
 		if i == 4 && len(t) > byteGroup &&
 			((braced && t[byteGroup] != '}') || len(t[byteGroup:]) > 1 || !braced) {
-			return fmt.Errorf("uu.ID string too long: %s", text)
+			return fmt.Errorf("uu.ID string too long: %q", text)
 		}
 
 		_, err = hex.Decode(b[:byteGroup/2], t[:byteGroup])
 		if err != nil {
-			return fmt.Errorf("uu.ID hex decoding error: %s", err)
+			return fmt.Errorf("uu.ID hex decoding error: %w", err)
 		}
 
 		t = t[byteGroup:]
