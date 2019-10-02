@@ -146,7 +146,7 @@ func ParseFloatDetails(str string) (f float64, thousandsSep, decimalSep byte, de
 		lastNonDigitIndex = -1
 
 		pointWritten = false
-		eWritten     = false
+		eIndex       = -1
 
 		numMinus          int
 		numGroupingRunes  int
@@ -166,12 +166,17 @@ func ParseFloatDetails(str string) (f float64, thousandsSep, decimalSep byte, de
 	// detect the sign, allowed positions are start and end
 	for i, r := range str {
 		switch {
+		case r == 'e':
+			eIndex = i
+
 		case r == '-':
 			switch {
 			case i == 0:
 				skipFirst = 1
 			case i == len(str)-1:
 				skipLast = 1
+			case i == eIndex+1:
+				continue
 			default:
 				return 0, 0, 0, 0, errors.Errorf("minus can only be used as first or last character: %q", str)
 			}
@@ -184,11 +189,15 @@ func ParseFloatDetails(str string) (f float64, thousandsSep, decimalSep byte, de
 				skipFirst = 1
 			case i == len(str)-1:
 				skipLast = 1
+			case i == eIndex+1:
+				continue
 			default:
 				return 0, 0, 0, 0, errors.Errorf("plus can only be used as first or last character: %q", str)
 			}
 		}
 	}
+
+	eIndex = -1
 
 	// remove the sign from the string and trim space in case the removal left one
 	trimmedSignsStr := strings.TrimSpace(str[skipFirst : len(str)-skipLast])
@@ -275,7 +284,7 @@ func ParseFloatDetails(str string) (f float64, thousandsSep, decimalSep byte, de
 			lastNonDigitIndex = i
 
 		case r == 'e':
-			if i == 0 || eWritten {
+			if i == 0 || eIndex != -1 {
 				return 0, 0, 0, 0, errors.Errorf("e can't be the first or a repeating character: %q", str)
 			}
 			if numGroupingRunes > 0 && !pointWritten {
@@ -283,14 +292,16 @@ func ParseFloatDetails(str string) (f float64, thousandsSep, decimalSep byte, de
 				pointWritten = true
 				decimalSep = '.'
 			}
-			floatBuilder.WriteString(trimmedSignsStr[lastNonDigitIndex+1 : i])
+			floatBuilder.WriteString(trimmedSignsStr[lastNonDigitIndex+1 : i+1]) // i+1 to write including the 'e'
+			lastNonDigitIndex = i
+			eIndex = i
+
+		case (r == '-' || r == '+') && i == eIndex+1:
+			floatBuilder.WriteRune(r)
 			lastNonDigitIndex = i
 
-			floatBuilder.WriteByte('e')
-			eWritten = true
-
 		default:
-			return 0, 0, 0, 0, errors.Errorf("invalid rune '%s' in %#v", string(r), str)
+			return 0, 0, 0, 0, errors.Errorf("invalid rune '%s' in %q", string(r), str)
 		}
 	}
 
@@ -320,7 +331,7 @@ func ParseFloatDetails(str string) (f float64, thousandsSep, decimalSep byte, de
 	}
 	pointPos := strings.IndexByte(floatStr, '.')
 	if pointPos != -1 {
-		if eWritten {
+		if eIndex != -1 {
 			ePos := strings.IndexByte(floatStr, 'e')
 			decimals = ePos - (pointPos + 1)
 		} else {
