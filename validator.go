@@ -1,6 +1,6 @@
 package types
 
-import "errors"
+import "github.com/domonda/go-wraperr/sentinel"
 
 // Validator can be implemented by types that can validate their data.
 type Validator interface {
@@ -29,7 +29,7 @@ func (v ValidatorAsValidatErr) Validate() error {
 
 // ErrInvalidValue means that a value is not valid,
 // returned by Validate() and ValidatorAsValidatErr.Validate().
-var ErrInvalidValue = errors.New("invalid value")
+const ErrInvalidValue = sentinel.Error("invalid value")
 
 // Validate returns an error if v implements ValidatErr or Validator
 // and the methods ValidatErr.Validate() or Validator.Valid()
