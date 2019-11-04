@@ -4,10 +4,9 @@ import (
 	"bytes"
 	"database/sql/driver"
 	"encoding/json"
+	"fmt"
 	"sort"
 	"strings"
-
-	"github.com/pkg/errors"
 )
 
 // IDSlice is a slice of uu.IDs.
@@ -125,7 +124,7 @@ func (s *IDSlice) Scan(value interface{}) (err error) {
 		return nil
 	}
 
-	return errors.Errorf("can't scan value '%#v' of type %T as uu.IDSlice", value, value)
+	return fmt.Errorf("can't scan value '%#v' of type %T as uu.IDSlice", value, value)
 }
 
 func (s *IDSlice) scanBytes(src []byte) (err error) {
@@ -135,7 +134,7 @@ func (s *IDSlice) scanBytes(src []byte) (err error) {
 	}
 
 	if len(src) < 2 || src[0] != '{' || src[len(src)-1] != '}' {
-		return errors.Errorf("can't parse '%s' as uu.IDSlice", string(src))
+		return fmt.Errorf("can't parse '%s' as uu.IDSlice", string(src))
 	}
 
 	ids := make([]ID, 0, 16)
