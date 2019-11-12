@@ -144,4 +144,5 @@ var falseBICs = map[BIC]struct{}{
 	"AUTOBANK":    {},
 	"DIENSTGEBER": {},
 	"GELISTET":    {},
+	"FACILITY":    {},
 }
