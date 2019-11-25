@@ -345,7 +345,17 @@ func IDFromPtr(ptr *ID, nilVal ID) ID {
 // IDFromBytes returns an ID converted from raw byte slice input.
 // It will return error if the slice isn't 16 bytes long.
 func IDFromBytes(input []byte) (id ID, err error) {
-	err = id.UnmarshalBinary(input)
+	switch len(input) {
+	case 16:
+		err = id.UnmarshalBinary(input)
+
+	case 32, 36:
+		err = id.UnmarshalText(input)
+
+	default:
+		return IDNil, fmt.Errorf("uu.IDFromBytes expects 16, 32, or 36 bytes, but got %d", len(input))
+	}
+
 	return id, err
 }
 

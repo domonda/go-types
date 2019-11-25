@@ -3,7 +3,6 @@ package uu
 import (
 	"bytes"
 	"database/sql/driver"
-	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -134,19 +133,20 @@ func (s *IDSlice) scanBytes(src []byte) (err error) {
 	}
 
 	if len(src) < 2 || src[0] != '{' || src[len(src)-1] != '}' {
-		return fmt.Errorf("can't parse '%s' as uu.IDSlice", string(src))
+		return fmt.Errorf("can't parse %q as uu.IDSlice", string(src))
 	}
 
-	ids := make([]ID, 0, 16)
+	ids := make(IDSlice, 0)
 
-	elements := bytes.Split(src[1:len(src)-1], []byte{','})
-	for _, elem := range elements {
-		elem = bytes.Trim(elem, `'"`)
-		id, err := IDFromString(string(elem))
-		if err != nil {
-			return err
+	if len(src) > 2 {
+		elements := bytes.Split(src[1:len(src)-1], []byte{','})
+		for _, elem := range elements {
+			id, err := IDFromBytes(bytes.Trim(elem, `'"`))
+			if err != nil {
+				return err
+			}
+			ids = append(ids, id)
 		}
-		ids = append(ids, id)
 	}
 
 	*s = ids
@@ -197,25 +197,35 @@ func (s IDSlice) MarshalJSON() ([]byte, error) {
 }
 
 // UnmarshalJSON implements encoding/json.Unmarshaler
-func (s *IDSlice) UnmarshalJSON(data []byte) (err error) {
+func (s *IDSlice) UnmarshalJSON(data []byte) error {
 	if data == nil || string(data) == "null" {
 		*s = nil
 		return nil
 	}
+	if len(data) < 2 || data[0] != '[' || data[len(data)-1] != ']' {
+		return fmt.Errorf("can't parse as uu.IDSlice because not a JSON array: %s", data)
+	}
 
-	// Can be unmarshaled directly because the slice elements are json.Unmarshaler
-	return json.Unmarshal(data, s)
+	ids := make(IDSlice, 0)
 
-	// var strs []string
-	// err = json.Unmarshal(data, &strs)
-	// if err != nil {
-	// 	return err
-	// }
-	// newS, err := SliceFromStrings(strs)
-	// if err != nil {
-	// 	return err
-	// }
+	if len(data) > 2 {
+		for i, next := 1, 1; i < len(data); i++ {
+			if data[i] == ',' || i == len(data)-1 {
+				str := bytes.TrimSpace(data[next:i])
+				if len(str) < 2 || str[0] != '"' || str[len(str)-1] != '"' {
+					return fmt.Errorf("can't parse as uu.IDSlice because not a JSON string array: %s", data)
+				}
+				id, err := IDFromBytes(str[1 : len(str)-1])
+				if err != nil {
+					return fmt.Errorf("error parsing uu.IDSlice from JSON: %w", err)
+				}
 
-	// *s = newS
-	// return nil
+				ids = append(ids, id)
+				next = i + 1
+			}
+		}
+	}
+
+	*s = ids
+	return nil
 }

@@ -24,6 +24,8 @@ package uu
 import (
 	"bytes"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 // And returns result of binary AND of two UUIDs.
@@ -162,6 +164,18 @@ func TestIDFromBytes(t *testing.T) {
 	if err == nil {
 		t.Errorf("Should return error parsing from empty byte slice, got %s", err)
 	}
+
+	u3, err := IDFromBytes(u.StringBytes())
+	assert.NoError(t, err)
+	assert.Equal(t, u, u3)
+
+	u4, err := IDFromBytes([]byte("6ba7b810-9dad-11d1-80b4-00c04fd430c8"))
+	assert.NoError(t, err)
+	assert.Equal(t, u, u4)
+
+	u5, err := IDFromBytes([]byte("6ba7b8109dad11d180b400c04fd430c8"))
+	assert.NoError(t, err)
+	assert.Equal(t, u, u5)
 }
 
 func TestMarshalBinary(t *testing.T) {
