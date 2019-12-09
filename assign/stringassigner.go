@@ -5,11 +5,11 @@ import (
 )
 
 type StringAssigner interface {
-	AssignString(str string, config *StringConfig, dest reflect.Value) error
+	AssignString(dest reflect.Value, str string, parser *StringParser) error
 }
 
-type StringAssignerFunc func(str string, config *StringConfig, dest reflect.Value) error
+type StringAssignerFunc func(dest reflect.Value, str string, parser *StringParser) error
 
-func (f StringAssignerFunc) AssignString(str string, config *StringConfig, dest reflect.Value) error {
-	return f(str, config, dest)
+func (f StringAssignerFunc) AssignString(dest reflect.Value, str string, parser *StringParser) error {
+	return f(dest, str, parser)
 }
