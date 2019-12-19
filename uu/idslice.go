@@ -71,6 +71,17 @@ func (s IDSlice) SortedClone() IDSlice {
 	return clone
 }
 
+// IndexOf returns the index of the first occurrence of id
+// in the slice, or -1 if id was not found.
+func (s IDSlice) IndexOf(id ID) int {
+	for i, curr := range s {
+		if curr == id {
+			return i
+		}
+	}
+	return -1
+}
+
 func (s IDSlice) Contains(id ID) bool {
 	for _, curr := range s {
 		if curr == id {
@@ -100,6 +111,36 @@ func (s IDSlice) ContainsAnyFromSet(set IDSet) bool {
 	return false
 }
 
+// RemoveFirst removes the first occurrence of id from the slice
+// and returns its index or -1 if id was not found in the slice.
+func (s *IDSlice) RemoveFirst(id ID) int {
+	index := s.IndexOf(id)
+	if index != -1 {
+		s.RemoveAt(index)
+	}
+	return index
+}
+
+// RemoveAll removes the all occurrences of id from the slice
+// and returns the count of removals.
+func (s *IDSlice) RemoveAll(id ID) (count int) {
+	for i := 0; i < len(*s); i++ {
+		if (*s)[i] == id {
+			*s = append((*s)[:i], (*s)[i+1:]...)
+			count++
+			i--
+		}
+	}
+	return count
+}
+
+// RemoveAt removes the slice element at the given index.
+// Will panic if the index is out of range.
+func (s *IDSlice) RemoveAt(index int) {
+	*s = append((*s)[:index], (*s)[index+1:]...)
+}
+
+// Clone returns a copy of the slice.
 func (s IDSlice) Clone() IDSlice {
 	clone := make(IDSlice, len(s))
 	copy(clone, s)
