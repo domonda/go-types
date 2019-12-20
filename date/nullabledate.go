@@ -81,6 +81,14 @@ func (n NullableDate) NormalizedOrNull(lang ...language.Code) NullableDate {
 	return norm
 }
 
+func (n NullableDate) NormalizedOrUnchanged(lang ...language.Code) NullableDate {
+	normalized, err := n.Normalized(lang...)
+	if err != nil {
+		return n
+	}
+	return normalized
+}
+
 // MidnightTimePtrOrNil returns the address of a midnight (00:00) time.Time of date,
 // or nil if date.IsZero() returns true.
 func (n NullableDate) MidnightTimePtrOrNil() *time.Time {
