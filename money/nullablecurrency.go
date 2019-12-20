@@ -52,6 +52,16 @@ func (c NullableCurrency) Normalized() (NullableCurrency, error) {
 	return NullableCurrency(norm), err
 }
 
+// NormalizedOrNull returns a normalized currency or CurrencyNull
+// if there was an error while normalizing.
+func (c NullableCurrency) NormalizedOrNull() NullableCurrency {
+	normalized, err := c.Normalized()
+	if err != nil {
+		return CurrencyNull
+	}
+	return normalized
+}
+
 // Scan implements the database/sql.Scanner interface.
 func (c *NullableCurrency) Scan(value interface{}) error {
 	switch x := value.(type) {
