@@ -42,6 +42,11 @@ func NullableIDFromPtr(ptr *ID) NullableID {
 	return NullableID{*ptr}
 }
 
+// Set sets an ID for this NullableID
+func (u *NullableID) Set(id ID) {
+	u.ID = id
+}
+
 // Valid returns if Variant and Version of this UUID are supported.
 // A Nil UUID is also valid.
 func (u NullableID) Valid() bool {
