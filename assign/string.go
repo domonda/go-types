@@ -1,6 +1,7 @@
 package assign
 
 import (
+	"encoding"
 	"reflect"
 	"strconv"
 	"strings"
@@ -29,9 +30,12 @@ func String(dest reflect.Value, str string, parser *StringParser) (err error) {
 		return assigner.AssignString(dest, str, parser)
 	}
 
-	if assignable, ok := dest.Addr().Interface().(strfmt.StringAssignable); ok {
-		_, err := assignable.AssignString(str)
+	switch x := dest.Addr().Interface().(type) {
+	case strfmt.StringAssignable:
+		_, err := x.AssignString(str)
 		return err
+	case encoding.TextUnmarshaler:
+		return x.UnmarshalText([]byte(str))
 	}
 
 	switch dest.Kind() {

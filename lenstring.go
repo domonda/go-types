@@ -9,6 +9,8 @@ import (
 
 // LenString holds a string together with a minimum and maximum length.
 // Validate returns an error if the string length does not fit the minium-maxium length.
+// LenString implements the encoding.UnmarshalText, json.Unmarshaler,
+// and strfmt.StringAssignable interfaces that will do length validation.
 type LenString struct {
 	str string
 	min int
