@@ -183,6 +183,13 @@ func RangeOfPeriod(period string) (from, until Date, err error) {
 	return from, until, nil
 }
 
+// RangeOfYear returns the date range from
+// first of January to 31st of December of a year.
+func RangeOfYear(year int) (from, until Date) {
+	yyyy := fmt.Sprintf("%04d", year)
+	return Date(yyyy + "-01-01"), Date(yyyy + "-12-31")
+}
+
 // YearWeek returns the dates of Monday and Sunday of an ISO 8601 week.
 func YearWeek(year, week int) (monday, sunday Date) {
 	t := time.Date(year, 0, 0, 0, 0, 0, 0, time.Local)

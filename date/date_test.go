@@ -258,7 +258,7 @@ func Test_RangeOfPeriod(t *testing.T) {
 	}
 
 	for period, expected := range periodDates {
-		t.Run(fmt.Sprintf("RangeOfPeriod(%s)", period), func(t *testing.T) {
+		t.Run(fmt.Sprintf("RangeOfPeriod(%#v)", period), func(t *testing.T) {
 			from, until, err := RangeOfPeriod(period)
 			if err != nil {
 				t.Fatal(err)
@@ -297,6 +297,26 @@ func Test_RangeOfPeriod(t *testing.T) {
 		})
 	}
 
+}
+func Test_RangeOfYear(t *testing.T) {
+	periodDates := map[int][2]Date{
+		-333: {"-333-01-01", "-333-12-31"},
+		0:    {"0000-01-01", "0000-12-31"},
+		325:  {"0325-01-01", "0325-12-31"},
+		2018: {"2018-01-01", "2018-12-31"},
+	}
+
+	for year, expected := range periodDates {
+		t.Run(fmt.Sprintf("RangeOfYear(%#v)", year), func(t *testing.T) {
+			from, until := RangeOfYear(year)
+			if from != expected[0] {
+				t.Errorf("RangeOfYear(%#v) expected from to be %#v but got %#v", year, expected[0], from)
+			}
+			if until != expected[1] {
+				t.Errorf("RangeOfYear(%#v) expected until to be %#v but got %#v", year, expected[1], until)
+			}
+		})
+	}
 }
 
 func Test_YearMonthDay(t *testing.T) {
