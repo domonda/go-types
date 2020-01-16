@@ -8,6 +8,8 @@ import (
 	"github.com/domonda/go-types/money"
 )
 
+var DefaultStringParser = NewStringParser()
+
 type StringParser struct {
 	TrueStrings                 []string                        `json:"trueStrings"`
 	FalseStrings                []string                        `json:"falseStrings"`

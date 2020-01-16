@@ -19,6 +19,10 @@ import (
 func String(dest reflect.Value, str string, parser *StringParser) (err error) {
 	defer wraperr.WithFuncParams(&err, dest, str, parser)
 
+	if parser == nil {
+		return wraperr.Errorf("nil StringParser")
+	}
+
 	if dest.Kind() == reflect.Ptr {
 		if dest.IsNil() {
 			dest.Set(reflect.New(dest.Type().Elem()))
@@ -32,7 +36,7 @@ func String(dest reflect.Value, str string, parser *StringParser) (err error) {
 
 	switch x := dest.Addr().Interface().(type) {
 	case strfmt.StringAssignable:
-		_, err := x.AssignString(str)
+		_, err = x.AssignString(str)
 		return err
 	case encoding.TextUnmarshaler:
 		return x.UnmarshalText([]byte(str))
