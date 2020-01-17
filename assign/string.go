@@ -35,7 +35,7 @@ func String(dest reflect.Value, str string, parser *StringParser) (err error) {
 	}
 
 	switch x := dest.Addr().Interface().(type) {
-	case strfmt.StringAssignable:
+	case StringAssignable:
 		_, err = x.AssignString(str)
 		return err
 	case encoding.TextUnmarshaler:

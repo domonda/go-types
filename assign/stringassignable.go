@@ -1,4 +1,4 @@
-package strfmt
+package assign
 
 type StringAssignable interface {
 	// AssignString tries to parse and assign the passed
