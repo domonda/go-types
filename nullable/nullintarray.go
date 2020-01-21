@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-
-	"github.com/domonda/errors"
 )
 
 // NullIntArray implements the sql.Scanner and driver.Valuer interfaces
@@ -73,7 +71,7 @@ func (a *NullIntArray) Scan(src interface{}) error {
 		return nil
 	}
 
-	return errors.Errorf("can't convert %T to NullIntArray", src)
+	return fmt.Errorf("can't convert %T to NullIntArray", src)
 }
 
 func (a *NullIntArray) scanBytes(src []byte) error {
@@ -82,7 +80,7 @@ func (a *NullIntArray) scanBytes(src []byte) error {
 	}
 
 	if src[0] != '{' || src[len(src)-1] != '}' {
-		return errors.Errorf("can't parse '%s' as NullIntArray", string(src))
+		return fmt.Errorf("can't parse %q as NullIntArray", string(src))
 	}
 
 	elements := strings.Split(string(src[1:len(src)-1]), ",")
@@ -91,7 +89,7 @@ func (a *NullIntArray) scanBytes(src []byte) error {
 		if elem != "NULL" && elem != "null" {
 			val, err := strconv.ParseInt(elem, 10, 64)
 			if err != nil {
-				return errors.Wrapf(err, "Can't parse '%s' as NullIntArray", string(src))
+				return fmt.Errorf("can't parse %q as NullIntArray because of: %w", string(src), err)
 			}
 			newArray[i] = sql.NullInt64{Valid: true, Int64: val}
 		}

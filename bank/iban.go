@@ -209,11 +209,11 @@ func (iban IBAN) Value() (driver.Value, error) {
 func (iban *IBAN) BankAndAccountNumbers() (bankNr, accountNr string, err error) {
 	country := iban.CountryCode()
 	if country == "" {
-		return "", "", errors.Errorf("invalid IBAN: '%s'", *iban)
+		return "", "", errors.Errorf("invalid IBAN: %q", string(*iban))
 	}
 	getNumbers, found := bankAndAccountNumbers[country]
 	if !found {
-		return "", "", errors.Errorf("can't extract bank and account numbers from IBAN: '%s'", *iban)
+		return "", "", errors.Errorf("can't extract bank and account numbers from IBAN: %q", string(*iban))
 	}
 	bankNr, accountNr = getNumbers(string(*iban))
 	return bankNr, accountNr, nil

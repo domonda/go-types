@@ -21,7 +21,7 @@ func (c Code) Valid() bool {
 
 func (c Code) Validate() error {
 	if !c.Valid() {
-		return fmt.Errorf("invalid country.Code: %q", c)
+		return fmt.Errorf("invalid country.Code: %q", string(c))
 	}
 	return nil
 }

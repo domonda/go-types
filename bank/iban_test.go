@@ -94,18 +94,18 @@ func Test_NormalizeIBAN(t *testing.T) {
 		testIBAN, correctIBAN := ibanTable[i], ibanTable[i+1]
 		normalized, err := NormalizeIBAN(testIBAN)
 		if err != nil {
-			t.Errorf("NormalizeIBAN(%s): %s", testIBAN, err.Error())
+			t.Errorf("NormalizeIBAN(%s): %s", string(testIBAN), err.Error())
 			continue
 		}
 		if string(normalized) != correctIBAN {
-			t.Errorf("NormalizeIBAN(%s): %s != %s", testIBAN, normalized, correctIBAN)
+			t.Errorf("NormalizeIBAN(%s): %s != %s", string(testIBAN), string(normalized), string(correctIBAN))
 		}
 	}
 
 	for _, invalidIBAN := range invalidIBANs {
 		normalized, err := NormalizeIBAN(invalidIBAN)
 		if err == nil {
-			t.Errorf("Should NOT be valid NormalizeIBAN(%s): %s", invalidIBAN, normalized)
+			t.Errorf("Should NOT be valid NormalizeIBAN(%s): %s", string(invalidIBAN), string(normalized))
 		}
 	}
 
@@ -113,11 +113,11 @@ func Test_NormalizeIBAN(t *testing.T) {
 		country, iban := countryIBANTable[i], countryIBANTable[i+1]
 		normalized, err := IBAN(iban).NormalizedWithSpaces()
 		if err != nil {
-			t.Errorf("NormalizedSpacedOrErr(%s): %s [%s]", iban, err.Error(), country)
+			t.Errorf("NormalizedSpacedOrErr(%s): %s [%s]", string(iban), err.Error(), string(country))
 			continue
 		}
 		if string(normalized) != iban {
-			t.Errorf("NormalizedSpacedOrErr(%s): %s != %s [%s]", iban, normalized, iban, country)
+			t.Errorf("NormalizedSpacedOrErr(%s): %s != %s [%s]", string(iban), string(normalized), string(iban), string(country))
 		}
 	}
 }
@@ -130,11 +130,11 @@ func Test_IBAN_BankAndAccountNumbers(t *testing.T) {
 	for iban, numbers := range bankAndAccountNumbersTable {
 		bankNr, accountNr, err := iban.BankAndAccountNumbers()
 		if err != nil {
-			t.Errorf("error from IBAN.BankAndAccountNumbers(%s): %s", iban, err)
+			t.Errorf("error from IBAN.BankAndAccountNumbers(%s): %s", string(iban), err)
 			continue
 		}
 		if bankNr != numbers[0] || accountNr != numbers[1] {
-			t.Errorf("IBAN.BankAndAccountNumbers(%s): not correct", iban)
+			t.Errorf("IBAN.BankAndAccountNumbers(%s): not correct", string(iban))
 		}
 	}
 }
@@ -153,7 +153,7 @@ func Test_IBAN_BankAndAccountNumbers(t *testing.T) {
 // 			continue
 // 		}
 // 		if string(testIBAN) != correctIBAN {
-// 			t.Errorf("IBANFromParts(%v): %s != %s", parts, testIBAN, correctIBAN)
+// 			t.Errorf("IBANFromParts(%v): %s != %s", parts, string(testIBAN), string(correctIBAN))
 // 		}
 // 	}
 // }

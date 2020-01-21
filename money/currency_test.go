@@ -38,7 +38,7 @@ func Test_NormalizeCurrency(t *testing.T) {
 			t.Errorf("NormalizeCurrency(%s): %s", testVal, err)
 		}
 		if string(result) != refVal {
-			t.Errorf("NormalizeCurrency(%s): %s != %s", testVal, result, refVal)
+			t.Errorf("NormalizeCurrency(%s): %s != %s", testVal, string(result), refVal)
 		}
 	}
 }

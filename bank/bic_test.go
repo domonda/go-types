@@ -37,12 +37,12 @@ var invalidBICs = []BIC{
 func Test_BICValid(t *testing.T) {
 	for _, bic := range validBICs {
 		if !bic.Valid() {
-			t.Errorf("Valid BIC not recognized: %s", bic)
+			t.Errorf("Valid BIC not recognized: %s", string(bic))
 		}
 	}
 	for _, bic := range invalidBICs {
 		if bic.Valid() {
-			t.Errorf("Invalid BIC not recognized: %s", bic)
+			t.Errorf("Invalid BIC not recognized: %s", string(bic))
 		}
 	}
 }
@@ -72,10 +72,10 @@ func Test_bicFinder(t *testing.T) {
 			}
 			bic := BIC(str[result[0]:result[1]])
 			if result[0] != indices[0] || result[1] != indices[1] {
-				t.Fatalf("Found BIC '%s' at wrong position in '%s'", bic, str)
+				t.Fatalf("Found BIC '%s' at wrong position in '%s'", string(bic), str)
 			}
 			if !bic.Valid() {
-				t.Fatalf("Invalid BIC: %s", bic)
+				t.Fatalf("Invalid BIC: %s", string(bic))
 			}
 		}
 	}

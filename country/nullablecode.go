@@ -24,7 +24,7 @@ func (c NullableCode) ValidAndNotNull() bool {
 
 func (c NullableCode) Validate() error {
 	if !c.Valid() {
-		return fmt.Errorf("invalid country.Code: %q", c)
+		return fmt.Errorf("invalid country.Code: %q", string(c))
 	}
 	return nil
 }

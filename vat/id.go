@@ -2,6 +2,7 @@ package vat
 
 import (
 	"database/sql/driver"
+	"fmt"
 	"unicode"
 
 	"github.com/domonda/errors"
@@ -50,31 +51,31 @@ func (id ID) Normalized() (ID, error) {
 
 	// Check length
 	if len(normalized) < IDMinLength {
-		return "", errors.Errorf("VAT ID '%s' is too short", id)
+		return "", fmt.Errorf("VAT ID %q is too short", string(id))
 	}
 	if len(normalized) > IDMaxLength {
-		return "", errors.Errorf("VAT ID '%s' is too long", id)
+		return "", fmt.Errorf("VAT ID %q is too long", string(id))
 	}
 
 	// Check country code
 	countryCode := country.Code(normalized[:2])
 	if !countryCode.Valid() {
-		return "", errors.Errorf("VAT ID '%s' has an invalid country code: '%s'", id, countryCode)
+		return "", fmt.Errorf("VAT ID %q has an invalid country code: %q", string(id), string(countryCode))
 	}
 
 	// Check format with country specific regex
 	regex, found := vatidRegex[countryCode]
 	if !found {
-		return "", errors.Errorf("VAT ID '%s' has an unsupported country code: '%s'", id, countryCode)
+		return "", fmt.Errorf("VAT ID %q has an unsupported country code: %q", string(id), string(countryCode))
 	}
 	if !regex.MatchString(string(normalized)) {
-		return "", errors.Errorf("VAT ID '%s' has an invalid format", id)
+		return "", fmt.Errorf("VAT ID %q has an invalid format", string(id))
 	}
 
 	// Test check-sum if a function is available for the country
 	check, found := vatidCheckSum[countryCode]
 	if found && !check(normalized) {
-		return "", errors.Errorf("VAT ID '%s' has an invalid check-sum", id)
+		return "", fmt.Errorf("VAT ID %q has an invalid check-sum", string(id))
 	}
 
 	return normalized, nil
@@ -117,7 +118,7 @@ func (id ID) ValidateIsNormalized() error {
 		return err
 	}
 	if id != norm {
-		return errors.Errorf("VAT ID is valid but not normalized: '%s'", id)
+		return fmt.Errorf("VAT ID is valid but not normalized: %q", string(id))
 	}
 	return nil
 }
@@ -185,7 +186,7 @@ func (id *ID) Scan(value interface{}) error {
 	case nil:
 		return errors.New("can't scan SQL NULL as vat.ID")
 	default:
-		return errors.Errorf("can't scan SQL value of type %T as vat.ID", value)
+		return fmt.Errorf("can't scan SQL value of type %T as vat.ID", value)
 	}
 	return nil
 }

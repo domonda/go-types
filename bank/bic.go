@@ -56,20 +56,20 @@ func (bic BIC) Valid() bool {
 func (bic BIC) Validate() error {
 	length := len(bic)
 	if !(length == BICMinLength || length == BICMaxLength) {
-		return errors.Errorf("invalid BIC '%s' length: %d", bic, length)
+		return errors.Errorf("invalid BIC %q length: %d", string(bic), length)
 	}
 	subMatches := bicExactRegex.FindStringSubmatch(string(bic))
 	// fmt.Println(subMatches)
 	if len(subMatches) != 5 {
-		return errors.Errorf("invalid BIC '%s': no regex match", bic)
+		return errors.Errorf("invalid BIC %q: no regex match", string(bic))
 	}
 	countryCode := country.Code(subMatches[2])
 	_, isValidCountry := ibanCountryLengthMap[countryCode]
 	if !isValidCountry {
-		return errors.Errorf("invalid BIC '%s' country code: '%s'", bic, countryCode)
+		return errors.Errorf("invalid BIC %q country code: %q", string(bic), countryCode)
 	}
 	if _, isFalse := falseBICs[bic]; isFalse {
-		return errors.Errorf("BIC '%s' is in list of invalid BICs", bic)
+		return errors.Errorf("BIC %q is in list of invalid BICs", string(bic))
 	}
 	return nil
 }

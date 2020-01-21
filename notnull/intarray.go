@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-
-	"github.com/domonda/errors"
 )
 
 // IntArray implements the sql.Scanner and driver.Valuer interfaces
@@ -51,7 +49,7 @@ func (a *IntArray) Scan(src interface{}) error {
 		return nil
 	}
 
-	return errors.Errorf("can't convert %T to IntArray", src)
+	return fmt.Errorf("can't convert %T to IntArray", src)
 }
 
 func (a *IntArray) scanBytes(src []byte) (err error) {
@@ -60,7 +58,7 @@ func (a *IntArray) scanBytes(src []byte) (err error) {
 	}
 
 	if src[0] != '{' || src[len(src)-1] != '}' {
-		return errors.Errorf("can't parse '%s' as IntArray", string(src))
+		return fmt.Errorf("can't parse %q as IntArray", string(src))
 	}
 
 	elements := strings.Split(string(src[1:len(src)-1]), ",")
@@ -68,7 +66,7 @@ func (a *IntArray) scanBytes(src []byte) (err error) {
 	for i, elem := range elements {
 		newArray[i], err = strconv.ParseInt(elem, 10, 64)
 		if err != nil {
-			return errors.Wrapf(err, "Can't parse '%s' as IntArray", string(src))
+			return fmt.Errorf("can't parse %q as IntArray because of: %w", string(src), err)
 		}
 	}
 	*a = newArray

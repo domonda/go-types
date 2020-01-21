@@ -1,11 +1,10 @@
 package strfmt
 
 import (
+	"fmt"
 	"math"
 	"strconv"
 	"strings"
-
-	"github.com/domonda/errors"
 )
 
 // FormatFloat formats a float similar to strconv.FormatFloat with the 'f' format option,
@@ -24,16 +23,16 @@ import (
 // See: https://en.wikipedia.org/wiki/Decimal_separator
 func FormatFloat(f float64, thousandsSep, decimalSep byte, precision int, padPrecision bool) string {
 	if thousandsSep != 0 && thousandsSep != '.' && thousandsSep != ',' && thousandsSep != ' ' && thousandsSep != '\'' {
-		panic(errors.Errorf("invalid thousandsSep: '%s'", string(thousandsSep)))
+		panic(fmt.Errorf("invalid thousandsSep: '%s'", string(thousandsSep)))
 	}
 	if decimalSep != '.' && decimalSep != ',' {
-		panic(errors.Errorf("invalid decimalSep: '%s'", string(decimalSep)))
+		panic(fmt.Errorf("invalid decimalSep: '%s'", string(decimalSep)))
 	}
 	if thousandsSep == decimalSep {
-		panic(errors.Errorf("thousandsSep == decimalSep: '%s'", string(thousandsSep)))
+		panic(fmt.Errorf("thousandsSep == decimalSep: '%s'", string(thousandsSep)))
 	}
 	if precision < -1 {
-		panic(errors.Errorf("precision < -1: %#v", precision))
+		panic(fmt.Errorf("precision < -1: %d", precision))
 	}
 
 	str := strconv.FormatFloat(f, 'f', precision, 64)
@@ -178,7 +177,7 @@ func ParseFloatDetails(str string) (f float64, thousandsSep, decimalSep byte, de
 			case i == eIndex+1:
 				continue
 			default:
-				return 0, 0, 0, 0, errors.Errorf("minus can only be used as first or last character: %q", str)
+				return 0, 0, 0, 0, fmt.Errorf("minus can only be used as first or last character: %q", str)
 			}
 			floatBuilder.WriteByte(byte(r))
 			numMinus = 1
@@ -192,7 +191,7 @@ func ParseFloatDetails(str string) (f float64, thousandsSep, decimalSep byte, de
 			case i == eIndex+1:
 				continue
 			default:
-				return 0, 0, 0, 0, errors.Errorf("plus can only be used as first or last character: %q", str)
+				return 0, 0, 0, 0, fmt.Errorf("plus can only be used as first or last character: %q", str)
 			}
 		}
 	}
@@ -208,7 +207,7 @@ func ParseFloatDetails(str string) (f float64, thousandsSep, decimalSep byte, de
 
 		case r == '.' || r == ',' || r == '\'':
 			if pointWritten {
-				return 0, 0, 0, 0, errors.Errorf("no further separators allowed after decimal separator: %q", str)
+				return 0, 0, 0, 0, fmt.Errorf("no further separators allowed after decimal separator: %q", str)
 			}
 
 			// Write everything after the lastNonDigitIndex and before current index
@@ -222,13 +221,13 @@ func ParseFloatDetails(str string) (f float64, thousandsSep, decimalSep byte, de
 			} else {
 				// It's a further grouping rune, has to be 3 bytes since last grouping rune
 				if i-(lastGroupingIndex+1) != 3 {
-					return 0, 0, 0, 0, errors.Errorf("thousands separators have to be 3 characters apart: %q", str)
+					return 0, 0, 0, 0, fmt.Errorf("thousands separators have to be 3 characters apart: %q", str)
 				}
 				numGroupingRunes++
 				if r == lastGroupingRune {
 					if numGroupingRunes == 2 {
 						if floatBuilder.Len()-numMinus > 6 {
-							return 0, 0, 0, 0, errors.Errorf("thousands separators have to be 3 characters apart: %q", str)
+							return 0, 0, 0, 0, fmt.Errorf("thousands separators have to be 3 characters apart: %q", str)
 						}
 					}
 					// If it's the same grouping rune, then just save it
@@ -247,7 +246,7 @@ func ParseFloatDetails(str string) (f float64, thousandsSep, decimalSep byte, de
 
 		case r == ' ':
 			if pointWritten {
-				return 0, 0, 0, 0, errors.Errorf("no further separators allowed after decimal separator: %q", str)
+				return 0, 0, 0, 0, fmt.Errorf("no further separators allowed after decimal separator: %q", str)
 			}
 
 			// Write everything after the lastNonDigitIndex and before current index
@@ -262,14 +261,14 @@ func ParseFloatDetails(str string) (f float64, thousandsSep, decimalSep byte, de
 			} else {
 				// It's a further grouping rune, has to be 3 bytes since last grouping rune
 				if i-(lastGroupingIndex+1) != 3 {
-					return 0, 0, 0, 0, errors.Errorf("thousands separators have to be 3 characters apart: %q", str)
+					return 0, 0, 0, 0, fmt.Errorf("thousands separators have to be 3 characters apart: %q", str)
 				}
 
 				numGroupingRunes++
 				if r == lastGroupingRune {
 					if numGroupingRunes == 2 {
 						if floatBuilder.Len()-numMinus > 6 {
-							return 0, 0, 0, 0, errors.Errorf("thousands separators have to be 3 characters apart: %q", str)
+							return 0, 0, 0, 0, fmt.Errorf("thousands separators have to be 3 characters apart: %q", str)
 						}
 					}
 					// If it's the same grouping rune, then just save it
@@ -278,14 +277,14 @@ func ParseFloatDetails(str string) (f float64, thousandsSep, decimalSep byte, de
 				} else {
 					// Spaces only are used as thousands separators.
 					// If the the last separator was not a space, something is wrong
-					return 0, 0, 0, 0, errors.Errorf("space can not be used after another thousands separator: %q", str)
+					return 0, 0, 0, 0, fmt.Errorf("space can not be used after another thousands separator: %q", str)
 				}
 			}
 			lastNonDigitIndex = i
 
 		case r == 'e':
 			if i == 0 || eIndex != -1 {
-				return 0, 0, 0, 0, errors.Errorf("e can't be the first or a repeating character: %q", str)
+				return 0, 0, 0, 0, fmt.Errorf("e can't be the first or a repeating character: %q", str)
 			}
 			if numGroupingRunes > 0 && !pointWritten {
 				floatBuilder.WriteByte('.')
@@ -301,7 +300,7 @@ func ParseFloatDetails(str string) (f float64, thousandsSep, decimalSep byte, de
 			lastNonDigitIndex = i
 
 		default:
-			return 0, 0, 0, 0, errors.Errorf("invalid rune '%s' in %q", string(r), str)
+			return 0, 0, 0, 0, fmt.Errorf("invalid rune '%s' in %q", string(r), str)
 		}
 	}
 
@@ -311,7 +310,7 @@ func ParseFloatDetails(str string) (f float64, thousandsSep, decimalSep byte, de
 			// then it was pure integer grouping, so the last there
 			// have to be 3 bytes since last grouping rune
 			if lastDigitIndex-lastGroupingIndex != 3 {
-				return 0, 0, 0, 0, errors.Errorf("thousands separators have to be 3 characters apart: %q", str)
+				return 0, 0, 0, 0, fmt.Errorf("thousands separators have to be 3 characters apart: %q", str)
 			}
 			thousandsSep = byte(lastGroupingRune)
 		} else {

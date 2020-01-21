@@ -5,8 +5,6 @@ import (
 	"database/sql/driver"
 	"fmt"
 	"strings"
-
-	"github.com/domonda/errors"
 )
 
 // NullBoolArray implements the sql.Scanner and driver.Valuer interfaces
@@ -73,7 +71,7 @@ func (a *NullBoolArray) Scan(src interface{}) error {
 		return nil
 	}
 
-	return errors.Errorf("can't convert %T to NullBoolArray", src)
+	return fmt.Errorf("can't convert %T to NullBoolArray", src)
 }
 
 func (a *NullBoolArray) scanBytes(src []byte) error {
@@ -82,7 +80,7 @@ func (a *NullBoolArray) scanBytes(src []byte) error {
 	}
 
 	if src[0] != '{' || src[len(src)-1] != '}' {
-		return errors.Errorf("can't parse '%s' as NullBoolArray", string(src))
+		return fmt.Errorf("can't parse %q as NullBoolArray", string(src))
 	}
 
 	elements := strings.Split(string(src[1:len(src)-1]), ",")

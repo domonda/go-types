@@ -78,7 +78,7 @@ func (n NullableID) ValidateIsNormalized() error {
 		return err
 	}
 	if n != norm {
-		return errors.Errorf("VAT ID is valid but not normalized: '%s'", n)
+		return errors.Errorf("VAT ID is valid but not normalized: %q", string(n))
 	}
 	return nil
 }

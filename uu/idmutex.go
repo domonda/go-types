@@ -46,7 +46,7 @@ func (m *IDMutex) Unlock(key ID) {
 
 	lock := m.locks[key]
 	if lock == nil {
-		panic(fmt.Sprintf("Unlock called for non locked key: %s", key))
+		panic(fmt.Sprintf("uu.IDMutex.Unlock called for non locked key: %s", key))
 	}
 	lock.count--
 	if lock.count == 0 {

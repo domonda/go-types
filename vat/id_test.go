@@ -42,9 +42,9 @@ func Test_NormalizeVATID(t *testing.T) {
 	for testID, refID := range validVATIDs {
 		result, err := NormalizeVATID(testID)
 		if err != nil {
-			t.Errorf("NormalizeVATID(%s): %s", testID, err)
+			t.Errorf("NormalizeVATID(%s): %s", string(testID), err)
 		} else if string(result) != refID {
-			t.Errorf("NormalizeVATID(%s): %s != %s", testID, result, refID)
+			t.Errorf("NormalizeVATID(%s): %s != %s", string(testID), string(result), refID)
 		}
 	}
 }
@@ -52,7 +52,7 @@ func Test_NormalizeVATID(t *testing.T) {
 func Test_VATIDValid(t *testing.T) {
 	for _, invalidID := range invalidVATIDs {
 		if invalidID.Valid() {
-			t.Errorf("vat.ID should be invalid: %s", invalidID)
+			t.Errorf("vat.ID should be invalid: %s", string(invalidID))
 		}
 	}
 }

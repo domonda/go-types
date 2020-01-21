@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-
-	"github.com/domonda/errors"
 )
 
 // FloatArray implements the sql.Scanner and driver.Valuer interfaces
@@ -51,7 +49,7 @@ func (a *FloatArray) Scan(src interface{}) error {
 		return nil
 	}
 
-	return errors.Errorf("can't convert %T to FloatArray", src)
+	return fmt.Errorf("can't convert %T to FloatArray", src)
 }
 
 func (a *FloatArray) scanBytes(src []byte) (err error) {
@@ -60,7 +58,7 @@ func (a *FloatArray) scanBytes(src []byte) (err error) {
 	}
 
 	if src[0] != '{' || src[len(src)-1] != '}' {
-		return errors.Errorf("can't parse '%s' as FloatArray", string(src))
+		return fmt.Errorf("can't parse %q as FloatArray", string(src))
 	}
 
 	elements := strings.Split(string(src[1:len(src)-1]), ",")
@@ -68,7 +66,7 @@ func (a *FloatArray) scanBytes(src []byte) (err error) {
 	for i, elem := range elements {
 		newArray[i], err = strconv.ParseFloat(elem, 64)
 		if err != nil {
-			return errors.Wrapf(err, "Can't parse '%s' as FloatArray", string(src))
+			return fmt.Errorf("can't parse %q as FloatArray because of: %w", string(src), err)
 		}
 	}
 	*a = newArray

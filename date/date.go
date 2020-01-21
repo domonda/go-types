@@ -10,7 +10,6 @@ import (
 
 	"github.com/jinzhu/now"
 
-	"github.com/domonda/errors"
 	"github.com/domonda/go-types/language"
 	"github.com/domonda/go-types/strutil"
 )
@@ -123,13 +122,13 @@ func Parse(layout, value string) (Date, error) {
 // Period of week 1 2019: RangeOfPeriod("2019-W01") == Date("2018-12-31"), Date("2019-01-06"), nil
 func RangeOfPeriod(period string) (from, until Date, err error) {
 	if len(period) != 4 && len(period) != 7 && len(period) != 8 {
-		return "", "", errors.Errorf("invalid period format length: %q", period)
+		return "", "", fmt.Errorf("invalid period format length: %q", period)
 	}
 
 	if len(period) == 4 {
 		year, err := strconv.Atoi(period)
 		if err != nil || year <= 0 {
-			return "", "", errors.Errorf("invalid period format: %q", period)
+			return "", "", fmt.Errorf("invalid period format: %q", period)
 		}
 		from = Date(period + "-01-01")
 		until = Date(period + "-12-31")
@@ -137,19 +136,19 @@ func RangeOfPeriod(period string) (from, until Date, err error) {
 	}
 
 	if period[4] != '-' {
-		return "", "", errors.Errorf("invalid period format, expected '-' after year: %q", period)
+		return "", "", fmt.Errorf("invalid period format, expected '-' after year: %q", period)
 	}
 
 	year, err := strconv.Atoi(period[:4])
 	if err != nil {
-		return "", "", errors.Errorf("invalid period format, can't parse year: %q", period)
+		return "", "", fmt.Errorf("invalid period format, can't parse year: %q", period)
 	}
 
 	switch period[5] {
 	case 'W', 'w':
 		week, err := strconv.Atoi(period[6:])
 		if err != nil || week < 1 || week > 53 {
-			return "", "", errors.Errorf("invalid period format, can't parse week: %q", period)
+			return "", "", fmt.Errorf("invalid period format, can't parse week: %q", period)
 		}
 		from, until = YearWeek(year, week)
 		return from, until, nil
@@ -157,7 +156,7 @@ func RangeOfPeriod(period string) (from, until Date, err error) {
 	case 'Q', 'q':
 		quarter, err := strconv.Atoi(period[6:])
 		if err != nil || quarter < 1 || quarter > 4 {
-			return "", "", errors.Errorf("invalid period format, can't parse quarter: %q", period)
+			return "", "", fmt.Errorf("invalid period format, can't parse quarter: %q", period)
 		}
 		from = Of(year, time.Month(quarter-1)*3+1, 1)
 		until = Of(year, time.Month(quarter)*3+1, 0) // 0th day is the last day of the previous month
@@ -166,7 +165,7 @@ func RangeOfPeriod(period string) (from, until Date, err error) {
 	case 'H', 'h':
 		half, err := strconv.Atoi(period[6:])
 		if err != nil || half < 1 || half > 2 {
-			return "", "", errors.Errorf("invalid period format, can't parse half-year: %q", period)
+			return "", "", fmt.Errorf("invalid period format, can't parse half-year: %q", period)
 		}
 		from = Of(year, time.Month(half-1)*6+1, 1)
 		until = Of(year, time.Month(half)*6+1, 0) // 0th day is the last day of the previous month
@@ -175,7 +174,7 @@ func RangeOfPeriod(period string) (from, until Date, err error) {
 
 	month, err := strconv.Atoi(period[5:])
 	if err != nil || month < 1 || month > 12 {
-		return "", "", errors.Errorf("invalid period format, can't parse month: %q", period)
+		return "", "", fmt.Errorf("invalid period format, can't parse month: %q", period)
 	}
 
 	from = Of(year, time.Month(month), 1)
@@ -516,7 +515,7 @@ func (date *Date) Scan(value interface{}) (err error) {
 		return nil
 	}
 
-	return errors.Errorf("can't scan value '%#v' of type %T as data.Date", value, value)
+	return fmt.Errorf("can't scan value '%#v' of type %T as data.Date", value, value)
 }
 
 // Value implements the driver database/sql/driver.Valuer interface.
@@ -593,7 +592,7 @@ func normalizeDate(str string, langHint language.Code) (string, error) {
 	trimmed := strings.ToLower(strings.TrimFunc(str, isDateTrimRune))
 
 	if len(trimmed) < MinLength {
-		return "", errors.Errorf("too short for a date: '%s'", str)
+		return "", fmt.Errorf("too short for a date: %q", str)
 	}
 
 	if len(trimmed) > 10 && trimmed[10] == 't' {
@@ -601,7 +600,7 @@ func normalizeDate(str string, langHint language.Code) (string, error) {
 		trimmed = trimmed[:10]
 	}
 
-	langHint = langHint.Normalized()
+	langHint, _ = langHint.Normalized()
 
 	parts := strings.FieldsFunc(trimmed, isDateSeparatorRune)
 	if len(parts) == 4 {
@@ -612,7 +611,7 @@ func normalizeDate(str string, langHint language.Code) (string, error) {
 		}
 	}
 	if len(parts) != 3 {
-		return "", errors.Errorf("Date must have 3 parts: '%s'", str)
+		return "", fmt.Errorf("Date must have 3 parts: %q", str)
 	}
 	dayHint := -1
 	totalLen := 0
@@ -639,7 +638,7 @@ func normalizeDate(str string, langHint language.Code) (string, error) {
 		}
 	}
 	if totalLen < 5 {
-		return "", errors.Errorf("Date is too short: '%s'", str)
+		return "", fmt.Errorf("Date is too short: %q", str)
 	}
 
 	len0 := len(parts[0])
@@ -675,7 +674,7 @@ func normalizeDate(str string, langHint language.Code) (string, error) {
 			expandVal2ToFullYear()
 		}
 		if !validDay(val1) || !validYear(val2) {
-			return "", errors.Errorf("invalid date: '%s'", str)
+			return "", fmt.Errorf("invalid date: %q", str)
 		}
 		// m DD YYYY
 		return fmt.Sprintf("%s-%02d-%s", parts[2], month0, parts[1]), nil
@@ -692,14 +691,14 @@ func normalizeDate(str string, langHint language.Code) (string, error) {
 
 	case len0 == 2 && month1 != 0 && len2 == 4:
 		if !validDay(val0) || !validYear(val2) {
-			return "", errors.Errorf("invalid date: '%s'", str)
+			return "", fmt.Errorf("invalid date: %q", str)
 		}
 		// DD m YYYY
 		return fmt.Sprintf("%s-%02d-%s", parts[2], month1, parts[0]), nil
 
 	case len0 == 4 && month1 != 0 && len2 == 2:
 		if !validYear(val0) || !validDay(val2) {
-			return "", errors.Errorf("invalid date: '%s'", str)
+			return "", fmt.Errorf("invalid date: %q", str)
 		}
 		// YYYY m DD
 		return fmt.Sprintf("%s-%02d-%s", parts[0], month1, parts[2]), nil
@@ -721,7 +720,7 @@ func normalizeDate(str string, langHint language.Code) (string, error) {
 
 	case len0 == 4 && len1 == 2 && len2 == 2:
 		if !validYear(val0) || !validMonth(val1) || !validDay(val2) {
-			return "", errors.Errorf("invalid date: '%s'", str)
+			return "", fmt.Errorf("invalid date: %q", str)
 		}
 		return strings.Join(parts, "-"), nil
 
@@ -737,7 +736,7 @@ func normalizeDate(str string, langHint language.Code) (string, error) {
 			// DD MM YYYY
 		}
 		if !validDay(val0) || !validMonth(val1) || !validYear(val2) {
-			return "", errors.Errorf("invalid date: '%s'", str)
+			return "", fmt.Errorf("invalid date: %q", str)
 		}
 		// DD MM YYYY
 		parts[0], parts[2] = parts[2], parts[0]
@@ -745,7 +744,7 @@ func normalizeDate(str string, langHint language.Code) (string, error) {
 		return strings.Join(parts, "-"), nil
 	}
 
-	return "", errors.Errorf("invalid date: '%s'", str)
+	return "", fmt.Errorf("invalid date: %q", str)
 }
 
 func validYear(year int) bool {
