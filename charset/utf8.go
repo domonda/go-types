@@ -15,6 +15,7 @@ func (UTF8Encoding) Name() string {
 	return "UTF-8"
 }
 
+// String implements the fmt.Stringer interface.
 func (e UTF8Encoding) String() string {
 	return e.Name() + " Encoding"
 }

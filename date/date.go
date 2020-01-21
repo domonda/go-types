@@ -263,6 +263,9 @@ func (date *Date) ScanString(source string) (sourceWasNormalized bool, err error
 	return newDate == Date(source), nil
 }
 
+// String returns the normalized date if possible,
+// else it will be returned unchanged as string.
+// String implements the fmt.Stringer interface.
 func (date Date) String() string {
 	norm, err := date.Normalized()
 	if err != nil {

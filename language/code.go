@@ -31,6 +31,9 @@ func (c Code) LanguageName() string {
 	return codeNames[c]
 }
 
+// String returns the normalized code if possible,
+// else it will be returned unchanged as string.
+// String implements the fmt.Stringer interface.
 func (c Code) String() string {
 	norm, err := c.Normalized()
 	if err != nil {

@@ -26,6 +26,7 @@ func (set StringSet) Sorted() (s []string) {
 	return s
 }
 
+// String implements the fmt.Stringer interface.
 func (set StringSet) String() string {
 	if len(set) == 0 {
 		return `[]`

@@ -78,6 +78,9 @@ func (c *Code) ScanString(source string) (normalized bool, err error) {
 	return newCode == Code(source), nil
 }
 
+// String returns the normalized code if possible,
+// else it will be returned unchanged as string.
+// String implements the fmt.Stringer interface.
 func (c Code) String() string {
 	norm, err := c.Normalized()
 	if err != nil {

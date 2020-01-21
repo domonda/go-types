@@ -77,6 +77,9 @@ func (n *NullableDate) ScanString(source string) (sourceWasNormalized bool, err 
 	return newDate == NullableDate(source), nil
 }
 
+// String returns the normalized date if possible,
+// else it will be returned unchanged as string.
+// String implements the fmt.Stringer interface.
 func (n NullableDate) String() string {
 	norm, err := n.Normalized()
 	if err != nil {

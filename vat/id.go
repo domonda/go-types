@@ -152,6 +152,9 @@ func (id ID) Number() string {
 	return string(norm[2:])
 }
 
+// String returns the normalized ID if possible,
+// else it will be returned unchanged as string.
+// String implements the fmt.Stringer interface.
 func (id ID) String() string {
 	norm, err := id.Normalized()
 	if err != nil {

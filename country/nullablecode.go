@@ -93,6 +93,9 @@ func (c *NullableCode) ScanString(source string) (normalized bool, err error) {
 	return newNullableCode == NullableCode(source), nil
 }
 
+// String returns the normalized code if possible,
+// else it will be returned unchanged as string.
+// String implements the fmt.Stringer interface.
 func (c NullableCode) String() string {
 	norm, err := c.Normalized()
 	if err != nil {

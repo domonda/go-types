@@ -88,6 +88,7 @@ func (e *UTF16Encoding) Name() string {
 	return "UTF-16, little-endian"
 }
 
+// String implements the fmt.Stringer interface.
 func (e *UTF16Encoding) String() string {
 	return e.Name() + " Encoding"
 }

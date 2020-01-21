@@ -150,6 +150,7 @@ func (bom BOM) Endian() binary.ByteOrder {
 	return nil
 }
 
+// String implements the fmt.Stringer interface.
 func (bom BOM) String() string {
 	switch bom {
 	case NoBOM:

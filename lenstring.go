@@ -68,6 +68,8 @@ func (s *LenString) validateLen(str string) error {
 	return nil
 }
 
+// String returns the string or "<nil>".
+// String implements the fmt.Stringer interface.
 func (s *LenString) String() string {
 	if s == nil {
 		return "<nil>"

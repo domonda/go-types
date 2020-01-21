@@ -105,6 +105,9 @@ func (n NullableID) Number() string {
 	return ID(n).Number()
 }
 
+// String returns the normalized ID if possible,
+// else it will be returned unchanged as string.
+// String implements the fmt.Stringer interface.
 func (n NullableID) String() string {
 	norm, err := n.Normalized()
 	if err != nil {

@@ -69,6 +69,7 @@ func (e *encodingImpl) Name() string {
 	return e.name
 }
 
+// String implements the fmt.Stringer interface.
 func (e *encodingImpl) String() string {
 	return e.Name() + " Encoding"
 }
