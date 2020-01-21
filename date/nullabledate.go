@@ -61,6 +61,30 @@ func (n NullableDate) Validate() error {
 	return Date(n).Validate()
 }
 
+// ScanString tries to parse and assign the passed
+// source string as value of the implementing type.
+// It returns an error if source could not be parsed.
+// If the source string could be parsed, but was not
+// in the expected normalized format, then false is
+// returned for sourceWasNormalized and nil for err.
+// ScanString implements the strfmt.Scannable interface.
+func (n *NullableDate) ScanString(source string) (sourceWasNormalized bool, err error) {
+	newDate, err := NullableDate(source).Normalized()
+	if err != nil {
+		return false, err
+	}
+	*n = newDate
+	return newDate == NullableDate(source), nil
+}
+
+func (n NullableDate) String() string {
+	norm, err := n.Normalized()
+	if err != nil {
+		return string(n)
+	}
+	return string(norm)
+}
+
 // Normalized returns the date in normalized form,
 // or an error if the format can't be detected.
 // The first given lang argument is used as language hint.

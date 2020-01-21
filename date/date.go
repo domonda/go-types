@@ -248,20 +248,28 @@ func FromUntilFromYearAndMonths(year, months string) (fromDate, untilDate Date, 
 	return fromDate, untilDate, nil
 }
 
-// AssignString tries to parse and assign the passed
-// source string as value of the implementing object.
+// ScanString tries to parse and assign the passed
+// source string as value of the implementing type.
 // It returns an error if source could not be parsed.
 // If the source string could be parsed, but was not
 // in the expected normalized format, then false is
-// returned for normalized and nil for err.
-// AssignString implements strfmt.StringAssignable
-func (date *Date) AssignString(source string) (normalized bool, err error) {
+// returned for sourceWasNormalized and nil for err.
+// ScanString implements the strfmt.Scannable interface.
+func (date *Date) ScanString(source string) (sourceWasNormalized bool, err error) {
 	newDate, err := Date(source).Normalized()
 	if err != nil {
 		return false, err
 	}
 	*date = newDate
 	return newDate == Date(source), nil
+}
+
+func (date Date) String() string {
+	norm, err := date.Normalized()
+	if err != nil {
+		return string(date)
+	}
+	return string(norm)
 }
 
 // WithinIncl returns if date is within and inclusive from and until.

@@ -105,14 +105,22 @@ func (n NullableID) Number() string {
 	return ID(n).Number()
 }
 
-// AssignString tries to parse and assign the passed
-// source string as value of the implementing object.
+func (n NullableID) String() string {
+	norm, err := n.Normalized()
+	if err != nil {
+		return string(n)
+	}
+	return string(norm)
+}
+
+// ScanString tries to parse and assign the passed
+// source string as value of the implementing type.
 // It returns an error if source could not be parsed.
 // If the source string could be parsed, but was not
 // in the expected normalized format, then false is
-// returned for normalized and nil for err.
-// AssignString implements strfmt.StringAssignable
-func (n *NullableID) AssignString(source string) (normalized bool, err error) {
+// returned for sourceWasNormalized and nil for err.
+// ScanString implements the strfmt.Scannable interface.
+func (n *NullableID) ScanString(source string) (normalized bool, err error) {
 	newID, err := NullableID(source).Normalized()
 	if err != nil {
 		return false, err

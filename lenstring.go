@@ -125,8 +125,14 @@ func (s *LenString) UnmarshalJSON(text []byte) error {
 	return s.SetString(str)
 }
 
-// AssignString implements the strfmt.StringAssignable interface
-func (s *LenString) AssignString(source string) (normalized bool, err error) {
+// ScanString tries to parse and assign the passed
+// source string as value of the implementing type.
+// It returns an error if source could not be parsed.
+// If the source string could be parsed, but was not
+// in the expected normalized format, then false is
+// returned for sourceWasNormalized and nil for err.
+// ScanString implements the strfmt.Scannable interface.
+func (s *LenString) ScanString(source string) (normalized bool, err error) {
 	err = s.SetString(source)
 	if err != nil {
 		return false, err

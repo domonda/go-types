@@ -151,14 +151,22 @@ func (id ID) Number() string {
 	return string(norm[2:])
 }
 
-// AssignString tries to parse and assign the passed
-// source string as value of the implementing object.
+func (id ID) String() string {
+	norm, err := id.Normalized()
+	if err != nil {
+		return string(id)
+	}
+	return string(norm)
+}
+
+// ScanString tries to parse and assign the passed
+// source string as value of the implementing type.
 // It returns an error if source could not be parsed.
 // If the source string could be parsed, but was not
 // in the expected normalized format, then false is
-// returned for normalized and nil for err.
-// AssignString implements strfmt.StringAssignable
-func (id *ID) AssignString(source string) (normalized bool, err error) {
+// returned for sourceWasNormalized and nil for err.
+// ScanString implements the strfmt.Scannable interface.
+func (id *ID) ScanString(source string) (normalized bool, err error) {
 	newID, err := ID(source).Normalized()
 	if err != nil {
 		return false, err

@@ -2,9 +2,8 @@ package country
 
 import (
 	"database/sql/driver"
+	"fmt"
 	"strings"
-
-	"github.com/domonda/errors"
 )
 
 const Null NullableCode = ""
@@ -25,7 +24,7 @@ func (c NullableCode) ValidAndNotNull() bool {
 
 func (c NullableCode) Validate() error {
 	if !c.Valid() {
-		return errors.Errorf("invalid country-code: %q", c)
+		return fmt.Errorf("invalid country.Code: %q", c)
 	}
 	return nil
 }
@@ -57,7 +56,7 @@ func (c *NullableCode) Scan(value interface{}) error {
 	case nil:
 		*c = Null
 	default:
-		return errors.Errorf("can't scan SQL value of type %T as country.NullableCode", value)
+		return fmt.Errorf("can't scan SQL value of type %T as country.NullableCode", value)
 	}
 	return nil
 }
@@ -78,18 +77,26 @@ func (c NullableCode) MarshalJSON() ([]byte, error) {
 	return []byte(`"` + c + `"`), nil
 }
 
-// AssignString tries to parse and assign the passed
-// source string as value of the implementing object.
+// ScanString tries to parse and assign the passed
+// source string as value of the implementing type.
 // It returns an error if source could not be parsed.
 // If the source string could be parsed, but was not
 // in the expected normalized format, then false is
-// returned for normalized and nil for err.
-// AssignString implements strfmt.StringAssignable
-func (c *NullableCode) AssignString(source string) (normalized bool, err error) {
+// returned for sourceWasNormalized and nil for err.
+// ScanString implements the strfmt.Scannable interface.
+func (c *NullableCode) ScanString(source string) (normalized bool, err error) {
 	newNullableCode := NullableCode(strings.ToUpper(source))
 	if !newNullableCode.Valid() {
-		return false, errors.Errorf("invalid country-code: '%s'", source)
+		return false, fmt.Errorf("invalid country.Code: '%s'", source)
 	}
 	*c = newNullableCode
 	return newNullableCode == NullableCode(source), nil
+}
+
+func (c NullableCode) String() string {
+	norm, err := c.Normalized()
+	if err != nil {
+		return string(c)
+	}
+	return string(norm)
 }

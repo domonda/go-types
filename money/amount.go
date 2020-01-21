@@ -2,12 +2,13 @@ package money
 
 import (
 	"bytes"
+	"errors"
+	"fmt"
 	"math"
 	"math/big"
 	"strconv"
 	"strings"
 
-	"github.com/domonda/errors"
 	"github.com/domonda/go-types/strfmt"
 )
 
@@ -29,7 +30,7 @@ func ParseAmount(str string, acceptedDecimals ...int) (Amount, error) {
 			return Amount(f), nil
 		}
 	}
-	return 0, errors.Errorf("parsing %q returned %d decimals wich is not in accepted list of %v", str, decimals, acceptedDecimals)
+	return 0, fmt.Errorf("parsing %q returned %d decimals wich is not in accepted list of %v", str, decimals, acceptedDecimals)
 }
 
 // AmountFromPtr dereferences ptr or returns nilVal if it is nil
@@ -40,14 +41,14 @@ func AmountFromPtr(ptr *Amount, nilVal Amount) Amount {
 	return *ptr
 }
 
-// AssignString tries to parse and assign the passed
-// source string as value of the implementing object.
+// ScanString tries to parse and assign the passed
+// source string as value of the implementing type.
 // It returns an error if source could not be parsed.
 // If the source string could be parsed, but was not
 // in the expected normalized format, then false is
-// returned for normalized and nil for err.
-// AssignString implements strfmt.StringAssignable
-func (a *Amount) AssignString(source string) (normalized bool, err error) {
+// returned for sourceWasNormalized and nil for err.
+// ScanString implements the strfmt.Scannable interface.
+func (a *Amount) ScanString(source string) (sourceWasNormalized bool, err error) {
 	f, err := strfmt.ParseFloat(source)
 	if err != nil {
 		return false, err
@@ -231,7 +232,7 @@ func (a *Amount) UnmarshalJSON(b []byte) error {
 
 	amount, err := ParseAmount(s)
 	if err != nil {
-		return errors.Wrapf(err, "can't unmarshal JSON as money.Amount: %s", b)
+		return fmt.Errorf("can't unmarshal JSON(%s) as money.Amount because of: %w", b, err)
 	}
 	*a = amount
 	return nil

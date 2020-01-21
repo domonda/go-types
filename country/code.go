@@ -2,9 +2,8 @@ package country
 
 import (
 	"database/sql/driver"
+	"fmt"
 	"strings"
-
-	"github.com/domonda/errors"
 )
 
 const Invalid Code = ""
@@ -22,7 +21,7 @@ func (c Code) Valid() bool {
 
 func (c Code) Validate() error {
 	if !c.Valid() {
-		return errors.Errorf("invalid country-code: %q", c)
+		return fmt.Errorf("invalid country.Code: %q", c)
 	}
 	return nil
 }
@@ -50,7 +49,7 @@ func (c *Code) Scan(value interface{}) error {
 	case nil:
 		*c = Invalid
 	default:
-		return errors.Errorf("can't scan SQL value of type %T as country.Code", value)
+		return fmt.Errorf("can't scan SQL value of type %T as country.Code", value)
 	}
 	return nil
 }
@@ -63,18 +62,26 @@ func (c Code) Value() (driver.Value, error) {
 	return string(c), nil
 }
 
-// AssignString tries to parse and assign the passed
-// source string as value of the implementing object.
+// ScanString tries to parse and assign the passed
+// source string as value of the implementing type.
 // It returns an error if source could not be parsed.
 // If the source string could be parsed, but was not
 // in the expected normalized format, then false is
-// returned for normalized and nil for err.
-// AssignString implements strfmt.StringAssignable
-func (c *Code) AssignString(source string) (normalized bool, err error) {
+// returned for sourceWasNormalized and nil for err.
+// ScanString implements the strfmt.Scannable interface.
+func (c *Code) ScanString(source string) (normalized bool, err error) {
 	newCode := Code(strings.ToUpper(source))
 	if !newCode.Valid() {
-		return false, errors.Errorf("invalid country-code: '%s'", source)
+		return false, fmt.Errorf("invalid country.Code: '%s'", source)
 	}
 	*c = newCode
 	return newCode == Code(source), nil
+}
+
+func (c Code) String() string {
+	norm, err := c.Normalized()
+	if err != nil {
+		return string(c)
+	}
+	return string(norm)
 }

@@ -2,9 +2,9 @@ package money
 
 import (
 	"database/sql/driver"
+	"fmt"
 	"strings"
-
-	"github.com/domonda/errors"
+	"errors"
 )
 
 // StringIsCurrency returns if a string can be parsed as Currency.
@@ -26,14 +26,14 @@ func NormalizeCurrency(str string) (Currency, error) {
 	return Currency(str).Normalized()
 }
 
-// AssignString tries to parse and assign the passed
-// source string as value of the implementing object.
+// ScanString tries to parse and assign the passed
+// source string as value of the implementing type.
 // It returns an error if source could not be parsed.
 // If the source string could be parsed, but was not
 // in the expected normalized format, then false is
-// returned for normalized and nil for err.
-// AssignString implements strfmt.StringAssignable
-func (c *Currency) AssignString(source string) (normalized bool, err error) {
+// returned for sourceWasNormalized and nil for err.
+// ScanString implements the strfmt.Scannable interface.
+func (c *Currency) ScanString(source string) (sourceWasNormalized bool, err error) {
 	newC, err := Currency(source).Normalized()
 	if err != nil {
 		return false, err
@@ -130,7 +130,7 @@ func (c *Currency) Scan(value interface{}) error {
 	case nil:
 		*c = CurrencyNull
 	default:
-		return errors.Errorf("can't scan SQL value of type %T as Currency", value)
+		return fmt.Errorf("can't scan SQL value of type %T as Currency", value)
 	}
 	return nil
 }

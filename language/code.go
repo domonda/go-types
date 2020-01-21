@@ -2,9 +2,8 @@ package language
 
 import (
 	"database/sql/driver"
+	"fmt"
 	"strings"
-
-	"github.com/domonda/errors"
 )
 
 // Code in its normalized form a ISO 639-1 two character language code.
@@ -17,19 +16,27 @@ func (c Code) Valid() bool {
 	return ok
 }
 
-func (c Code) Normalized() Code {
+func (c Code) Normalized() (Code, error) {
 	// TODO normalize 3 letter codes https://en.wikipedia.org/wiki/List_of_ISO_639-1_codes
 	// TODO normalize BCP-47 language codes, such as "en-US" or "sr-Latn"
 	// http://www.unicode.org/reports/tr35/#Unicode_locale_identifier.
 	normalized := Code(strings.ToLower(string(c)))
 	if _, ok := codeNames[normalized]; !ok {
-		return ""
+		return "", fmt.Errorf("invalid language.Code: %q", c)
 	}
-	return normalized
+	return normalized, nil
 }
 
 func (c Code) LanguageName() string {
 	return codeNames[c]
+}
+
+func (c Code) String() string {
+	norm, err := c.Normalized()
+	if err != nil {
+		return string(c)
+	}
+	return string(norm)
 }
 
 // Scan implements the database/sql.Scanner interface.
@@ -42,7 +49,7 @@ func (c *Code) Scan(value interface{}) error {
 	case nil:
 		*c = Null
 	default:
-		return errors.Errorf("can't scan SQL value of type %T as language.Code", value)
+		return fmt.Errorf("can't scan SQL value of type %T as language.Code", value)
 	}
 	return nil
 }

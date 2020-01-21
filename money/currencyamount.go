@@ -14,26 +14,6 @@ func NewCurrencyAmount(currency Currency, amount Amount) *CurrencyAmount {
 	return &CurrencyAmount{Currency: currency, Amount: amount}
 }
 
-// String implements the fmt.Stringer interface.
-func (ca *CurrencyAmount) String() string {
-	return fmt.Sprintf("%s %.2f", ca.Currency, ca.Amount)
-}
-
-func (ca *CurrencyAmount) Format(currencyFirst bool, thousandsSep, decimalSep byte, precision int) string {
-	amountStr := ca.Amount.Format(thousandsSep, decimalSep, precision)
-	if ca.Currency == "" {
-		return amountStr
-	}
-	if currencyFirst {
-		return string(ca.Currency) + " " + amountStr
-	}
-	return amountStr + " " + string(ca.Currency)
-}
-
-func (ca *CurrencyAmount) GoString() string {
-	return fmt.Sprintf("{Currency: %#v, Amount: %#v}", ca.Currency, ca.Amount)
-}
-
 // ParseCurrencyAmount parses a currency and an amount from str with acceptedDecimals.
 // If acceptedDecimals is empty, then any decimal number is accepted.
 func ParseCurrencyAmount(str string, acceptedDecimals ...int) (result CurrencyAmount, err error) {
@@ -65,4 +45,40 @@ func ParseCurrencyAmount(str string, acceptedDecimals ...int) (result CurrencyAm
 	}
 
 	return result, nil
+}
+
+// String implements the fmt.Stringer interface.
+func (ca *CurrencyAmount) String() string {
+	return fmt.Sprintf("%s %.2f", ca.Currency, ca.Amount)
+}
+
+func (ca *CurrencyAmount) Format(currencyFirst bool, thousandsSep, decimalSep byte, precision int) string {
+	amountStr := ca.Amount.Format(thousandsSep, decimalSep, precision)
+	if ca.Currency == "" {
+		return amountStr
+	}
+	if currencyFirst {
+		return string(ca.Currency) + " " + amountStr
+	}
+	return amountStr + " " + string(ca.Currency)
+}
+
+func (ca *CurrencyAmount) GoString() string {
+	return fmt.Sprintf("{Currency: %#v, Amount: %#v}", ca.Currency, ca.Amount)
+}
+
+// ScanString tries to parse and assign the passed
+// source string as value of the implementing type.
+// It returns an error if source could not be parsed.
+// If the source string could be parsed, but was not
+// in the expected normalized format, then false is
+// returned for sourceWasNormalized and nil for err.
+// ScanString implements the strfmt.Scannable interface.
+func (ca *CurrencyAmount) ScanString(source string) (sourceWasNormalized bool, err error) {
+	parsed, err := ParseCurrencyAmount(source, 0, 2)
+	if err != nil {
+		return false, err
+	}
+	*ca = parsed
+	return ca.String() == source, nil
 }

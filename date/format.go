@@ -31,20 +31,20 @@ func (f *Format) Parse(str string, langHints ...language.Code) (normalized strin
 	return f.Format(date), nil
 }
 
-func (f *Format) AssignString(dest reflect.Value, str string) error {
-	str = strings.TrimSpace(str)
+func (f *Format) AssignString(dest reflect.Value, source string) error {
+	source = strings.TrimSpace(source)
 
 	tPtr := new(time.Time)
-	if str != "" {
+	if source != "" {
 		if f.Layout == "" {
-			d, err := Normalize(str)
+			d, err := Normalize(source)
 			if err != nil {
 				return err
 			}
 			t := d.MidnightTime()
 			tPtr = &t
 		} else {
-			t, err := time.Parse(f.Layout, str)
+			t, err := time.Parse(f.Layout, source)
 			if err != nil {
 				return err
 			}
