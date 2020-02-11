@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"math"
 	"math/big"
-	"strconv"
-	"strings"
 
 	"github.com/domonda/go-types/strfmt"
 )
@@ -69,30 +67,7 @@ func (a Amount) RoundToInt() Amount {
 
 // RoundToCents returns the amount rounded to cents
 func (a Amount) RoundToCents() Amount {
-	s := strconv.FormatFloat(float64(a), 'f', -1, 64)
-
-	p := strings.IndexByte(s, '.')
-	if p == -1 {
-		return a
-	}
-	if decim := len(s) - p - 1; decim <= 2 {
-		return a
-	}
-
-	if s[p+3] < '5' {
-		// If third decimal is smaller than 5 cut off rest
-		s = s[:p+3]
-	} else {
-		// If third decimal is equal or larger than 5,
-		// increase second decimal by one
-		s = s[:p+2] + string(s[p+2]+1)
-	}
-
-	f, err := strconv.ParseFloat(s, 64)
-	if err != nil {
-		panic(err)
-	}
-	return Amount(f)
+	return Amount(math.Round(float64(a)*100) / 100)
 }
 
 // String returns the amount formatted to two decimal places
