@@ -171,6 +171,8 @@ func Test_Amount_RoundToCents(t *testing.T) {
 		9999999.005:        9999999.01,
 		9999999.009:        9999999.01,
 		19999999.55:        19999999.55,
+		89.99999:           90,
+		189.99999:          190,
 	}
 	for testAmount, refAmount := range roundToCentsTable {
 		assert.Equal(t, refAmount, testAmount.RoundToCents())
