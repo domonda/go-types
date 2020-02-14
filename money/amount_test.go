@@ -209,3 +209,41 @@ func Test_Amount_SplitEquallyRoundToCents(t *testing.T) {
 		assert.Equal(t, expected, result)
 	}
 }
+
+func Test_Amount_ScaleAmountsToMatchRoundToCents(t *testing.T) {
+	data := []struct {
+		sum      Amount
+		amounts  []Amount
+		expected []Amount
+	}{
+		{0, nil, nil},
+		{0, []Amount{1}, []Amount{0}},
+		{100, []Amount{1}, []Amount{100}},
+		{100, []Amount{50.4444345}, []Amount{100}},
+		{100, []Amount{100}, []Amount{100}},
+		{100, []Amount{1000}, []Amount{100}},
+		{100, []Amount{1, 2}, []Amount{33.33, 66.67}},
+		{100, []Amount{1, 2, 3}, []Amount{16.67, 33.33, 50}},
+		{100, []Amount{1, 2, 3, 4}, []Amount{10, 20, 30, 40}},
+		{100, []Amount{-1, +2, -3, +4}, []Amount{10, 20, 30, 40}},
+		{100, []Amount{11, 17, 37}, []Amount{16.92, 26.15, 56.93}},
+		{1, []Amount{11, 17, 37}, []Amount{0.17, 0.26, 0.57}},
+
+		{-0, nil, nil},
+		{-0, []Amount{-1}, []Amount{-0}},
+		{-100, []Amount{-1}, []Amount{-100}},
+		{-100, []Amount{-50.4444345}, []Amount{-100}},
+		{-100, []Amount{-100}, []Amount{-100}},
+		{-100, []Amount{-1000}, []Amount{-100}},
+		{-100, []Amount{-1, 2}, []Amount{-33.33, -66.67}},
+		{-100, []Amount{-1, 2, 3}, []Amount{-16.67, -33.33, -50}},
+		{-100, []Amount{-1, 2, 3, 4}, []Amount{-10, -20, -30, -40}},
+		{-100, []Amount{-1, +2, -3, +4}, []Amount{-10, -20, -30, -40}},
+		{-100, []Amount{-11, 17, 37}, []Amount{-16.92, -26.15, -56.93}},
+		{-1, []Amount{-11, 17, 37}, []Amount{-0.17, -0.26, -0.57}},
+	}
+	for _, test := range data {
+		result := test.sum.ScaleAmountsToMatchRoundToCents(test.amounts)
+		assert.Equal(t, test.expected, result)
+	}
+}

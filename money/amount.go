@@ -167,13 +167,36 @@ func (a Amount) SplitEquallyRoundToCents(numAmounts int) []Amount {
 	if numAmounts < 1 {
 		return nil
 	}
-	amounts := make([]Amount, numAmounts)
-	splitted := (a / Amount(numAmounts)).RoundToCents()
+	splitted := make([]Amount, numAmounts)
+	part := (a / Amount(numAmounts)).RoundToCents()
 	for i := 0; i < numAmounts-1; i++ {
-		amounts[i] = splitted
+		splitted[i] = part
 	}
-	amounts[numAmounts-1] = (a.RoundToCents() - (splitted * Amount(numAmounts-1))).RoundToCents()
-	return amounts
+	splitted[numAmounts-1] = (a.RoundToCents() - (part * Amount(numAmounts-1))).RoundToCents()
+	return splitted
+}
+
+func (a Amount) ScaleAmountsToMatchRoundToCents(amounts []Amount) []Amount {
+	numAmounts := len(amounts)
+	if numAmounts == 0 {
+		return nil
+	}
+
+	sum := Amount(0)
+	for _, amount := range amounts {
+		sum += amount.Copysign(a)
+	}
+	scaleFactor := a / sum
+
+	sum = 0
+	scaled := make([]Amount, numAmounts)
+	for i := 0; i < numAmounts-1; i++ {
+		scaled[i] = (amounts[i].Copysign(a) * scaleFactor).RoundToCents()
+		sum += scaled[i]
+	}
+	scaled[numAmounts-1] = (a.RoundToCents() - sum).RoundToCents()
+
+	return scaled
 }
 
 // Valid returns if a is not infinite or NaN
