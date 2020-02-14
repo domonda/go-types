@@ -181,3 +181,31 @@ func Test_Amount_RoundToCents(t *testing.T) {
 		assert.Equal(t, refAmount, testAmount.RoundToCents())
 	}
 }
+
+func Test_Amount_SplitEquallyRoundToCents(t *testing.T) {
+	type input struct {
+		amount     Amount
+		numAmounts int
+	}
+	data := map[input][]Amount{
+		{amount: 100, numAmounts: 0}:     nil,
+		{amount: 100.005, numAmounts: 1}: {100.01},
+		{amount: 100.005, numAmounts: 2}: {50, 50.01},
+		{amount: 100, numAmounts: 3}:     {33.33, 33.33, 33.34},
+		{amount: 0.01, numAmounts: 5}:    {0, 0, 0, 0, 0.01},
+		{amount: 0.05, numAmounts: 5}:    {0.01, 0.01, 0.01, 0.01, 0.01},
+		{amount: 1, numAmounts: 17}:      {0.06, 0.06, 0.06, 0.06, 0.06, 0.06, 0.06, 0.06, 0.06, 0.06, 0.06, 0.06, 0.06, 0.06, 0.06, 0.06, 0.04},
+
+		{amount: -100, numAmounts: 0}:     nil,
+		{amount: -100.005, numAmounts: 1}: {-100.01},
+		{amount: -100.005, numAmounts: 2}: {-50, -50.01},
+		{amount: -100, numAmounts: 3}:     {-33.33, -33.33, -33.34},
+		{amount: -0.01, numAmounts: 5}:    {-0, -0, -0, -0, -0.01},
+		{amount: -0.05, numAmounts: 5}:    {-0.01, -0.01, -0.01, -0.01, -0.01},
+		{amount: -1, numAmounts: 17}:      {-0.06, -0.06, -0.06, -0.06, -0.06, -0.06, -0.06, -0.06, -0.06, -0.06, -0.06, -0.06, -0.06, -0.06, -0.06, -0.06, -0.04},
+	}
+	for input, expected := range data {
+		result := input.amount.SplitEquallyRoundToCents(input.numAmounts)
+		assert.Equal(t, expected, result)
+	}
+}

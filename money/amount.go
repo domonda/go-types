@@ -159,6 +159,23 @@ func (a Amount) Abs() Amount {
 	return Amount(math.Abs(float64(a)))
 }
 
+// SplitEquallyRoundToCents divides the amount equally into numAmounts amounts
+// that are rounded to cents and that sum up to the initial amount rounded to cents.
+// The last amount may slightly differ from the others amounts to guarantee
+// that the sum of the rounded cents equals the rounded cents of the initial amount.
+func (a Amount) SplitEquallyRoundToCents(numAmounts int) []Amount {
+	if numAmounts < 1 {
+		return nil
+	}
+	amounts := make([]Amount, numAmounts)
+	splitted := (a / Amount(numAmounts)).RoundToCents()
+	for i := 0; i < numAmounts-1; i++ {
+		amounts[i] = splitted
+	}
+	amounts[numAmounts-1] = (a.RoundToCents() - (splitted * Amount(numAmounts-1))).RoundToCents()
+	return amounts
+}
+
 // Valid returns if a is not infinite or NaN
 func (a Amount) Valid() bool {
 	return !math.IsNaN(float64(a)) && !math.IsInf(float64(a), 0)
