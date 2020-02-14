@@ -182,19 +182,19 @@ func ScaleAmountsToSumRoundToCents(amounts []Amount, sum Amount) []Amount {
 		return nil
 	}
 
-	checkSum := Amount(0)
+	compareSum := Amount(0)
 	for _, amount := range amounts {
-		checkSum += amount.Copysign(sum)
+		compareSum += amount.Copysign(sum)
 	}
-	scaleFactor := sum / checkSum
+	scaleFactor := sum / compareSum
 
-	checkSum = 0
+	compareSum = 0
 	scaled := make([]Amount, numAmounts)
 	for i := 0; i < numAmounts-1; i++ {
 		scaled[i] = (amounts[i].Copysign(sum) * scaleFactor).RoundToCents()
-		checkSum += scaled[i]
+		compareSum += scaled[i]
 	}
-	scaled[numAmounts-1] = (sum.RoundToCents() - checkSum).RoundToCents()
+	scaled[numAmounts-1] = (sum.RoundToCents() - compareSum).RoundToCents()
 
 	return scaled
 }
