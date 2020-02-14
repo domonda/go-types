@@ -176,25 +176,25 @@ func (a Amount) SplitEquallyRoundToCents(numAmounts int) []Amount {
 	return splitted
 }
 
-func (a Amount) ScaleAmountsToMatchRoundToCents(amounts []Amount) []Amount {
+func ScaleAmountsToSumRoundToCents(amounts []Amount, sum Amount) []Amount {
 	numAmounts := len(amounts)
 	if numAmounts == 0 {
 		return nil
 	}
 
-	sum := Amount(0)
+	checkSum := Amount(0)
 	for _, amount := range amounts {
-		sum += amount.Copysign(a)
+		checkSum += amount.Copysign(sum)
 	}
-	scaleFactor := a / sum
+	scaleFactor := sum / checkSum
 
-	sum = 0
+	checkSum = 0
 	scaled := make([]Amount, numAmounts)
 	for i := 0; i < numAmounts-1; i++ {
-		scaled[i] = (amounts[i].Copysign(a) * scaleFactor).RoundToCents()
-		sum += scaled[i]
+		scaled[i] = (amounts[i].Copysign(sum) * scaleFactor).RoundToCents()
+		checkSum += scaled[i]
 	}
-	scaled[numAmounts-1] = (a.RoundToCents() - sum).RoundToCents()
+	scaled[numAmounts-1] = (sum.RoundToCents() - checkSum).RoundToCents()
 
 	return scaled
 }

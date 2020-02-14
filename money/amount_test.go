@@ -210,7 +210,7 @@ func Test_Amount_SplitEquallyRoundToCents(t *testing.T) {
 	}
 }
 
-func Test_Amount_ScaleAmountsToMatchRoundToCents(t *testing.T) {
+func Test_Amount_ScaleAmountsToSumRoundToCents(t *testing.T) {
 	data := []struct {
 		sum      Amount
 		amounts  []Amount
@@ -243,7 +243,7 @@ func Test_Amount_ScaleAmountsToMatchRoundToCents(t *testing.T) {
 		{-1, []Amount{-11, 17, 37}, []Amount{-0.17, -0.26, -0.57}},
 	}
 	for _, test := range data {
-		result := test.sum.ScaleAmountsToMatchRoundToCents(test.amounts)
+		result := ScaleAmountsToSumRoundToCents(test.amounts, test.sum)
 		assert.Equal(t, test.expected, result)
 	}
 }
