@@ -581,3 +581,22 @@ func StringContainsAny(str string, subStrings []string) bool {
 	}
 	return false
 }
+
+// ToSnakeCase converts s to snake case
+// by lower casing everything and inserting '_'
+// before every new upper case character in s.
+func ToSnakeCase(s string) string {
+	var b strings.Builder
+	b.Grow(len(s) + 2)
+	lastWasUpper := true
+	for _, r := range s {
+		lr := unicode.ToLower(r)
+		isUpper := lr != r
+		if isUpper && !lastWasUpper {
+			b.WriteByte('_')
+		}
+		b.WriteRune(lr)
+		lastWasUpper = isUpper
+	}
+	return b.String()
+}
