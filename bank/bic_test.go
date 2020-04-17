@@ -51,9 +51,9 @@ var bicFinderData = map[string][][]int{
 	"BKAUATWw":                  nil,
 	"GIBAATWWX01 ":              nil, // TODO, detects too short instead of matching until end
 	" XBKAUATWW ":               nil,
-	"BKAUATWW":                  [][]int{[]int{0, 8}},
-	" BKAUATWW ":                [][]int{[]int{1, 9}},
-	"BKAUATWW. BIC:GIBAATWWXXX": [][]int{[]int{0, 8}, []int{14, 14 + 11}},
+	"BKAUATWW":                  {[]int{0, 8}},
+	" BKAUATWW ":                {[]int{1, 9}},
+	"BKAUATWW. BIC:GIBAATWWXXX": {[]int{0, 8}, []int{14, 14 + 11}},
 }
 
 func Test_bicFinder(t *testing.T) {

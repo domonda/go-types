@@ -123,7 +123,7 @@ func Test_NormalizeIBAN(t *testing.T) {
 }
 
 var bankAndAccountNumbersTable = map[IBAN][2]string{
-	"AT252011183728861100": [2]string{"20111", "83728861100"},
+	"AT252011183728861100": {"20111", "83728861100"},
 }
 
 func Test_IBAN_BankAndAccountNumbers(t *testing.T) {
