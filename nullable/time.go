@@ -22,6 +22,11 @@ type Time struct {
 	time.Time
 }
 
+// TimeFrom returns a nullable.Time from a time.Time
+func TimeFrom(t time.Time) Time {
+	return Time{Time: t}
+}
+
 // String returns Time.String() or "NULL" if Time.IsZero().
 func (nt Time) String() string {
 	if nt.Time.IsZero() {
