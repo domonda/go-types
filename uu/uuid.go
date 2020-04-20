@@ -179,8 +179,14 @@ func (id ID) Validate() error {
 	return nil
 }
 
+// IsNil returns wether the id IDNil (all zeros)
+func (id ID) IsNil() bool {
+	return id == IDNil
+}
+
+// Nullable returns the ID as NullableID
 func (id ID) Nullable() NullableID {
-	return NullableID{ID: id}
+	return NullableIDFrom(id)
 }
 
 // Bytes returns bytes slice representation of UUID.

@@ -52,6 +52,16 @@ func (n *NullableID) Set(id ID) {
 	n.ID = id
 }
 
+// SetNull sets the NullableID to null
+func (n *NullableID) SetNull() {
+	n.ID = IDNil
+}
+
+// Get returns the non nullable ID value
+func (n *NullableID) Get() ID {
+	return n.ID
+}
+
 // IsNull returns true if the NullableID is null
 func (n NullableID) IsNull() bool {
 	return n == IDNull
