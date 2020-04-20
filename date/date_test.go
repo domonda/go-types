@@ -194,10 +194,10 @@ func Test_Finder(t *testing.T) {
 
 	deFinderData := map[string][][]int{
 		"3:28:00":                nil,
-		"2006-01-02":             [][]int{[]int{0, 10}},
-		"2006-01-02, 2017/12/03": [][]int{[]int{0, 10}, []int{12, 22}},
-		"jan. 24 2012, 2017/12/03 16. Dezember 98": [][]int{[]int{0, 12}, []int{14, 24}, []int{25, 40}},
-		"Datum: 25.12.1975 Dezember 1975":          [][]int{[]int{7, 17}},
+		"2006-01-02":             {[]int{0, 10}},
+		"2006-01-02, 2017/12/03": {[]int{0, 10}, []int{12, 22}},
+		"jan. 24 2012, 2017/12/03 16. Dezember 98": {[]int{0, 12}, []int{14, 24}, []int{25, 40}},
+		"Datum: 25.12.1975 Dezember 1975":          {[]int{7, 17}},
 	}
 
 	deFinder := NewFinder("de")

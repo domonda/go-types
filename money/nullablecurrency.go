@@ -17,45 +17,50 @@ type NullableCurrency string
 
 // GetOrDefault returns the value c references if it is valid and c is not nil.
 // Safe to call on a nil pointer.
-func (c *NullableCurrency) GetOrDefault(defaultVal NullableCurrency) NullableCurrency {
-	if !c.ValidPtr() {
+func (n *NullableCurrency) GetOrDefault(defaultVal NullableCurrency) NullableCurrency {
+	if !n.ValidPtr() {
 		return defaultVal
 	}
-	return *c
+	return *n
+}
+
+// IsNull returns true if the NullableCurrency is null
+func (n NullableCurrency) IsNull() bool {
+	return n == CurrencyNull
 }
 
 // Valid returns true if c is an empty string, or a valid 3 character ISO 4217 alphabetic code.
-func (c NullableCurrency) Valid() bool {
-	return c == CurrencyNull || Currency(c).Valid()
+func (n NullableCurrency) Valid() bool {
+	return n == CurrencyNull || Currency(n).Valid()
 }
 
 // ValidAndNotNull returns if the currency is valid and not Null.
-func (c NullableCurrency) ValidAndNotNull() bool {
-	return Currency(c).Valid()
+func (n NullableCurrency) ValidAndNotNull() bool {
+	return Currency(n).Valid()
 }
 
 // Valid returns true if c is nil, an empty string, or a valid 3 character ISO 4217 alphabetic code.
 // Safe to call on a nil pointer.
-func (c *NullableCurrency) ValidPtr() bool {
-	if c == nil || *c == CurrencyNull {
+func (n *NullableCurrency) ValidPtr() bool {
+	if n == nil || *n == CurrencyNull {
 		return true
 	}
-	return Currency(*c).Valid()
+	return Currency(*n).Valid()
 }
 
 // Normalized normalizes a currency string
-func (c NullableCurrency) Normalized() (NullableCurrency, error) {
-	if c == CurrencyNull {
-		return c, nil
+func (n NullableCurrency) Normalized() (NullableCurrency, error) {
+	if n == CurrencyNull {
+		return n, nil
 	}
-	norm, err := Currency(c).Normalized()
+	norm, err := Currency(n).Normalized()
 	return NullableCurrency(norm), err
 }
 
 // NormalizedOrNull returns a normalized currency or CurrencyNull
 // if there was an error while normalizing.
-func (c NullableCurrency) NormalizedOrNull() NullableCurrency {
-	normalized, err := c.Normalized()
+func (n NullableCurrency) NormalizedOrNull() NullableCurrency {
+	normalized, err := n.Normalized()
 	if err != nil {
 		return CurrencyNull
 	}
@@ -63,14 +68,14 @@ func (c NullableCurrency) NormalizedOrNull() NullableCurrency {
 }
 
 // Scan implements the database/sql.Scanner interface.
-func (c *NullableCurrency) Scan(value interface{}) error {
+func (n *NullableCurrency) Scan(value interface{}) error {
 	switch x := value.(type) {
 	case string:
-		*c = NullableCurrency(x)
+		*n = NullableCurrency(x)
 	case []byte:
-		*c = NullableCurrency(x)
+		*n = NullableCurrency(x)
 	case nil:
-		*c = CurrencyNull
+		*n = CurrencyNull
 	default:
 		return errors.Errorf("can't scan SQL value of type %T as NullableCurrency", value)
 	}
@@ -78,27 +83,27 @@ func (c *NullableCurrency) Scan(value interface{}) error {
 }
 
 // Value implements the driver database/sql/driver.Valuer interface.
-func (c NullableCurrency) Value() (driver.Value, error) {
-	if c == CurrencyNull {
+func (n NullableCurrency) Value() (driver.Value, error) {
+	if n == CurrencyNull {
 		return nil, nil
 	}
-	return string(c), nil
+	return string(n), nil
 }
 
 // Symbol returns the currency symbol like € for EUR if available,
 // or currency code if no widely recognized symbol is available.
-func (c NullableCurrency) Symbol() string {
-	if s, ok := currencyCodeToSymbol[Currency(c)]; ok {
+func (n NullableCurrency) Symbol() string {
+	if s, ok := currencyCodeToSymbol[Currency(n)]; ok {
 		return s
 	}
-	return string(c)
+	return string(n)
 }
 
 // EnglishName returns the english name of the currency
-func (c NullableCurrency) EnglishName() string {
-	return currencyCodeToName[Currency(c)]
+func (n NullableCurrency) EnglishName() string {
+	return currencyCodeToName[Currency(n)]
 }
 
-func (c NullableCurrency) Currency() Currency {
-	return Currency(c)
+func (n NullableCurrency) Currency() Currency {
+	return Currency(n)
 }

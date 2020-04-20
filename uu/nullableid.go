@@ -48,71 +48,84 @@ func NullableIDFromPtr(ptr *ID) NullableID {
 }
 
 // Set sets an ID for this NullableID
-func (u *NullableID) Set(id ID) {
-	u.ID = id
+func (n *NullableID) Set(id ID) {
+	n.ID = id
+}
+
+// IsNull returns true if the NullableID is null
+func (n NullableID) IsNull() bool {
+	return n == IDNull
+}
+
+// String returns the ID as string or "NULL"
+func (n NullableID) String() string {
+	if n == IDNull {
+		return "NULL"
+	}
+	return n.ID.String()
 }
 
 // Valid returns if Variant and Version of this UUID are supported.
 // A Nil UUID is also valid.
-func (u NullableID) Valid() bool {
-	return u == IDNull || u.ID.Valid()
+func (n NullableID) Valid() bool {
+	return n == IDNull || n.ID.Valid()
 }
 
 // Validate returns an error if the Variant and Version of this UUID are not supported.
 // A Nil UUID is also valid.
-func (u NullableID) Validate() error {
-	if u == IDNull {
+func (n NullableID) Validate() error {
+	if n == IDNull {
 		return nil
 	}
-	return u.ID.Validate()
+	return n.ID.Validate()
 }
 
 // Ptr returns a pointer to this NullableID's value, or a nil pointer if this NullableID is null.
-func (u NullableID) Ptr() *ID {
-	if u == IDNull {
+func (n NullableID) Ptr() *ID {
+	if n == IDNull {
 		return nil
 	}
-	return &u.ID
+	return &n.ID
 }
 
 // Value implements the driver.Valuer interface.
-func (u NullableID) Value() (driver.Value, error) {
-	if u == IDNull {
+func (n NullableID) Value() (driver.Value, error) {
+	if n == IDNull {
 		return nil, nil
 	}
 	// Delegate to ID Value function
-	return u.ID.Value()
+	return n.ID.Value()
 }
 
 // Scan implements the sql.Scanner interface.
-func (u *NullableID) Scan(src interface{}) error {
+func (n *NullableID) Scan(src interface{}) error {
 	if src == nil {
-		*u = IDNull
+		*n = IDNull
 		return nil
 	}
 	// Delegate to ID Scan function
-	return u.ID.Scan(src)
+	return n.ID.Scan(src)
 }
 
 // UnmarshalJSON implements json.Unmarshaler.
 // It supports string and null input. Blank string input does not produce a null ID.
 // It also supports unmarshalling a sql.NullString.
-func (u *NullableID) UnmarshalJSON(data []byte) (err error) {
+func (n *NullableID) UnmarshalJSON(data []byte) (err error) {
 	var v interface{}
 	if err = json.Unmarshal(data, &v); err != nil {
 		return err
 	}
 	switch x := v.(type) {
 	case string:
-		u.ID, err = IDFromString(x)
+		n.ID, err = IDFromString(x)
 	case map[string]interface{}:
-		var n sql.NullString
-		err = json.Unmarshal(data, &n)
-		if n.Valid {
-			u.ID, err = IDFromString(n.String)
+		var ns sql.NullString
+		err = json.Unmarshal(data, &ns)
+		if ns.Valid {
+			n.ID, err = IDFromString(ns.String)
 		}
 	case nil:
-		*u = IDNull
+		*n = IDNull
 		return nil
 	default:
 		err = fmt.Errorf("json: cannot unmarshal %v into Go value of type uuid.NullString", reflect.TypeOf(v).Name())
@@ -122,38 +135,29 @@ func (u *NullableID) UnmarshalJSON(data []byte) (err error) {
 
 // MarshalJSON implements json.Marshaler.
 // It will encode null if Valid == false.
-func (u NullableID) MarshalJSON() ([]byte, error) {
-	if u == IDNull {
+func (n NullableID) MarshalJSON() ([]byte, error) {
+	if n == IDNull {
 		return []byte("null"), nil
 	}
-	return json.Marshal(u.ID.String())
+	return json.Marshal(n.ID.String())
 }
 
 // MarshalText implements encoding.TextMarshaler.
 // It will encode a blank string when this String is null.
-func (u NullableID) MarshalText() ([]byte, error) {
-	if u == IDNull {
+func (n NullableID) MarshalText() ([]byte, error) {
+	if n == IDNull {
 		return []byte{}, nil
 	}
-	return []byte(u.ID.String()), nil
+	return []byte(n.ID.String()), nil
 }
 
 // UnmarshalText implements encoding.TextUnmarshaler.
 // It will unmarshal to a null String if the input is a blank string.
-func (u *NullableID) UnmarshalText(text []byte) (err error) {
+func (n *NullableID) UnmarshalText(text []byte) (err error) {
 	if len(text) == 0 {
-		*u = IDNull
+		*n = IDNull
 		return nil
 	}
-	u.ID, err = IDFromBytes(text)
+	n.ID, err = IDFromBytes(text)
 	return err
-}
-
-// String returns the ID as string if Valid == true,
-// or "null" if Valid == false.
-func (u NullableID) String() string {
-	if u == IDNull {
-		return "null"
-	}
-	return u.ID.String()
 }

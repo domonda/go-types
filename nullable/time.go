@@ -16,8 +16,7 @@ import (
 // It assumes that zero time instant is never used
 // in any real life application so it's free
 // to be used as magical value for representing NULL.
-// As with time.Time use the IsZero method the check for NULL
-// instead of comparing with the default value of the type.
+// IsNull uses time.Time.IsZero internally.
 type Time struct {
 	time.Time
 }
@@ -27,23 +26,29 @@ func TimeFrom(t time.Time) Time {
 	return Time{Time: t}
 }
 
+// IsNull returns true if the Time is null.
+// Uses time.Time.IsZero internally.
+func (n Time) IsNull() bool {
+	return n.Time.IsZero()
+}
+
 // String returns Time.String() or "NULL" if Time.IsZero().
-func (nt Time) String() string {
-	if nt.Time.IsZero() {
+func (n Time) String() string {
+	if n.IsNull() {
 		return "NULL"
 	}
-	return nt.Time.String()
+	return n.Time.String()
 }
 
 // Scan implements the database/sql.Scanner interface.
-func (nt *Time) Scan(value interface{}) error {
+func (n *Time) Scan(value interface{}) error {
 	switch t := value.(type) {
 	case nil:
-		*nt = Time{}
+		*n = Time{}
 		return nil
 
 	case time.Time:
-		nt.Time = t
+		n.Time = t
 		return nil
 
 	default:
@@ -52,27 +57,27 @@ func (nt *Time) Scan(value interface{}) error {
 }
 
 // Value implements the driver database/sql/driver.Valuer interface.
-func (nt Time) Value() (driver.Value, error) {
-	if nt.Time.IsZero() {
+func (n Time) Value() (driver.Value, error) {
+	if n.IsNull() {
 		return nil, nil
 	}
-	return nt.Time, nil
+	return n.Time, nil
 }
 
 // UnarshalJSON implements encoding/json.Unmarshaler.
 // Interprets []byte(nil), []byte(""), []byte("null") as null.
-func (nt *Time) UnmarshalJSON(sourceJSON []byte) error {
-	if len(sourceJSON) == 0 || bytes.Equal(sourceJSON, []byte("null")) {
-		*nt = Time{}
+func (n *Time) UnmarshalJSON(sourceJSON []byte) error {
+	if len(sourceJSON) == 0 || bytes.Equal(sourceJSON, []byte("null")) /*|| bytes.Equal(sourceJSON, []byte(`"NULL"`))*/ {
+		*n = Time{}
 		return nil
 	}
-	return json.Unmarshal(sourceJSON, &nt.Time)
+	return json.Unmarshal(sourceJSON, &n.Time)
 }
 
 // MarshalJSON implements encoding/json.Marshaler
-func (nt Time) MarshalJSON() ([]byte, error) {
-	if nt.Time.IsZero() {
+func (n Time) MarshalJSON() ([]byte, error) {
+	if n.IsNull() {
 		return []byte("null"), nil
 	}
-	return json.Marshal(nt.Time)
+	return json.Marshal(n.Time)
 }

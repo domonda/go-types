@@ -45,6 +45,11 @@ func (n NullableID) NormalizedNotNull() (ID, error) {
 	return ID(n).Normalized()
 }
 
+// IsNull returns true if the NullableID is null
+func (n NullableID) IsNull() bool {
+	return n == Null
+}
+
 // Valid returns if id is a valid VAT ID or Null,
 // ignoring normalization.
 func (n NullableID) Valid() bool {

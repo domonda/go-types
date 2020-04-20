@@ -59,15 +59,15 @@ func Test_VATIDValid(t *testing.T) {
 
 var vatidTestIndices = map[string][][]int{
 	"":                         nil,
-	"ATU10223006":              [][]int{[]int{0, 11}},
-	"  ATU10223006":            [][]int{[]int{2, 13}},
-	"UID: ATU10223006":         [][]int{[]int{5, 16}},
-	"UID AT U 10223006":        [][]int{[]int{4, 17}},
-	"UID:AT U 10223006":        [][]int{[]int{4, 17}},
-	"ATU10223006 ":             [][]int{[]int{0, 11}},
-	"ATU10223006 ATU 10223006": [][]int{[]int{0, 11}, []int{12, 24}},
-	" AT U 10223006 ATU10223006 ATU 10223006 ": [][]int{[]int{1, 14}, []int{15, 26}, []int{27, 39}},
-	"USt-IdNr. DE 136725570":                   [][]int{[]int{10, 22}},
+	"ATU10223006":              {{0, 11}},
+	"  ATU10223006":            {{2, 13}},
+	"UID: ATU10223006":         {{5, 16}},
+	"UID AT U 10223006":        {{4, 17}},
+	"UID:AT U 10223006":        {{4, 17}},
+	"ATU10223006 ":             {{0, 11}},
+	"ATU10223006 ATU 10223006": {{0, 11}, {12, 24}},
+	" AT U 10223006 ATU10223006 ATU 10223006 ": {{1, 14}, {15, 26}, {27, 39}},
+	"USt-IdNr. DE 136725570":                   {{10, 22}},
 }
 
 func Test_VATIDFinder_FindAllIndex(t *testing.T) {

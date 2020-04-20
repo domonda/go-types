@@ -14,23 +14,28 @@ const Null NullableCode = ""
 // Null.Valid() or NullableCode("").Valid() will return true.
 type NullableCode string
 
-func (c NullableCode) Valid() bool {
-	return c == Null || Code(c).Valid()
+// IsNull returns true if the NullableCode is null
+func (n NullableCode) IsNull() bool {
+	return n == Null
 }
 
-func (c NullableCode) ValidAndNotNull() bool {
-	return Code(c).Valid()
+func (n NullableCode) Valid() bool {
+	return n == Null || Code(n).Valid()
 }
 
-func (c NullableCode) Validate() error {
-	if !c.Valid() {
-		return fmt.Errorf("invalid country.Code: %q", string(c))
+func (n NullableCode) ValidAndNotNull() bool {
+	return Code(n).Valid()
+}
+
+func (n NullableCode) Validate() error {
+	if !n.Valid() {
+		return fmt.Errorf("invalid country.Code: %q", string(n))
 	}
 	return nil
 }
 
-func (c NullableCode) Normalized() (NullableCode, error) {
-	normalized := NullableCode(strings.ToUpper(string(c)))
+func (n NullableCode) Normalized() (NullableCode, error) {
+	normalized := NullableCode(strings.ToUpper(string(n)))
 	err := normalized.Validate()
 	if err != nil {
 		return Null, err
@@ -38,23 +43,23 @@ func (c NullableCode) Normalized() (NullableCode, error) {
 	return normalized, nil
 }
 
-func (c NullableCode) CountryName() string {
-	return Code(c).CountryName()
+func (n NullableCode) CountryName() string {
+	return Code(n).CountryName()
 }
 
-func (c NullableCode) Code() Code {
-	return Code(c)
+func (n NullableCode) Code() Code {
+	return Code(n)
 }
 
 // Scan implements the database/sql.Scanner interface.
-func (c *NullableCode) Scan(value interface{}) error {
+func (n *NullableCode) Scan(value interface{}) error {
 	switch x := value.(type) {
 	case string:
-		*c = NullableCode(x)
+		*n = NullableCode(x)
 	case []byte:
-		*c = NullableCode(x)
+		*n = NullableCode(x)
 	case nil:
-		*c = Null
+		*n = Null
 	default:
 		return fmt.Errorf("can't scan SQL value of type %T as country.NullableCode", value)
 	}
@@ -62,19 +67,19 @@ func (c *NullableCode) Scan(value interface{}) error {
 }
 
 // Value implements the driver database/sql/driver.Valuer interface.
-func (c NullableCode) Value() (driver.Value, error) {
-	if c == Null {
+func (n NullableCode) Value() (driver.Value, error) {
+	if n == Null {
 		return nil, nil
 	}
-	return string(c), nil
+	return string(n), nil
 }
 
 // MarshalJSON implements encoding/json.Marshaler
-func (c NullableCode) MarshalJSON() ([]byte, error) {
-	if c == Null {
+func (n NullableCode) MarshalJSON() ([]byte, error) {
+	if n == Null {
 		return []byte("null"), nil
 	}
-	return []byte(`"` + c + `"`), nil
+	return []byte(`"` + n + `"`), nil
 }
 
 // ScanString tries to parse and assign the passed
@@ -84,22 +89,22 @@ func (c NullableCode) MarshalJSON() ([]byte, error) {
 // in the expected normalized format, then false is
 // returned for sourceWasNormalized and nil for err.
 // ScanString implements the strfmt.Scannable interface.
-func (c *NullableCode) ScanString(source string) (normalized bool, err error) {
+func (n *NullableCode) ScanString(source string) (normalized bool, err error) {
 	newNullableCode := NullableCode(strings.ToUpper(source))
 	if !newNullableCode.Valid() {
 		return false, fmt.Errorf("invalid country.Code: '%s'", source)
 	}
-	*c = newNullableCode
+	*n = newNullableCode
 	return newNullableCode == NullableCode(source), nil
 }
 
 // String returns the normalized code if possible,
 // else it will be returned unchanged as string.
 // String implements the fmt.Stringer interface.
-func (c NullableCode) String() string {
-	norm, err := c.Normalized()
+func (n NullableCode) String() string {
+	norm, err := n.Normalized()
 	if err != nil {
-		return string(c)
+		return string(n)
 	}
 	return string(norm)
 }

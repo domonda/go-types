@@ -36,6 +36,11 @@ func MustNullable(str string) NullableDate {
 	return d
 }
 
+// IsNull returns true if the NullableDate is null
+func (n NullableDate) IsNull() bool {
+	return n == Null
+}
+
 // Valid returns if the format of the date is correct, see Format
 // n.IsZero() is valid
 func (n NullableDate) Valid() bool {
