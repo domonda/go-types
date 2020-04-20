@@ -16,6 +16,11 @@ type NullableID struct {
 	ID
 }
 
+// NullableIDFrom returns a NullableID for an ID
+func NullableIDFrom(id ID) NullableID {
+	return NullableID{ID: id}
+}
+
 // NullableIDFromString creates a new valid NullableID
 func NullableIDFromString(s string) (n NullableID, err error) {
 	n.ID, err = IDFromString(s)
