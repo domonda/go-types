@@ -26,6 +26,23 @@ func TimeFrom(t time.Time) Time {
 	return Time{Time: t}
 }
 
+// TimeFromPtr returns a nullable.Time from a time.Time pointer
+// with nil interpreted as null.
+func TimeFromPtr(ptr *time.Time) Time {
+	if ptr == nil {
+		return Time{}
+	}
+	return Time{Time: *ptr}
+}
+
+// Ptr returns a pointer to Time or nil if IsNull
+func (n Time) Ptr() *time.Time {
+	if n.IsNull() {
+		return nil
+	}
+	return &n.Time
+}
+
 // IsNull returns true if the Time is null.
 // Uses time.Time.IsZero internally.
 func (n Time) IsNull() bool {
