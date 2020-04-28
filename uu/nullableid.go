@@ -69,8 +69,13 @@ func (n NullableID) IsNull() bool {
 
 // String returns the ID as string or "NULL"
 func (n NullableID) String() string {
-	if n == IDNull {
-		return "NULL"
+	return n.StringOr("NULL")
+}
+
+// StringOr returns the ID as string or the passed nullStr
+func (n NullableID) StringOr(nullStr string) string {
+	if n.IsNull() {
+		return nullStr
 	}
 	return n.ID.String()
 }

@@ -51,8 +51,13 @@ func (n Time) IsNull() bool {
 
 // String returns Time.String() or "NULL" if Time.IsZero().
 func (n Time) String() string {
+	return n.StringOr("NULL")
+}
+
+// StringOr returns Time.String() or the passed nullStr if Time.IsZero().
+func (n Time) StringOr(nullStr string) string {
 	if n.IsNull() {
-		return "NULL"
+		return nullStr
 	}
 	return n.Time.String()
 }
