@@ -37,6 +37,13 @@ func IntPtr(ptr *int, strForNil ...string) string {
 	return strconv.Itoa(*ptr)
 }
 
+func UintPtr(ptr *uint, strForNil ...string) string {
+	if ptr == nil {
+		return strings.Join(strForNil, "")
+	}
+	return strconv.FormatUint(uint64(*ptr), 10)
+}
+
 func Int64Ptr(ptr *int64, strForNil ...string) string {
 	if ptr == nil {
 		return strings.Join(strForNil, "")
