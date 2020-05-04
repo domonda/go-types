@@ -21,6 +21,21 @@ type Time struct {
 	time.Time
 }
 
+// TimeParse parses a time value with the provided layout
+// using time.Parse(layout, value)
+// except for when value is on of "", "null", "NULL",
+// then a null/zero time and no error are returned.
+func TimeParse(layout, value string) (Time, error) {
+	if value == "" || value == "null" || value == "NULL" {
+		return Time{}, nil
+	}
+	t, err := time.Parse(layout, value)
+	if err != nil {
+		return Time{}, err
+	}
+	return Time{Time: t}, nil
+}
+
 // TimeFrom returns a nullable.Time from a time.Time
 func TimeFrom(t time.Time) Time {
 	return Time{Time: t}
