@@ -21,6 +21,11 @@ type Time struct {
 	time.Time
 }
 
+// TimeNow returns the current time
+func TimeNow() Time {
+	return Time{Time: time.Now()}
+}
+
 // TimeParse parses a time value with the provided layout
 // using time.Parse(layout, value)
 // except for when value is on of "", "null", "NULL",
@@ -75,6 +80,14 @@ func (n Time) StringOr(nullStr string) string {
 		return nullStr
 	}
 	return n.Time.String()
+}
+
+// UTC returns the time in UTC or the null time
+func (n Time) UTC() Time {
+	if n.IsNull() {
+		return n
+	}
+	return Time{Time: time.Now().UTC()}
 }
 
 // Scan implements the database/sql.Scanner interface.
