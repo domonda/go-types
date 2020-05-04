@@ -23,6 +23,7 @@ package uu
 
 import (
 	"bytes"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -621,4 +622,30 @@ func TestIDv5(t *testing.T) {
 	if u1 == u4 {
 		t.Errorf("UUIDv3 generated same UUIDs for sane names in different namespaces: %s and %s", u1, u4)
 	}
+}
+
+func TestID_GoString(t *testing.T) {
+	tests := []struct {
+		name string
+		id   ID
+		want string
+	}{
+		{"9256978d-18e6-4435-ad16-d7046d41b71a", IDMustFromString("9256978d-18e6-4435-ad16-d7046d41b71a"), `uu.ID("9256978d-18e6-4435-ad16-d7046d41b71a")`},
+		{"a92bb308-f0f9-43d2-b31d-c0962198c31c", IDMustFromString("a92bb308-f0f9-43d2-b31d-c0962198c31c"), `uu.ID("a92bb308-f0f9-43d2-b31d-c0962198c31c")`},
+		{"59a268e5-d820-4884-b120-10d1a9b0dd00", IDMustFromString("59a268e5-d820-4884-b120-10d1a9b0dd00"), `uu.ID("59a268e5-d820-4884-b120-10d1a9b0dd00")`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.id.GoString(); got != tt.want {
+				t.Errorf("ID.GoString() = %v, want %v", got, tt.want)
+			}
+			if got := fmt.Sprintf("%#v", tt.id); got != tt.want {
+				t.Errorf("ID.GoString() = %v, want %v", got, tt.want)
+			}
+			if got := fmt.Sprintf("%v", tt.id); got != tt.name {
+				t.Errorf("ID.String() = %v, want %v", got, tt.name)
+			}
+		})
+	}
+
 }

@@ -213,10 +213,17 @@ func (id ID) StringBytes() []byte {
 }
 
 // String returns the canonical string representation of the UUID:
-// xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+//   xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 // String implements the fmt.Stringer interface.
 func (id ID) String() string {
 	return string(id.StringBytes())
+}
+
+// GoString returns a pseudo Go literal for the ID in the format:
+//   uu.ID("xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx")
+// It compiles if uu.ID is replace by uu.IDMustFromString.
+func (id ID) GoString() string {
+	return `uu.ID("` + id.String() + `")`
 }
 
 // Hex returns the hex representation without dashes of the UUID
