@@ -62,6 +62,15 @@ func (n *NullableID) Get() ID {
 	return n.ID
 }
 
+// MustGet returns the non nullable ID value
+// or panics when the ID is null.
+func (n *NullableID) MustGet() ID {
+	if n.IsNull() {
+		panic("NULL uu.ID")
+	}
+	return n.ID
+}
+
 // IsNull returns true if the NullableID is null
 func (n NullableID) IsNull() bool {
 	return n == IDNull
