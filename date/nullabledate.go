@@ -121,12 +121,6 @@ func (n NullableDate) NormalizedOrUnchanged(lang ...language.Code) NullableDate 
 	return normalized
 }
 
-// MidnightTimePtrOrNil returns the address of a midnight (00:00) time.Time of date,
-// or nil if date.IsZero() returns true.
-func (n NullableDate) MidnightTimePtrOrNil() *time.Time {
-	return Date(n).MidnightTimePtrOrNil()
-}
-
 // Scan implements the database/sql.Scanner interface.
 func (n *NullableDate) Scan(value interface{}) (err error) {
 	switch x := value.(type) {

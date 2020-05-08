@@ -10,6 +10,7 @@ import (
 
 	"github.com/domonda/errors"
 	"github.com/domonda/go-types/language"
+	"github.com/domonda/go-types/nullable"
 )
 
 type Format struct {
@@ -31,7 +32,7 @@ func (f *Format) Parse(str string, langHints ...language.Code) (normalized strin
 	return f.Format(date), nil
 }
 
-func (f *Format) AssignString(dest reflect.Value, source string) error {
+func (f *Format) AssignString(dest reflect.Value, source string /*, loc *time.Location*/) error {
 	source = strings.TrimSpace(source)
 
 	tPtr := new(time.Time)
@@ -41,7 +42,7 @@ func (f *Format) AssignString(dest reflect.Value, source string) error {
 			if err != nil {
 				return err
 			}
-			t := d.MidnightTime()
+			t := d.MidnightInLocation(time.Local)
 			tPtr = &t
 		} else {
 			t, err := time.Parse(f.Layout, source)
@@ -85,6 +86,10 @@ func (f *Format) AssignString(dest reflect.Value, source string) error {
 
 	case **time.Time:
 		*ptr = tPtr
+		return nil
+
+	case *nullable.Time:
+		*ptr = nullable.TimeFromPtr(tPtr)
 		return nil
 
 	case *null.Time:

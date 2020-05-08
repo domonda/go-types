@@ -65,6 +65,8 @@ func Of(year int, month time.Month, day int) Date {
 
 // OfTime returns the date part of the passed time.Time
 // or an empty string if t.IsZero().
+// To get the date in a certain time zone,
+// pass the time.Time with a location set to the time zone.
 func OfTime(t time.Time) Date {
 	if t.IsZero() {
 		return ""
@@ -276,16 +278,16 @@ func (date Date) String() string {
 
 // WithinIncl returns if date is within and inclusive from and until.
 func (date Date) WithinIncl(from, until Date) bool {
-	t := date.MidnightTime()
-	tFrom := from.MidnightTime()
-	tUntil := until.MidnightTime()
+	t := date.MidnightUTC()
+	tFrom := from.MidnightUTC()
+	tUntil := until.MidnightUTC()
 	return (t == tFrom || t.After(tFrom)) && (t == tUntil || t.Before(tUntil))
 }
 
 // BetweenExcl returns if date is between and exlusive after and until.
 func (date Date) BetweenExcl(after, before Date) bool {
-	t := date.MidnightTime()
-	return t.After(after.MidnightTime()) && t.Before(before.MidnightTime())
+	t := date.MidnightUTC()
+	return t.After(after.MidnightUTC()) && t.Before(before.MidnightUTC())
 }
 
 // NullableDate returns date as NullableDate
@@ -328,9 +330,9 @@ func (date Date) TimeUTC(hour, minute, second int) time.Time {
 	return date.Time(hour, minute, second, time.UTC)
 }
 
-// MidnightTime returns the midnight (00:00) time.Time of the date in UTC,
+// MidnightUTC returns the midnight (00:00) time.Time of the date in UTC,
 // or a zero time.Time value if the date is not valid.
-func (date Date) MidnightTime() time.Time {
+func (date Date) MidnightUTC() time.Time {
 	if date.IsZero() {
 		return time.Time{}
 	}
@@ -341,10 +343,10 @@ func (date Date) MidnightTime() time.Time {
 	return t
 }
 
-// MidnightTime returns the midnight (00:00) time.Time of the date
+// MidnightInLocation returns the midnight (00:00) time.Time of the date
 // in the given location,
 // or a zero time.Time value if the date is not valid.
-func (date Date) MidnightTimeInLocation(loc *time.Location) time.Time {
+func (date Date) MidnightInLocation(loc *time.Location) time.Time {
 	if date.IsZero() {
 		return time.Time{}
 	}
@@ -355,7 +357,7 @@ func (date Date) MidnightTimeInLocation(loc *time.Location) time.Time {
 	return t
 }
 
-// Format returns date.MidnightTime().Format(layout),
+// Format returns date.MidnightUTC().Format(layout),
 // or an empty string if date or layout are an empty string.
 func (date Date) Format(layout string) string {
 	if date == "" || layout == "" {
@@ -364,17 +366,7 @@ func (date Date) Format(layout string) string {
 	if layout == Layout {
 		return string(date)
 	}
-	return date.MidnightTime().Format(layout)
-}
-
-// MidnightTimePtrOrNil returns the address of a midnight (00:00) time.Time of date,
-// or nil if date.IsZero() returns true.
-func (date Date) MidnightTimePtrOrNil() *time.Time {
-	if date.IsZero() {
-		return nil
-	}
-	t := date.MidnightTime()
-	return &t
+	return date.MidnightUTC().Format(layout)
 }
 
 func (date Date) NormalizedOrUnchanged(lang ...language.Code) Date {
@@ -402,72 +394,72 @@ func (date Date) NormalizedOrNull(lang ...language.Code) NullableDate {
 }
 
 func (date Date) After(other Date) bool {
-	return date.MidnightTime().After(other.MidnightTime())
+	return date.MidnightUTC().After(other.MidnightUTC())
 }
 
 func (date Date) Before(other Date) bool {
-	return date.MidnightTime().Before(other.MidnightTime())
+	return date.MidnightUTC().Before(other.MidnightUTC())
 }
 
 func (date Date) AfterTime(other time.Time) bool {
-	return date.MidnightTime().After(other)
+	return date.MidnightUTC().After(other)
 }
 
 func (date Date) BeforeTime(other time.Time) bool {
-	return date.MidnightTime().Before(other)
+	return date.MidnightUTC().Before(other)
 }
 
 func (date Date) AddDate(years int, months int, days int) Date {
-	return OfTime(date.MidnightTime().AddDate(years, months, days))
+	return OfTime(date.MidnightUTC().AddDate(years, months, days))
 }
 
 func (date Date) BeginningOfWeek() Date {
-	n := (now.Now{Time: date.MidnightTime()})
+	n := (now.Now{Time: date.MidnightUTC()})
 	return OfTime(n.BeginningOfWeek())
 }
 
 func (date Date) BeginningOfMonth() Date {
-	n := (now.Now{Time: date.MidnightTime()})
+	n := (now.Now{Time: date.MidnightUTC()})
 	return OfTime(n.BeginningOfMonth())
 }
 
 func (date Date) BeginningOfQuarter() Date {
-	n := (now.Now{Time: date.MidnightTime()})
+	n := (now.Now{Time: date.MidnightUTC()})
 	return OfTime(n.BeginningOfQuarter())
 }
 
 func (date Date) BeginningOfYear() Date {
-	n := (now.Now{Time: date.MidnightTime()})
+	n := (now.Now{Time: date.MidnightUTC()})
 	return OfTime(n.BeginningOfYear())
 }
 
 func (date Date) EndOfWeek() Date {
-	n := (now.Now{Time: date.MidnightTime()})
+	n := (now.Now{Time: date.MidnightUTC()})
 	return OfTime(n.EndOfWeek())
 }
 
 func (date Date) EndOfMonth() Date {
-	n := (now.Now{Time: date.MidnightTime()})
+	n := (now.Now{Time: date.MidnightUTC()})
 	return OfTime(n.EndOfMonth())
 }
 
 func (date Date) EndOfQuarter() Date {
-	n := (now.Now{Time: date.MidnightTime()})
+	n := (now.Now{Time: date.MidnightUTC()})
 	return OfTime(n.EndOfQuarter())
 }
 
 func (date Date) EndOfYear() Date {
-	n := (now.Now{Time: date.MidnightTime()})
+	n := (now.Now{Time: date.MidnightUTC()})
 	return OfTime(n.EndOfYear())
 }
 
 func (date Date) LastMonday() Date {
-	n := (now.Now{Time: date.MidnightTime()})
+	n := (now.Now{Time: date.MidnightUTC()})
 	return OfTime(n.Monday())
 }
 
 func (date Date) NextSunday() Date {
-	n := (now.Now{Time: date.MidnightTime()})
+	n := (now.Now{Time: date.MidnightUTC()})
 	return OfTime(n.Sunday())
 }
 
@@ -488,7 +480,7 @@ func (date Date) YearMonthDay() (year int, month time.Month, day int) {
 // week 52 or 53 of year n-1, and Dec 29 to Dec 31 might belong to week 1
 // of year n+1.
 func (date Date) ISOWeek() (year, week int) {
-	t := date.MidnightTime()
+	t := date.MidnightUTC()
 	if t.IsZero() {
 		return 0, 0
 	}
