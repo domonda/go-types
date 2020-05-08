@@ -343,6 +343,13 @@ func (date Date) MidnightUTC() time.Time {
 	return t
 }
 
+// Midnight returns the midnight (00:00) time.Time of the date
+// in the local time zone,
+// or a zero time.Time value if the date is not valid.
+func (date Date) Midnight() time.Time {
+	return date.MidnightInLocation(time.Local)
+}
+
 // MidnightInLocation returns the midnight (00:00) time.Time of the date
 // in the given location,
 // or a zero time.Time value if the date is not valid.

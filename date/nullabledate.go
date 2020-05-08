@@ -183,6 +183,13 @@ func (n NullableDate) MidnightUTC() nullable.Time {
 	return t
 }
 
+// Midnight returns the midnight (00:00) nullable.Time of the date
+// in the local time zone,
+// or a null nullable.Time value if the date is not valid.
+func (n NullableDate) Midnight() nullable.Time {
+	return n.MidnightInLocation(time.Local)
+}
+
 // MidnightTime returns the midnight (00:00) nullable.Time of the date
 // in the given location,
 // or a null nullable.Time value if the date is not valid.
