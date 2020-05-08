@@ -6,6 +6,7 @@ import (
 
 	"github.com/domonda/errors"
 	"github.com/domonda/go-types/language"
+	"github.com/domonda/go-types/nullable"
 )
 
 // Null is an empty string and will be treatet as SQL NULL.
@@ -169,29 +170,29 @@ func (n NullableDate) Date() Date {
 	return Date(n)
 }
 
-// MidnightTime returns the midnight (00:00) time.Time of the date in UTC,
-// or a zero time.Time value if the date is not valid.
-func (n NullableDate) MidnightTime() time.Time {
+// MidnightUTC returns the midnight (00:00) nullable.Time of the date in UTC,
+// or a null nullable.Time value if the date is not valid.
+func (n NullableDate) MidnightUTC() nullable.Time {
 	if n.IsZero() {
-		return time.Time{}
+		return nullable.Time{}
 	}
-	t, err := time.Parse(Layout, string(n))
+	t, err := nullable.TimeParse(Layout, string(n))
 	if err != nil {
-		return time.Time{}
+		return nullable.Time{}
 	}
 	return t
 }
 
-// MidnightTime returns the midnight (00:00) time.Time of the date
+// MidnightTime returns the midnight (00:00) nullable.Time of the date
 // in the given location,
-// or a zero time.Time value if the date is not valid.
-func (n NullableDate) MidnightTimeInLocation(loc *time.Location) time.Time {
+// or a null nullable.Time value if the date is not valid.
+func (n NullableDate) MidnightInLocation(loc *time.Location) nullable.Time {
 	if n.IsZero() {
-		return time.Time{}
+		return nullable.Time{}
 	}
-	t, err := time.ParseInLocation(Layout, string(n), loc)
+	t, err := nullable.TimeParseInLocation(Layout, string(n), loc)
 	if err != nil {
-		return time.Time{}
+		return nullable.Time{}
 	}
 	return t
 }
@@ -205,7 +206,7 @@ func (n NullableDate) ISOWeek() (year, week int) {
 	return Date(n).ISOWeek()
 }
 
-// Format returns n.MidnightTime().Format(layout),
+// Format returns n.MidnightUTC().Format(layout),
 // or an empty string if n is Null or layout is an empty string.
 func (n NullableDate) Format(layout string) string {
 	if n == Null || layout == "" {
@@ -214,5 +215,5 @@ func (n NullableDate) Format(layout string) string {
 	if layout == Layout {
 		return string(n)
 	}
-	return n.MidnightTime().Format(layout)
+	return n.MidnightUTC().Format(layout)
 }
