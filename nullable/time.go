@@ -41,6 +41,21 @@ func TimeParse(layout, value string) (Time, error) {
 	return Time{Time: t}, nil
 }
 
+// TimeParseInLocation parses a time value with the provided layout
+// and location using time.ParseInLocation(layout, value, loc)
+// except for when value is on of "", "null", "NULL",
+// then a null/zero time and no error are returned.
+func TimeParseInLocation(layout, value string, loc *time.Location) (Time, error) {
+	if value == "" || value == "null" || value == "NULL" {
+		return Time{}, nil
+	}
+	t, err := time.ParseInLocation(layout, value, loc)
+	if err != nil {
+		return Time{}, err
+	}
+	return Time{Time: t}, nil
+}
+
 // TimeFrom returns a nullable.Time from a time.Time
 func TimeFrom(t time.Time) Time {
 	return Time{Time: t}
