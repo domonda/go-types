@@ -24,6 +24,16 @@ func NonEmptyStringFromPtr(ptr *string) NonEmptyString {
 	return NonEmptyString(*ptr)
 }
 
+// NonEmptyStringFromError converts an error to a NonEmptyString
+// interpreting a nil error as null value ""
+// or else using err.Error() as value.
+func NonEmptyStringFromError(err error) NonEmptyString {
+	if err == nil {
+		return ""
+	}
+	return NonEmptyString(err.Error())
+}
+
 // Ptr returns the address of the string value or nil if n.IsNull()
 func (n NonEmptyString) Ptr() *string {
 	if n.IsNull() {
