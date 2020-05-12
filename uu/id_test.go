@@ -628,3 +628,16 @@ func TestID_GoString(t *testing.T) {
 	}
 
 }
+
+func TestID_Base64(t *testing.T) {
+	for i := 0; i < 100; i++ {
+		id := IDv4()
+		t.Run(id.String(), func(t *testing.T) {
+			b := id.Base64()
+			assert.Len(t, b, 22, "always 22 characters")
+			parsed, err := IDFromString(b)
+			assert.NoError(t, err, "can parse")
+			assert.Equal(t, id, parsed, "parsed base64 UUID equal to original")
+		})
+	}
+}

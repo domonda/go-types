@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"crypto/sha1"
 	"database/sql/driver"
+	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
@@ -203,8 +204,15 @@ func (id ID) GoString() string {
 }
 
 // Hex returns the hex representation without dashes of the UUID
+// The returned string is always 32 characters long.
 func (id ID) Hex() string {
 	return hex.EncodeToString(id[:])
+}
+
+// Base64 returns the unpadded base64 URL encoding of the UUID.
+// The returned string is always 22 characters long.
+func (id ID) Base64() string {
+	return base64.RawURLEncoding.EncodeToString(id[:])
 }
 
 // SetVersion sets version bits.
@@ -230,8 +238,16 @@ func (id ID) MarshalText() (text []byte, err error) {
 // "{6ba7b810-9dad-11d1-80b4-00c04fd430c8}",
 // "urn:uuid:6ba7b810-9dad-11d1-80b4-00c04fd430c8"
 func (id *ID) UnmarshalText(text []byte) (err error) {
-	if len(text) < 32 {
+	if len(text) < 22 {
 		return fmt.Errorf("uu.ID string too short: %q", text)
+	}
+
+	if len(text) == 22 {
+		_, err = base64.RawURLEncoding.Decode(id[:], text)
+		if err != nil {
+			return fmt.Errorf("uu.ID base64 decoding error: %w", err)
+		}
+		return nil
 	}
 
 	if len(text) == 32 {
@@ -338,7 +354,7 @@ func IDFromBytes(input []byte) (id ID, err error) {
 	case 16:
 		err = id.UnmarshalBinary(input)
 
-	case 32, 36:
+	case 22, 32, 36:
 		err = id.UnmarshalText(input)
 
 	default:
