@@ -21,7 +21,7 @@ func Test_Less(t *testing.T) {
 	for i := range input {
 		sorted[i] = input[i]
 	}
-	sort.Slice(sorted, func(i, j int) bool { return IDCompareLess(sorted[i], sorted[j]) })
+	sort.Slice(sorted, func(i, j int) bool { return IDCompare(sorted[i], sorted[j]) < 0 })
 
 	for i := range input {
 		if sorted[i] != sortedRef[i] {

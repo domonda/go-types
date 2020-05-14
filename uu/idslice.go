@@ -16,10 +16,9 @@ import (
 type IDSlice []ID
 
 func SliceFromStrings(strs []string) (s IDSlice, err error) {
-	if strs == nil {
+	if len(strs) == 0 {
 		return nil, nil
 	}
-
 	s = make(IDSlice, len(strs))
 	for i, str := range strs {
 		s[i], err = IDFromString(str)
@@ -38,7 +37,7 @@ func MustSliceFromStrings(strs ...string) IDSlice {
 	return s
 }
 
-func (s IDSlice) Set() IDSet {
+func (s IDSlice) MakeSet() IDSet {
 	set := make(IDSet, len(s))
 	set.AddSlice(s)
 	return set
@@ -50,6 +49,9 @@ func (s IDSlice) String() string {
 }
 
 func (s IDSlice) Strings() []string {
+	if len(s) == 0 {
+		return nil
+	}
 	ss := make([]string, len(s))
 	for i, id := range s {
 		ss[i] = id.String()
@@ -57,12 +59,8 @@ func (s IDSlice) Strings() []string {
 	return ss
 }
 
-func IDCompareLess(a, b ID) bool {
-	return bytes.Compare(a[:], b[:]) < 0
-}
-
 func (s IDSlice) Sort() {
-	sort.Slice(s, func(i, j int) bool { return IDCompareLess(s[i], s[j]) })
+	sort.Slice(s, func(i, j int) bool { return IDCompare(s[i], s[j]) < 0 })
 }
 
 func (s IDSlice) SortedClone() IDSlice {
@@ -142,6 +140,9 @@ func (s *IDSlice) RemoveAt(index int) {
 
 // Clone returns a copy of the slice.
 func (s IDSlice) Clone() IDSlice {
+	if s == nil {
+		return nil
+	}
 	clone := make(IDSlice, len(s))
 	copy(clone, s)
 	return clone

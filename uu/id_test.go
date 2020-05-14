@@ -246,13 +246,26 @@ func TestIDFromString(t *testing.T) {
 }
 
 func TestIDFromStringShort(t *testing.T) {
-	// Invalid 35-character UUID string
-	s1 := "6ba7b810-9dad-11d1-80b4-00c04fd430c"
+	strs := []string{
+		"1a9a39a3-cc4b-4fef-bf59-975667a93b3e",
+		"d33c40a4-b8d4-4229-b0bc-56b08cd925da",
+		"fdd3e1a3-4e11-4bcb-b89a-35adb170a132",
+		"0810befa-8992-4ee5-8bea-f34d8c288b6d",
+		"44f5163a-cb73-45f9-a7e9-785bc3753014",
+		"d8d13d23-60e0-423d-b2e5-49d553519f49",
+	}
+	for _, str := range strs {
+		for l := len(str) - 1; l >= 0; l-- {
+			if l == 22 {
+				// 22 characters substring of UUID is valid base64
+				// so we won't get a "too short" error
+				continue
+			}
 
-	for i := len(s1); i >= 0; i-- {
-		_, err := IDFromString(s1[:i])
-		if err == nil {
-			t.Errorf("Should return error trying to parse too short string, got %s", err)
+			id, err := IDFromString(str[:l])
+			if err == nil {
+				t.Errorf("Should return error trying to parse too short string, got UUID %s from string %q", id, str[:l])
+			}
 		}
 	}
 }

@@ -1,10 +1,7 @@
 package uu
 
 import (
-	"bytes"
 	"database/sql/driver"
-	"fmt"
-	"strings"
 )
 
 // IDSet is a set of uu.IDs.
@@ -13,34 +10,43 @@ import (
 // with the nil map value used as SQL NULL
 type IDSet map[ID]struct{}
 
-// String implements the fmt.Stringer interface.
-func (set IDSet) String() string {
-	return fmt.Sprintf("set%v", set.SortedSlice())
+// MakeIDSet returns an IDSet with
+// the optional passed ids added to it.
+func MakeIDSet(ids ...ID) IDSet {
+	return IDSlice(ids).MakeSet()
 }
 
-// GetOne returns a random ID from the set or Nil if the set is empty.
+// String implements the fmt.Stringer interface.
+func (s IDSet) String() string {
+	return "set" + s.SortedSlice().String()
+}
+
+// GetOne returns a random ID from the set or IDNil if the set is empty.
 // Most useful to get the only ID in a set of size one.
-func (set IDSet) GetOne() ID {
-	for id := range set {
+func (s IDSet) GetOne() ID {
+	for id := range s {
 		return id
 	}
 	return IDNil
 }
 
-func (set IDSet) Slice() IDSlice {
-	s := make(IDSlice, len(set))
+func (s IDSet) Slice() IDSlice {
+	if len(s) == 0 {
+		return nil
+	}
+	sl := make(IDSlice, len(s))
 	i := 0
-	for id := range set {
-		s[i] = id
+	for id := range s {
+		sl[i] = id
 		i++
 	}
-	return s
+	return sl
 }
 
-func (set IDSet) SortedSlice() IDSlice {
-	s := set.Slice()
-	s.Sort()
-	return s
+func (s IDSet) SortedSlice() IDSlice {
+	sl := s.Slice()
+	sl.Sort()
+	return sl
 }
 
 func (set IDSet) AddSlice(s IDSlice) {
@@ -49,69 +55,69 @@ func (set IDSet) AddSlice(s IDSlice) {
 	}
 }
 
-func (set IDSet) AddSet(other IDSet) {
+func (s IDSet) AddSet(other IDSet) {
 	for id := range other {
-		set[id] = struct{}{}
+		s[id] = struct{}{}
 	}
 }
 
-func (set IDSet) Add(id ID) {
-	set[id] = struct{}{}
+func (s IDSet) Add(id ID) {
+	s[id] = struct{}{}
 }
 
-func (set IDSet) Contains(id ID) bool {
-	_, has := set[id]
+func (s IDSet) Contains(id ID) bool {
+	_, has := s[id]
 	return has
 }
 
-func (set IDSet) Delete(id ID) {
-	delete(set, id)
+func (s IDSet) Delete(id ID) {
+	delete(s, id)
 }
 
-func (set IDSet) DeleteAll() {
-	for id := range set {
-		delete(set, id)
+func (s IDSet) DeleteAll() {
+	for id := range s {
+		delete(s, id)
 	}
 }
 
-func (set IDSet) DeleteSlice(s IDSlice) {
-	for _, id := range s {
-		delete(set, id)
+func (s IDSet) DeleteSlice(sl IDSlice) {
+	for _, id := range sl {
+		delete(s, id)
 	}
 }
 
-func (set IDSet) DeleteSet(other IDSet) {
+func (s IDSet) DeleteSet(other IDSet) {
 	for id := range other {
-		delete(set, id)
+		delete(s, id)
 	}
 }
 
-func (set IDSet) Clone() IDSet {
+func (s IDSet) Clone() IDSet {
 	clone := make(IDSet)
-	clone.AddSet(set)
+	clone.AddSet(s)
 	return clone
 }
 
-func (set IDSet) Diff(other IDSet) IDSet {
+func (s IDSet) Diff(other IDSet) IDSet {
 	diff := make(IDSet)
-	for id := range set {
+	for id := range s {
 		if !other.Contains(id) {
 			diff.Add(id)
 		}
 	}
 	for id := range other {
-		if !set.Contains(id) {
+		if !s.Contains(id) {
 			diff.Add(id)
 		}
 	}
 	return diff
 }
 
-func (set IDSet) Equal(other IDSet) bool {
-	if len(set) != len(other) {
+func (s IDSet) Equal(other IDSet) bool {
+	if len(s) != len(other) {
 		return false
 	}
-	for id := range set {
+	for id := range s {
 		if !other.Contains(id) {
 			return false
 		}
@@ -121,74 +127,42 @@ func (set IDSet) Equal(other IDSet) bool {
 
 // Scan implements the database/sql.Scanner interface
 // with the nil map value used as SQL NULL.
-// Does *set = make(Set) if *set == nil
-// so it can be used with an not initialized Set variable
-func (set *IDSet) Scan(value interface{}) (err error) {
-	switch x := value.(type) {
-	case string:
-		return set.scanBytes([]byte(x))
-
-	case []byte:
-		return set.scanBytes(x)
-
-	case nil:
-		*set = nil
-		return nil
+// Id does assign a new IDSet to *set instead of modifying the existing map,
+// so it can be used with uninitialized IDSet variable.
+func (s *IDSet) Scan(value interface{}) error {
+	var idSlice IDSlice
+	err := idSlice.Scan(value)
+	if err != nil {
+		return err
 	}
-
-	return fmt.Errorf("can't scan value '%#v' of type %T as uu.IDSet", value, value)
-}
-
-func (set *IDSet) scanBytes(src []byte) (err error) {
-	if src == nil {
-		*set = nil
-		return nil
-	}
-
-	if len(src) < 2 || src[0] != '{' || src[len(src)-1] != '}' {
-		return fmt.Errorf("can't parse %#v as uu.IDSet", string(src))
-	}
-
-	ids := make(IDSlice, 0, 16)
-
-	elements := bytes.Split(src[1:len(src)-1], []byte{','})
-	for _, elem := range elements {
-		elem = bytes.Trim(elem, `'"`)
-		id, err := IDFromString(string(elem))
-		if err != nil {
-			return err
-		}
-		ids = append(ids, id)
-	}
-
-	if *set == nil {
-		*set = make(IDSet)
-	} else {
-		set.DeleteAll()
-	}
-	set.AddSlice(ids)
-
+	*s = idSlice.MakeSet()
 	return nil
 }
 
 // Value implements the driver database/sql/driver.Valuer interface
 // with the nil map value used as SQL NULL
-func (set IDSet) Value() (driver.Value, error) {
-	if set == nil {
+func (s IDSet) Value() (driver.Value, error) {
+	if s == nil {
 		return nil, nil
 	}
 
-	var b strings.Builder
-	b.WriteByte('{')
-	for i, id := range set.SortedSlice() {
-		if i > 0 {
-			b.WriteByte(',')
-		}
-		b.WriteByte('"')
-		b.WriteString(id.String())
-		b.WriteByte('"')
-	}
-	b.WriteByte('}')
+	return s.SortedSlice().Value()
+}
 
-	return b.String(), nil
+// MarshalJSON implements encoding/json.Marshaler
+func (s IDSet) MarshalJSON() ([]byte, error) {
+	return s.SortedSlice().MarshalJSON()
+}
+
+// UnmarshalJSON implements encoding/json.Unmarshaler
+// Id does assign a new IDSet to *set instead of modifying the existing map,
+// so it can be used with uninitialized IDSet variable.
+func (s *IDSet) UnmarshalJSON(data []byte) error {
+	var idSlice IDSlice
+	err := idSlice.UnmarshalJSON(data)
+	if err != nil {
+		return err
+	}
+	*s = idSlice.MakeSet()
+	return nil
 }

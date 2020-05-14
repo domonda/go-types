@@ -238,24 +238,24 @@ func (id ID) MarshalText() (text []byte, err error) {
 // "{6ba7b810-9dad-11d1-80b4-00c04fd430c8}",
 // "urn:uuid:6ba7b810-9dad-11d1-80b4-00c04fd430c8"
 func (id *ID) UnmarshalText(text []byte) (err error) {
-	if len(text) < 22 {
-		return fmt.Errorf("uu.ID string too short: %q", text)
-	}
-
-	if len(text) == 22 {
+	switch len(text) {
+	case 22:
 		_, err = base64.RawURLEncoding.Decode(id[:], text)
 		if err != nil {
 			return fmt.Errorf("uu.ID base64 decoding error: %w", err)
 		}
 		return nil
-	}
 
-	if len(text) == 32 {
+	case 32:
 		_, err = hex.Decode(id[:], text)
 		if err != nil {
 			return fmt.Errorf("uu.ID hex decoding error: %w", err)
 		}
 		return nil
+	}
+
+	if len(text) < 36 {
+		return fmt.Errorf("uu.ID string too short: %q", text)
 	}
 
 	t := text[:]
@@ -492,3 +492,27 @@ func idFromHash(h hash.Hash, ns ID, name string) (id ID) {
 	copy(id[:], h.Sum(nil))
 	return id
 }
+
+// IDCompare returns bytes.Compare result of a and b.
+func IDCompare(a, b ID) int {
+	return bytes.Compare(a[:], b[:])
+}
+
+// TODO test
+// func idCompareOptimized(a, b ID) int {
+// 	aWords := (*[2]uint64)(unsafe.Pointer(&a[0]))
+// 	bWords := (*[2]uint64)(unsafe.Pointer(&b[0]))
+// 	if aWords[1] < bWords[1] {
+// 		return -1
+// 	}
+// 	if aWords[1] > bWords[1] {
+// 		return +1
+// 	}
+// 	if aWords[0] < bWords[0] {
+// 		return -1
+// 	}
+// 	if aWords[0] > bWords[0] {
+// 		return +1
+// 	}
+// 	return 0
+// }
