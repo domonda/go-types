@@ -15,12 +15,22 @@ import (
 // with the nil slice value used as SQL NULL and JSON null.
 type IDSlice []ID
 
-func SliceFromStrings(strs []string) (s IDSlice, err error) {
+// IDSliceFromString parses a string created with IDSlice.String()
+func IDSliceFromString(str string) (IDSlice, error) {
+	if strings.HasPrefix(str, "[") && strings.HasSuffix(str, "]") {
+		str = str[1 : len(str)-1]
+	}
+	return IDSliceFromStrings(strings.Split(str, ","))
+}
+
+// IDSliceFromStrings parses an IDSlice from strings
+func IDSliceFromStrings(strs []string) (IDSlice, error) {
 	if len(strs) == 0 {
 		return nil, nil
 	}
-	s = make(IDSlice, len(strs))
+	s := make(IDSlice, len(strs))
 	for i, str := range strs {
+		var err error
 		s[i], err = IDFromString(str)
 		if err != nil {
 			return nil, err
@@ -29,14 +39,17 @@ func SliceFromStrings(strs []string) (s IDSlice, err error) {
 	return s, nil
 }
 
-func MustSliceFromStrings(strs ...string) IDSlice {
-	s, err := SliceFromStrings(strs)
+// IDSliceMustFromStrings parses an IDSlice from strings
+// and panics in case of an error.
+func IDSliceMustFromStrings(strs ...string) IDSlice {
+	s, err := IDSliceFromStrings(strs)
 	if err != nil {
 		panic(err)
 	}
 	return s
 }
 
+// MakeSet returns an IDSet with the IDs from the IDSlice.
 func (s IDSlice) MakeSet() IDSet {
 	set := make(IDSet, len(s))
 	set.AddSlice(s)
@@ -48,6 +61,7 @@ func (s IDSlice) String() string {
 	return "[" + strings.Join(s.Strings(), ",") + "]"
 }
 
+// Strings returns a slice with all IDs converted to strings
 func (s IDSlice) Strings() []string {
 	if len(s) == 0 {
 		return nil
@@ -59,10 +73,12 @@ func (s IDSlice) Strings() []string {
 	return ss
 }
 
+// Sort the slice in place.
 func (s IDSlice) Sort() {
 	sort.Slice(s, func(i, j int) bool { return IDCompare(s[i], s[j]) < 0 })
 }
 
+// SortedClone returns a sorted clone of the slice.
 func (s IDSlice) SortedClone() IDSlice {
 	clone := s.Clone()
 	clone.Sort()
@@ -146,6 +162,21 @@ func (s IDSlice) Clone() IDSlice {
 	clone := make(IDSlice, len(s))
 	copy(clone, s)
 	return clone
+}
+
+// MarshalText implements the encoding.TextMarshaler interface
+func (s IDSlice) MarshalText() (text []byte, err error) {
+	return []byte(s.String()), nil
+}
+
+// UnmarshalText implements the encoding.TextUnmarshaler interface
+func (s *IDSlice) UnmarshalText(text []byte) error {
+	parsed, err := IDSliceFromString(string(text))
+	if err != nil {
+		return err
+	}
+	*s = parsed
+	return nil
 }
 
 // Scan implements the database/sql.Scanner interface

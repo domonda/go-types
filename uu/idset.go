@@ -2,6 +2,7 @@ package uu
 
 import (
 	"database/sql/driver"
+	"strings"
 )
 
 // IDSet is a set of uu.IDs.
@@ -14,6 +15,38 @@ type IDSet map[ID]struct{}
 // the optional passed ids added to it.
 func MakeIDSet(ids ...ID) IDSet {
 	return IDSlice(ids).MakeSet()
+}
+
+// MakeIDSetFromStrings returns an IDSet with strs parsed as IDs
+func MakeIDSetFromStrings(strs []string) (IDSet, error) {
+	s := make(IDSet)
+	for _, str := range strs {
+		id, err := IDFromString(str)
+		if err != nil {
+			return nil, err
+		}
+		s.Add(id)
+	}
+	return s, nil
+}
+
+// MakeIDSetMustFromStrings returns an IDSet with the
+// passed strings as IDs or panics if there was an error.
+func MakeIDSetMustFromStrings(strs ...string) IDSet {
+	s, err := MakeIDSetFromStrings(strs)
+	if err != nil {
+		panic(err)
+	}
+	return s
+}
+
+// IDSetFromString parses a string created with IDSet.String()
+func IDSetFromString(str string) (IDSet, error) {
+	str = strings.TrimPrefix(str, "set")
+	if strings.HasPrefix(str, "[") && strings.HasSuffix(str, "]") {
+		str = str[1 : len(str)-1]
+	}
+	return MakeIDSetFromStrings(strings.Split(str, ","))
 }
 
 // String implements the fmt.Stringer interface.
@@ -123,6 +156,21 @@ func (s IDSet) Equal(other IDSet) bool {
 		}
 	}
 	return true
+}
+
+// MarshalText implements the encoding.TextMarshaler interface
+func (s IDSet) MarshalText() (text []byte, err error) {
+	return []byte(s.String()), nil
+}
+
+// UnmarshalText implements the encoding.TextUnmarshaler interface
+func (s *IDSet) UnmarshalText(text []byte) error {
+	parsed, err := IDSetFromString(string(text))
+	if err != nil {
+		return err
+	}
+	*s = parsed
+	return nil
 }
 
 // Scan implements the database/sql.Scanner interface

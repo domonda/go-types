@@ -8,7 +8,7 @@ import (
 )
 
 func TestIDSlice(t *testing.T) {
-	slice := MustSliceFromStrings(
+	slice := IDSliceMustFromStrings(
 		"ec449f0f-e10c-4edb-8b59-0e6c896fdca5",
 		"2d6a2c10-e4a6-45a3-a705-8115214a3778",
 		"f3e52e97-e976-4a4c-a602-294310bcf935",
