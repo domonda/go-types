@@ -170,6 +170,7 @@ func (s IDSlice) MarshalText() (text []byte, err error) {
 }
 
 // UnmarshalText implements the encoding.TextUnmarshaler interface
+// by calling IDSliceFromString.
 func (s *IDSlice) UnmarshalText(text []byte) error {
 	parsed, err := IDSliceFromString(string(text))
 	if err != nil {

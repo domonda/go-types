@@ -233,11 +233,17 @@ func (id ID) MarshalText() (text []byte, err error) {
 
 // UnmarshalText implements the encoding.TextUnmarshaler interface.
 // Following formats are supported:
-// "6ba7b8109dad11d180b400c04fd430c8",
-// "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
-// "{6ba7b810-9dad-11d1-80b4-00c04fd430c8}",
-// "urn:uuid:6ba7b810-9dad-11d1-80b4-00c04fd430c8"
+// `6ba7b8109dad11d180b400c04fd430c8`
+// `6ba7b810-9dad-11d1-80b4-00c04fd430c8`
+// `"6ba7b810-9dad-11d1-80b4-00c04fd430c8"`
+// `{6ba7b810-9dad-11d1-80b4-00c04fd430c8}`
+// `urn:uuid:6ba7b810-9dad-11d1-80b4-00c04fd430c`
+// Surrounding double quotes will be removed before parsing,
 func (id *ID) UnmarshalText(text []byte) (err error) {
+	if len(text) >= 24 && text[0] == '"' && text[len(text)-1] == '"' {
+		text = text[1 : len(text)-1]
+	}
+
 	switch len(text) {
 	case 22:
 		_, err = base64.RawURLEncoding.Decode(id[:], text)
@@ -257,6 +263,8 @@ func (id *ID) UnmarshalText(text []byte) (err error) {
 	if len(text) < 36 {
 		return fmt.Errorf("uu.ID string too short: %q", text)
 	}
+
+	// TODO: fix historic mess:
 
 	t := text[:]
 	braced := false
