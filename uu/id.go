@@ -238,73 +238,91 @@ func (id ID) MarshalText() (text []byte, err error) {
 // `"6ba7b810-9dad-11d1-80b4-00c04fd430c8"`
 // `{6ba7b810-9dad-11d1-80b4-00c04fd430c8}`
 // `urn:uuid:6ba7b810-9dad-11d1-80b4-00c04fd430c`
-// Surrounding double quotes will be removed before parsing,
+// Surrounding double quotes will be removed before parsing.
 func (id *ID) UnmarshalText(text []byte) (err error) {
-	if len(text) >= 24 && text[0] == '"' && text[len(text)-1] == '"' {
+	if len(text) < 22 {
+		return fmt.Errorf("uu.ID string too short: %q", text)
+	}
+
+	var (
+		newID    ID
+		original = text
+	)
+
+	if bytes.HasPrefix(text, []byte("urn:uuid:")) {
+		text = text[9:]
+		if len(text) != 36 {
+			return fmt.Errorf("uu.ID string has wrong length: %q", original)
+		}
+		newID, err = parseDashedFormat(text, original)
+		if err != nil {
+			return err
+		}
+		*id = newID
+		return nil
+	}
+
+	if text[0] == '"' && text[len(text)-1] == '"' {
+		text = text[1 : len(text)-1]
+	}
+	if text[0] == '{' && text[len(text)-1] == '}' {
 		text = text[1 : len(text)-1]
 	}
 
 	switch len(text) {
 	case 22:
-		_, err = base64.RawURLEncoding.Decode(id[:], text)
+		_, err = base64.RawURLEncoding.Decode(newID[:], text)
 		if err != nil {
-			return fmt.Errorf("uu.ID base64 decoding error: %w", err)
+			return fmt.Errorf("uu.ID string %q base64 decoding error: %w", original, err)
 		}
-		return nil
 
 	case 32:
-		_, err = hex.Decode(id[:], text)
+		_, err = hex.Decode(newID[:], text)
 		if err != nil {
-			return fmt.Errorf("uu.ID hex decoding error: %w", err)
-		}
-		return nil
-	}
-
-	if len(text) < 36 {
-		return fmt.Errorf("uu.ID string too short: %q", text)
-	}
-
-	// TODO: fix historic mess:
-
-	t := text[:]
-	braced := false
-
-	if bytes.Equal(t[:9], urnPrefix) {
-		t = t[9:]
-	} else if t[0] == '{' {
-		braced = true
-		t = t[1:]
-	}
-
-	b := id[:]
-
-	for i, byteGroup := range byteGroups {
-		if i > 0 {
-			if t[0] != '-' {
-				return fmt.Errorf("uu.ID: invalid string format")
-			}
-			t = t[1:]
+			return fmt.Errorf("uu.ID string %q hex decoding error: %w", original, err)
 		}
 
-		if len(t) < byteGroup {
-			return fmt.Errorf("uu.ID string too short: %q", text)
-		}
-
-		if i == 4 && len(t) > byteGroup &&
-			((braced && t[byteGroup] != '}') || len(t[byteGroup:]) > 1 || !braced) {
-			return fmt.Errorf("uu.ID string too long: %q", text)
-		}
-
-		_, err = hex.Decode(b[:byteGroup/2], t[:byteGroup])
+	case 36:
+		newID, err = parseDashedFormat(text, original)
 		if err != nil {
-			return fmt.Errorf("uu.ID hex decoding error: %w", err)
+			return err
 		}
 
-		t = t[byteGroup:]
-		b = b[byteGroup/2:]
+	default:
+		return fmt.Errorf("uu.ID string has wrong length: %q", original)
 	}
 
+	*id = newID
 	return nil
+}
+
+func parseDashedFormat(text, original []byte) (newID ID, err error) {
+	if text[8] != '-' || text[13] != '-' || text[18] != '-' || text[23] != '-' {
+		return IDNil, fmt.Errorf("invalid UUID string format: %q", original)
+	}
+
+	_, err = hex.Decode(newID[0:4], text[0:8])
+	if err != nil {
+		return IDNil, fmt.Errorf("uu.ID string %q hex decoding error: %w", original, err)
+	}
+	_, err = hex.Decode(newID[4:6], text[9:13])
+	if err != nil {
+		return IDNil, fmt.Errorf("uu.ID string %q hex decoding error: %w", original, err)
+	}
+	_, err = hex.Decode(newID[6:8], text[14:18])
+	if err != nil {
+		return IDNil, fmt.Errorf("uu.ID string %q hex decoding error: %w", original, err)
+	}
+	_, err = hex.Decode(newID[8:10], text[19:23])
+	if err != nil {
+		return IDNil, fmt.Errorf("uu.ID string %q hex decoding error: %w", original, err)
+	}
+	_, err = hex.Decode(newID[10:16], text[24:36])
+	if err != nil {
+		return IDNil, fmt.Errorf("uu.ID string %q hex decoding error: %w", original, err)
+	}
+
+	return newID, nil
 }
 
 // MarshalBinary implements the encoding.BinaryMarshaler interface.
