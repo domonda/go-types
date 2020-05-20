@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"database/sql/driver"
 	"encoding/json"
+	"errors"
 	"fmt"
 )
 
@@ -63,6 +64,9 @@ func (n *NonEmptyString) Scan(value interface{}) error {
 		return nil
 
 	case string:
+		if s == "" {
+			return errors.New("can't scan empty string as nullable.NonEmptyString")
+		}
 		*n = NonEmptyString(s)
 		return nil
 
@@ -80,9 +84,11 @@ func (n NonEmptyString) Value() (driver.Value, error) {
 }
 
 // UnarshalJSON implements encoding/json.Unmarshaler.
-// Interprets []byte(nil), []byte(""), []byte("null") as null.
 func (n *NonEmptyString) UnmarshalJSON(sourceJSON []byte) error {
-	if len(sourceJSON) == 0 || bytes.Equal(sourceJSON, []byte("null")) {
+	if bytes.Equal(sourceJSON, []byte(`""`)) {
+		return errors.New("can't unmarshal empty JSON string as nullable.NonEmptyString")
+	}
+	if bytes.Equal(sourceJSON, []byte(`null`)) {
 		*n = ""
 		return nil
 	}
@@ -93,7 +99,7 @@ func (n *NonEmptyString) UnmarshalJSON(sourceJSON []byte) error {
 // by returning the JSON null value if n is an empty string.
 func (n NonEmptyString) MarshalJSON() ([]byte, error) {
 	if n.IsNull() {
-		return []byte("null"), nil
+		return []byte(`null`), nil
 	}
 	return json.Marshal(string(n))
 }
