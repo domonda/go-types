@@ -8,7 +8,7 @@ import (
 )
 
 // IBANNull is an empty string and will be treatet as SQL NULL.
-const IBANNull = ""
+const IBANNull NullableIBAN = ""
 
 // NullableIBAN is a IBAN value which can hold an emtpy string ("") as the null value.
 type NullableIBAN string
