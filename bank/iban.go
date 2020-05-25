@@ -136,6 +136,11 @@ func (iban IBAN) NormalizedWithSpaces() (IBAN, error) {
 	return IBAN(b.String()), nil
 }
 
+// Nullable returns the IBAN as NullableIBAN
+func (iban IBAN) Nullable() NullableIBAN {
+	return NullableIBAN(iban)
+}
+
 func writeIBANRuneToCheckSumBuf(r rune, b *strings.Builder) {
 	if r >= 'A' && r <= 'Z' {
 		i := int(r - 'A' + 10)
@@ -185,7 +190,7 @@ func (iban *IBAN) Scan(value interface{}) error {
 	case []byte:
 		*iban = IBAN(x)
 	case nil:
-		*iban = IBANNull
+		*iban = ""
 	default:
 		return errors.Errorf("can't scan SQL value of type %T as IBAN", value)
 	}
@@ -194,7 +199,7 @@ func (iban *IBAN) Scan(value interface{}) error {
 
 // Value implements the driver database/sql/driver.Valuer interface.
 func (iban IBAN) Value() (driver.Value, error) {
-	if iban == IBANNull {
+	if iban == "" {
 		return nil, nil
 	}
 	return string(iban), nil

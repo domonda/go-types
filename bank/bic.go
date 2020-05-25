@@ -52,6 +52,11 @@ func (bic BIC) Valid() bool {
 	return bic.Validate() == nil
 }
 
+// Nullable returns the BIC as NullableBIC
+func (bic BIC) Nullable() NullableBIC {
+	return NullableBIC(bic)
+}
+
 // Validate returns an error if this is not a valid SWIFT Business Identifier Code
 func (bic BIC) Validate() error {
 	length := len(bic)
