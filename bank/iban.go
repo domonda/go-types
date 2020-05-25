@@ -18,9 +18,6 @@ var ibanRegex = regexp.MustCompile(`^([A-Z]{2})(\d{2})([A-Z\d]{8,30})$`)
 const (
 	IBANMinLength = 15
 	IBANMaxLength = 32
-
-	// IBANNull is an empty string and will be treatet as SQL NULL.
-	IBANNull = ""
 )
 
 // NormalizeIBAN returns str as normalized IBAN or an error.
@@ -38,9 +35,6 @@ func StringIsIBAN(str string) bool {
 // IBAN implements the database/sql.Scanner and database/sql/driver.Valuer interfaces,
 // and will treat an empty IBAN string as SQL NULL value.
 type IBAN string
-
-// NullableIBAN is a IBAN value which can hold an emtpy string ("") as the null value.
-type NullableIBAN = IBAN
 
 // ScanString tries to parse and assign the passed
 // source string as value of the implementing type.
