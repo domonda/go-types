@@ -12,9 +12,11 @@ import (
 	"github.com/domonda/go-wraperr"
 )
 
-// Scan str to dest using the given ScanConfig.
-func Scan(dest reflect.Value, str string, config *ScanConfig) (err error) {
-	defer wraperr.WithFuncParams(&err, dest, str, config)
+// Scan source into dest using the given ScanConfig.
+// If dest is an assignable nil pointer variable,
+// then a new object of the pointed to type will be allocated and set.
+func Scan(dest reflect.Value, source string, config *ScanConfig) (err error) {
+	defer wraperr.WithFuncParams(&err, dest, source, config)
 
 	if config == nil {
 		return wraperr.Errorf("nil ScanConfig")
@@ -28,68 +30,69 @@ func Scan(dest reflect.Value, str string, config *ScanConfig) (err error) {
 	}
 
 	if scaner, ok := config.TypeScanners[dest.Type()]; ok {
-		return scaner.ScanString(dest, str, config)
+		return scaner.ScanString(dest, source, config)
 	}
 
 	switch x := dest.Addr().Interface().(type) {
 	case Scannable:
-		_, err = x.ScanString(str)
+		_, err = x.ScanString(source)
 		return err
+
 	case encoding.TextUnmarshaler:
-		return x.UnmarshalText([]byte(str))
+		return x.UnmarshalText([]byte(source))
 	}
 
 	switch dest.Kind() {
 	case reflect.Bool:
-		s := strings.TrimSpace(str)
+		s := strings.TrimSpace(source)
 		switch {
 		case strutil.StringIn(s, config.TrueStrings):
 			dest.SetBool(true)
 		case strutil.StringIn(s, config.FalseStrings):
 			dest.SetBool(false)
 		default:
-			return wraperr.Errorf("can't scan %q as bool", str)
+			return wraperr.Errorf("can't scan %q as bool", source)
 		}
 
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		i, err := strconv.ParseInt(strings.TrimSpace(str), 10, 64)
+		i, err := strconv.ParseInt(strings.TrimSpace(source), 10, 64)
 		if err != nil {
-			return wraperr.Errorf("can't scan %q as int because %w", str, err)
+			return wraperr.Errorf("can't scan %q as int because %w", source, err)
 		}
 		dest.SetInt(i)
 
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		u, err := strconv.ParseUint(strings.TrimSpace(str), 10, 64)
+		u, err := strconv.ParseUint(strings.TrimSpace(source), 10, 64)
 		if err != nil {
-			return wraperr.Errorf("can't scan %q as uint because %w", str, err)
+			return wraperr.Errorf("can't scan %q as uint because %w", source, err)
 		}
 		dest.SetUint(u)
 
 	case reflect.Float32, reflect.Float64:
-		f, err := ParseFloat(str)
+		f, err := ParseFloat(source)
 		if err != nil {
-			return wraperr.Errorf("can't scan %q as float because %w", str, err)
+			return wraperr.Errorf("can't scan %q as float because %w", source, err)
 		}
 		dest.SetFloat(f)
 
 	case reflect.String:
-		dest.SetString(str)
+		dest.SetString(source)
 
 	default:
-		return wraperr.Errorf("can't scan to type %s", dest.Type())
+		return wraperr.Errorf("can't scan %q as destination type %s", source, dest.Type())
 	}
 
 	// Validate scanned value if dest implements types.ValidatErr or types.Validator
 	switch x := dest.Interface().(type) {
 	case types.ValidatErr:
 		if err := x.Validate(); err != nil {
-			return wraperr.Errorf("error validating %s value scanned from %q because %w", dest.Type(), str, err)
+			return wraperr.Errorf("error validating %s value scanned from %q because %w", dest.Type(), source, err)
 		}
 		return nil
 
 	case types.Validator:
 		if !x.Valid() {
-			return wraperr.Errorf("error validating %s value scanned from %q", dest.Type(), str)
+			return wraperr.Errorf("error validating %s value scanned from %q", dest.Type(), source)
 		}
 		return nil
 	}
@@ -98,13 +101,13 @@ func Scan(dest reflect.Value, str string, config *ScanConfig) (err error) {
 	switch x := dest.Addr().Interface().(type) {
 	case types.ValidatErr:
 		if err := x.Validate(); err != nil {
-			return wraperr.Errorf("error validating %s value scanned from %q because %w", dest.Type(), str, err)
+			return wraperr.Errorf("error validating %s value scanned from %q because %w", dest.Type(), source, err)
 		}
 		return nil
 
 	case types.Validator:
 		if !x.Valid() {
-			return wraperr.Errorf("error validating %s value scanned from %q", dest.Type(), str)
+			return wraperr.Errorf("error validating %s value scanned from %q", dest.Type(), source)
 		}
 		return nil
 	}
