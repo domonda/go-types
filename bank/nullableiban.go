@@ -42,7 +42,7 @@ func (iban NullableIBAN) ValidAndNormalized() bool {
 
 // CountryCode returns the country code of the IBAN
 func (iban NullableIBAN) CountryCode() country.Code {
-	if iban == IBANNull || !iban.Valid() {
+	if iban.IsNull() || !iban.Valid() {
 		return ""
 	}
 	return country.Code(iban[:2])
@@ -51,7 +51,7 @@ func (iban NullableIBAN) CountryCode() country.Code {
 // Normalized returns the iban in normalized form,
 // or an error if the format can't be detected.
 func (iban NullableIBAN) Normalized() (NullableIBAN, error) {
-	if iban == IBANNull {
+	if iban.IsNull() {
 		return "", nil
 	}
 	normalized, err := IBAN(iban).Normalized()
@@ -72,7 +72,7 @@ func (iban NullableIBAN) NormalizedOrUnchanged() NullableIBAN {
 // NormalizedWithSpaces returns the iban in normalized form with spaces every 4 characters,
 // or an error if the format can't be detected.
 func (iban NullableIBAN) NormalizedWithSpaces() (NullableIBAN, error) {
-	if iban == IBANNull {
+	if iban.IsNull() {
 		return "", nil
 	}
 	normalized, err := IBAN(iban).NormalizedWithSpaces()
@@ -99,8 +99,33 @@ func (iban *NullableIBAN) Scan(value interface{}) error {
 
 // Value implements the driver database/sql/driver.Valuer interface.
 func (iban NullableIBAN) Value() (driver.Value, error) {
-	if iban == IBANNull {
+	if iban.IsNull() {
 		return nil, nil
 	}
 	return string(iban), nil
+}
+
+// Set sets an IBAN for this NullableIBAN
+func (n *NullableIBAN) Set(id IBAN) {
+	*n = NullableIBAN(id)
+}
+
+// SetNull sets the NullableIBAN to null
+func (n *NullableIBAN) SetNull() {
+	*n = IBANNull
+}
+
+// Get returns the non nullable IBAN value
+// or panics if the NullableIBAN is null.
+// Note: check with IsNull before using Get!
+func (n *NullableIBAN) Get() IBAN {
+	if n.IsNull() {
+		panic("NULL bank.IBAN")
+	}
+	return IBAN(*n)
+}
+
+// IsNull returns true if the NullableIBAN is null
+func (n NullableIBAN) IsNull() bool {
+	return n == IBANNull
 }
