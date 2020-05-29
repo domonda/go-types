@@ -1,21 +1,25 @@
 package charset
 
-// UTF8Encoding passes strings through
-type UTF8Encoding struct{}
+func UTF8Encoding() Encoding {
+	return utf8Encoding{}
+}
 
-func (UTF8Encoding) Encode(utf8Str []byte) (encodedStr []byte, err error) {
+// utf8Encoding passes strings through
+type utf8Encoding struct{}
+
+func (utf8Encoding) Encode(utf8Str []byte) (encodedStr []byte, err error) {
 	return utf8Str, nil
 }
 
-func (UTF8Encoding) Decode(encodedStr []byte) (utf8Str []byte, err error) {
+func (utf8Encoding) Decode(encodedStr []byte) (utf8Str []byte, err error) {
 	return encodedStr, nil
 }
 
-func (UTF8Encoding) Name() string {
+func (utf8Encoding) Name() string {
 	return "UTF-8"
 }
 
 // String implements the fmt.Stringer interface.
-func (e UTF8Encoding) String() string {
+func (e utf8Encoding) String() string {
 	return e.Name() + " Encoding"
 }

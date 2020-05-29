@@ -5,8 +5,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"strings"
-
-	"github.com/domonda/errors"
 )
 
 type BOM string
@@ -15,41 +13,41 @@ var (
 	NoBOM BOM
 	// UTF-8, BOM bytes: EF BB BF
 	BOMUTF8 = BOM(bomUTF8)
-	// UTF-16, big-endian, BOM bytes: FE FF
-	BOMUTF16BigEndian = BOM(bomUTF16BigEndian)
-	// UTF-16, little-endian, BOM bytes: FF FE
-	BOMUTF16LittleEndian = BOM(bomUTF16LittleEndian)
-	// UTF-32, big-endian, BOM bytes: 00 00 FE FF
-	BOMUTF32BigEndian = BOM(bomUTF32BigEndian)
-	// UTF-32, little-endian, BOM bytes: FF FE 00 00
-	BOMUTF32LittleEndian = BOM(bomUTF32LittleEndian)
+	// UTF-16BE, BOM bytes: FE FF
+	BOMUTF16BE = BOM(bomUTF16BE)
+	// UTF-16LE, BOM bytes: FF FE
+	BOMUTF16LE = BOM(bomUTF16LE)
+	// UTF-32BE, BOM bytes: 00 00 FE FF
+	BOMUTF32BE = BOM(bomUTF32BE)
+	// UTF-32LE, BOM bytes: FF FE 00 00
+	BOMUTF32LE = BOM(bomUTF32LE)
 )
 
 var (
 	// UTF-8, BOM bytes: EF BB BF
 	bomUTF8 = []byte{0xEF, 0xBB, 0xBF}
-	// UTF-16, big-endian, BOM bytes: FE FF
-	bomUTF16BigEndian = []byte{0xFE, 0xFF}
-	// UTF-16, little-endian, BOM bytes: FF FE
-	bomUTF16LittleEndian = []byte{0xFF, 0xFE}
-	// UTF-32, big-endian, BOM bytes: 00 00 FE FF
-	bomUTF32BigEndian = []byte{0x00, 0x00, 0xFE, 0xFF}
-	// UTF-32, little-endian, BOM bytes: FF FE 00 00
-	bomUTF32LittleEndian = []byte{0xFF, 0xFE, 0x00, 0x00}
+	// UTF-16BE, BOM bytes: FE FF
+	bomUTF16BE = []byte{0xFE, 0xFF}
+	// UTF-16LE, BOM bytes: FF FE
+	bomUTF16LE = []byte{0xFF, 0xFE}
+	// UTF-32BE, BOM bytes: 00 00 FE FF
+	bomUTF32BE = []byte{0x00, 0x00, 0xFE, 0xFF}
+	// UTF-32LE, BOM bytes: FF FE 00 00
+	bomUTF32LE = []byte{0xFF, 0xFE, 0x00, 0x00}
 )
 
 func BOMOfString(str string) BOM {
 	switch {
 	case strings.HasPrefix(str, string(BOMUTF8)):
 		return BOMUTF8
-	case strings.HasPrefix(str, string(BOMUTF16BigEndian)):
-		return BOMUTF16BigEndian
-	case strings.HasPrefix(str, string(BOMUTF16LittleEndian)):
-		return BOMUTF16LittleEndian
-	case strings.HasPrefix(str, string(BOMUTF32BigEndian)):
-		return BOMUTF32BigEndian
-	case strings.HasPrefix(str, string(BOMUTF32LittleEndian)):
-		return BOMUTF32LittleEndian
+	case strings.HasPrefix(str, string(BOMUTF16BE)):
+		return BOMUTF16BE
+	case strings.HasPrefix(str, string(BOMUTF16LE)):
+		return BOMUTF16LE
+	case strings.HasPrefix(str, string(BOMUTF32BE)):
+		return BOMUTF32BE
+	case strings.HasPrefix(str, string(BOMUTF32LE)):
+		return BOMUTF32LE
 	}
 	return NoBOM
 }
@@ -58,14 +56,14 @@ func BOMOfBytes(b []byte) BOM {
 	switch {
 	case bytes.HasPrefix(b, bomUTF8):
 		return BOMUTF8
-	case bytes.HasPrefix(b, bomUTF16BigEndian):
-		return BOMUTF16BigEndian
-	case bytes.HasPrefix(b, bomUTF16LittleEndian):
-		return BOMUTF16LittleEndian
-	case bytes.HasPrefix(b, bomUTF32BigEndian):
-		return BOMUTF32BigEndian
-	case bytes.HasPrefix(b, bomUTF32LittleEndian):
-		return BOMUTF32LittleEndian
+	case bytes.HasPrefix(b, bomUTF16BE):
+		return BOMUTF16BE
+	case bytes.HasPrefix(b, bomUTF16LE):
+		return BOMUTF16LE
+	case bytes.HasPrefix(b, bomUTF32BE):
+		return BOMUTF32BE
+	case bytes.HasPrefix(b, bomUTF32LE):
+		return BOMUTF32LE
 	}
 	return NoBOM
 }
@@ -88,63 +86,63 @@ func DecodeStringWithBOM(b []byte) (string, error) {
 func (bom BOM) Encoding() (Encoding, error) {
 	switch bom {
 	case NoBOM, BOMUTF8:
-		return UTF8Encoding{}, nil
+		return UTF8Encoding(), nil
 
-	case BOMUTF16LittleEndian, BOMUTF16BigEndian:
-		return NewUTF16Encoding(bom.Endian()), nil
+	case BOMUTF16LE, BOMUTF16BE:
+		return UTF16Encoding(bom.Endian()), nil
 
-	case BOMUTF32LittleEndian, BOMUTF32BigEndian:
-		return NewUTF32Encoding(bom.Endian()), nil
+	case BOMUTF32LE, BOMUTF32BE:
+		return UTF32Encoding(bom.Endian()), nil
 	}
 
-	return nil, errors.Errorf("unsupported BOM: %v", []byte(bom))
+	return nil, fmt.Errorf("unsupported BOM: %v", []byte(bom))
 }
 
 func (bom BOM) Decode(data []byte) ([]byte, error) {
 	dataBOM, data := SplitBOM(data)
 	if dataBOM != NoBOM && dataBOM != bom {
-		return nil, errors.Errorf("wrong BOM in data: %s, expected: %s", dataBOM, bom)
+		return nil, fmt.Errorf("wrong BOM in data: %v, expected: %v", []byte(dataBOM), []byte(bom))
 	}
 
 	switch bom {
 	case NoBOM, BOMUTF8:
 		return data, nil
 
-	case BOMUTF16LittleEndian, BOMUTF16BigEndian:
+	case BOMUTF16LE, BOMUTF16BE:
 		return DecodeUTF16(data, bom.Endian())
 
-	case BOMUTF32LittleEndian, BOMUTF32BigEndian:
+	case BOMUTF32LE, BOMUTF32BE:
 		return DecodeUTF32(data, bom.Endian())
 	}
 
-	return nil, errors.Errorf("unsupported BOM: %v", []byte(bom))
+	return nil, fmt.Errorf("unsupported BOM: %v", []byte(bom))
 }
 
 func (bom BOM) DecodeString(data []byte) (string, error) {
 	dataBOM, data := SplitBOM(data)
 	if dataBOM != NoBOM && dataBOM != bom {
-		return "", errors.Errorf("wrong BOM in data: %s, expected: %s", dataBOM, bom)
+		return "", fmt.Errorf("wrong BOM in data: %v, expected: %v", []byte(dataBOM), []byte(bom))
 	}
 
 	switch bom {
 	case NoBOM, BOMUTF8:
 		return string(data), nil
 
-	case BOMUTF16LittleEndian, BOMUTF16BigEndian:
+	case BOMUTF16LE, BOMUTF16BE:
 		return DecodeUTF16String(data, bom.Endian())
 
-	case BOMUTF32LittleEndian, BOMUTF32BigEndian:
+	case BOMUTF32LE, BOMUTF32BE:
 		return DecodeUTF32String(data, bom.Endian())
 	}
 
-	return "", errors.Errorf("unsupported BOM: %v", []byte(bom))
+	return "", fmt.Errorf("unsupported BOM: %v", []byte(bom))
 }
 
 func (bom BOM) Endian() binary.ByteOrder {
 	switch bom {
-	case BOMUTF16LittleEndian, BOMUTF32LittleEndian:
+	case BOMUTF16LE, BOMUTF32LE:
 		return binary.LittleEndian
-	case BOMUTF16BigEndian, BOMUTF32BigEndian:
+	case BOMUTF16BE, BOMUTF32BE:
 		return binary.BigEndian
 	}
 	return nil
@@ -157,14 +155,14 @@ func (bom BOM) String() string {
 		return "No BOM"
 	case BOMUTF8:
 		return "UTF-8"
-	case BOMUTF16BigEndian:
-		return "UTF-16, big-endian"
-	case BOMUTF16LittleEndian:
-		return "UTF-16, little-endian"
-	case BOMUTF32BigEndian:
-		return "UTF-32, big-endian"
-	case BOMUTF32LittleEndian:
-		return "UTF-32, little-endian"
+	case BOMUTF16BE:
+		return "UTF-16BE"
+	case BOMUTF16LE:
+		return "UTF-16LE"
+	case BOMUTF32BE:
+		return "UTF-32BE"
+	case BOMUTF32LE:
+		return "UTF-32LE"
 	}
-	return fmt.Sprintf("Invalid BOM: %#v", string(bom))
+	return fmt.Sprintf("Invalid BOM: %v", []byte(bom))
 }

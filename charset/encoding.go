@@ -1,12 +1,9 @@
 package charset
 
 import (
-	"strings"
 	"sync"
 
 	"golang.org/x/text/encoding"
-
-	"github.com/domonda/errors"
 )
 
 // Encoding provides threadsafe methods for encoding and decoding text
@@ -15,25 +12,6 @@ type Encoding interface {
 	Decode(encodedStr []byte) (utf8Str []byte, err error)
 	Name() string
 	String() string
-}
-
-func GetEncoding(name string) (Encoding, error) {
-	if n := strings.ToUpper(name); n == "UTF-8" || n == "UTF8" {
-		return UTF8Encoding{}, nil
-	}
-	enc, name := findEncoding(name)
-	if enc == nil {
-		return nil, errors.Errorf("encoding not found: '%s'", name)
-	}
-	return &encodingImpl{name: name, encoding: enc}, nil
-}
-
-func MustGetEncoding(name string) Encoding {
-	enc, err := GetEncoding(name)
-	if err != nil {
-		panic(err)
-	}
-	return enc
 }
 
 type encodingImpl struct {

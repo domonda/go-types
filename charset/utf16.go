@@ -4,9 +4,39 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"unicode/utf16"
 	"unicode/utf8"
 )
+
+// UTF16Encoding returns an UTF-16 Encoding with the passed binary.ByteOrder
+func UTF16Encoding(byteOrder binary.ByteOrder) Encoding {
+	return utf16Encoding{byteOrder}
+}
+
+// utf16Encoding implements Encoding for UTF-16
+type utf16Encoding struct {
+	byteOrder binary.ByteOrder
+}
+
+func (e utf16Encoding) Encode(utf8Str []byte) (encodedStr []byte, err error) {
+	return EncodeUTF16(utf8Str, e.byteOrder)
+}
+
+func (e utf16Encoding) Decode(encodedStr []byte) (utf8Str []byte, err error) {
+	return DecodeUTF16(encodedStr, e.byteOrder)
+}
+
+func (e utf16Encoding) Name() string {
+	if e.byteOrder == binary.BigEndian {
+		return "UTF-16BE"
+	}
+	return "UTF-16LE"
+}
+
+func (e utf16Encoding) String() string {
+	return e.Name() + " Encoding"
+}
 
 func decodeUTF16Runes(b []byte, byteOrder binary.ByteOrder) []rune {
 	numRunes := len(b) / 2
@@ -22,7 +52,7 @@ func DecodeUTF16(b []byte, byteOrder binary.ByteOrder) ([]byte, error) {
 		return nil, nil
 	}
 	if len(b)&1 != 0 {
-		return nil, errors.New("odd length of UTF-16 string")
+		return nil, fmt.Errorf("odd length of UTF-16 string: %d", len(b))
 	}
 	runes := decodeUTF16Runes(b, byteOrder)
 	buf := bytes.Buffer{}
@@ -59,36 +89,7 @@ func EncodeUTF16(b []byte, byteOrder binary.ByteOrder) ([]byte, error) {
 
 func DecodeUTF16String(b []byte, byteOrder binary.ByteOrder) (string, error) {
 	if len(b)&1 != 0 {
-		return "", errors.New("odd length of UTF-16 string")
+		return "", fmt.Errorf("odd length of UTF-16 string: %d", len(b))
 	}
 	return string(decodeUTF16Runes(b, byteOrder)), nil
-}
-
-// UTF16Encoding implements Encoding for UTF-16
-type UTF16Encoding struct {
-	byteOrder binary.ByteOrder
-}
-
-func NewUTF16Encoding(byteOrder binary.ByteOrder) Encoding {
-	return &UTF16Encoding{byteOrder}
-}
-
-func (e *UTF16Encoding) Encode(utf8Str []byte) (encodedStr []byte, err error) {
-	return EncodeUTF16(utf8Str, e.byteOrder)
-}
-
-func (e *UTF16Encoding) Decode(encodedStr []byte) (utf8Str []byte, err error) {
-	return DecodeUTF16(encodedStr, e.byteOrder)
-}
-
-func (e *UTF16Encoding) Name() string {
-	if e.byteOrder == binary.BigEndian {
-		return "UTF-16, big-endian"
-	}
-	return "UTF-16, little-endian"
-}
-
-// String implements the fmt.Stringer interface.
-func (e *UTF16Encoding) String() string {
-	return e.Name() + " Encoding"
 }
