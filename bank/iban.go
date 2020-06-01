@@ -75,7 +75,7 @@ func (iban IBAN) CountryCode() country.Code {
 // or an error if the format can't be detected.
 func (iban IBAN) Normalized() (IBAN, error) {
 	switch {
-	case iban == "":
+	case iban.Nullable().IsNull():
 		return "", errors.New("empty IBAN")
 	case len(iban) < IBANMinLength:
 		return "", errors.New("IBAN too short")
@@ -190,7 +190,7 @@ func (iban *IBAN) Scan(value interface{}) error {
 	case []byte:
 		*iban = IBAN(x)
 	case nil:
-		*iban = ""
+		*iban = IBAN(IBANNull)
 	default:
 		return errors.Errorf("can't scan SQL value of type %T as IBAN", value)
 	}
@@ -199,9 +199,6 @@ func (iban *IBAN) Scan(value interface{}) error {
 
 // Value implements the driver database/sql/driver.Valuer interface.
 func (iban IBAN) Value() (driver.Value, error) {
-	if iban == "" {
-		return nil, nil
-	}
 	return string(iban), nil
 }
 
