@@ -36,3 +36,7 @@ func (c *ScanConfig) initTypeScanners() {
 		reflect.TypeOf((*time.Duration)(nil)).Elem(): ScannerFunc(scanDurationString),
 	}
 }
+
+func (c *ScanConfig) SetTypeScanner(t reflect.Type, s Scanner) {
+	c.TypeScanners[t] = s
+}
