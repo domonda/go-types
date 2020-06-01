@@ -7,6 +7,7 @@ import (
 	"strings"
 )
 
+// BOM is a Unicode Byte Order Mark
 type BOM string
 
 var (
@@ -56,14 +57,14 @@ func BOMOfBytes(b []byte) BOM {
 	switch {
 	case bytes.HasPrefix(b, bomUTF8):
 		return BOMUTF8
-	case bytes.HasPrefix(b, bomUTF16BE):
-		return BOMUTF16BE
 	case bytes.HasPrefix(b, bomUTF16LE):
 		return BOMUTF16LE
-	case bytes.HasPrefix(b, bomUTF32BE):
-		return BOMUTF32BE
+	case bytes.HasPrefix(b, bomUTF16BE):
+		return BOMUTF16BE
 	case bytes.HasPrefix(b, bomUTF32LE):
 		return BOMUTF32LE
+	case bytes.HasPrefix(b, bomUTF32BE):
+		return BOMUTF32BE
 	}
 	return NoBOM
 }

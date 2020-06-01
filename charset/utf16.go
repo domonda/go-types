@@ -38,6 +38,13 @@ func (e utf16Encoding) String() string {
 	return e.Name() + " Encoding"
 }
 
+func (e utf16Encoding) BOM() BOM {
+	if e.byteOrder == binary.BigEndian {
+		return BOMUTF16BE
+	}
+	return BOMUTF16LE
+}
+
 func decodeUTF16Runes(b []byte, byteOrder binary.ByteOrder) []rune {
 	numRunes := len(b) / 2
 	u16s := make([]uint16, numRunes)
@@ -54,6 +61,24 @@ func DecodeUTF16(b []byte, byteOrder binary.ByteOrder) ([]byte, error) {
 	if len(b)&1 != 0 {
 		return nil, fmt.Errorf("odd length of UTF-16 string: %d", len(b))
 	}
+
+	// Check for BOM and remove it before decoding
+	if bom := BOMOfBytes(b); bom != NoBOM {
+		switch byteOrder {
+		case binary.LittleEndian:
+			if bom != BOMUTF16LE {
+				return nil, fmt.Errorf("expected %s BOM but got %s", BOMUTF16LE, bom)
+			}
+		case binary.BigEndian:
+			if bom != BOMUTF16BE {
+				return nil, fmt.Errorf("expected %s BOM but got %s", BOMUTF16BE, bom)
+			}
+		default:
+			return nil, fmt.Errorf("invalid binary.ByteOrder: %v", byteOrder)
+		}
+		b = b[len(bom):]
+	}
+
 	runes := decodeUTF16Runes(b, byteOrder)
 	buf := bytes.Buffer{}
 	buf.Grow(len(runes))

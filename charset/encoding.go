@@ -12,10 +12,15 @@ type Encoding interface {
 	Decode(encodedStr []byte) (utf8Str []byte, err error)
 	Name() string
 	String() string
+
+	// BOM returns the Unicode Byte Order Mark of the encoding
+	// or NoBOM if the encoding has no BOM.
+	BOM() BOM
 }
 
 type encodingImpl struct {
 	name       string
+	bom        BOM
 	encoding   encoding.Encoding
 	encoder    *encoding.Encoder
 	encoderMtx sync.Mutex
@@ -50,4 +55,8 @@ func (e *encodingImpl) Name() string {
 // String implements the fmt.Stringer interface.
 func (e *encodingImpl) String() string {
 	return e.Name() + " Encoding"
+}
+
+func (e *encodingImpl) BOM() BOM {
+	return e.bom
 }

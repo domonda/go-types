@@ -10,12 +10,15 @@ import (
 func UTF32Encoding(byteOrder binary.ByteOrder) Encoding {
 	name := "UTF-32LE"
 	endian := utf32.LittleEndian
+	bom := BOMUTF32LE
 	if byteOrder == binary.BigEndian {
 		name = "UTF-32BE"
 		endian = utf32.BigEndian
+		bom = BOMUTF32BE
 	}
 	return &encodingImpl{
 		name:    name,
+		bom:     bom,
 		encoder: utf32.UTF32(endian, utf32.IgnoreBOM).NewEncoder(),
 		decoder: utf32.UTF32(endian, utf32.IgnoreBOM).NewDecoder(),
 	}

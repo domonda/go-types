@@ -12,7 +12,7 @@ func (utf8Encoding) Encode(utf8Str []byte) (encodedStr []byte, err error) {
 }
 
 func (utf8Encoding) Decode(encodedStr []byte) (utf8Str []byte, err error) {
-	return encodedStr, nil
+	return BOMUTF8.Decode(encodedStr)
 }
 
 func (utf8Encoding) Name() string {
@@ -22,4 +22,8 @@ func (utf8Encoding) Name() string {
 // String implements the fmt.Stringer interface.
 func (e utf8Encoding) String() string {
 	return e.Name() + " Encoding"
+}
+
+func (utf8Encoding) BOM() BOM {
+	return BOMUTF8
 }
