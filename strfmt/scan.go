@@ -83,33 +83,12 @@ func Scan(dest reflect.Value, source string, config *ScanConfig) (err error) {
 	}
 
 	// Validate scanned value if dest implements types.ValidatErr or types.Validator
-	switch x := dest.Interface().(type) {
-	case types.ValidatErr:
-		if err := x.Validate(); err != nil {
-			return wraperr.Errorf("error validating %s value scanned from %q because %w", dest.Type(), source, err)
-		}
-		return nil
-
-	case types.Validator:
-		if !x.Valid() {
-			return wraperr.Errorf("error validating %s value scanned from %q", dest.Type(), source)
-		}
-		return nil
+	err, isValidator := types.TryValidate(dest.Interface())
+	if !isValidator {
+		err, isValidator = types.TryValidate(dest.Addr().Interface())
 	}
-
-	// Validate scanned value if dest pointer implements types.ValidatErr or types.Validator
-	switch x := dest.Addr().Interface().(type) {
-	case types.ValidatErr:
-		if err := x.Validate(); err != nil {
-			return wraperr.Errorf("error validating %s value scanned from %q because %w", dest.Type(), source, err)
-		}
-		return nil
-
-	case types.Validator:
-		if !x.Valid() {
-			return wraperr.Errorf("error validating %s value scanned from %q", dest.Type(), source)
-		}
-		return nil
+	if isValidator && err != nil {
+		return wraperr.Errorf("error validating %s value scanned from %q because %w", dest.Type(), source, err)
 	}
 
 	return nil

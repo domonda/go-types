@@ -120,3 +120,25 @@ func Validate(v interface{}) error {
 	}
 	return nil
 }
+
+// TryValidate returns an error and true if v implements ValidatErr or Validator
+// and the methods ValidatErr.Validate() or Validator.Valid()
+// indicate an invalid value.
+// The error from ValidatErr.Validate() is returned directly,
+// and ErrInvalidValue is returned if Validator.Valid() is false.
+// If v does not implement ValidatErr or Validator then nil and false
+// will be returned.
+func TryValidate(v interface{}) (err error, isValidator bool) {
+	switch x := v.(type) {
+	case ValidatErr:
+		return x.Validate(), true
+	case Validator:
+		if x.Valid() {
+			return nil, true
+		} else {
+			return ErrInvalidValue, true
+		}
+	default:
+		return nil, false
+	}
+}
