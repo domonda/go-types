@@ -10,6 +10,7 @@ var DefaultScanConfig = NewScanConfig()
 type ScanConfig struct {
 	TrueStrings                 []string                 `json:"trueStrings"`
 	FalseStrings                []string                 `json:"falseStrings"`
+	NilStrings                  []string                 `json:"nilStrings"`
 	TimeFormats                 []string                 `json:"timeFormats"`
 	AcceptedMoneyAmountDecimals []int                    `json:"acceptedMoneyAmountDecimals,omitempty"`
 	TypeScanners                map[reflect.Type]Scanner `json:"-"`
@@ -19,6 +20,7 @@ func NewScanConfig() *ScanConfig {
 	c := &ScanConfig{
 		TrueStrings:  []string{"true", "TRUE", "yes", "YES"},
 		FalseStrings: []string{"false", "FALSE", "no", "NO"},
+		NilStrings:   []string{"", "nil", "null", "NULL"},
 		TimeFormats: []string{
 			time.RFC3339Nano,
 			time.RFC3339,
@@ -39,4 +41,41 @@ func (c *ScanConfig) initTypeScanners() {
 
 func (c *ScanConfig) SetTypeScanner(t reflect.Type, s Scanner) {
 	c.TypeScanners[t] = s
+}
+
+func (c *ScanConfig) IsTrue(str string) bool {
+	for _, val := range c.TrueStrings {
+		if str == val {
+			return true
+		}
+	}
+	return false
+}
+
+func (c *ScanConfig) IsFalse(str string) bool {
+	for _, val := range c.FalseStrings {
+		if str == val {
+			return true
+		}
+	}
+	return false
+}
+
+func (c *ScanConfig) IsNil(str string) bool {
+	for _, val := range c.NilStrings {
+		if str == val {
+			return true
+		}
+	}
+	return false
+}
+
+func (c *ScanConfig) ParseTime(str string) (t time.Time, ok bool) {
+	for _, format := range c.TimeFormats {
+		t, err := time.Parse(format, str)
+		if err == nil {
+			return t, ok
+		}
+	}
+	return time.Time{}, false
 }

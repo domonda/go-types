@@ -8,7 +8,6 @@ import (
 	"time"
 
 	types "github.com/domonda/go-types"
-	"github.com/domonda/go-types/strutil"
 	"github.com/domonda/go-wraperr"
 )
 
@@ -22,15 +21,26 @@ func Scan(dest reflect.Value, source string, config *ScanConfig) (err error) {
 		return wraperr.Errorf("nil ScanConfig")
 	}
 
-	if dest.Kind() == reflect.Ptr {
-		if dest.IsNil() {
-			dest.Set(reflect.New(dest.Type().Elem()))
-		}
-		dest = dest.Elem()
-	}
-
+	// First priority is to check if there is a custom scanner for the type
 	if scaner, ok := config.TypeScanners[dest.Type()]; ok {
 		return scaner.ScanString(dest, source, config)
+	}
+
+	if dest.Kind() == reflect.Ptr {
+		if config.IsNil(source) {
+			// If dest is a pointer type and source is a nil string
+			// then set pointer to nil (the zero value of the pointer)
+			dest.Set(reflect.Zero(dest.Type()))
+			return nil
+		}
+		if dest.IsNil() {
+			// If source is not a nil string and dest is nil
+			// then allocate and set pointer
+			dest.Set(reflect.New(dest.Type().Elem()))
+		}
+		// Use pointed to type in further code because dest.Addr()
+		// will be used where only a pointer makes sense
+		dest = dest.Elem()
 	}
 
 	switch x := dest.Addr().Interface().(type) {
@@ -43,12 +53,15 @@ func Scan(dest reflect.Value, source string, config *ScanConfig) (err error) {
 	}
 
 	switch dest.Kind() {
+	case reflect.String:
+		dest.SetString(source)
+
 	case reflect.Bool:
 		s := strings.TrimSpace(source)
 		switch {
-		case strutil.StringIn(s, config.TrueStrings):
+		case config.IsTrue(s):
 			dest.SetBool(true)
-		case strutil.StringIn(s, config.FalseStrings):
+		case config.IsFalse(s):
 			dest.SetBool(false)
 		default:
 			return wraperr.Errorf("can't scan %q as bool", source)
@@ -75,19 +88,16 @@ func Scan(dest reflect.Value, source string, config *ScanConfig) (err error) {
 		}
 		dest.SetFloat(f)
 
-	case reflect.String:
-		dest.SetString(source)
-
 	default:
 		return wraperr.Errorf("can't scan %q as destination type %s", source, dest.Type())
 	}
 
-	// Validate scanned value if dest implements types.ValidatErr or types.Validator
+	// Validate scanned value if dest or dest pointer implements types.ValidatErr or types.Validator
 	err, isValidator := types.TryValidate(dest.Interface())
 	if !isValidator {
 		err, isValidator = types.TryValidate(dest.Addr().Interface())
 	}
-	if isValidator && err != nil {
+	if err != nil {
 		return wraperr.Errorf("error validating %s value scanned from %q because %w", dest.Type(), source, err)
 	}
 
@@ -95,15 +105,12 @@ func Scan(dest reflect.Value, source string, config *ScanConfig) (err error) {
 }
 
 func scanTimeString(dest reflect.Value, str string, config *ScanConfig) error {
-	s := strings.TrimSpace(str)
-	for _, config := range config.TimeFormats {
-		t, err := time.Parse(config, s)
-		if err == nil {
-			dest.Set(reflect.ValueOf(t))
-			return nil
-		}
+	t, ok := config.ParseTime(strings.TrimSpace(str))
+	if !ok {
+		return wraperr.Errorf("can't scan %q as time.Time", str)
 	}
-	return wraperr.Errorf("can't scan %q as time.Time", str)
+	dest.Set(reflect.ValueOf(t))
+	return nil
 }
 
 func scanDurationString(dest reflect.Value, str string, config *ScanConfig) error {
