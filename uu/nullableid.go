@@ -154,7 +154,6 @@ func (n *NullableID) UnmarshalJSON(data []byte) (err error) {
 }
 
 // MarshalJSON implements json.Marshaler.
-// It will encode null if Valid == false.
 func (n NullableID) MarshalJSON() ([]byte, error) {
 	if n == IDNull {
 		return []byte("null"), nil
