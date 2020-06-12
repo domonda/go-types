@@ -18,8 +18,8 @@ type ScanConfig struct {
 
 func NewScanConfig() *ScanConfig {
 	c := &ScanConfig{
-		TrueStrings:  []string{"true", "TRUE", "yes", "YES"},
-		FalseStrings: []string{"false", "FALSE", "no", "NO"},
+		TrueStrings:  []string{"true", "TRUE", "yes", "YES", "1"},
+		FalseStrings: []string{"false", "FALSE", "no", "NO", "0"},
 		NilStrings:   []string{"", "nil", "<nil>", "null", "NULL"},
 		TimeFormats: []string{
 			time.RFC3339Nano,
