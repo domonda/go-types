@@ -20,7 +20,7 @@ func NewScanConfig() *ScanConfig {
 	c := &ScanConfig{
 		TrueStrings:  []string{"true", "TRUE", "yes", "YES"},
 		FalseStrings: []string{"false", "FALSE", "no", "NO"},
-		NilStrings:   []string{"", "nil", "null", "NULL"},
+		NilStrings:   []string{"", "nil", "<nil>", "null", "NULL"},
 		TimeFormats: []string{
 			time.RFC3339Nano,
 			time.RFC3339,
