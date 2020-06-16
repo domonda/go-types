@@ -159,6 +159,26 @@ func (a Amount) Abs() Amount {
 	return Amount(math.Abs(float64(a)))
 }
 
+// PosSign returns the amount with a positive sign (abs) if true is passed,
+// or with a negative sign if false is passed.
+func (a Amount) PosSign(positive bool) Amount {
+	if positive {
+		return a.Copysign(+1)
+	} else {
+		return a.Copysign(-1)
+	}
+}
+
+// NegSign returns the amount with a negative sign if true is passed,
+// or with a positive sign (abs) if false is passed.
+func (a Amount) NegSign(negative bool) Amount {
+	if negative {
+		return a.Copysign(-1)
+	} else {
+		return a.Copysign(+1)
+	}
+}
+
 // SplitEquallyRoundToCents divides the amount equally into numAmounts amounts
 // that are rounded to cents and that sum up to the initial amount rounded to cents.
 // The last amount may slightly differ from the others amounts to guarantee
