@@ -61,6 +61,12 @@ func (s IDSlice) String() string {
 	return "[" + strings.Join(s.Strings(), ",") + "]"
 }
 
+// PrettyString returns the IDSlice in its standard string format.
+// Implements pretty.Stringer.
+func (s IDSlice) PrettyString() string {
+	return s.String()
+}
+
 // Strings returns a slice with all IDs converted to strings
 func (s IDSlice) Strings() []string {
 	if len(s) == 0 {

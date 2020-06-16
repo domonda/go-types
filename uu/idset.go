@@ -54,6 +54,12 @@ func (s IDSet) String() string {
 	return "set" + s.SortedSlice().String()
 }
 
+// PrettyString returns s.SortedSlice().PrettyString().
+// Implements pretty.Stringer.
+func (s IDSet) PrettyString() string {
+	return s.SortedSlice().PrettyString()
+}
+
 // GetOne returns a random ID from the set or IDNil if the set is empty.
 // Most useful to get the only ID in a set of size one.
 func (s IDSet) GetOne() ID {

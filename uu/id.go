@@ -203,6 +203,12 @@ func (id ID) GoString() string {
 	return `uu.ID("` + id.String() + `")`
 }
 
+// PrettyString returns the ID in its standard string format.
+// Implements pretty.Stringer.
+func (id ID) PrettyString() string {
+	return id.String()
+}
+
 // Hex returns the hex representation without dashes of the UUID
 // The returned string is always 32 characters long.
 func (id ID) Hex() string {

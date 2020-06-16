@@ -67,6 +67,12 @@ func (n *NullableID) Get() ID {
 	return n.ID
 }
 
+// PrettyString returns the NullableID in its standard string format.
+// Implements pretty.Stringer.
+func (n NullableID) PrettyString() string {
+	return n.StringOr("NULL")
+}
+
 // IsNull returns true if the NullableID is null
 func (n NullableID) IsNull() bool {
 	return n == IDNull
