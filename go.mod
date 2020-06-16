@@ -4,7 +4,7 @@ go 1.13
 
 require (
 	github.com/domonda/errors v0.8.0
-	github.com/domonda/go-errs v0.0.0-20200612160633-fd9465b2b903
+	github.com/domonda/go-errs v0.0.0-20200616115407-8e68783c0c59
 	github.com/guregu/null v4.0.0+incompatible
 	github.com/jinzhu/now v1.1.1
 	github.com/lib/pq v1.7.0
