@@ -1,6 +1,6 @@
 package types
 
-import "github.com/domonda/go-errs"
+import "errors"
 
 // Validator can be implemented by types that can validate their data.
 type Validator interface {
@@ -101,7 +101,7 @@ func (v ValidatorAsValidatErr) Validate() error {
 
 // ErrInvalidValue means that a value is not valid,
 // returned by Validate() and ValidatorAsValidatErr.Validate().
-const ErrInvalidValue = errs.Sentinel("invalid value")
+var ErrInvalidValue = errors.New("invalid value")
 
 // Validate returns an error if v implements ValidatErr or Validator
 // and the methods ValidatErr.Validate() or Validator.Valid()

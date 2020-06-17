@@ -2,12 +2,12 @@ package strfmt
 
 import (
 	"encoding"
+	"fmt"
 	"reflect"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/domonda/go-errs"
 	types "github.com/domonda/go-types"
 )
 
@@ -15,10 +15,8 @@ import (
 // If dest is an assignable nil pointer variable,
 // then a new object of the pointed to type will be allocated and set.
 func Scan(dest reflect.Value, source string, config *ScanConfig) (err error) {
-	defer errs.WrapWithFuncParams(&err, dest, source, config)
-
 	if config == nil {
-		return errs.Errorf("nil ScanConfig")
+		return fmt.Errorf("nil ScanConfig")
 	}
 
 	// First priority is to check if there is a custom scanner for the type
@@ -64,32 +62,32 @@ func Scan(dest reflect.Value, source string, config *ScanConfig) (err error) {
 		case config.IsFalse(s):
 			dest.SetBool(false)
 		default:
-			return errs.Errorf("can't scan %q as bool", source)
+			return fmt.Errorf("can't scan %q as bool", source)
 		}
 
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		i, err := strconv.ParseInt(strings.TrimSpace(source), 10, 64)
 		if err != nil {
-			return errs.Errorf("can't scan %q as int because %w", source, err)
+			return fmt.Errorf("can't scan %q as int because %w", source, err)
 		}
 		dest.SetInt(i)
 
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 		u, err := strconv.ParseUint(strings.TrimSpace(source), 10, 64)
 		if err != nil {
-			return errs.Errorf("can't scan %q as uint because %w", source, err)
+			return fmt.Errorf("can't scan %q as uint because %w", source, err)
 		}
 		dest.SetUint(u)
 
 	case reflect.Float32, reflect.Float64:
 		f, err := ParseFloat(source)
 		if err != nil {
-			return errs.Errorf("can't scan %q as float because %w", source, err)
+			return fmt.Errorf("can't scan %q as float because %w", source, err)
 		}
 		dest.SetFloat(f)
 
 	default:
-		return errs.Errorf("can't scan %q as destination type %s", source, dest.Type())
+		return fmt.Errorf("can't scan %q as destination type %s", source, dest.Type())
 	}
 
 	// Validate scanned value if dest or dest pointer implements types.ValidatErr or types.Validator
@@ -98,7 +96,7 @@ func Scan(dest reflect.Value, source string, config *ScanConfig) (err error) {
 		err, isValidator = types.TryValidate(dest.Addr().Interface())
 	}
 	if err != nil {
-		return errs.Errorf("error validating %s value scanned from %q because %w", dest.Type(), source, err)
+		return fmt.Errorf("error validating %s value scanned from %q because %w", dest.Type(), source, err)
 	}
 
 	return nil
@@ -107,7 +105,7 @@ func Scan(dest reflect.Value, source string, config *ScanConfig) (err error) {
 func scanTimeString(dest reflect.Value, str string, config *ScanConfig) error {
 	t, ok := config.ParseTime(strings.TrimSpace(str))
 	if !ok {
-		return errs.Errorf("can't scan %q as time.Time", str)
+		return fmt.Errorf("can't scan %q as time.Time", str)
 	}
 	dest.Set(reflect.ValueOf(t))
 	return nil
@@ -116,7 +114,7 @@ func scanTimeString(dest reflect.Value, str string, config *ScanConfig) error {
 func scanDurationString(dest reflect.Value, str string, config *ScanConfig) error {
 	d, err := time.ParseDuration(strings.TrimSpace(str))
 	if err != nil {
-		return errs.Errorf("can't scan %q as time.Duration because %w", str, err)
+		return fmt.Errorf("can't scan %q as time.Duration because %w", str, err)
 	}
 	dest.Set(reflect.ValueOf(d))
 	return nil

@@ -3,7 +3,6 @@ module github.com/domonda/go-types
 go 1.13
 
 require (
-	github.com/domonda/go-errs v0.0.0-20200617111610-0219cb9510be
 	github.com/guregu/null v4.0.0+incompatible
 	github.com/jinzhu/now v1.1.1
 	github.com/lib/pq v1.7.0
