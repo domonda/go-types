@@ -16,7 +16,7 @@ import (
 // then a new object of the pointed to type will be allocated and set.
 func Scan(dest reflect.Value, source string, config *ScanConfig) (err error) {
 	if config == nil {
-		return fmt.Errorf("nil ScanConfig")
+		return fmt.Errorf("can't scan %q using nil ScanConfig", source)
 	}
 
 	// First priority is to check if there is a custom scanner for the type
