@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"hash"
+	"io"
 	"net"
 	"os"
 	"sync"
@@ -203,10 +204,10 @@ func (id ID) GoString() string {
 	return `uu.ID("` + id.String() + `")`
 }
 
-// PrettyString returns the ID in its standard string format.
-// Implements pretty.Stringer.
-func (id ID) PrettyString() string {
-	return id.String()
+// PrettyPrint the ID in the format xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx.
+// Implements pretty.Printer.
+func (id ID) PrettyPrint(w io.Writer) {
+	w.Write(id.StringBytes())
 }
 
 // Hex returns the hex representation without dashes of the UUID

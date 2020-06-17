@@ -2,6 +2,7 @@ package uu
 
 import (
 	"database/sql/driver"
+	"io"
 	"strings"
 )
 
@@ -54,10 +55,10 @@ func (s IDSet) String() string {
 	return "set" + s.SortedSlice().String()
 }
 
-// PrettyString returns s.SortedSlice().PrettyString().
+// PrettyPrint using s.SortedSlice().PrettyPrint(w).
 // Implements pretty.Stringer.
-func (s IDSet) PrettyString() string {
-	return s.SortedSlice().PrettyString()
+func (s IDSet) PrettyPrint(w io.Writer) {
+	s.SortedSlice().PrettyPrint(w)
 }
 
 // GetOne returns a random ID from the set or IDNil if the set is empty.

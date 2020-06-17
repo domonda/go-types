@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"database/sql/driver"
 	"fmt"
+	"io"
 	"sort"
 	"strings"
 )
@@ -61,10 +62,10 @@ func (s IDSlice) String() string {
 	return "[" + strings.Join(s.Strings(), ",") + "]"
 }
 
-// PrettyString returns the IDSlice in its standard string format.
-// Implements pretty.Stringer.
-func (s IDSlice) PrettyString() string {
-	return s.String()
+// PrettyPrint using IDSlice.String().
+// Implements pretty.Printer.
+func (s IDSlice) PrettyPrint(w io.Writer) {
+	w.Write([]byte(s.String()))
 }
 
 // Strings returns a slice with all IDs converted to strings
