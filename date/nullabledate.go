@@ -2,9 +2,9 @@ package date
 
 import (
 	"database/sql/driver"
+	"fmt"
 	"time"
 
-	"github.com/domonda/errors"
 	"github.com/domonda/go-types/language"
 	"github.com/domonda/go-types/nullable"
 )
@@ -145,7 +145,7 @@ func (n *NullableDate) Scan(value interface{}) (err error) {
 		return nil
 	}
 
-	return errors.Errorf("can't scan value '%#v' of type %T as data.NullableDate", value, value)
+	return fmt.Errorf("can't scan value '%#v' of type %T as data.NullableDate", value, value)
 }
 
 // Value implements the driver database/sql/driver.Valuer interface.

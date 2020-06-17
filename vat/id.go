@@ -2,10 +2,10 @@ package vat
 
 import (
 	"database/sql/driver"
+	"errors"
 	"fmt"
 	"unicode"
 
-	"github.com/domonda/errors"
 	"github.com/domonda/go-types/country"
 	"github.com/domonda/go-types/strutil"
 )

@@ -2,8 +2,7 @@ package money
 
 import (
 	"database/sql/driver"
-
-	"github.com/domonda/errors"
+	"fmt"
 )
 
 // NullableCurrency holds a 3 character ISO 4217 alphabetic code,
@@ -77,7 +76,7 @@ func (n *NullableCurrency) Scan(value interface{}) error {
 	case nil:
 		*n = CurrencyNull
 	default:
-		return errors.Errorf("can't scan SQL value of type %T as NullableCurrency", value)
+		return fmt.Errorf("can't scan SQL value of type %T as NullableCurrency", value)
 	}
 	return nil
 }

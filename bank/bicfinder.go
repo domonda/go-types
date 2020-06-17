@@ -1,10 +1,10 @@
 package bank
 
 import (
+	"fmt"
 	"regexp"
 	"unicode/utf8"
 
-	"github.com/domonda/errors"
 	"github.com/domonda/go-types/country"
 	"github.com/domonda/go-types/strutil"
 )
@@ -32,7 +32,7 @@ func (bicFinder) FindAllIndex(str []byte, n int) [][]int {
 	result := make([][]int, 0, len(indices))
 	for _, matchIndices := range indices {
 		if len(matchIndices) != 2*2 {
-			panic(errors.Errorf("Expected 4 match indices but len(matchIndices) = %d", len(matchIndices)))
+			panic(fmt.Errorf("Expected 4 match indices but len(matchIndices) = %d", len(matchIndices)))
 		}
 		// for _, i := range matchIndices {
 		// 	if i < 0 || i > len(str) {

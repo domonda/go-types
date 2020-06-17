@@ -2,13 +2,14 @@ package bank
 
 import (
 	"database/sql/driver"
+	"errors"
+	"fmt"
 	"math/big"
 	"regexp"
 	"strconv"
 	"strings"
 	"unicode"
 
-	"github.com/domonda/errors"
 	"github.com/domonda/go-types/country"
 	"github.com/domonda/go-types/strutil"
 )
@@ -192,7 +193,7 @@ func (iban *IBAN) Scan(value interface{}) error {
 	case nil:
 		*iban = IBAN(IBANNull)
 	default:
-		return errors.Errorf("can't scan SQL value of type %T as IBAN", value)
+		return fmt.Errorf("can't scan SQL value of type %T as IBAN", value)
 	}
 	return nil
 }
@@ -205,11 +206,11 @@ func (iban IBAN) Value() (driver.Value, error) {
 func (iban *IBAN) BankAndAccountNumbers() (bankNr, accountNr string, err error) {
 	country := iban.CountryCode()
 	if country == "" {
-		return "", "", errors.Errorf("invalid IBAN: %q", string(*iban))
+		return "", "", fmt.Errorf("invalid IBAN: %q", string(*iban))
 	}
 	getNumbers, found := bankAndAccountNumbers[country]
 	if !found {
-		return "", "", errors.Errorf("can't extract bank and account numbers from IBAN: %q", string(*iban))
+		return "", "", fmt.Errorf("can't extract bank and account numbers from IBAN: %q", string(*iban))
 	}
 	bankNr, accountNr = getNumbers(string(*iban))
 	return bankNr, accountNr, nil

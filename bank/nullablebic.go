@@ -2,8 +2,7 @@ package bank
 
 import (
 	"database/sql/driver"
-
-	"github.com/domonda/errors"
+	"fmt"
 )
 
 // BICNull is an empty string and will be treatet as SQL NULL.
@@ -51,7 +50,7 @@ func (bic *NullableBIC) Scan(value interface{}) error {
 	case nil:
 		*bic = BICNull
 	default:
-		return errors.Errorf("can't scan SQL value of type %T as BIC", value)
+		return fmt.Errorf("can't scan SQL value of type %T as BIC", value)
 	}
 	return nil
 }

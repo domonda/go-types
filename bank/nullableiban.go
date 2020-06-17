@@ -2,8 +2,8 @@ package bank
 
 import (
 	"database/sql/driver"
+	"fmt"
 
-	"github.com/domonda/errors"
 	"github.com/domonda/go-types/country"
 )
 
@@ -92,7 +92,7 @@ func (iban *NullableIBAN) Scan(value interface{}) error {
 	case nil:
 		*iban = IBANNull
 	default:
-		return errors.Errorf("can't scan SQL value of type %T as NullableIBAN", value)
+		return fmt.Errorf("can't scan SQL value of type %T as NullableIBAN", value)
 	}
 	return nil
 }

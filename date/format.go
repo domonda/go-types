@@ -1,6 +1,7 @@
 package date
 
 import (
+	"fmt"
 	"reflect"
 	"strings"
 	"time"
@@ -8,7 +9,6 @@ import (
 	"github.com/guregu/null"
 	reflection "github.com/ungerik/go-reflection"
 
-	"github.com/domonda/errors"
 	"github.com/domonda/go-types/language"
 	"github.com/domonda/go-types/nullable"
 )
@@ -52,7 +52,7 @@ func (f *Format) AssignString(dest reflect.Value, source string /*, loc *time.Lo
 			tPtr = &t
 		}
 		if tPtr.IsZero() {
-			return errors.Errorf("can't assign zero time")
+			return fmt.Errorf("can't assign zero time")
 		}
 		// if !f.TimeZone.IsLocal() {
 		// 	*tPtr = tPtr.In(f.TimeZone.Get())
@@ -101,7 +101,7 @@ func (f *Format) AssignString(dest reflect.Value, source string /*, loc *time.Lo
 		return nil
 	}
 
-	return errors.Errorf("AssignString destination type not supported: %s", dest.Type())
+	return fmt.Errorf("AssignString destination type not supported: %s", dest.Type())
 }
 
 func (f *Format) FormatString(val reflect.Value) (string, error) {
@@ -126,5 +126,5 @@ func (f *Format) FormatString(val reflect.Value) (string, error) {
 		return x.Format(f.Layout), nil
 	}
 
-	return "", errors.Errorf("could not format as date string: %s", val.Type())
+	return "", fmt.Errorf("could not format as date string: %s", val.Type())
 }

@@ -2,8 +2,7 @@ package bank
 
 import (
 	"database/sql/driver"
-
-	"github.com/domonda/errors"
+	"fmt"
 )
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -35,7 +34,7 @@ func (t *AccountType) Scan(value interface{}) error {
 	case nil:
 		*t = ""
 	default:
-		return errors.Errorf("can't scan SQL value of type %T as AccountType", value)
+		return fmt.Errorf("can't scan SQL value of type %T as AccountType", value)
 	}
 	return nil
 }

@@ -2,8 +2,8 @@ package vat
 
 import (
 	"database/sql/driver"
+	"fmt"
 
-	"github.com/domonda/errors"
 	"github.com/domonda/go-types/country"
 )
 
@@ -83,7 +83,7 @@ func (n NullableID) ValidateIsNormalized() error {
 		return err
 	}
 	if n != norm {
-		return errors.Errorf("VAT ID is valid but not normalized: %q", string(n))
+		return fmt.Errorf("VAT ID is valid but not normalized: %q", string(n))
 	}
 	return nil
 }
@@ -147,7 +147,7 @@ func (n *NullableID) Scan(value interface{}) error {
 	case nil:
 		*n = Null
 	default:
-		return errors.Errorf("can't scan SQL value of type %T as vat.NullableID", value)
+		return fmt.Errorf("can't scan SQL value of type %T as vat.NullableID", value)
 	}
 	return nil
 }
