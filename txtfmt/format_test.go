@@ -4,12 +4,21 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/domonda/go-types/bank"
 	"github.com/domonda/go-types/date"
 	"github.com/domonda/go-types/money"
+	"github.com/domonda/go-types/uu"
 )
 
 var caseSet = map[*FormatConfig]map[reflect.Value]string{
 	NewEnglishFormatConfig(): {
+		// nills/nulls
+		reflect.ValueOf(voidStr()):                   "",
+		reflect.ValueOf(voidFloat()):                 "",
+		reflect.ValueOf(uu.NullableIDFrom(uu.IDNil)): "NULL",
+		reflect.ValueOf(money.NullableCurrency("")):  "",
+		reflect.ValueOf(bank.NullableIBAN("")):       "",
+		reflect.ValueOf(bank.NullableBIC("")):        "",
 		// booleans
 		reflect.ValueOf(true):  "YES",
 		reflect.ValueOf(false): "NO",
@@ -26,6 +35,13 @@ var caseSet = map[*FormatConfig]map[reflect.Value]string{
 		reflect.ValueOf(ptrPtrDateDate("2022-12-01")): "01/12/2022",
 	},
 	NewGermanFormatConfig(): {
+		// nills/nulls
+		reflect.ValueOf(voidStr()):                   "",
+		reflect.ValueOf(voidFloat()):                 "",
+		reflect.ValueOf(uu.NullableIDFrom(uu.IDNil)): "NULL",
+		reflect.ValueOf(money.NullableCurrency("")):  "",
+		reflect.ValueOf(bank.NullableIBAN("")):       "",
+		reflect.ValueOf(bank.NullableBIC("")):        "",
 		// booleans
 		reflect.ValueOf(true):  "JA",
 		reflect.ValueOf(false): "NEIN",
@@ -52,6 +68,14 @@ func Test_FormatValue(t *testing.T) {
 			}
 		}
 	}
+}
+
+func voidStr() *string {
+	return nil
+}
+
+func voidFloat() *float64 {
+	return nil
 }
 
 func ptrMoneyAmount(a float64) *money.Amount {
