@@ -56,6 +56,7 @@ func NewEnglishFormatConfig() *FormatConfig {
 	config := NewFormatConfig()
 	config.True = "YES"
 	config.False = "NO"
+	config.Date = "02/01/2006"
 	return config
 }
 
