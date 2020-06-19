@@ -131,3 +131,27 @@ func GermanMoneyFormat(currencyFirst bool) MoneyFormat {
 		Precision:     2,
 	}
 }
+
+func formatDateString(val reflect.Value, config *FormatConfig) string {
+	return val.Interface().(date.Date).Format(config.Date)
+}
+
+func formatNullableDateString(val reflect.Value, config *FormatConfig) string {
+	return val.Interface().(date.NullableDate).Format(config.Date)
+}
+
+func formatTimeString(val reflect.Value, config *FormatConfig) string {
+	return val.Interface().(time.Time).Format(config.Time)
+}
+
+func formatDurationString(val reflect.Value, config *FormatConfig) string {
+	return val.Interface().(time.Duration).String()
+}
+
+func formatMoneyAmountString(val reflect.Value, config *FormatConfig) string {
+	return config.MoneyAmount.FormatAmount(val.Interface().(money.Amount))
+}
+
+func formatMoneyCurrencyAmountString(val reflect.Value, config *FormatConfig) string {
+	return config.MoneyAmount.FormatCurrencyAmount(val.Interface().(money.CurrencyAmount))
+}
