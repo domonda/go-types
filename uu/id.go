@@ -157,9 +157,14 @@ func (id ID) Validate() error {
 	return nil
 }
 
-// IsNil returns wether the id IDNil (all zeros)
+// IsNil returns if the id is the Nil UUID value (all zeros)
 func (id ID) IsNil() bool {
 	return id == IDNil
+}
+
+// IsNotNil returns if the id is not the Nil UUID value (all zeros)
+func (id ID) IsNotNil() bool {
+	return id != IDNil
 }
 
 // Nullable returns the ID as NullableID
