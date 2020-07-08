@@ -61,10 +61,17 @@ func (n *NullableID) SetNull() {
 // Get returns the non nullable ID value
 // or panics if the NullableID is null.
 // Note: check with IsNull before using Get!
-func (n *NullableID) Get() ID {
+func (n NullableID) Get() ID {
 	if n.IsNull() {
 		panic("NULL uu.ID")
 	}
+	return n.ID
+}
+
+// GetOrNil returns the non nullable ID value
+// or the Nil UUID if n is null.
+// Use Get to ensure getting a non Nil UUID or panic.
+func (n NullableID) GetOrNil() ID {
 	return n.ID
 }
 
