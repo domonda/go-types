@@ -47,6 +47,11 @@ var vatidRegex = map[country.Code]*regexp.Regexp{
 	"SE": regexp.MustCompile(`^SE\s??\d{12}$`),
 	"SI": regexp.MustCompile(`^SI\s??\d{8}$`),
 	"SK": regexp.MustCompile(`^SK\s??\d{10}$`),
+	// > For the non-Union scheme, the taxable person can choose any Member State to be
+	// > the Member State of identification. That Member State will allocate an individual
+	// > VAT identification number to the taxable person (using the format EUxxxyyyyyz).
+	// Taken straight from: https://ec.europa.eu/taxation_customs/sites/taxation/files/resources/documents/taxation/vat/how_vat_works/telecom/one-stop-shop-guidelines_en.pdf
+	MOSSSchemaVATCountryCode: regexp.MustCompile(`^EU\s??\d{9}$`),
 }
 
 // https://www.bmf.gv.at/egovernment/fon/fuer-softwarehersteller/BMF_UID_Konstruktionsregeln.pdf

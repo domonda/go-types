@@ -30,6 +30,7 @@ var validVATIDs = map[string]string{
 	"NO 916634773":    "NO916634773",
 	"CHE-123.456.788": "CHE123456788",
 	"CHE123456788":    "CHE123456788",
+	"EU372008134":     "EU372008134", // MOSS scheme VAT
 }
 
 var invalidVATIDs = []ID{

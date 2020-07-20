@@ -10,6 +10,11 @@ import (
 	"github.com/domonda/go-types/strutil"
 )
 
+// MOSSSchemaVATCountryCode or the VAT Mini One Stop Shop (MOSS) is an optional scheme that allows you
+// to account for VAT - normally due in multiple EU countries – in just one EU country. Check out:
+// https://europa.eu/youreurope/business/taxation/vat/vat-digital-services-moss-scheme/index_en.htm
+const MOSSSchemaVATCountryCode = "EU"
+
 // ID is a european VAT ID.
 // ID implements the database/sql.Scanner and database/sql/driver.Valuer interfaces,
 // returning errors when the ID is not valid and can't be normalized.
@@ -59,7 +64,7 @@ func (id ID) Normalized() (ID, error) {
 
 	// Check country code
 	countryCode := country.Code(normalized[:2])
-	if !countryCode.Valid() {
+	if countryCode != MOSSSchemaVATCountryCode && !countryCode.Valid() {
 		return "", fmt.Errorf("VAT ID %q has an invalid country code: %q", string(id), string(countryCode))
 	}
 
@@ -136,6 +141,10 @@ func (id ID) CountryCode() country.Code {
 		return country.Invalid
 	}
 	code := country.Code(norm[:2])
+	if code == MOSSSchemaVATCountryCode {
+		// MOSS VAT begins with "EU" - Europe is not a country
+		return country.Invalid
+	}
 	if code == "EL" {
 		return "GR"
 	}
