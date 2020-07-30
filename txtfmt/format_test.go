@@ -15,7 +15,7 @@ var caseSet = map[*FormatConfig]map[reflect.Value]string{
 		// nills/nulls
 		reflect.ValueOf(voidStr()):                   "",
 		reflect.ValueOf(voidFloat()):                 "",
-		reflect.ValueOf(uu.NullableIDFrom(uu.IDNil)): "NULL",
+		reflect.ValueOf(uu.NullableIDFrom(uu.IDNil)): "",
 		reflect.ValueOf(money.NullableCurrency("")):  "",
 		reflect.ValueOf(bank.NullableIBAN("")):       "",
 		reflect.ValueOf(bank.NullableBIC("")):        "",
@@ -38,7 +38,7 @@ var caseSet = map[*FormatConfig]map[reflect.Value]string{
 		// nills/nulls
 		reflect.ValueOf(voidStr()):                   "",
 		reflect.ValueOf(voidFloat()):                 "",
-		reflect.ValueOf(uu.NullableIDFrom(uu.IDNil)): "NULL",
+		reflect.ValueOf(uu.NullableIDFrom(uu.IDNil)): "",
 		reflect.ValueOf(money.NullableCurrency("")):  "",
 		reflect.ValueOf(bank.NullableIBAN("")):       "",
 		reflect.ValueOf(bank.NullableBIC("")):        "",

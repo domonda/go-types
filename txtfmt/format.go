@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"strconv"
 
+	"github.com/domonda/go-types/nullable"
 	"github.com/domonda/go-types/strfmt"
 	"github.com/ungerik/go-reflection"
 )
@@ -16,11 +17,8 @@ func FormatValue(val reflect.Value, config *FormatConfig) string {
 		return f.FormatValue(derefVal, config)
 	}
 
-	switch val.Type().Kind() {
-	case reflect.Ptr, reflect.Interface:
-		if val.IsNil() {
-			return config.Nil
-		}
+	if nullable.ReflectIsNull(val) {
+		return config.Nil
 	}
 
 	switch derefType.Kind() {
