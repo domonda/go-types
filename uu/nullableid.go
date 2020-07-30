@@ -81,7 +81,8 @@ func (n NullableID) PrettyPrint(w io.Writer) {
 	w.Write([]byte(n.StringOr("NULL")))
 }
 
-// IsNull returns true if the NullableID is null
+// IsNull returns true if the NullableID is null.
+// IsNull implements the nullable.Nullable interface.
 func (n NullableID) IsNull() bool {
 	return n == IDNull
 }

@@ -14,6 +14,10 @@ import (
 // and a non nil zero length slice to an empty SQL array '{}'.
 type NullBoolArray []sql.NullBool
 
+// IsNull returns true if a is nil.
+// IsNull implements the Nullable interface.
+func (a NullBoolArray) IsNull() bool { return a == nil }
+
 // Bools returns all NullBoolArray elements as []bool with NULL elements set to false.
 func (a NullBoolArray) Bools() []bool {
 	return notnull.NullBoolArray(a).Bools()

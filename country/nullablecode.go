@@ -14,7 +14,8 @@ const Null NullableCode = ""
 // Null.Valid() or NullableCode("").Valid() will return true.
 type NullableCode string
 
-// IsNull returns true if the NullableCode is null
+// IsNull returns true if the NullableCode is null.
+// IsNull implements the nullable.Nullable interface.
 func (n NullableCode) IsNull() bool {
 	return n == Null
 }

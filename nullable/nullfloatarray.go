@@ -14,6 +14,10 @@ import (
 // and a non nil zero length slice to an empty SQL array '{}'.
 type NullFloatArray []sql.NullFloat64
 
+// IsNull returns true if a is nil.
+// IsNull implements the Nullable interface.
+func (a NullFloatArray) IsNull() bool { return a == nil }
+
 // Floats returns all NullFloatArray elements as []float64 with NULL elements set to 0.
 func (a NullFloatArray) Floats() []float64 {
 	if len(a) == 0 {

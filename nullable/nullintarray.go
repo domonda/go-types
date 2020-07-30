@@ -14,6 +14,10 @@ import (
 // and a non nil zero length slice to an empty SQL array '{}'.
 type NullIntArray []sql.NullInt64
 
+// IsNull returns true if a is nil.
+// IsNull implements the Nullable interface.
+func (a NullIntArray) IsNull() bool { return a == nil }
+
 // Ints returns all NullIntArray elements as []int64 with NULL elements set to 0.
 func (a NullIntArray) Ints() []int64 {
 	if len(a) == 0 {

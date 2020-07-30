@@ -21,6 +21,10 @@ func MarshalJSON(source interface{}) (JSON, error) {
 	return json.Marshal(source)
 }
 
+// IsNull returns true if j is nil.
+// IsNull implements the Nullable interface.
+func (j JSON) IsNull() bool { return j == nil }
+
 // MarshalFrom marshalles source as JSON and sets it
 // at j when there was no error.
 func (j *JSON) MarshalFrom(source interface{}) error {
@@ -45,7 +49,7 @@ func (j JSON) UnmarshalTo(dest interface{}) error {
 // See the package function MarshalJSON to marshal
 // a struct into JSON
 func (j JSON) MarshalJSON() ([]byte, error) {
-	if j == nil {
+	if j.IsNull() {
 		return []byte("null"), nil
 	}
 	return j, nil
@@ -69,7 +73,7 @@ func (j *JSON) UnmarshalJSON(sourceJSON []byte) error {
 
 // Valid reports whether j is a valid JSON encoding.
 func (j JSON) Valid() bool {
-	if j == nil {
+	if j.IsNull() {
 		return true
 	}
 	return json.Valid(j)
@@ -77,7 +81,7 @@ func (j JSON) Valid() bool {
 
 // Value returns j as a SQL value.
 func (j JSON) Value() (driver.Value, error) {
-	if len(j) == 0 {
+	if j.IsNull() {
 		return nil, nil
 	}
 	return []byte(j), nil
@@ -85,7 +89,12 @@ func (j JSON) Value() (driver.Value, error) {
 
 // IsEmpty returns true if j is nil, or an empty JSON value like "", "{}", or "[]"
 func (j JSON) IsEmpty() bool {
-	return j == nil || string(j) == "{}" || string(j) == "[]"
+	switch string(j) {
+	case "", "{}", "[]":
+		return true
+	default:
+		return false
+	}
 }
 
 // Scan stores the src in *j. No validation is done.
@@ -120,7 +129,7 @@ func (j *JSON) Scan(src interface{}) error {
 // String returns the JSON as string.
 // String implements the fmt.Stringer interface.
 func (j JSON) String() string {
-	if j == nil {
+	if j.IsNull() {
 		return "null"
 	}
 	return string(j)

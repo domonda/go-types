@@ -83,7 +83,8 @@ func (bic *NullableBIC) Get() BIC {
 	return BIC(*bic)
 }
 
-// IsNull returns true if the NullableBIC is null
+// IsNull returns true if the NullableBIC is null.
+// IsNull implements the nullable.Nullable interface.
 func (bic NullableBIC) IsNull() bool {
 	return bic == BICNull
 }

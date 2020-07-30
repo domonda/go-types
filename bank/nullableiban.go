@@ -125,7 +125,8 @@ func (n *NullableIBAN) Get() IBAN {
 	return IBAN(*n)
 }
 
-// IsNull returns true if the NullableIBAN is null
+// IsNull returns true if the NullableIBAN is null.
+// IsNull implements the nullable.Nullable interface.
 func (n NullableIBAN) IsNull() bool {
 	return n == IBANNull
 }

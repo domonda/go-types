@@ -45,7 +45,8 @@ func (n NullableID) NormalizedNotNull() (ID, error) {
 	return ID(n).Normalized()
 }
 
-// IsNull returns true if the NullableID is null
+// IsNull returns true if the NullableID is null.
+// IsNull implements the nullable.Nullable interface.
 func (n NullableID) IsNull() bool {
 	return n == Null
 }

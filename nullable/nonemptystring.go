@@ -44,6 +44,7 @@ func (n NonEmptyString) Ptr() *string {
 }
 
 // IsNull returns true if the string n is empty.
+// IsNull implements the Nullable interface.
 func (n NonEmptyString) IsNull() bool {
 	return n == ""
 }

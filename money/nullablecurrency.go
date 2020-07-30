@@ -23,7 +23,8 @@ func (n *NullableCurrency) GetOrDefault(defaultVal NullableCurrency) NullableCur
 	return *n
 }
 
-// IsNull returns true if the NullableCurrency is null
+// IsNull returns true if the NullableCurrency is null.
+// IsNull implements the nullable.Nullable interface.
 func (n NullableCurrency) IsNull() bool {
 	return n == CurrencyNull
 }

@@ -13,7 +13,11 @@ import (
 // and a non nil zero length slice to an empty SQL array '{}'.
 type FloatArray []float64
 
-// String implements the fmt.Stringer interface.
+// IsNull returns true if a is nil.
+// IsNull implements the Nullable interface.
+func (a FloatArray) IsNull() bool { return a == nil }
+
+// String implements the fmt.Stringer interface
 func (a FloatArray) String() string {
 	value, _ := a.Value()
 	return fmt.Sprintf("FloatArray%v", value)
@@ -21,7 +25,7 @@ func (a FloatArray) String() string {
 
 // Value implements the database/sql/driver.Valuer interface
 func (a FloatArray) Value() (driver.Value, error) {
-	if a == nil {
+	if a.IsNull() {
 		return nil, nil
 	}
 	return notnull.FloatArray(a).Value()

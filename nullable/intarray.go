@@ -13,6 +13,10 @@ import (
 // and a non nil zero length slice to an empty SQL array '{}'.
 type IntArray []int64
 
+// IsNull returns true if a is nil.
+// IsNull implements the Nullable interface.
+func (a IntArray) IsNull() bool { return a == nil }
+
 // String implements the fmt.Stringer interface.
 func (a IntArray) String() string {
 	value, _ := a.Value()
@@ -21,7 +25,7 @@ func (a IntArray) String() string {
 
 // Value implements the database/sql/driver.Valuer interface
 func (a IntArray) Value() (driver.Value, error) {
-	if a == nil {
+	if a.IsNull() {
 		return nil, nil
 	}
 	return notnull.IntArray(a).Value()

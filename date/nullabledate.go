@@ -37,7 +37,8 @@ func MustNullable(str string) NullableDate {
 	return d
 }
 
-// IsNull returns true if the NullableDate is null
+// IsNull returns true if the NullableDate is null.
+// IsNull implements the nullable.Nullable interface.
 func (n NullableDate) IsNull() bool {
 	return n == Null
 }

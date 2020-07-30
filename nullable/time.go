@@ -80,6 +80,7 @@ func (n Time) Ptr() *time.Time {
 
 // IsNull returns true if the Time is null.
 // Uses time.Time.IsZero internally.
+// IsNull implements the Nullable interface.
 func (n Time) IsNull() bool {
 	return n.Time.IsZero()
 }
