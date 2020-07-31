@@ -144,6 +144,11 @@ func (a *Amount) Equal(b *Amount) bool {
 	return *a == *b
 }
 
+// Signbit reports whether a is negative or negative zero.
+func (a Amount) Signbit() bool {
+	return math.Signbit(float64(a))
+}
+
 // Copysign returns an Amount with the magnitude
 // of a and with the sign of the sign argument.
 func (a Amount) Copysign(sign Amount) Amount {
@@ -159,9 +164,9 @@ func (a Amount) Abs() Amount {
 	return Amount(math.Abs(float64(a)))
 }
 
-// PosSign returns the amount with a positive sign (abs) if true is passed,
+// WithPosSign returns the amount with a positive sign (abs) if true is passed,
 // or with a negative sign if false is passed.
-func (a Amount) PosSign(positive bool) Amount {
+func (a Amount) WithPosSign(positive bool) Amount {
 	if positive {
 		return a.Copysign(+1)
 	} else {
@@ -169,9 +174,9 @@ func (a Amount) PosSign(positive bool) Amount {
 	}
 }
 
-// NegSign returns the amount with a negative sign if true is passed,
+// WithNegSign returns the amount with a negative sign if true is passed,
 // or with a positive sign (abs) if false is passed.
-func (a Amount) NegSign(negative bool) Amount {
+func (a Amount) WithNegSign(negative bool) Amount {
 	if negative {
 		return a.Copysign(-1)
 	} else {
