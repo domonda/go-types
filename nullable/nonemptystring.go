@@ -8,6 +8,9 @@ import (
 	"fmt"
 )
 
+// NullNonEmptyString is the SQL NULL and JSON null value for NonEmptyString.
+const NullNonEmptyString NonEmptyString = ""
+
 // NonEmptyString is a string type where the empty string value
 // is interpreted as SQL NULL and JSON null by
 // implementing the sql.Scanner and driver.Valuer interfaces
