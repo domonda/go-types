@@ -87,6 +87,11 @@ func (n NullableID) IsNull() bool {
 	return n == IDNull
 }
 
+// IsNotNull returns true if the NullableID is not null.
+func (n NullableID) IsNotNull() bool {
+	return n != IDNull
+}
+
 // String returns the ID as string or "NULL"
 func (n NullableID) String() string {
 	return n.StringOr("NULL")
