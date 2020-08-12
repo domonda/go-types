@@ -96,7 +96,7 @@ func (n *NonEmptyString) UnmarshalJSON(sourceJSON []byte) error {
 		*n = ""
 		return nil
 	}
-	return json.Unmarshal(sourceJSON, n)
+	return json.Unmarshal(sourceJSON, (*string)(n))
 }
 
 // MarshalJSON implements encoding/json.Marshaler
