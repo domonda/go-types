@@ -89,9 +89,10 @@ func (n NonEmptyString) Value() (driver.Value, error) {
 
 // UnarshalJSON implements encoding/json.Unmarshaler.
 func (n *NonEmptyString) UnmarshalJSON(sourceJSON []byte) error {
-	if bytes.Equal(sourceJSON, []byte(`""`)) {
-		return errors.New("can't unmarshal empty JSON string as nullable.NonEmptyString")
-	}
+	// Commented out to accept empty string as null to help transition existing data
+	// if bytes.Equal(sourceJSON, []byte(`""`)) {
+	// 	return errors.New("can't unmarshal empty JSON string as nullable.NonEmptyString")
+	// }
 	if bytes.Equal(sourceJSON, []byte(`null`)) {
 		*n = ""
 		return nil
