@@ -51,6 +51,31 @@ func (n NullableID) IsNull() bool {
 	return n == Null
 }
 
+// IsNotNull returns true if the NullableID is not null.
+func (n NullableID) IsNotNull() bool {
+	return n != Null
+}
+
+// Set sets an ID for this NullableID
+func (n *NullableID) Set(id ID) {
+	*n = NullableID(id)
+}
+
+// SetNull sets the NullableID to null
+func (n *NullableID) SetNull() {
+	*n = Null
+}
+
+// Get returns the non nullable ID value
+// or panics if the NullableID is null.
+// Note: check with IsNull before using Get!
+func (n NullableID) Get() ID {
+	if n.IsNull() {
+		panic("NULL vat.ID")
+	}
+	return ID(n)
+}
+
 // Valid returns if id is a valid VAT ID or Null,
 // ignoring normalization.
 func (n NullableID) Valid() bool {
@@ -92,11 +117,6 @@ func (n NullableID) ValidateIsNormalized() error {
 // ValidateIsNormalizedAndNotNull returns an error if id is not a valid and normalized VAT ID.
 func (n NullableID) ValidateIsNormalizedAndNotNull() error {
 	return ID(n).ValidateIsNormalized()
-}
-
-// ID returns the NullableID as ID without any validation.
-func (n NullableID) ID() ID {
-	return ID(n)
 }
 
 // CountryCode returns the country.Code of the VAT ID,
