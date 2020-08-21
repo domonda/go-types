@@ -52,6 +52,11 @@ func (n NonEmptyString) IsNull() bool {
 	return n == ""
 }
 
+// IsNotNull returns true if the string n is not empty.
+func (n NonEmptyString) IsNotNull() bool {
+	return n != ""
+}
+
 // StringOr returns the string value of n or the passed nullString if n.IsNull()
 func (n NonEmptyString) StringOr(nullString string) string {
 	if n.IsNull() {
