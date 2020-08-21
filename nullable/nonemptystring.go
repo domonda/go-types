@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 )
 
 // NullNonEmptyString is the SQL NULL and JSON null value for NonEmptyString.
@@ -63,6 +64,13 @@ func (n NonEmptyString) StringOr(nullString string) string {
 		return nullString
 	}
 	return string(n)
+}
+
+// TrimSpace returns the string with all white-space
+// characters trimmed from beginning and end.
+// A potentially resulting empty string will be interpreted as null.
+func (n NonEmptyString) TrimSpace() NonEmptyString {
+	return NonEmptyString(strings.TrimSpace(string(n)))
 }
 
 // Scan implements the database/sql.Scanner interface.
