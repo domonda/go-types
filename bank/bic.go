@@ -141,4 +141,5 @@ var falseBICs = map[BIC]struct{}{
 	"DIENSTGEBER": {},
 	"GELISTET":    {},
 	"FACILITY":    {},
+	"AMTSGERICHT": {},
 }
