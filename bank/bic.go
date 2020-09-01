@@ -142,4 +142,5 @@ var falseBICs = map[BIC]struct{}{
 	"GELISTET":    {},
 	"FACILITY":    {},
 	"AMTSGERICHT": {},
+	"DEUTSCHLAND": {},
 }
