@@ -74,7 +74,7 @@ func (c *ScanConfig) ParseTime(str string) (t time.Time, ok bool) {
 	for _, format := range c.TimeFormats {
 		t, err := time.Parse(format, str)
 		if err == nil {
-			return t, ok
+			return t, true
 		}
 	}
 	return time.Time{}, false
