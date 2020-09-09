@@ -25,6 +25,8 @@ func NewScanConfig() *ScanConfig {
 			time.RFC3339Nano,
 			time.RFC3339,
 			"2006-01-02 15:04:05",
+			"2006-01-02 15:04",
+			"2006-01-02",
 		},
 		AcceptedMoneyAmountDecimals: []int{0, 2, 4},
 	}
