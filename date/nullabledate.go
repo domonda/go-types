@@ -43,6 +43,11 @@ func (n NullableDate) IsNull() bool {
 	return n == Null
 }
 
+// IsNotNull returns true if the NullableDate is not null.
+func (n NullableDate) IsNotNull() bool {
+	return n != Null
+}
+
 // Valid returns if the format of the date is correct, see Format
 // n.IsZero() is valid
 func (n NullableDate) Valid() bool {
