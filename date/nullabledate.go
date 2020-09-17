@@ -37,15 +37,47 @@ func MustNullable(str string) NullableDate {
 	return d
 }
 
+// IsZero returns true when the date is any of ["", "0000-00-00", "0001-01-01", "null", "NULL"]
+// "0001-01-01" is treated as zero because it's the zero value of time.Time.
+func (n NullableDate) IsZero() bool {
+	return Date(n).IsZero()
+}
+
+// Date returns the NullableDate as Date without checking if it's null.
+// See also Get which panics on null.
+func (n NullableDate) Date() Date {
+	return Date(n)
+}
+
 // IsNull returns true if the NullableDate is null.
 // IsNull implements the nullable.Nullable interface.
 func (n NullableDate) IsNull() bool {
-	return n == Null
+	return n.IsZero()
 }
 
 // IsNotNull returns true if the NullableDate is not null.
 func (n NullableDate) IsNotNull() bool {
-	return n != Null
+	return !n.IsNull()
+}
+
+// Set sets an Date for this NullableDate
+func (n *NullableDate) Set(d Date) {
+	*n = NullableDate(d)
+}
+
+// SetNull sets the NullableDate to null
+func (n *NullableDate) SetNull() {
+	*n = Null
+}
+
+// Get returns the non nullable Date value
+// or panics if the NullableDate is null.
+// Note: check with IsNull before using Get!
+func (n NullableDate) Get() Date {
+	if n.IsNull() {
+		panic("date.Null")
+	}
+	return Date(n)
 }
 
 // Valid returns if the format of the date is correct, see Format
@@ -164,16 +196,6 @@ func (n NullableDate) Value() (driver.Value, error) {
 		return nil, err
 	}
 	return string(normalized), nil
-}
-
-// IsZero returns true when the date is any of ["", "0000-00-00", "0001-01-01", "null", "NULL"]
-// "0001-01-01" is treated as zero because it's the zero value of time.Time.
-func (n NullableDate) IsZero() bool {
-	return Date(n).IsZero()
-}
-
-func (n NullableDate) Date() Date {
-	return Date(n)
 }
 
 // MidnightUTC returns the midnight (00:00) nullable.Time of the date in UTC,
