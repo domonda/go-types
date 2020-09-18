@@ -143,4 +143,5 @@ var falseBICs = map[BIC]struct{}{
 	"FACILITY":    {},
 	"AMTSGERICHT": {},
 	"DEUTSCHLAND": {},
+	"GESAMTNETTO": {},
 }

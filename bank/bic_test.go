@@ -34,6 +34,7 @@ var invalidBICs = []BIC{
 	"FACILITY",    // valid syntax, but not a BIC
 	"AMTSGERICHT", // valid syntax, but not a BIC
 	"DEUTSCHLAND", // valid syntax, but not a BIC
+	"GESAMTNETTO", // valid syntax, but not a BIC
 }
 
 func Test_BICValid(t *testing.T) {
