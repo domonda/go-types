@@ -10,6 +10,6 @@ require (
 	github.com/ungerik/go-command v0.0.0-20200715123347-c0a2757c9504
 	github.com/ungerik/go-fs v0.0.0-20200821085535-43255b165ff2
 	github.com/ungerik/go-reflection v0.0.0-20191013094457-172d2e71715f
-	golang.org/x/sys v0.0.0-20200918174421-af09f7315aff // indirect
+	golang.org/x/sys v0.0.0-20200923182605-d9f96fdee20d // indirect
 	golang.org/x/text v0.3.3
 )

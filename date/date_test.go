@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/domonda/go-types/language"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -359,4 +360,36 @@ func Test_Date_UnmarshalJSON(t *testing.T) {
 	assert.Equal(t, Date("2012-12-12"), s.NotNull, "valid Date")
 	assert.Equal(t, Date("Not a date!"), s.Invalid, "invalid Date parsed as is, without error")
 	assert.False(t, s.Invalid.Valid(), "invalid Date parsed as is, not valid")
+}
+
+func TestDate_Normalized(t *testing.T) {
+	tests := []struct {
+		name    string
+		date    Date
+		lang    []language.Code
+		want    Date
+		wantErr bool
+	}{
+		// Valid:
+		{name: "earliest", date: "0001-01-01", lang: nil, want: "0001-01-01"},
+		{name: "3000-01-01", date: "3000-01-01", lang: nil, want: "3000-01-01"},
+		{name: "3000/01/01", date: "3000/01/01", lang: nil, want: "3000-01-01"},
+		{name: "3000.01.01", date: "3000.01.01", lang: nil, want: "3000-01-01"},
+		// Invalid:
+		{name: "empty", date: "", lang: nil, wantErr: true},
+		{name: "invalid year", date: "0000-01-01", lang: nil, wantErr: true},
+		{name: "invalid month", date: "2020-00-01", lang: nil, wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := tt.date.Normalized(tt.lang...)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Date.Normalized() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if got != tt.want {
+				t.Errorf("Date.Normalized() = %v, want %v", got, tt.want)
+			}
+		})
+	}
 }

@@ -613,7 +613,7 @@ func normalizeDate(str string, langHint language.Code) (string, error) {
 		}
 	}
 	if len(parts) != 3 {
-		return "", fmt.Errorf("Date must have 3 parts: %q", str)
+		return "", fmt.Errorf("date must have 3 parts: %q", str)
 	}
 	dayHint := -1
 	totalLen := 0
@@ -640,7 +640,7 @@ func normalizeDate(str string, langHint language.Code) (string, error) {
 		}
 	}
 	if totalLen < 5 {
-		return "", fmt.Errorf("Date is too short: %q", str)
+		return "", fmt.Errorf("date is too short: %q", str)
 	}
 
 	len0 := len(parts[0])
@@ -750,7 +750,7 @@ func normalizeDate(str string, langHint language.Code) (string, error) {
 }
 
 func validYear(year int) bool {
-	return year >= 1900 && year <= 2045
+	return year > 0
 }
 
 func validMonth(month int) bool {
