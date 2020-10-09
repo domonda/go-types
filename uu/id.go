@@ -190,7 +190,7 @@ func (id ID) StringBytes() []byte {
 	b[18] = dash
 	hex.Encode(b[19:23], id[8:10])
 	b[23] = dash
-	hex.Encode(b[24:], id[10:])
+	hex.Encode(b[24:36], id[10:16])
 
 	return b
 }
@@ -199,7 +199,19 @@ func (id ID) StringBytes() []byte {
 //   xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 // String implements the fmt.Stringer interface.
 func (id ID) String() string {
-	return string(id.StringBytes())
+	b := make([]byte, 36)
+
+	hex.Encode(b[0:8], id[0:4])
+	b[8] = dash
+	hex.Encode(b[9:13], id[4:6])
+	b[13] = dash
+	hex.Encode(b[14:18], id[6:8])
+	b[18] = dash
+	hex.Encode(b[19:23], id[8:10])
+	b[23] = dash
+	hex.Encode(b[24:36], id[10:16])
+
+	return string(b)
 }
 
 // GoString returns a pseudo Go literal for the ID in the format:
@@ -240,7 +252,7 @@ func (id *ID) SetVariant() {
 // MarshalText implements the encoding.TextMarshaler interface.
 // The encoding is the same as returned by String.
 func (id ID) MarshalText() (text []byte, err error) {
-	return []byte(id.String()), nil
+	return id.StringBytes(), nil
 }
 
 // UnmarshalText implements the encoding.TextUnmarshaler interface.

@@ -240,18 +240,21 @@ func (s IDSlice) Value() (driver.Value, error) {
 	if s == nil {
 		return nil, nil
 	}
-
-	var b strings.Builder
-	b.WriteByte('{')
-	for i, id := range s {
-		if i > 0 {
-			b.WriteByte(',')
-		}
-		b.WriteByte('"')
-		b.WriteString(id.String())
-		b.WriteByte('"')
+	l := len(s)
+	if l == 0 {
+		return "{}", nil
 	}
-	b.WriteByte('}')
+
+	b := strings.Builder{}
+	b.Grow(2 + (36 + 2) + (l-1)*(1+36+2))
+
+	b.WriteString(`{"`)
+	b.Write(s[0].StringBytes())
+	for i := 1; i < l; i++ {
+		b.WriteString(`","`)
+		b.Write(s[i].StringBytes())
+	}
+	b.WriteString(`"}`)
 
 	return b.String(), nil
 }
@@ -261,20 +264,22 @@ func (s IDSlice) MarshalJSON() ([]byte, error) {
 	if s == nil {
 		return []byte("null"), nil
 	}
-
-	var b bytes.Buffer
-	b.WriteByte('[')
-	for i, id := range s {
-		if i > 0 {
-			b.WriteByte(',')
-		}
-		b.WriteByte('"')
-		b.WriteString(id.String())
-		b.WriteByte('"')
+	l := len(s)
+	if l == 0 {
+		return []byte("[]"), nil
 	}
-	b.WriteByte(']')
 
-	return b.Bytes(), nil
+	b := make([]byte, 0, 2+(36+2)+(l-1)*(1+36+2))
+
+	b = append(b, `["`...)
+	b = append(b, s[0].StringBytes()...)
+	for i := 1; i < l; i++ {
+		b = append(b, `","`...)
+		b = append(b, s[i].StringBytes()...)
+	}
+	b = append(b, `"]`...)
+
+	return b, nil
 }
 
 // UnmarshalJSON implements encoding/json.Unmarshaler

@@ -1,7 +1,9 @@
 package uu
 
 import (
+	"database/sql/driver"
 	"encoding/json"
+	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -63,4 +65,31 @@ func TestIDSlice(t *testing.T) {
 	got, err := IDSliceFromStrings(nil)
 	assert.NoError(t, err)
 	assert.Nil(t, got)
+}
+
+func TestIDSlice_Value(t *testing.T) {
+	tests := []struct {
+		name    string
+		s       IDSlice
+		want    driver.Value
+		wantErr bool
+	}{
+		{name: "nil", s: nil, want: nil},
+		{name: "len0", s: IDSlice{}, want: driver.Value(`{}`)},
+		{name: "len1", s: IDSliceMustFromStrings("3004417b-25ca-441c-924f-102e571e5b5b"), want: driver.Value(`{"3004417b-25ca-441c-924f-102e571e5b5b"}`)},
+		{name: "len2", s: IDSliceMustFromStrings("4a6ae04c-8718-4cea-929e-0d8071d328c7", "52d75836-03e0-4b38-8405-bbaa0f392d12"), want: driver.Value(`{"4a6ae04c-8718-4cea-929e-0d8071d328c7","52d75836-03e0-4b38-8405-bbaa0f392d12"}`)},
+		{name: "len3", s: IDSliceMustFromStrings("2de0c5e3-d660-4ced-b929-f3a28a42849c", "b445f20b-d964-4fde-a360-39dc60b2157d", "2646cba5-4bc6-454f-bdd0-b869a2650f7e"), want: driver.Value(`{"2de0c5e3-d660-4ced-b929-f3a28a42849c","b445f20b-d964-4fde-a360-39dc60b2157d","2646cba5-4bc6-454f-bdd0-b869a2650f7e"}`)},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := tt.s.Value()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("IDSlice.Value() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("IDSlice.Value() = %v, want %v", got, tt.want)
+			}
+		})
+	}
 }
