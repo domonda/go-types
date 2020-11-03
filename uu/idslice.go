@@ -82,15 +82,28 @@ func (s IDSlice) Strings() []string {
 
 // Sort the slice in place.
 func (s IDSlice) Sort() {
-	sort.Slice(s, func(i, j int) bool { return IDCompare(s[i], s[j]) < 0 })
+	sort.Sort(s)
 }
 
 // SortedClone returns a sorted clone of the slice.
 func (s IDSlice) SortedClone() IDSlice {
-	clone := s.Clone()
-	clone.Sort()
-	return clone
+	c := s.Clone()
+	c.Sort()
+	return c
 }
+
+// Len is the number of elements in the collection.
+// One of the methods to implement sort.Interface.
+func (s IDSlice) Len() int { return len(s) }
+
+// Less reports whether the element with
+// index i should sort before the element with index j.
+// One of the methods to implement sort.Interface.
+func (s IDSlice) Less(i, j int) bool { return IDCompare(s[i], s[j]) < 0 }
+
+// Swap swaps the elements with indexes i and j.
+// One of the methods to implement sort.Interface.
+func (s IDSlice) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
 
 // IndexOf returns the index of the first occurrence of id
 // in the slice, or -1 if id was not found.

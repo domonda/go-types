@@ -82,3 +82,16 @@ func (a IntArray) MarshalJSON() ([]byte, error) {
 	}
 	return json.Marshal([]int64(a))
 }
+
+// Len is the number of elements in the collection.
+// One of the methods to implement sort.Interface.
+func (a IntArray) Len() int { return len(a) }
+
+// Less reports whether the element with
+// index i should sort before the element with index j.
+// One of the methods to implement sort.Interface.
+func (a IntArray) Less(i, j int) bool { return a[i] < a[j] }
+
+// Swap swaps the elements with indexes i and j.
+// One of the methods to implement sort.Interface.
+func (a IntArray) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
