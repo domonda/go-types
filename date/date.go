@@ -563,6 +563,22 @@ func (date Date) BeforeTodayUTC() bool {
 	return date.Before(OfTodayUTC())
 }
 
+func (date Date) Add(years, months, days int) Date {
+	return OfTime(date.Midnight().AddDate(years, months, days))
+}
+
+func (date Date) AddYears(years int) Date {
+	return OfTime(date.Midnight().AddDate(years, 0, 0))
+}
+
+func (date Date) AddMonths(months int) Date {
+	return OfTime(date.Midnight().AddDate(0, months, 0))
+}
+
+func (date Date) AddDays(days int) Date {
+	return OfTime(date.Midnight().AddDate(0, 0, days))
+}
+
 func isDateSeparatorRune(r rune) bool {
 	return unicode.IsSpace(r) || r == '.' || r == '/' || r == '-'
 }
