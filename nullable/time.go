@@ -106,6 +106,11 @@ func (n Time) UTC() Time {
 	return Time{Time: time.Now().UTC()}
 }
 
+// Set the passed time.Time
+func (n *Time) Set(t time.Time) {
+	n.Time = t
+}
+
 // Scan implements the database/sql.Scanner interface.
 func (n *Time) Scan(value interface{}) error {
 	switch t := value.(type) {

@@ -73,6 +73,12 @@ func (n NonEmptyString) TrimSpace() NonEmptyString {
 	return NonEmptyString(strings.TrimSpace(string(n)))
 }
 
+// Set the passed string as NonEmptyString.
+// Passing an empty string will be interpreted as setting NULL.
+func (n *NonEmptyString) Set(s string) {
+	*n = NonEmptyString(s)
+}
+
 // Scan implements the database/sql.Scanner interface.
 func (n *NonEmptyString) Scan(value interface{}) error {
 	switch s := value.(type) {
