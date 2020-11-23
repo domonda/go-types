@@ -14,12 +14,6 @@ const Null NullableCode = ""
 // Null.Valid() or NullableCode("").Valid() will return true.
 type NullableCode string
 
-// IsNull returns true if the NullableCode is null.
-// IsNull implements the nullable.Nullable interface.
-func (n NullableCode) IsNull() bool {
-	return n == Null
-}
-
 func (n NullableCode) Valid() bool {
 	return n == Null || Code(n).Valid()
 }
@@ -48,7 +42,38 @@ func (n NullableCode) CountryName() string {
 	return Code(n).CountryName()
 }
 
-func (n NullableCode) Code() Code {
+// func (n NullableCode) Code() Code {
+// 	return Code(n)
+// }
+
+// IsNull returns true if the NullableID is null.
+// IsNull implements the nullable.Nullable interface.
+func (n NullableCode) IsNull() bool {
+	return n == Null
+}
+
+// IsNotNull returns true if the NullableCode is not null.
+func (n NullableCode) IsNotNull() bool {
+	return n != Null
+}
+
+// Set sets an ID for this NullableCode
+func (n *NullableCode) Set(code Code) {
+	*n = NullableCode(code)
+}
+
+// SetNull sets the NullableCode to null
+func (n *NullableCode) SetNull() {
+	*n = Null
+}
+
+// Get returns the non nullable ID value
+// or panics if the NullableCode is null.
+// Note: check with IsNull before using Get!
+func (n NullableCode) Get() Code {
+	if n.IsNull() {
+		panic("NULL country.Code")
+	}
 	return Code(n)
 }
 
