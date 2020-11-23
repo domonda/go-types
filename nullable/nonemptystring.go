@@ -39,6 +39,14 @@ func NonEmptyStringFromError(err error) NonEmptyString {
 	return NonEmptyString(err.Error())
 }
 
+// NonEmptyStringTrimSpace returns a NonEmptyString
+// by trimming space from the passed string.
+// If the passed string with trimmed space is an empty string
+// then the NonEmptyString will represent null.
+func NonEmptyStringTrimSpace(str string) NonEmptyString {
+	return NonEmptyString(str).TrimSpace()
+}
+
 // Ptr returns the address of the string value or nil if n.IsNull()
 func (n NonEmptyString) Ptr() *string {
 	if n.IsNull() {
