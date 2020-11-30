@@ -78,6 +78,14 @@ func (n Time) Ptr() *time.Time {
 	return &n.Time
 }
 
+// UTC returns the time in UTC or the null time
+func (n Time) UTC() Time {
+	if n.IsNull() {
+		return n
+	}
+	return Time{Time: time.Now().UTC()}
+}
+
 // IsNull returns true if the Time is null.
 // Uses time.Time.IsZero internally.
 // IsNull implements the Nullable interface.
@@ -98,12 +106,14 @@ func (n Time) StringOr(nullStr string) string {
 	return n.Time.String()
 }
 
-// UTC returns the time in UTC or the null time
-func (n Time) UTC() Time {
+// Get returns the non nullable time.Time value
+// or panics if the Time is null.
+// Note: check with IsNull before using Get!
+func (n Time) Get() time.Time {
 	if n.IsNull() {
-		return n
+		panic("NULL nullable.NonEmptyString")
 	}
-	return Time{Time: time.Now().UTC()}
+	return n.Time
 }
 
 // Set the passed time.Time

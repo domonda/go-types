@@ -66,6 +66,13 @@ func (n NonEmptyString) IsNotNull() bool {
 	return n != ""
 }
 
+// TrimSpace returns the string with all white-space
+// characters trimmed from beginning and end.
+// A potentially resulting empty string will be interpreted as null.
+func (n NonEmptyString) TrimSpace() NonEmptyString {
+	return NonEmptyString(strings.TrimSpace(string(n)))
+}
+
 // StringOr returns the string value of n or the passed nullString if n.IsNull()
 func (n NonEmptyString) StringOr(nullString string) string {
 	if n.IsNull() {
@@ -74,11 +81,14 @@ func (n NonEmptyString) StringOr(nullString string) string {
 	return string(n)
 }
 
-// TrimSpace returns the string with all white-space
-// characters trimmed from beginning and end.
-// A potentially resulting empty string will be interpreted as null.
-func (n NonEmptyString) TrimSpace() NonEmptyString {
-	return NonEmptyString(strings.TrimSpace(string(n)))
+// Get returns the non nullable string value
+// or panics if the NonEmptyString is null.
+// Note: check with IsNull before using Get!
+func (n NonEmptyString) Get() string {
+	if n.IsNull() {
+		panic("NULL nullable.NonEmptyString")
+	}
+	return string(n)
 }
 
 // Set the passed string as NonEmptyString.
