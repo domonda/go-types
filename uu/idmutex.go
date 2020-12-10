@@ -11,12 +11,12 @@ import (
 // This is equivalent to declaring a mutex variable for every key,
 // except that the key and the number of mutexes are dynamic.
 type IDMutex struct {
-	locksMtx sync.Mutex
-	locks    map[ID]*locker
+	global sync.Mutex
+	locks  map[ID]*locker
 }
 
 type locker struct {
-	mutex sync.Mutex
+	sync.Mutex
 	count int
 }
 
@@ -25,32 +25,40 @@ func NewIDMutex() *IDMutex {
 	return &IDMutex{locks: make(map[ID]*locker)}
 }
 
-// Lock the mutex for a given key.
-func (m *IDMutex) Lock(key ID) {
-	m.locksMtx.Lock()
-	lock := m.locks[key]
-	if lock == nil {
-		lock = new(locker)
-		m.locks[key] = lock
+// Lock the mutex for a given ID.
+func (m *IDMutex) Lock(id ID) {
+	m.global.Lock()
+	l := m.locks[id]
+	if l == nil {
+		l = new(locker)
+		m.locks[id] = l
 	}
-	lock.count++
-	m.locksMtx.Unlock()
+	l.count++
+	m.global.Unlock()
 
-	lock.mutex.Lock()
+	l.Lock()
 }
 
-// Unlock the mutex for a given key.
-func (m *IDMutex) Unlock(key ID) {
-	m.locksMtx.Lock()
-	defer m.locksMtx.Unlock()
+// Unlock the mutex for a given ID.
+func (m *IDMutex) Unlock(id ID) {
+	m.global.Lock()
+	defer m.global.Unlock()
 
-	lock := m.locks[key]
-	if lock == nil {
-		panic(fmt.Sprintf("uu.IDMutex.Unlock called for non locked key: %s", key))
+	l := m.locks[id]
+	if l == nil {
+		panic(fmt.Sprintf("uu.IDMutex.Unlock called for non locked key: %s", id))
 	}
-	lock.count--
-	if lock.count == 0 {
-		delete(m.locks, key)
+	l.count--
+	if l.count == 0 {
+		delete(m.locks, id)
 	}
-	lock.mutex.Unlock()
+	l.Unlock()
+}
+
+// IsLocked tells wether an ID is locked.
+func (m *IDMutex) IsLocked(id ID) bool {
+	m.global.Lock()
+	_, locked := m.locks[id]
+	m.global.Unlock()
+	return locked
 }
