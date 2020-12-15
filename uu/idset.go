@@ -1,6 +1,7 @@
 package uu
 
 import (
+	"bytes"
 	"database/sql/driver"
 	"io"
 	"strings"
@@ -105,9 +106,14 @@ func (s IDSet) Add(id ID) {
 	s[id] = struct{}{}
 }
 
+// Contains returns true if the set contains the passed id.
+// It is valid to call this method on a nil IDSet.
 func (s IDSet) Contains(id ID) bool {
-	_, has := s[id]
-	return has
+	if s == nil {
+		return false
+	}
+	_, ok := s[id]
+	return ok
 }
 
 func (s IDSet) Delete(id ID) {
@@ -133,6 +139,9 @@ func (s IDSet) DeleteSet(other IDSet) {
 }
 
 func (s IDSet) Clone() IDSet {
+	if s == nil {
+		return nil
+	}
 	clone := make(IDSet)
 	clone.AddSet(s)
 	return clone
@@ -185,6 +194,10 @@ func (s *IDSet) UnmarshalText(text []byte) error {
 // Id does assign a new IDSet to *set instead of modifying the existing map,
 // so it can be used with uninitialized IDSet variable.
 func (s *IDSet) Scan(value interface{}) error {
+	if value == nil {
+		*s = nil
+		return nil
+	}
 	var idSlice IDSlice
 	err := idSlice.Scan(value)
 	if err != nil {
@@ -200,12 +213,14 @@ func (s IDSet) Value() (driver.Value, error) {
 	if s == nil {
 		return nil, nil
 	}
-
 	return s.SortedSlice().Value()
 }
 
 // MarshalJSON implements encoding/json.Marshaler
 func (s IDSet) MarshalJSON() ([]byte, error) {
+	if s == nil {
+		return []byte("null"), nil
+	}
 	return s.SortedSlice().MarshalJSON()
 }
 
@@ -213,6 +228,10 @@ func (s IDSet) MarshalJSON() ([]byte, error) {
 // Id does assign a new IDSet to *set instead of modifying the existing map,
 // so it can be used with uninitialized IDSet variable.
 func (s *IDSet) UnmarshalJSON(data []byte) error {
+	if bytes.Equal(data, []byte("null")) {
+		*s = nil
+		return nil
+	}
 	var idSlice IDSlice
 	err := idSlice.UnmarshalJSON(data)
 	if err != nil {
