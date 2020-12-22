@@ -14,19 +14,44 @@ import (
 // NullableCurrency("").Valid() == true
 type NullableCurrency string
 
-// GetOrDefault returns the value c references if it is valid and c is not nil.
-// Safe to call on a nil pointer.
-func (n *NullableCurrency) GetOrDefault(defaultVal NullableCurrency) NullableCurrency {
-	if !n.ValidPtr() {
-		return defaultVal
-	}
-	return *n
-}
-
 // IsNull returns true if the NullableCurrency is null.
 // IsNull implements the nullable.Nullable interface.
 func (n NullableCurrency) IsNull() bool {
 	return n == CurrencyNull
+}
+
+// IsNotNull returns true if the NullableCurrency is not null.
+func (n NullableCurrency) IsNotNull() bool {
+	return n != CurrencyNull
+}
+
+// Set sets an ID for this NullableCurrency
+func (n *NullableCurrency) Set(currency Currency) {
+	*n = NullableCurrency(currency)
+}
+
+// SetNull sets the NullableCurrency to null
+func (n *NullableCurrency) SetNull() {
+	*n = CurrencyNull
+}
+
+// Get returns the non nullable Currency value
+// or panics if the NullableCurrency is null.
+// Note: check with IsNull before using Get!
+func (n NullableCurrency) Get() Currency {
+	if n.IsNull() {
+		panic("NULL money.Currency")
+	}
+	return Currency(n)
+}
+
+// GetOr returns the Currency if n valid and not null,
+// or else the passed defaultVal is returned.
+func (n NullableCurrency) GetOr(defaultVal Currency) Currency {
+	if !n.ValidAndNotNull() {
+		return defaultVal
+	}
+	return Currency(n)
 }
 
 // Valid returns true if c is an empty string, or a valid 3 character ISO 4217 alphabetic code.
