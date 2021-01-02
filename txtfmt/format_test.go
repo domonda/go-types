@@ -13,12 +13,12 @@ import (
 var caseSet = map[*FormatConfig]map[reflect.Value]string{
 	NewEnglishFormatConfig(): {
 		// nills/nulls
-		reflect.ValueOf(voidStr()):                   "",
-		reflect.ValueOf(voidFloat()):                 "",
-		reflect.ValueOf(uu.NullableIDFrom(uu.IDNil)): "",
-		reflect.ValueOf(money.NullableCurrency("")):  "",
-		reflect.ValueOf(bank.NullableIBAN("")):       "",
-		reflect.ValueOf(bank.NullableBIC("")):        "",
+		reflect.ValueOf(voidStr()):                  "",
+		reflect.ValueOf(voidFloat()):                "",
+		reflect.ValueOf(uu.IDNull):                  "",
+		reflect.ValueOf(money.NullableCurrency("")): "",
+		reflect.ValueOf(bank.NullableIBAN("")):      "",
+		reflect.ValueOf(bank.NullableBIC("")):       "",
 		// booleans
 		reflect.ValueOf(true):  "YES",
 		reflect.ValueOf(false): "NO",
@@ -36,12 +36,12 @@ var caseSet = map[*FormatConfig]map[reflect.Value]string{
 	},
 	NewGermanFormatConfig(): {
 		// nills/nulls
-		reflect.ValueOf(voidStr()):                   "",
-		reflect.ValueOf(voidFloat()):                 "",
-		reflect.ValueOf(uu.NullableIDFrom(uu.IDNil)): "",
-		reflect.ValueOf(money.NullableCurrency("")):  "",
-		reflect.ValueOf(bank.NullableIBAN("")):       "",
-		reflect.ValueOf(bank.NullableBIC("")):        "",
+		reflect.ValueOf(voidStr()):                  "",
+		reflect.ValueOf(voidFloat()):                "",
+		reflect.ValueOf(uu.IDNull):                  "",
+		reflect.ValueOf(money.NullableCurrency("")): "",
+		reflect.ValueOf(bank.NullableIBAN("")):      "",
+		reflect.ValueOf(bank.NullableBIC("")):       "",
 		// booleans
 		reflect.ValueOf(true):  "JA",
 		reflect.ValueOf(false): "NEIN",
