@@ -13,8 +13,9 @@ import (
 // Valid values for decimalSep are '.' and ','.
 // If thousandsSep is not zero, then the integer part of the number is grouped
 // with thousandsSep between every group of 3 digits from right to left.
-// Valid values for thousandsSep are [0, ',', '.', '\''] and thousandsSep must be different from  decimalSep.
-// precision controls the number of digits (excluding the exponent).
+// Valid values for thousandsSep are [0, ',', '.', '\'']
+// and thousandsSep must be different from decimalSep.
+// The precision argument controls the number of digits (excluding the exponent).
 // The special precision -1 uses the smallest number of digits
 // necessary such that ParseFloat will return f exactly.
 // If padPrecision is true and precision is greater zero,

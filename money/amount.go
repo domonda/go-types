@@ -121,8 +121,9 @@ func (ptr *Amount) StringOr(nilVal string) string {
 // Valid values for decimalSep are '.' and ','.
 // If thousandsSep is not zero, then the integer part of the number is grouped
 // with thousandsSep between every group of 3 digits.
-// Valid values for thousandsSep are [0, ',', '.'] and thousandsSep must be different from  decimalSep.
-// precision controls the number of digits (excluding the exponent).
+// Valid values for thousandsSep are [0, ',', '.']
+// and thousandsSep must be different from decimalSep.
+// The precision argument controls the number of digits (excluding the exponent).
 // The special precision -1 uses the smallest number of digits
 // necessary such that ParseFloat will return f exactly.
 func (a Amount) Format(thousandsSep, decimalSep byte, precision int) string {
