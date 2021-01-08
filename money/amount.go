@@ -70,6 +70,13 @@ func (a Amount) RoundToCents() Amount {
 	return Amount(math.Round(float64(a)*100) / 100)
 }
 
+// RoundToDecimals returns the amount rounded
+// to the passed number of decimal places.
+func (a Amount) RoundToDecimals(decimals int) Amount {
+	pow := math.Pow10(decimals)
+	return Amount(math.Round(float64(a)*pow) / pow)
+}
+
 // String returns the amount formatted to two decimal places
 // String implements the fmt.Stringer interface.
 func (a Amount) String() string {
@@ -202,6 +209,10 @@ func (a Amount) SplitEquallyRoundToCents(numAmounts int) []Amount {
 	return splitted
 }
 
+// ScaleAmountsToSumRoundToCents returns the passed amounts equally scaled
+// in a way that their sum is equal to the passed sum.
+// The scaled amounts are rounded to cents and it's assured,
+// that the sum of cents equals the passed sum in cents.
 func ScaleAmountsToSumRoundToCents(amounts []Amount, sum Amount) []Amount {
 	numAmounts := len(amounts)
 	if numAmounts == 0 {
