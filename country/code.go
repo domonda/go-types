@@ -35,7 +35,7 @@ func (c Code) Normalized() (Code, error) {
 	return normalized, nil
 }
 
-func (c Code) CountryName() string {
+func (c Code) EnglishName() string {
 	return countryMap[c]
 }
 

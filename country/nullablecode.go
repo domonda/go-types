@@ -38,8 +38,8 @@ func (n NullableCode) Normalized() (NullableCode, error) {
 	return normalized, nil
 }
 
-func (n NullableCode) CountryName() string {
-	return Code(n).CountryName()
+func (n NullableCode) EnglishName() string {
+	return Code(n).EnglishName()
 }
 
 // func (n NullableCode) Code() Code {
