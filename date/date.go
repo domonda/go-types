@@ -265,6 +265,21 @@ func (date *Date) ScanString(source string) (sourceWasNormalized bool, err error
 	return newDate == Date(source), nil
 }
 
+// ScanStringAndDetectLayout does the same thing as `ScanString`,
+// however, it returns the detected layout aswell.
+func (date *Date) ScanStringAndDetectLayout(source string) (sourceWasNormalized bool, layout string, err error) {
+	normalized, layout, err := detectLayoutAndNormalizeDate(source, "")
+	if err != nil {
+		return false, "", err
+	}
+	_, err = time.Parse(Layout, normalized)
+	if err != nil {
+		return false, "", err
+	}
+	*date = Date(normalized)
+	return normalized == source, layout, nil
+}
+
 // String returns the normalized date if possible,
 // else it will be returned unchanged as string.
 // String implements the fmt.Stringer interface.
@@ -607,10 +622,18 @@ func normalizeAndCheckDate(str string, langHint language.Code) (Date, error) {
 }
 
 func normalizeDate(str string, langHint language.Code) (string, error) {
+	normalized, _, err := detectLayoutAndNormalizeDate(str, langHint)
+	if err != nil {
+		return "", err
+	}
+	return normalized, nil
+}
+
+func detectLayoutAndNormalizeDate(str string, langHint language.Code) (string, string, error) {
 	trimmed := strings.ToLower(strings.TrimFunc(str, isDateTrimRune))
 
 	if len(trimmed) < MinLength {
-		return "", fmt.Errorf("too short for a date: %q", str)
+		return "", "", fmt.Errorf("too short for a date: %q", str)
 	}
 
 	if len(trimmed) > 10 && trimmed[10] == 't' {
@@ -629,7 +652,7 @@ func normalizeDate(str string, langHint language.Code) (string, error) {
 		}
 	}
 	if len(parts) != 3 {
-		return "", fmt.Errorf("date must have 3 parts: %q", str)
+		return "", "", fmt.Errorf("date must have 3 parts: %q", str)
 	}
 	dayHint := -1
 	totalLen := 0
@@ -656,7 +679,7 @@ func normalizeDate(str string, langHint language.Code) (string, error) {
 		}
 	}
 	if totalLen < 5 {
-		return "", fmt.Errorf("date is too short: %q", str)
+		return "", "", fmt.Errorf("date is too short: %q", str)
 	}
 
 	len0 := len(parts[0])
@@ -692,10 +715,10 @@ func normalizeDate(str string, langHint language.Code) (string, error) {
 			expandVal2ToFullYear()
 		}
 		if !validDay(val1) || !validYear(val2) {
-			return "", fmt.Errorf("invalid date: %q", str)
+			return "", "", fmt.Errorf("invalid date: %q", str)
 		}
 		// m DD YYYY
-		return fmt.Sprintf("%s-%02d-%s", parts[2], month0, parts[1]), nil
+		return fmt.Sprintf("%s-%02d-%s", parts[2], month0, parts[1]), "1 02 2006", nil
 
 	case len0 == 2 && month1 != 0 && len2 == 2:
 		if (!validDay(val0) && validDay(val2)) || dayHint == 2 {
@@ -709,17 +732,17 @@ func normalizeDate(str string, langHint language.Code) (string, error) {
 
 	case len0 == 2 && month1 != 0 && len2 == 4:
 		if !validDay(val0) || !validYear(val2) {
-			return "", fmt.Errorf("invalid date: %q", str)
+			return "", "", fmt.Errorf("invalid date: %q", str)
 		}
 		// DD m YYYY
-		return fmt.Sprintf("%s-%02d-%s", parts[2], month1, parts[0]), nil
+		return fmt.Sprintf("%s-%02d-%s", parts[2], month1, parts[0]), "02 1 2006", nil
 
 	case len0 == 4 && month1 != 0 && len2 == 2:
 		if !validYear(val0) || !validDay(val2) {
-			return "", fmt.Errorf("invalid date: %q", str)
+			return "", "", fmt.Errorf("invalid date: %q", str)
 		}
 		// YYYY m DD
-		return fmt.Sprintf("%s-%02d-%s", parts[0], month1, parts[2]), nil
+		return fmt.Sprintf("%s-%02d-%s", parts[0], month1, parts[2]), "2006 1 02", nil
 
 	case month2 != 0:
 		if len0 == 2 {
@@ -734,35 +757,39 @@ func normalizeDate(str string, langHint language.Code) (string, error) {
 			len0 = 4
 		}
 		// YYYY DD m
-		return fmt.Sprintf("%s-%02d-%s", parts[0], month2, parts[1]), nil
+		return fmt.Sprintf("%s-%02d-%s", parts[0], month2, parts[1]), "2006 02 1", nil
 
 	case len0 == 4 && len1 == 2 && len2 == 2:
 		if !validYear(val0) || !validMonth(val1) || !validDay(val2) {
-			return "", fmt.Errorf("invalid date: %q", str)
+			return "", "", fmt.Errorf("invalid date: %q", str)
 		}
-		return strings.Join(parts, "-"), nil
+		return strings.Join(parts, "-"), "2006 01 02", nil
 
 	case len0 == 2 && len1 == 2 && len2 == 2:
 		expandVal2ToFullYear()
 		fallthrough
 
 	case len0 == 2 && len1 == 2 && len2 == 4:
+		var layout string
 		if (!validMonth(val1) && validMonth(val0)) || dayHint == 1 || langHint == "en" {
 			// MM DD YYYY
 			parts[0], parts[1] = parts[1], parts[0]
 			val0, val1 = val1, val0
+			layout = "01 02 2006"
+		} else {
 			// DD MM YYYY
+			layout = "02 01 2006"
 		}
 		if !validDay(val0) || !validMonth(val1) || !validYear(val2) {
-			return "", fmt.Errorf("invalid date: %q", str)
+			return "", "", fmt.Errorf("invalid date: %q", str)
 		}
 		// DD MM YYYY
 		parts[0], parts[2] = parts[2], parts[0]
 		// YYYY MM DD
-		return strings.Join(parts, "-"), nil
+		return strings.Join(parts, "-"), layout, nil
 	}
 
-	return "", fmt.Errorf("invalid date: %q", str)
+	return "", "", fmt.Errorf("invalid date: %q", str)
 }
 
 func validYear(year int) bool {
