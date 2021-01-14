@@ -265,6 +265,15 @@ func (date *Date) ScanString(source string) (sourceWasNormalized bool, err error
 	return newDate == Date(source), nil
 }
 
+func (date *Date) ScanStringWithLang(source string, lang language.Code) (sourceWasNormalized bool, monthMustBeFirst bool, err error) {
+	newDate, monthMustBeFirst, err := normalizeAndCheckDate(source, lang)
+	if err != nil {
+		return false, false, err
+	}
+	*date = newDate
+	return newDate == Date(source), monthMustBeFirst, nil
+}
+
 // String returns the normalized date if possible,
 // else it will be returned unchanged as string.
 // String implements the fmt.Stringer interface.
@@ -591,26 +600,27 @@ func isDateTrimRune(r rune) bool {
 // or an error if the format can't be detected.
 // The first given lang argument is used as language hint.
 func (date Date) Normalized(lang ...language.Code) (Date, error) {
-	return normalizeAndCheckDate(string(date), getLangHint(lang))
+	normalized, _, err := normalizeAndCheckDate(string(date), getLangHint(lang))
+	return normalized, err
 }
 
-func normalizeAndCheckDate(str string, langHint language.Code) (Date, error) {
-	normalized, err := normalizeDate(str, langHint)
+func normalizeAndCheckDate(str string, langHint language.Code) (Date, bool, error) {
+	normalized, monthMustBeFirst, err := normalizeDate(str, langHint)
 	if err != nil {
-		return "", err
+		return "", monthMustBeFirst, err
 	}
 	_, err = time.Parse(Layout, normalized)
 	if err != nil {
-		return "", err
+		return "", monthMustBeFirst, err
 	}
-	return Date(normalized), nil
+	return Date(normalized), monthMustBeFirst, nil
 }
 
-func normalizeDate(str string, langHint language.Code) (string, error) {
+func normalizeDate(str string, langHint language.Code) (string, bool, error) {
 	trimmed := strings.ToLower(strings.TrimFunc(str, isDateTrimRune))
 
 	if len(trimmed) < MinLength {
-		return "", fmt.Errorf("too short for a date: %q", str)
+		return "", false, fmt.Errorf("too short for a date: %q", str)
 	}
 
 	if len(trimmed) > 10 && trimmed[10] == 't' {
@@ -629,7 +639,7 @@ func normalizeDate(str string, langHint language.Code) (string, error) {
 		}
 	}
 	if len(parts) != 3 {
-		return "", fmt.Errorf("date must have 3 parts: %q", str)
+		return "", false, fmt.Errorf("date must have 3 parts: %q", str)
 	}
 	dayHint := -1
 	totalLen := 0
@@ -656,7 +666,7 @@ func normalizeDate(str string, langHint language.Code) (string, error) {
 		}
 	}
 	if totalLen < 5 {
-		return "", fmt.Errorf("date is too short: %q", str)
+		return "", false, fmt.Errorf("date is too short: %q", str)
 	}
 
 	len0 := len(parts[0])
@@ -692,10 +702,10 @@ func normalizeDate(str string, langHint language.Code) (string, error) {
 			expandVal2ToFullYear()
 		}
 		if !validDay(val1) || !validYear(val2) {
-			return "", fmt.Errorf("invalid date: %q", str)
+			return "", false, fmt.Errorf("invalid date: %q", str)
 		}
 		// m DD YYYY
-		return fmt.Sprintf("%s-%02d-%s", parts[2], month0, parts[1]), nil
+		return fmt.Sprintf("%s-%02d-%s", parts[2], month0, parts[1]), false, nil
 
 	case len0 == 2 && month1 != 0 && len2 == 2:
 		if (!validDay(val0) && validDay(val2)) || dayHint == 2 {
@@ -709,17 +719,17 @@ func normalizeDate(str string, langHint language.Code) (string, error) {
 
 	case len0 == 2 && month1 != 0 && len2 == 4:
 		if !validDay(val0) || !validYear(val2) {
-			return "", fmt.Errorf("invalid date: %q", str)
+			return "", false, fmt.Errorf("invalid date: %q", str)
 		}
 		// DD m YYYY
-		return fmt.Sprintf("%s-%02d-%s", parts[2], month1, parts[0]), nil
+		return fmt.Sprintf("%s-%02d-%s", parts[2], month1, parts[0]), false, nil
 
 	case len0 == 4 && month1 != 0 && len2 == 2:
 		if !validYear(val0) || !validDay(val2) {
-			return "", fmt.Errorf("invalid date: %q", str)
+			return "", false, fmt.Errorf("invalid date: %q", str)
 		}
 		// YYYY m DD
-		return fmt.Sprintf("%s-%02d-%s", parts[0], month1, parts[2]), nil
+		return fmt.Sprintf("%s-%02d-%s", parts[0], month1, parts[2]), false, nil
 
 	case month2 != 0:
 		if len0 == 2 {
@@ -734,19 +744,20 @@ func normalizeDate(str string, langHint language.Code) (string, error) {
 			len0 = 4
 		}
 		// YYYY DD m
-		return fmt.Sprintf("%s-%02d-%s", parts[0], month2, parts[1]), nil
+		return fmt.Sprintf("%s-%02d-%s", parts[0], month2, parts[1]), false, nil
 
 	case len0 == 4 && len1 == 2 && len2 == 2:
 		if !validYear(val0) || !validMonth(val1) || !validDay(val2) {
-			return "", fmt.Errorf("invalid date: %q", str)
+			return "", false, fmt.Errorf("invalid date: %q", str)
 		}
-		return strings.Join(parts, "-"), nil
+		return strings.Join(parts, "-"), false, nil
 
 	case len0 == 2 && len1 == 2 && len2 == 2:
 		expandVal2ToFullYear()
 		fallthrough
 
 	case len0 == 2 && len1 == 2 && len2 == 4:
+		monthMustBeFirst := validMonth(val0) && !validMonth(val1)
 		if (!validMonth(val1) && validMonth(val0)) || dayHint == 1 || langHint == "en" {
 			// MM DD YYYY
 			parts[0], parts[1] = parts[1], parts[0]
@@ -754,15 +765,15 @@ func normalizeDate(str string, langHint language.Code) (string, error) {
 			// DD MM YYYY
 		}
 		if !validDay(val0) || !validMonth(val1) || !validYear(val2) {
-			return "", fmt.Errorf("invalid date: %q", str)
+			return "", false, fmt.Errorf("invalid date: %q", str)
 		}
 		// DD MM YYYY
 		parts[0], parts[2] = parts[2], parts[0]
 		// YYYY MM DD
-		return strings.Join(parts, "-"), nil
+		return strings.Join(parts, "-"), monthMustBeFirst, nil
 	}
 
-	return "", fmt.Errorf("invalid date: %q", str)
+	return "", false, fmt.Errorf("invalid date: %q", str)
 }
 
 func validYear(year int) bool {

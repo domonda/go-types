@@ -121,6 +121,19 @@ func (n *NullableDate) ScanString(source string) (sourceWasNormalized bool, err 
 	return newDate == NullableDate(source), nil
 }
 
+func (n *NullableDate) ScanStringWithLang(source string, lang language.Code) (sourceWasNormalized bool, monthMustBeFirst bool, err error) {
+	if NullableDate(source).IsZero() {
+		*n = Null
+		return false, false, nil
+	}
+	newDate, monthMustBeFirst, err := normalizeAndCheckDate(source, lang)
+	if err != nil {
+		return false, false, err
+	}
+	*n = newDate.NullableDate()
+	return newDate == Date(source), monthMustBeFirst, nil
+}
+
 // String returns the normalized date if possible,
 // else it will be returned unchanged as string.
 // String implements the fmt.Stringer interface.

@@ -44,7 +44,7 @@ func (df *Finder) FindAllIndex(str []byte, n int) (indices [][]int) {
 				end -= n
 				r, n = utf8.DecodeLastRune(str[beg:end])
 			}
-			_, err := normalizeAndCheckDate(strings.ToLower(s[beg:end]), df.LangHint)
+			_, _, err := normalizeAndCheckDate(strings.ToLower(s[beg:end]), df.LangHint)
 			if err == nil {
 				indices = append(indices, []int{beg, end})
 				break
