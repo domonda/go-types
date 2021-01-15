@@ -6,6 +6,7 @@ import (
 )
 
 var validVATIDs = map[string]string{
+	"atu10223006":     "ATU10223006", // Example
 	"ATU10223006":     "ATU10223006", // Example
 	"ATU67554568":     "ATU67554568", // Real
 	"ATU68765099":     "ATU68765099", // Real
@@ -16,6 +17,7 @@ var validVATIDs = map[string]string{
 	"DE 167015661":    "DE167015661",
 	"ATU 10223006":    "ATU10223006",
 	"AT U 10223006":   "ATU10223006",
+	"at U 10223006":   "ATU10223006",
 	"ATU.10223006":    "ATU10223006",
 	"GB123456789012":  "GB123456789012",
 	"GB 123456789012": "GB123456789012",
