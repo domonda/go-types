@@ -4,6 +4,7 @@ import (
 	"database/sql/driver"
 	"errors"
 	"fmt"
+	"strings"
 	"unicode"
 
 	"github.com/domonda/go-types/country"
@@ -46,7 +47,7 @@ func isVATIDTrimRune(r rune) bool {
 
 // NormalizedUnchecked returns a generic normalized version of ID without performing any format checks.
 func (id ID) NormalizedUnchecked() ID {
-	return ID(strutil.RemoveRunesString(string(id), unicode.IsSpace, unicode.IsPunct))
+	return ID(strings.ToUpper(strutil.RemoveRunesString(string(id), unicode.IsSpace, unicode.IsPunct)))
 }
 
 // Normalized returns the id in normalized form,
