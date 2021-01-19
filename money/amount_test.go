@@ -120,7 +120,7 @@ var stringTable = map[Amount]string{
 	0.054123:    "0.05",
 }
 
-func Test_String(t *testing.T) {
+func Test_Amount_String(t *testing.T) {
 	for amount, refstr := range stringTable {
 		str := amount.String()
 		if str != refstr {
