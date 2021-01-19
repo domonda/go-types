@@ -146,9 +146,6 @@ func (id ID) CountryCode() country.Code {
 		// MOSS VAT begins with "EU" - Europe is not a country
 		return country.Invalid
 	}
-	if code == "EL" {
-		return "GR"
-	}
 	return code
 }
 

@@ -87,6 +87,7 @@ const (
 	GH Code = "GH"
 	GI Code = "GI"
 	GR Code = "GR"
+	EL Code = "EL"
 	GL Code = "GL"
 	GD Code = "GD"
 	GP Code = "GP"
@@ -339,6 +340,7 @@ var countryMap = map[Code]string{
 	GH: "Ghana",
 	GI: "Gibraltar",
 	GR: "Greece",
+	EL: "Greece",
 	GL: "Greenland",
 	GD: "Grenada",
 	GP: "Guadeloupe",
