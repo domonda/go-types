@@ -77,10 +77,11 @@ func (a Amount) RoundToDecimals(decimals int) Amount {
 	return Amount(math.Round(float64(a)*pow) / pow)
 }
 
-// String returns the amount formatted to two decimal places
+// String returns the amount rounded to two decimal places
+// formatted with a dot as decimal separator.
 // String implements the fmt.Stringer interface.
 func (a Amount) String() string {
-	return a.Format(0, '.', 2)
+	return a.RoundToCents().Format(0, '.', 2)
 
 	// neg := a < 0
 	// s := strconv.FormatInt(a.Abs().Cents(), 10)
@@ -131,6 +132,7 @@ func (ptr *Amount) StringOr(nilVal string) string {
 // Valid values for thousandsSep are [0, ',', '.']
 // and thousandsSep must be different from decimalSep.
 // The precision argument controls the number of digits (excluding the exponent).
+// Note that the last digit is not rounded!
 // The special precision -1 uses the smallest number of digits
 // necessary such that ParseFloat will return f exactly.
 func (a Amount) Format(thousandsSep, decimalSep byte, precision int) string {
