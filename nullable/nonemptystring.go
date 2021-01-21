@@ -58,12 +58,12 @@ func (n NonEmptyString) Ptr() *string {
 // IsNull returns true if the string n is empty.
 // IsNull implements the Nullable interface.
 func (n NonEmptyString) IsNull() bool {
-	return n == ""
+	return n == NullNonEmptyString
 }
 
 // IsNotNull returns true if the string n is not empty.
 func (n NonEmptyString) IsNotNull() bool {
-	return n != ""
+	return n != NullNonEmptyString
 }
 
 // TrimSpace returns the string with all white-space
@@ -97,11 +97,16 @@ func (n *NonEmptyString) Set(s string) {
 	*n = NonEmptyString(s)
 }
 
+// SetNull sets the string to its null value
+func (n *NonEmptyString) SetNull() {
+	*n = NullNonEmptyString
+}
+
 // Scan implements the database/sql.Scanner interface.
 func (n *NonEmptyString) Scan(value interface{}) error {
 	switch s := value.(type) {
 	case nil:
-		*n = ""
+		*n = NullNonEmptyString
 		return nil
 
 	case string:
@@ -131,7 +136,7 @@ func (n *NonEmptyString) UnmarshalJSON(sourceJSON []byte) error {
 	// 	return errors.New("can't unmarshal empty JSON string as nullable.NonEmptyString")
 	// }
 	if bytes.Equal(sourceJSON, []byte(`null`)) {
-		*n = ""
+		*n = NullNonEmptyString
 		return nil
 	}
 	return json.Unmarshal(sourceJSON, (*string)(n))

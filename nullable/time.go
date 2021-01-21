@@ -116,9 +116,14 @@ func (n Time) Get() time.Time {
 	return n.Time
 }
 
-// Set the passed time.Time
+// Set a time.Time
 func (n *Time) Set(t time.Time) {
 	n.Time = t
+}
+
+// SetNull sets the time to its null value
+func (n *Time) SetNull() {
+	n.Time = time.Time{}
 }
 
 // Scan implements the database/sql.Scanner interface.
