@@ -2,13 +2,13 @@ package nullable
 
 import "reflect"
 
-// Nullable is an interface with a IsNull method
+// Nullable is an interface with an IsNull method
 type Nullable interface {
 	// IsNull returns true if the implementing value is considered null.
 	IsNull() bool
 }
 
-// Zeroable is an interface with a IsZero method
+// Zeroable is an interface with an IsZero method
 type Zeroable interface {
 	// IsZero returns true if the implementing value is considered zero.
 	IsZero() bool

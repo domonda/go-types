@@ -5,7 +5,10 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
+	"io"
 	"time"
+
+	"github.com/domonda/go-pretty"
 )
 
 // Time represents a time.Time where the zero time instant
@@ -166,4 +169,13 @@ func (n Time) MarshalJSON() ([]byte, error) {
 		return []byte("null"), nil
 	}
 	return json.Marshal(n.Time)
+}
+
+// PrettyPrint implements the pretty.Printer interface
+func (n Time) PrettyPrint(w io.Writer) {
+	if n.IsNull() {
+		w.Write([]byte("null"))
+	} else {
+		pretty.Fprint(w, n.Time)
+	}
 }
