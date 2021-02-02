@@ -96,6 +96,12 @@ func (n Time) IsNull() bool {
 	return n.Time.IsZero()
 }
 
+// IsNotNull returns true if the Time is not null.
+// Uses time.Time.IsZero internally.
+func (n Time) IsNotNull() bool {
+	return !n.IsNull()
+}
+
 // String returns Time.String() or "NULL" if Time.IsZero().
 func (n Time) String() string {
 	return n.StringOr("NULL")
@@ -114,7 +120,7 @@ func (n Time) StringOr(nullStr string) string {
 // Note: check with IsNull before using Get!
 func (n Time) Get() time.Time {
 	if n.IsNull() {
-		panic("NULL nullable.NonEmptyString")
+		panic("NULL nullable.Time")
 	}
 	return n.Time
 }
