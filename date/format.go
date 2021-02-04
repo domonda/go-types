@@ -72,7 +72,7 @@ func (f *Format) AssignString(dest reflect.Value, source string /*, loc *time.Lo
 		if tPtr == nil {
 			*ptr = Null
 		} else {
-			*ptr = OfTime(*tPtr).NullableDate()
+			*ptr = OfTime(*tPtr).Nullable()
 		}
 		return nil
 

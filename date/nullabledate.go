@@ -130,7 +130,7 @@ func (n *NullableDate) ScanStringWithLang(source string, lang language.Code) (so
 	if err != nil {
 		return false, false, err
 	}
-	*n = newDate.NullableDate()
+	*n = newDate.Nullable()
 	return newDate == Date(source), monthMustBeFirst, nil
 }
 
@@ -184,11 +184,11 @@ func (n *NullableDate) Scan(value interface{}) (err error) {
 				return err
 			}
 		}
-		*n = d.NullableDate()
+		*n = d.Nullable()
 		return nil
 
 	case time.Time:
-		*n = OfTime(x).NullableDate()
+		*n = OfTime(x).Nullable()
 		return nil
 
 	case nil:
