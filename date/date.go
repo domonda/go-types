@@ -299,8 +299,8 @@ func (date Date) BetweenExcl(after, before Date) bool {
 	return t.After(after.MidnightUTC()) && t.Before(before.MidnightUTC())
 }
 
-// NullableDate returns date as NullableDate
-func (date Date) NullableDate() NullableDate {
+// Nullable returns the date as NullableDate
+func (date Date) Nullable() NullableDate {
 	if date.IsZero() {
 		return Null
 	}
