@@ -2,9 +2,9 @@ package money
 
 import (
 	"database/sql/driver"
+	"errors"
 	"fmt"
 	"strings"
-	"errors"
 )
 
 // StringIsCurrency returns if a string can be parsed as Currency.
@@ -155,4 +155,15 @@ func (c Currency) Symbol() string {
 // EnglishName returns the english name of the currency
 func (c Currency) EnglishName() string {
 	return currencyCodeToName[c]
+}
+
+// String returns the normalized currency as string if possible,
+// else it will be returned unchanged as string.
+// String implements the fmt.Stringer interface.
+func (c Currency) String() string {
+	norm, err := c.Normalized()
+	if err != nil {
+		return string(c)
+	}
+	return string(norm)
 }

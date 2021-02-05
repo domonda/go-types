@@ -137,6 +137,17 @@ func (iban IBAN) NormalizedWithSpaces() (IBAN, error) {
 	return IBAN(b.String()), nil
 }
 
+// String returns the normalized IBAN string if possible,
+// else it will be returned unchanged as string.
+// String implements the fmt.Stringer interface.
+func (iban IBAN) String() string {
+	norm, err := iban.Normalized()
+	if err != nil {
+		return string(iban)
+	}
+	return string(norm)
+}
+
 // Nullable returns the IBAN as NullableIBAN
 func (iban IBAN) Nullable() NullableIBAN {
 	return NullableIBAN(iban)

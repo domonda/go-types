@@ -148,3 +148,14 @@ func (n NullableCurrency) EnglishName() string {
 func (n NullableCurrency) Currency() Currency {
 	return Currency(n)
 }
+
+// String returns the normalized currency as string if possible,
+// else it will be returned unchanged as string.
+// String implements the fmt.Stringer interface.
+func (n NullableCurrency) String() string {
+	norm, err := n.Normalized()
+	if err != nil {
+		return string(n)
+	}
+	return string(norm)
+}

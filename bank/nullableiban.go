@@ -130,3 +130,14 @@ func (n *NullableIBAN) Get() IBAN {
 func (n NullableIBAN) IsNull() bool {
 	return n == IBANNull
 }
+
+// String returns the normalized IBAN string if possible,
+// else it will be returned unchanged as string.
+// String implements the fmt.Stringer interface.
+func (n NullableIBAN) String() string {
+	norm, err := n.Normalized()
+	if err != nil {
+		return string(n)
+	}
+	return string(norm)
+}
