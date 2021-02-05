@@ -107,7 +107,7 @@ func Parse(layout, value string) (Date, error) {
 	return OfTime(t), nil
 }
 
-// RangeOfPeriod returns the dates [from, until] for a period
+// PeriodRange returns the dates [from, until] for a period
 // defined in one the following formats:
 // period of a ISO 8601 week of a year: YYYY-Wnn
 // period of a month of a year: YYYY-MM,
@@ -117,12 +117,12 @@ func Parse(layout, value string) (Date, error) {
 // The returned from Date is the first day of the month of the period,
 // the returned until Date is the last day of the month of the period.
 // Exmaples:
-// Period of June 2018: RangeOfPeriod("2018-06") == Date("2018-06-01"), Date("2018-06-30"), nil
-// Period of Q3 2018: RangeOfPeriod("2018-Q3") == Date("2018-07-01"), Date("2018-09-30"), nil
-// Period of second half of 2018: RangeOfPeriod("2018-H2") == Date("2018-07-01"), Date("2018-12-31"), nil
-// Period of year 2018: RangeOfPeriod("2018") == Date("2018-07-01"), Date("2018-12-31"), nil
-// Period of week 1 2019: RangeOfPeriod("2019-W01") == Date("2018-12-31"), Date("2019-01-06"), nil
-func RangeOfPeriod(period string) (from, until Date, err error) {
+// Period of June 2018: PeriodRange("2018-06") == Date("2018-06-01"), Date("2018-06-30"), nil
+// Period of Q3 2018: PeriodRange("2018-Q3") == Date("2018-07-01"), Date("2018-09-30"), nil
+// Period of second half of 2018: PeriodRange("2018-H2") == Date("2018-07-01"), Date("2018-12-31"), nil
+// Period of year 2018: PeriodRange("2018") == Date("2018-07-01"), Date("2018-12-31"), nil
+// Period of week 1 2019: PeriodRange("2019-W01") == Date("2018-12-31"), Date("2019-01-06"), nil
+func PeriodRange(period string) (from, until Date, err error) {
 	if len(period) != 4 && len(period) != 7 && len(period) != 8 {
 		return "", "", fmt.Errorf("invalid period format length: %q", period)
 	}
@@ -152,7 +152,7 @@ func RangeOfPeriod(period string) (from, until Date, err error) {
 		if err != nil || week < 1 || week > 53 {
 			return "", "", fmt.Errorf("invalid period format, can't parse week: %q", period)
 		}
-		from, until = YearWeek(year, week)
+		from, until = YearWeekRange(year, week)
 		return from, until, nil
 
 	case 'Q', 'q':
@@ -184,37 +184,32 @@ func RangeOfPeriod(period string) (from, until Date, err error) {
 	return from, until, nil
 }
 
-// RangeOfYear returns the date range from
+// YearRange returns the date range from
 // first of January to 31st of December of a year.
-func RangeOfYear(year int) (from, until Date) {
+func YearRange(year int) (from, until Date) {
 	yyyy := fmt.Sprintf("%04d", year)
 	return Date(yyyy + "-01-01"), Date(yyyy + "-12-31")
 }
 
-// YearWeek returns the dates of Monday and Sunday of an ISO 8601 week.
-func YearWeek(year, week int) (monday, sunday Date) {
-	t := time.Date(year, 0, 0, 0, 0, 0, 0, time.Local)
-	isoYear, isoWeek := t.ISOWeek()
+// YearWeekMonday returns the date of Monday of an ISO 8601 week.
+func YearWeekMonday(year, week int) (monday Date) {
+	// January 1st of the year
+	t := time.Date(year, 1, 1, 0, 0, 0, 0, time.UTC)
 
-	// iterate back to Monday
-	for t.Weekday() != time.Monday {
-		t = t.AddDate(0, 0, -1)
-		isoYear, isoWeek = t.ISOWeek()
-	}
+	// Go back to Monday of week
+	t = t.AddDate(0, 0, int(time.Monday-t.Weekday()))
 
-	// iterate forward to the first day of the first week
-	for isoYear < year {
-		t = t.AddDate(0, 0, 7)
-		isoYear, isoWeek = t.ISOWeek()
-	}
+	// Add week days
+	t = t.AddDate(0, 0, (week-1)*7)
 
-	// iterate forward to the first day of the given week
-	for isoWeek < week {
-		t = t.AddDate(0, 0, 7)
-		isoYear, isoWeek = t.ISOWeek()
-	}
+	return OfTime(t)
+}
 
-	return OfTime(t), OfTime(t.AddDate(0, 0, 6))
+// YearWeekRange returns the dates of Monday and Sunday of an ISO 8601 week.
+func YearWeekRange(year, week int) (monday, sunday Date) {
+	monday = YearWeekMonday(year, week)
+	sunday = monday.AddDays(6)
+	return monday, sunday
 }
 
 func FromUntilFromYearAndMonths(year, months string) (fromDate, untilDate Date, err error) {

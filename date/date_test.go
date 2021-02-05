@@ -230,7 +230,7 @@ func Test_Finder(t *testing.T) {
 	}
 }
 
-func Test_RangeOfPeriod(t *testing.T) {
+func Test_PeriodRange(t *testing.T) {
 	periodDates := map[string][2]Date{
 		"2018-01": {"2018-01-01", "2018-01-31"},
 		"2018-06": {"2018-06-01", "2018-06-30"},
@@ -259,16 +259,16 @@ func Test_RangeOfPeriod(t *testing.T) {
 	}
 
 	for period, expected := range periodDates {
-		t.Run(fmt.Sprintf("RangeOfPeriod(%#v)", period), func(t *testing.T) {
-			from, until, err := RangeOfPeriod(period)
+		t.Run(fmt.Sprintf("PeriodRange(%#v)", period), func(t *testing.T) {
+			from, until, err := PeriodRange(period)
 			if err != nil {
 				t.Fatal(err)
 			}
 			if from != expected[0] {
-				t.Errorf("RangeOfPeriod(%#v) expected from to be %#v but got %#v", period, expected[0], from)
+				t.Errorf("PeriodRange(%#v) expected from to be %#v but got %#v", period, expected[0], from)
 			}
 			if until != expected[1] {
-				t.Errorf("RangeOfPeriod(%#v) expected until to be %#v but got %#v", period, expected[1], until)
+				t.Errorf("PeriodRange(%#v) expected until to be %#v but got %#v", period, expected[1], until)
 			}
 		})
 	}
@@ -292,14 +292,14 @@ func Test_RangeOfPeriod(t *testing.T) {
 	}
 
 	for _, period := range invalidPeriods {
-		t.Run(fmt.Sprintf("RangeOfPeriod(%s)", period), func(t *testing.T) {
-			_, _, err := RangeOfPeriod(period)
-			assert.Error(t, err, "RangeOfPeriod(%#v)", period)
+		t.Run(fmt.Sprintf("PeriodRange(%s)", period), func(t *testing.T) {
+			_, _, err := PeriodRange(period)
+			assert.Error(t, err, "PeriodRange(%#v)", period)
 		})
 	}
 
 }
-func Test_RangeOfYear(t *testing.T) {
+func Test_YearRange(t *testing.T) {
 	periodDates := map[int][2]Date{
 		-333: {"-333-01-01", "-333-12-31"},
 		0:    {"0000-01-01", "0000-12-31"},
@@ -308,13 +308,13 @@ func Test_RangeOfYear(t *testing.T) {
 	}
 
 	for year, expected := range periodDates {
-		t.Run(fmt.Sprintf("RangeOfYear(%#v)", year), func(t *testing.T) {
-			from, until := RangeOfYear(year)
+		t.Run(fmt.Sprintf("YearRange(%#v)", year), func(t *testing.T) {
+			from, until := YearRange(year)
 			if from != expected[0] {
-				t.Errorf("RangeOfYear(%#v) expected from to be %#v but got %#v", year, expected[0], from)
+				t.Errorf("YearRange(%#v) expected from to be %#v but got %#v", year, expected[0], from)
 			}
 			if until != expected[1] {
-				t.Errorf("RangeOfYear(%#v) expected until to be %#v but got %#v", year, expected[1], until)
+				t.Errorf("YearRange(%#v) expected until to be %#v but got %#v", year, expected[1], until)
 			}
 		})
 	}
@@ -389,6 +389,37 @@ func TestDate_Normalized(t *testing.T) {
 			}
 			if got != tt.want {
 				t.Errorf("Date.Normalized() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestYearWeekRange(t *testing.T) {
+	type args struct {
+		year int
+		week int
+	}
+	tests := []struct {
+		name       string
+		args       args
+		wantMonday Date
+		wantSunday Date
+	}{
+		{name: "2021/-1", args: args{year: 2021, week: -1}, wantMonday: "2020-12-14", wantSunday: "2020-12-20"},
+		{name: "2021/0", args: args{year: 2021, week: 0}, wantMonday: "2020-12-21", wantSunday: "2020-12-27"},
+		{name: "2020/52", args: args{year: 2020, week: 52}, wantMonday: "2020-12-21", wantSunday: "2020-12-27"},
+		{name: "2020/53", args: args{year: 2020, week: 53}, wantMonday: "2020-12-28", wantSunday: "2021-01-03"},
+		{name: "2020/54", args: args{year: 2020, week: 54}, wantMonday: "2021-01-04", wantSunday: "2021-01-10"},
+		{name: "2020/55", args: args{year: 2020, week: 55}, wantMonday: "2021-01-11", wantSunday: "2021-01-17"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotMonday, gotSunday := YearWeekRange(tt.args.year, tt.args.week)
+			if gotMonday != tt.wantMonday {
+				t.Errorf("YearWeekRange() gotMonday = %v, want %v", gotMonday, tt.wantMonday)
+			}
+			if gotSunday != tt.wantSunday {
+				t.Errorf("YearWeekRange() gotSunday = %v, want %v", gotSunday, tt.wantSunday)
 			}
 		})
 	}
