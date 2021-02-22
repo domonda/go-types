@@ -129,6 +129,12 @@ func (n NonEmptyString) Value() (driver.Value, error) {
 	return string(n), nil
 }
 
+// UnmarshalText implements the encoding.TextUnmarshaler interface
+func (n *NonEmptyString) UnmarshalText(text []byte) error {
+	*n = NonEmptyString(text)
+	return nil
+}
+
 // UnarshalJSON implements encoding/json.Unmarshaler.
 func (n *NonEmptyString) UnmarshalJSON(sourceJSON []byte) error {
 	// Commented out to accept empty string as null to help transition existing data
