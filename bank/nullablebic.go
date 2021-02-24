@@ -88,3 +88,7 @@ func (bic *NullableBIC) Get() BIC {
 func (bic NullableBIC) IsNull() bool {
 	return bic == BICNull
 }
+
+func (bic NullableBIC) IsNotNull() bool {
+	return bic != BICNull
+}
