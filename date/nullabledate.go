@@ -245,6 +245,61 @@ func (n NullableDate) MidnightInLocation(loc *time.Location) nullable.Time {
 	return t
 }
 
+// NormalizedEqual returns if two dates are equal in normalized form.
+func (n NullableDate) NormalizedEqual(other NullableDate) bool {
+	a, _ := n.Normalized()
+	b, _ := other.Normalized()
+	return a == b
+}
+
+// After returns if the date is after the passed other one.
+// Returns false if any of the dates is null.
+func (n NullableDate) After(other NullableDate) bool {
+	if n.IsNull() || other.IsNull() {
+		return false
+	}
+	return n.MidnightUTC().Get().After(other.MidnightUTC().Get())
+}
+
+// EqualOrAfter returns if the date is equal or after the passed other one.
+func (n NullableDate) EqualOrAfter(other NullableDate) bool {
+	return n.NormalizedEqual(other) || n.After(other)
+}
+
+// Before returns if the date is before the passed other one.
+// Returns false if any of the dates is null.
+func (n NullableDate) Before(other NullableDate) bool {
+	if n.IsNull() || other.IsNull() {
+		return false
+	}
+	return n.MidnightUTC().Get().Before(other.MidnightUTC().Get())
+}
+
+// EqualOrBefore returns if the date is equal or before the passed other one.
+func (n NullableDate) EqualOrBefore(other NullableDate) bool {
+	return n.NormalizedEqual(other) || n.Before(other)
+}
+
+// AfterTime returns if midnight of the date in location of the passed
+// time is after the time.
+// Returns false if the date is null.
+func (n NullableDate) AfterTime(other time.Time) bool {
+	if n.IsNull() {
+		return false
+	}
+	return n.MidnightInLocation(other.Location()).After(other)
+}
+
+// BeforeTime returns if midnight of the date in location of the passed
+// time is before the time.
+// Returns false if the date is null.
+func (n NullableDate) BeforeTime(other time.Time) bool {
+	if n.IsNull() {
+		return false
+	}
+	return n.MidnightInLocation(other.Location()).Before(other)
+}
+
 // ISOWeek returns the ISO 8601 year and week number in which the date occurs.
 // Week ranges from 1 to 53. Jan 01 to Jan 03 of year n might belong to
 // week 52 or 53 of year n-1, and Dec 29 to Dec 31 might belong to week 1

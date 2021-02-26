@@ -88,8 +88,8 @@ func OfToday() Date {
 	return OfTime(time.Now())
 }
 
-// OfTodayUTC returns the date of today in the UTC timezone.
-func OfTodayUTC() Date {
+// OfNowInUTC returns the date of the current time in the UTC timezone.
+func OfNowInUTC() Date {
 	return OfTime(time.Now().UTC())
 }
 
@@ -404,20 +404,43 @@ func (date Date) NormalizedOrNull(lang ...language.Code) NullableDate {
 	return NullableDate(normalized)
 }
 
+// NormalizedEqual returns if two dates are equal in normalized form.
+func (date Date) NormalizedEqual(other Date) bool {
+	a, _ := date.Normalized()
+	b, _ := other.Normalized()
+	return a == b
+}
+
+// After returns if the date is after the passed other one.
 func (date Date) After(other Date) bool {
 	return date.MidnightUTC().After(other.MidnightUTC())
 }
 
+// EqualOrAfter returns if the date is equal or after the passed other one.
+func (date Date) EqualOrAfter(other Date) bool {
+	return date.NormalizedEqual(other) || date.After(other)
+}
+
+// Before returns if the date is before the passed other one.
 func (date Date) Before(other Date) bool {
 	return date.MidnightUTC().Before(other.MidnightUTC())
 }
 
-func (date Date) AfterTime(other time.Time) bool {
-	return date.MidnightUTC().After(other)
+// EqualOrBefore returns if the date is equal or before the passed other one.
+func (date Date) EqualOrBefore(other Date) bool {
+	return date.NormalizedEqual(other) || date.Before(other)
 }
 
+// AfterTime returns if midnight of the date in location of the passed
+// time is after the time.
+func (date Date) AfterTime(other time.Time) bool {
+	return date.MidnightInLocation(other.Location()).After(other)
+}
+
+// BeforeTime returns if midnight of the date in location of the passed
+// time is before the time.
 func (date Date) BeforeTime(other time.Time) bool {
-	return date.MidnightUTC().Before(other)
+	return date.MidnightInLocation(other.Location()).Before(other)
 }
 
 func (date Date) AddDate(years int, months int, days int) Date {
@@ -547,24 +570,24 @@ func (date Date) IsToday() bool {
 	return date == OfToday()
 }
 
-func (date Date) IsTodayUTC() bool {
-	return date == OfTodayUTC()
+func (date Date) IsTodayInUTC() bool {
+	return date == OfNowInUTC()
 }
 
 func (date Date) AfterToday() bool {
 	return date.After(OfToday())
 }
 
-func (date Date) AfterTodayUTC() bool {
-	return date.After(OfTodayUTC())
+func (date Date) AfterTodayInUTC() bool {
+	return date.After(OfNowInUTC())
 }
 
 func (date Date) BeforeToday() bool {
 	return date.Before(OfToday())
 }
 
-func (date Date) BeforeTodayUTC() bool {
-	return date.Before(OfTodayUTC())
+func (date Date) BeforeTodayInUTC() bool {
+	return date.Before(OfNowInUTC())
 }
 
 func (date Date) Add(years, months, days int) Date {
