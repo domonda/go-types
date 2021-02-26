@@ -194,6 +194,16 @@ func (a Amount) WithNegSign(negative bool) Amount {
 	}
 }
 
+// MultipliedByRate returns the amount multiplied by a rate.
+func (a Amount) MultipliedByRate(rate Rate) Amount {
+	return a * Amount(rate)
+}
+
+// DividedByRate returns the amount divided by a rate.
+func (a Amount) DividedByRate(rate Rate) Amount {
+	return a / Amount(rate)
+}
+
 // SplitEquallyRoundToCents divides the amount equally into numAmounts amounts
 // that are rounded to cents and that sum up to the initial amount rounded to cents.
 // The last amount may slightly differ from the others amounts to guarantee
