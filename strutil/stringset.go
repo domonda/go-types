@@ -8,9 +8,23 @@ import (
 type StringSet map[string]struct{}
 
 func NewStringSet(strings ...string) StringSet {
-	set := make(StringSet)
+	set := make(StringSet, len(strings))
 	for _, s := range strings {
 		set[s] = struct{}{}
+	}
+	return set
+}
+
+func NewStringSetMergeSlices(slices ...[]string) StringSet {
+	cap := 0
+	for _, strings := range slices {
+		cap += len(strings)
+	}
+	set := make(StringSet, cap)
+	for _, strings := range slices {
+		for _, s := range strings {
+			set[s] = struct{}{}
+		}
 	}
 	return set
 }
@@ -78,13 +92,13 @@ func (set StringSet) DeleteSet(other StringSet) {
 }
 
 func (set StringSet) Clone() StringSet {
-	clone := make(StringSet)
+	clone := make(StringSet, len(set))
 	clone.AddSet(set)
 	return clone
 }
 
 func (set StringSet) Diff(other StringSet) StringSet {
-	diff := make(StringSet)
+	diff := make(StringSet, len(set))
 	for str := range set {
 		if !other.Contains(str) {
 			diff.Add(str)
