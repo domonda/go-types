@@ -1,7 +1,6 @@
 package nullable
 
 import (
-	"bytes"
 	"database/sql/driver"
 	"encoding/json"
 	"errors"
@@ -135,21 +134,8 @@ func (n *NonEmptyString) UnmarshalText(text []byte) error {
 	return nil
 }
 
-// UnarshalJSON implements encoding/json.Unmarshaler.
-func (n *NonEmptyString) UnmarshalJSON(sourceJSON []byte) error {
-	// Commented out to accept empty string as null to help transition existing data
-	// if bytes.Equal(sourceJSON, []byte(`""`)) {
-	// 	return errors.New("can't unmarshal empty JSON string as nullable.NonEmptyString")
-	// }
-	if bytes.Equal(sourceJSON, []byte(`null`)) {
-		*n = NullNonEmptyString
-		return nil
-	}
-	return json.Unmarshal(sourceJSON, (*string)(n))
-}
-
 // MarshalJSON implements encoding/json.Marshaler
-// by returning the JSON null value if n is an empty string.
+// by returning the JSON null for an empty/null string.
 func (n NonEmptyString) MarshalJSON() ([]byte, error) {
 	if n.IsNull() {
 		return []byte(`null`), nil

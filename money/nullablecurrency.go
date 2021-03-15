@@ -2,6 +2,7 @@ package money
 
 import (
 	"database/sql/driver"
+	"encoding/json"
 	"fmt"
 )
 
@@ -158,4 +159,13 @@ func (n NullableCurrency) String() string {
 		return string(n)
 	}
 	return string(norm)
+}
+
+// MarshalJSON implements encoding/json.Marshaler
+// by returning the JSON null for an empty/null string.
+func (n NullableCurrency) MarshalJSON() ([]byte, error) {
+	if n.IsNull() {
+		return []byte(`null`), nil
+	}
+	return json.Marshal(string(n))
 }

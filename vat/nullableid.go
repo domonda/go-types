@@ -2,6 +2,7 @@ package vat
 
 import (
 	"database/sql/driver"
+	"encoding/json"
 	"fmt"
 
 	"github.com/domonda/go-types/country"
@@ -180,4 +181,13 @@ func (n NullableID) Value() (driver.Value, error) {
 		return nil, nil
 	}
 	return string(normalized), nil
+}
+
+// MarshalJSON implements encoding/json.Marshaler
+// by returning the JSON null for an empty/null string.
+func (n NullableID) MarshalJSON() ([]byte, error) {
+	if n.IsNull() {
+		return []byte(`null`), nil
+	}
+	return json.Marshal(string(n))
 }

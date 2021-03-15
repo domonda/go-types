@@ -2,6 +2,7 @@ package country
 
 import (
 	"database/sql/driver"
+	"encoding/json"
 	"fmt"
 	"strings"
 )
@@ -133,4 +134,13 @@ func (n NullableCode) String() string {
 		return string(n)
 	}
 	return string(norm)
+}
+
+// MarshalJSON implements encoding/json.Marshaler
+// by returning the JSON null for an empty/null string.
+func (n NullableCode) MarshalJSON() ([]byte, error) {
+	if n.IsNull() {
+		return []byte(`null`), nil
+	}
+	return json.Marshal(string(n))
 }

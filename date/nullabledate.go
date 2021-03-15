@@ -2,6 +2,7 @@ package date
 
 import (
 	"database/sql/driver"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -319,4 +320,13 @@ func (n NullableDate) Format(layout string) string {
 		return string(n)
 	}
 	return n.MidnightUTC().Format(layout)
+}
+
+// MarshalJSON implements encoding/json.Marshaler
+// by returning the JSON null for an empty/null string.
+func (n NullableDate) MarshalJSON() ([]byte, error) {
+	if n.IsNull() {
+		return []byte(`null`), nil
+	}
+	return json.Marshal(string(n))
 }

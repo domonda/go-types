@@ -2,6 +2,7 @@ package bank
 
 import (
 	"database/sql/driver"
+	"encoding/json"
 	"fmt"
 )
 
@@ -91,4 +92,13 @@ func (bic NullableBIC) IsNull() bool {
 
 func (bic NullableBIC) IsNotNull() bool {
 	return bic != BICNull
+}
+
+// MarshalJSON implements encoding/json.Marshaler
+// by returning the JSON null for an empty/null string.
+func (n NullableBIC) MarshalJSON() ([]byte, error) {
+	if n.IsNull() {
+		return []byte(`null`), nil
+	}
+	return json.Marshal(string(n))
 }
