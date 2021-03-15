@@ -101,14 +101,6 @@ func (n NullableCode) Value() (driver.Value, error) {
 	return string(n), nil
 }
 
-// MarshalJSON implements encoding/json.Marshaler
-func (n NullableCode) MarshalJSON() ([]byte, error) {
-	if n == Null {
-		return []byte("null"), nil
-	}
-	return []byte(`"` + n + `"`), nil
-}
-
 // ScanString tries to parse and assign the passed
 // source string as value of the implementing type.
 // It returns an error if source could not be parsed.
