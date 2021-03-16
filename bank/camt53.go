@@ -5,7 +5,6 @@ import (
 
 	"github.com/domonda/go-types/date"
 	"github.com/domonda/go-types/money"
-	command "github.com/ungerik/go-command"
 	fs "github.com/ungerik/go-fs"
 )
 
@@ -55,12 +54,6 @@ type CAMT53Entry struct {
 	DebitorBIC   BIC      `xml:"NtryDtls>TxDtls>RltdAgts>DbtrAgt>FinInstnId>BIC"`
 	CreditorBIC  BIC      `xml:"NtryDtls>TxDtls>RltdAgts>CdtrAgt>FinInstnId>BIC"`
 	Reference    string   `xml:"NtryDtls>TxDtls>RmtInf>Strd>CdtrRefInf>Ref"`
-}
-
-var ParseCAMT53XMLArgs struct {
-	command.ArgsDef
-
-	File fs.File `arg:"file"`
 }
 
 func ParseCAMT53XML(file fs.File) (camt *CAMT53, err error) {

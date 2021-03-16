@@ -3,20 +3,12 @@ package findencoding
 import (
 	"fmt"
 
-	command "github.com/ungerik/go-command"
 	fs "github.com/ungerik/go-fs"
 	"golang.org/x/text/encoding/charmap"
 
 	"github.com/domonda/go-types/charset"
 	"github.com/domonda/go-types/strutil"
 )
-
-var PrintFileWithAllEncodingsArgs struct {
-	command.ArgsDef
-
-	File     fs.FileReader `arg:"file"`
-	MaxBytes int           `arg:"maxLines" desc:"print max bytes per char-set if > 0"`
-}
 
 func PrintFileWithAllEncodings(file fs.FileReader, maxBytes int) error {
 	sourceData, err := file.ReadAll()
