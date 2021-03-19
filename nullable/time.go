@@ -115,6 +115,24 @@ func (n Time) StringOr(nullStr string) string {
 	return n.Time.String()
 }
 
+// Format the time using time.Time.Format
+// or return "NULL" if n.IsNull().
+func (n Time) Format(layout string) string {
+	if n.IsNull() {
+		return "NULL"
+	}
+	return n.Time.Format(layout)
+}
+
+// AppendFormat the time to b using time.Time.AppendFormat
+// or append []byte("NULL") if n.IsNull().
+func (t Time) AppendFormat(b []byte, layout string) []byte {
+	if n.IsNull() {
+		return []byte("NULL")
+	}
+	return n.Time.AppendFormat(b, layout)
+}
+
 // Get returns the non nullable time.Time value
 // or panics if the Time is null.
 // Note: check with IsNull before using Get!
