@@ -32,10 +32,10 @@ func (a FloatArray) String() string {
 		b.WriteString(strconv.FormatFloat(a[i], 'f', -1, 64))
 	}
 	b.WriteByte(']')
-	return b.String(), nil
+	return b.String()
 }
 
-func (a FloatArray) StringOr(nilStr) string {
+func (a FloatArray) StringOr(nilStr string) string {
 	if a.IsNull() {
 		return nilStr
 	}
