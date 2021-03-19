@@ -3,6 +3,7 @@ package money
 import (
 	"math"
 	"math/big"
+	"strconv"
 
 	"github.com/domonda/go-types/strfmt"
 )
@@ -61,6 +62,14 @@ func (r Rate) RoundToDecimals(decimals int) Rate {
 // necessary such that ParseFloat will return f exactly.
 func (r Rate) Format(thousandsSep, decimalSep byte, precision int) string {
 	return strfmt.FormatFloat(float64(r), thousandsSep, decimalSep, precision, true)
+}
+
+// StringOr returns strconv.FormatFloat for *r or nilVal if r is nil.
+func (r *Rate) StringOr(nilVal string) string {
+	if r == nil {
+		return nilVal
+	}
+	return strconv.FormatFloat(float64(*r), 'f', -1, 64)
 }
 
 // BigFloat returns m as a new big.Float
