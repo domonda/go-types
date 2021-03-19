@@ -128,7 +128,7 @@ func (n Time) Format(layout string) string {
 // or append []byte("NULL") if n.IsNull().
 func (t Time) AppendFormat(b []byte, layout string) []byte {
 	if n.IsNull() {
-		return []byte("NULL")
+		return append(b, "NULL"...)
 	}
 	return n.Time.AppendFormat(b, layout)
 }
