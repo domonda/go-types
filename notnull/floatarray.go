@@ -17,8 +17,16 @@ type FloatArray []float64
 
 // String implements the fmt.Stringer interface.
 func (a FloatArray) String() string {
-	value, _ := a.Value()
-	return fmt.Sprintf("FloatArray%v", value)
+	var b strings.Builder
+	b.WriteByte('[')
+	for i := range a {
+		if i > 0 {
+			b.WriteString(", ")
+		}
+		b.WriteString(strconv.FormatFloat(a[i], 'f', -1, 64))
+	}
+	b.WriteByte(']')
+	return b.String(), nil
 }
 
 // Value implements the database/sql/driver.Valuer interface

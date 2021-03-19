@@ -2,7 +2,8 @@ package nullable
 
 import (
 	"database/sql/driver"
-	"fmt"
+	"strconv"
+	"strings"
 
 	"github.com/domonda/go-types/notnull"
 )
@@ -19,8 +20,26 @@ func (a FloatArray) IsNull() bool { return a == nil }
 
 // String implements the fmt.Stringer interface
 func (a FloatArray) String() string {
-	value, _ := a.Value()
-	return fmt.Sprintf("FloatArray%v", value)
+	if a.IsNull() {
+		return "NULL"
+	}
+	var b strings.Builder
+	b.WriteByte('[')
+	for i := range a {
+		if i > 0 {
+			b.WriteString(", ")
+		}
+		b.WriteString(strconv.FormatFloat(a[i], 'f', -1, 64))
+	}
+	b.WriteByte(']')
+	return b.String(), nil
+}
+
+func (a FloatArray) StringOr(nilStr) string {
+	if a.IsNull() {
+		return nilStr
+	}
+	return a.String()
 }
 
 // Value implements the database/sql/driver.Valuer interface
