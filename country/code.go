@@ -88,3 +88,9 @@ func (c Code) String() string {
 	}
 	return string(norm)
 }
+
+// Nullable returns the Code as NullableCode.
+// Country code Invalid is returned as Null.
+func (c Code) Nullable() NullableCode {
+	return NullableCode(c)
+}

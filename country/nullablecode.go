@@ -43,10 +43,6 @@ func (n NullableCode) EnglishName() string {
 	return Code(n).EnglishName()
 }
 
-// func (n NullableCode) Code() Code {
-// 	return Code(n)
-// }
-
 // IsNull returns true if the NullableID is null.
 // IsNull implements the nullable.Nullable interface.
 func (n NullableCode) IsNull() bool {
