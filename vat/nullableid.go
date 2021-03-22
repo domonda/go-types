@@ -120,10 +120,26 @@ func (n NullableID) ValidateIsNormalizedAndNotNull() error {
 	return ID(n).ValidateIsNormalized()
 }
 
-// CountryCode returns the country.Code of the VAT ID,
-// or country.Null if the id is not valid.
-func (n NullableID) CountryCode() country.Code {
-	return ID(n).CountryCode()
+// CountryCode returns the country.NullableCode of the VAT ID,
+// or ccountry.Null if the id is null or not valid.
+// For a VAT Mini One Stop Shop (MOSS) ID that begins with "EU"
+// the EU's capital Brussels' country Belgum's
+// code country.BE will be returned.
+// See also NullableID.IsMOSS.
+func (n NullableID) CountryCode() country.NullableCode {
+	if n.IsNull() {
+		return country.Null
+	}
+	return country.NullableCode(ID(n).CountryCode())
+}
+
+// IsMOSS returns true if the ID follows the
+// VAT Mini One Stop Shop (MOSS) schema beginning with "EU".
+func (n NullableID) IsMOSS() bool {
+	if n.IsNull() {
+		return false
+	}
+	return ID(n).IsMOSS()
 }
 
 // Number returns the number part after the country code of the VAT ID,

@@ -136,9 +136,10 @@ func (id ID) NullableID() NullableID {
 
 // CountryCode returns the country.Code of the VAT ID,
 // or country.Invalid if the id is not valid.
-// For a MOSS VAT that begins with "EU"
+// For a VAT Mini One Stop Shop (MOSS) ID that begins with "EU"
 // the EU's capital Brussels' country Belgum's
 // code country.BE will be returned.
+// See also ID.IsMOSS.
 func (id ID) CountryCode() country.Code {
 	norm, err := id.Normalized()
 	if err != nil {
@@ -150,6 +151,16 @@ func (id ID) CountryCode() country.Code {
 		return country.BE
 	}
 	return code
+}
+
+// IsMOSS returns true if the ID follows the
+// VAT Mini One Stop Shop (MOSS) schema beginning with "EU".
+func (id ID) IsMOSS() bool {
+	norm, err := id.Normalized()
+	if err != nil {
+		return false
+	}
+	return norm[:2] == MOSSSchemaVATCountryCode
 }
 
 // Number returns the number part after the country code of the VAT ID,
