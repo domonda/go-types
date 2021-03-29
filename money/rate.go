@@ -12,10 +12,10 @@ import (
 // useful for money conversion rates and percentages.
 type Rate float64
 
-// RateFromPtr dereferences ptr or returns nilVal if it is nil
-func RateFromPtr(ptr *Rate, nilVal Rate) Rate {
+// RateFromPtr dereferences ptr or returns defaultVal if it is nil
+func RateFromPtr(ptr *Rate, defaultVal Rate) Rate {
 	if ptr == nil {
-		return nilVal
+		return defaultVal
 	}
 	return *ptr
 }
@@ -64,12 +64,20 @@ func (r Rate) Format(thousandsSep, decimalSep byte, precision int) string {
 	return strfmt.FormatFloat(float64(r), thousandsSep, decimalSep, precision, true)
 }
 
-// StringOr returns strconv.FormatFloat for *r or nilVal if r is nil.
-func (r *Rate) StringOr(nilVal string) string {
-	if r == nil {
-		return nilVal
+// StringOr returns strconv.FormatFloat the pointed to rate or defaultVal if ptr is nil.
+func (ptr *Rate) StringOr(defaultVal string) string {
+	if ptr == nil {
+		return defaultVal
 	}
-	return strconv.FormatFloat(float64(*r), 'f', -1, 64)
+	return strconv.FormatFloat(float64(*ptr), 'f', -1, 64)
+}
+
+// FloatOr returns the pointed to rate as float64 or defaultVal if ptr is nil.
+func (ptr *Rate) FloatOr(defaultVal float64) float64 {
+	if ptr == nil {
+		return defaultVal
+	}
+	return float64(*ptr)
 }
 
 // BigFloat returns m as a new big.Float

@@ -31,10 +31,10 @@ func ParseAmount(str string, acceptedDecimals ...int) (Amount, error) {
 	return 0, fmt.Errorf("parsing %q returned %d decimals wich is not in accepted list of %v", str, decimals, acceptedDecimals)
 }
 
-// AmountFromPtr dereferences ptr or returns nilVal if it is nil
-func AmountFromPtr(ptr *Amount, nilVal Amount) Amount {
+// AmountFromPtr dereferences ptr or returns defaultVal if it is nil
+func AmountFromPtr(ptr *Amount, defaultVal Amount) Amount {
 	if ptr == nil {
-		return nilVal
+		return defaultVal
 	}
 	return *ptr
 }
@@ -115,12 +115,20 @@ func (a Amount) String() string {
 	// return b.String()
 }
 
-// StringOr returns ptr.String() or nilVal if ptr is nil.
-func (ptr *Amount) StringOr(nilVal string) string {
+// StringOr returns ptr.String() or defaultVal if ptr is nil.
+func (ptr *Amount) StringOr(defaultVal string) string {
 	if ptr == nil {
-		return nilVal
+		return defaultVal
 	}
 	return ptr.String()
+}
+
+// FloatOr returns the pointed to amount as float64 or defaultVal if ptr is nil.
+func (ptr *Amount) FloatOr(defaultVal float64) float64 {
+	if ptr == nil {
+		return defaultVal
+	}
+	return float64(*ptr)
 }
 
 // Format formats the Amount similar to strconv.FormatFloat with the 'f' format option,

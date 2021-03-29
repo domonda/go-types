@@ -181,10 +181,10 @@ func IDMustFromString(input string) ID {
 }
 
 // IDFromPtr returns the dereferenced value of ptr,
-// or nilVal if ptr is nil.
-func IDFromPtr(ptr *ID, nilVal ID) ID {
+// or defaultVal if ptr is nil.
+func IDFromPtr(ptr *ID, defaultVal ID) ID {
 	if ptr == nil {
-		return nilVal
+		return defaultVal
 	}
 	return *ptr
 }
