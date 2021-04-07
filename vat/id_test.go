@@ -14,6 +14,7 @@ var validVATIDs = map[string]string{
 	"ATU65785527":     "ATU65785527", // Real
 	"ESW0184081H":     "ESW0184081H", // Real: Amazon EU Sarl Sucursal EN España
 	"DE111111125":     "DE111111125", // Example
+	"LT347776113":     "LT347776113",
 	"DE 167015661":    "DE167015661",
 	"ATU 10223006":    "ATU10223006",
 	"AT U 10223006":   "ATU10223006",
