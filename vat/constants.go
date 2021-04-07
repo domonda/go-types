@@ -20,7 +20,7 @@ var vatidRegex = map[country.Code]*regexp.Regexp{
 	"AT": regexp.MustCompile(`^AT\s??U\s??\d{8}$`),
 	"BE": regexp.MustCompile(`^BE\s??\d{10}$`),
 	"BG": regexp.MustCompile(`^BG\s??\d{9,10}$`),
-	"CH": regexp.MustCompile(`^CHE\s??-?(\d{9}|(\d{3}\.\d{3}\.\d{3}))$`),
+	"CH": regexp.MustCompile(`^CHE\s??-?(?:\d{9}|(?:\d{3}\.\d{3}\.\d{3}))$`),
 	"CY": regexp.MustCompile(`^CY\s??\d{8}[A-Z]$`),
 	"CZ": regexp.MustCompile(`^CZ\s??\d{8,10}$`),
 	"DE": regexp.MustCompile(`^DE\s??[1-9]\d{8}$`),
