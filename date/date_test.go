@@ -424,3 +424,28 @@ func TestYearWeekRange(t *testing.T) {
 		})
 	}
 }
+
+func TestDate_AddMonths(t *testing.T) {
+	type args struct {
+		months int
+	}
+	tests := []struct {
+		date Date
+		args args
+		want Date
+	}{
+		{date: "2020-01-01", args: args{months: 1}, want: "2020-02-01"},
+		{date: "2020-01-01", args: args{months: 2}, want: "2020-03-01"},
+		{date: "2020-12-01", args: args{months: 1}, want: "2021-01-01"},
+		{date: "2020-01-01", args: args{months: 12}, want: "2021-01-01"},
+		{date: "2020-01-01", args: args{months: -1}, want: "2019-12-01"},
+		// TODO
+	}
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("%s + %d", tt.date, tt.args.months), func(t *testing.T) {
+			if got := tt.date.AddMonths(tt.args.months); got != tt.want {
+				t.Errorf("Date.AddMonths() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
