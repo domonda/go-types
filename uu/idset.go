@@ -16,7 +16,7 @@ type IDSet map[ID]struct{}
 // MakeIDSet returns an IDSet with
 // the optional passed ids added to it.
 func MakeIDSet(ids ...ID) IDSet {
-	return IDSlice(ids).MakeSet()
+	return IDSlice(ids).AsSet()
 }
 
 // MakeIDSetFromStrings returns an IDSet with strs parsed as IDs
@@ -53,13 +53,13 @@ func IDSetFromString(str string) (IDSet, error) {
 
 // String implements the fmt.Stringer interface.
 func (s IDSet) String() string {
-	return "set" + s.SortedSlice().String()
+	return "set" + s.AsSortedSlice().String()
 }
 
-// PrettyPrint using s.SortedSlice().PrettyPrint(w).
+// PrettyPrint using s.AsSortedSlice().PrettyPrint(w).
 // Implements pretty.Stringer.
 func (s IDSet) PrettyPrint(w io.Writer) {
-	s.SortedSlice().PrettyPrint(w)
+	s.AsSortedSlice().PrettyPrint(w)
 }
 
 // GetOne returns a random ID from the set or IDNil if the set is empty.
@@ -71,7 +71,13 @@ func (s IDSet) GetOne() ID {
 	return IDNil
 }
 
-func (s IDSet) Slice() IDSlice {
+// AsSet returns s unchanged to implement the IDs interface.
+func (s IDSet) AsSet() IDSet {
+	return s
+}
+
+// AsSlice returns the IDs of the set as IDSlice with undefined order.
+func (s IDSet) AsSlice() IDSlice {
 	if len(s) == 0 {
 		return nil
 	}
@@ -84,8 +90,9 @@ func (s IDSet) Slice() IDSlice {
 	return sl
 }
 
-func (s IDSet) SortedSlice() IDSlice {
-	sl := s.Slice()
+// AsSortedSlice returns the IDs of the set as sorted IDSlice.
+func (s IDSet) AsSortedSlice() IDSlice {
+	sl := s.AsSlice()
 	sl.Sort()
 	return sl
 }
@@ -203,7 +210,7 @@ func (s *IDSet) Scan(value interface{}) error {
 	if err != nil {
 		return err
 	}
-	*s = idSlice.MakeSet()
+	*s = idSlice.AsSet()
 	return nil
 }
 
@@ -213,7 +220,7 @@ func (s IDSet) Value() (driver.Value, error) {
 	if s == nil {
 		return nil, nil
 	}
-	return s.SortedSlice().Value()
+	return s.AsSortedSlice().Value()
 }
 
 // MarshalJSON implements encoding/json.Marshaler
@@ -221,7 +228,7 @@ func (s IDSet) MarshalJSON() ([]byte, error) {
 	if s == nil {
 		return []byte("null"), nil
 	}
-	return s.SortedSlice().MarshalJSON()
+	return s.AsSortedSlice().MarshalJSON()
 }
 
 // UnmarshalJSON implements encoding/json.Unmarshaler
@@ -237,6 +244,6 @@ func (s *IDSet) UnmarshalJSON(data []byte) error {
 	if err != nil {
 		return err
 	}
-	*s = idSlice.MakeSet()
+	*s = idSlice.AsSet()
 	return nil
 }

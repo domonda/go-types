@@ -50,11 +50,16 @@ func IDSliceMustFromStrings(strs ...string) IDSlice {
 	return s
 }
 
-// MakeSet returns an IDSet with the IDs from the IDSlice.
-func (s IDSlice) MakeSet() IDSet {
+// AsSet returns the IDs of the slice as a IDSet.
+func (s IDSlice) AsSet() IDSet {
 	set := make(IDSet, len(s))
 	set.AddSlice(s)
 	return set
+}
+
+// AsSlice returns s unchanged to implement the IDs interface.
+func (s IDSlice) AsSlice() IDSlice {
+	return s
 }
 
 // String implements the fmt.Stringer interface.
