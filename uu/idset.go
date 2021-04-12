@@ -71,6 +71,11 @@ func (s IDSet) GetOne() ID {
 	return IDNil
 }
 
+// Len returns the length of the IDSet.
+func (s IDSet) Len() int {
+	return len(s)
+}
+
 // AsSet returns s unchanged to implement the IDs interface.
 func (s IDSet) AsSet() IDSet {
 	return s
