@@ -43,7 +43,7 @@ var vatidRegex = map[country.Code]*regexp.Regexp{
 	"NO": regexp.MustCompile(`^NO\s??\d{9}$`),
 	"PL": regexp.MustCompile(`^PL\s??\d{10}$`),
 	"PT": regexp.MustCompile(`^PT\s??\d{9}$`),
-	"RO": regexp.MustCompile(`^RO\s??\d{2,10}$`),
+	"RO": regexp.MustCompile(`^RO\s??\d{8}$`),
 	"SE": regexp.MustCompile(`^SE\s??\d{12}$`),
 	"SI": regexp.MustCompile(`^SI\s??\d{8}$`),
 	"SK": regexp.MustCompile(`^SK\s??\d{10}$`),
