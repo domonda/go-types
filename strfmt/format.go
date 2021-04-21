@@ -1,6 +1,7 @@
 package strfmt
 
 import (
+	"encoding"
 	"fmt"
 	"reflect"
 	"strconv"
@@ -11,6 +12,9 @@ import (
 )
 
 // FormatValue formats the passed value following the format config.
+// If te value implements encoding.TextMarshaler and MarshalText
+// does not return an error, then this string is returned instead
+// of more generic type conversions.
 func FormatValue(val reflect.Value, config *FormatConfig) string {
 	derefVal, derefType := reflection.DerefValueAndType(val)
 	if f, ok := config.TypeFormatters[derefType]; ok && derefVal.IsValid() {
@@ -19,6 +23,20 @@ func FormatValue(val reflect.Value, config *FormatConfig) string {
 
 	if nullable.ReflectIsNull(val) {
 		return config.Nil
+	}
+
+	textMarshaller, _ := val.Interface().(encoding.TextMarshaler)
+	if textMarshaller == nil && val.CanAddr() {
+		textMarshaller, _ = val.Addr().Interface().(encoding.TextMarshaler)
+	}
+	if textMarshaller == nil {
+		textMarshaller, _ = derefVal.Interface().(encoding.TextMarshaler)
+	}
+	if textMarshaller != nil {
+		text, err := textMarshaller.MarshalText()
+		if err != nil {
+			return string(text)
+		}
 	}
 
 	switch derefType.Kind() {
