@@ -1,12 +1,12 @@
-package txtfmt
+package strfmt
 
 import (
 	"fmt"
 	"reflect"
 	"strconv"
 
+	"github.com/domonda/go-types/float"
 	"github.com/domonda/go-types/nullable"
-	"github.com/domonda/go-types/strfmt"
 	"github.com/ungerik/go-reflection"
 )
 
@@ -32,7 +32,7 @@ func FormatValue(val reflect.Value, config *FormatConfig) string {
 		return derefVal.String()
 
 	case reflect.Float32, reflect.Float64:
-		return strfmt.FormatFloat(
+		return float.Format(
 			derefVal.Float(),
 			config.Float.ThousandsSep,
 			config.Float.DecimalSep,

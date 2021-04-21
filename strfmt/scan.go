@@ -9,6 +9,7 @@ import (
 	"time"
 
 	types "github.com/domonda/go-types"
+	"github.com/domonda/go-types/float"
 )
 
 // Scan source into dest using the given ScanConfig.
@@ -80,7 +81,7 @@ func Scan(dest reflect.Value, source string, config *ScanConfig) (err error) {
 		dest.SetUint(u)
 
 	case reflect.Float32, reflect.Float64:
-		f, err := ParseFloat(source)
+		f, err := float.Parse(source)
 		if err != nil {
 			return fmt.Errorf("can't scan %q as float because %w", source, err)
 		}

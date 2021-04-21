@@ -1,17 +1,19 @@
-package txtfmt
+package strfmt
 
 import (
 	"reflect"
 	"time"
 
 	"github.com/domonda/go-types/date"
+	"github.com/domonda/go-types/float"
 	"github.com/domonda/go-types/money"
+	"github.com/domonda/go-types/nullable"
 )
 
 type FormatConfig struct {
-	Float          FloatFormat
+	Float          float.FormatDef
 	MoneyAmount    MoneyFormat
-	Percent        FloatFormat
+	Percent        float.FormatDef
 	Time           string
 	Date           string
 	Nil            string // Also used for nullable.Nullable and Zeroable
@@ -34,6 +36,7 @@ func NewFormatConfig() *FormatConfig {
 			reflect.TypeOf((*date.Date)(nil)).Elem():            FormatterFunc(formatDateString),
 			reflect.TypeOf((*date.NullableDate)(nil)).Elem():    FormatterFunc(formatNullableDateString),
 			reflect.TypeOf((*time.Time)(nil)).Elem():            FormatterFunc(formatTimeString),
+			reflect.TypeOf((*nullable.Time)(nil)).Elem():        FormatterFunc(formatNullableTimeString),
 			reflect.TypeOf((*time.Duration)(nil)).Elem():        FormatterFunc(formatDurationString),
 			reflect.TypeOf((*money.Amount)(nil)).Elem():         FormatterFunc(formatMoneyAmountString),
 			reflect.TypeOf((*money.CurrencyAmount)(nil)).Elem(): FormatterFunc(formatMoneyCurrencyAmountString),
@@ -70,6 +73,10 @@ func formatNullableDateString(val reflect.Value, config *FormatConfig) string {
 
 func formatTimeString(val reflect.Value, config *FormatConfig) string {
 	return val.Interface().(time.Time).Format(config.Time)
+}
+
+func formatNullableTimeString(val reflect.Value, config *FormatConfig) string {
+	return val.Interface().(nullable.Time).Format(config.Time)
 }
 
 func formatDurationString(val reflect.Value, config *FormatConfig) string {

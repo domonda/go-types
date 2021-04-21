@@ -5,7 +5,7 @@ import (
 	"math/big"
 	"strconv"
 
-	"github.com/domonda/go-types/strfmt"
+	"github.com/domonda/go-types/float"
 )
 
 // Rate is a float64 underneath with additional methods
@@ -28,7 +28,7 @@ func RateFromPtr(ptr *Rate, defaultVal Rate) Rate {
 // returned for sourceWasNormalized and nil for err.
 // ScanString implements the strfmt.Scannable interface.
 func (r *Rate) ScanString(source string) (sourceWasNormalized bool, err error) {
-	f, err := strfmt.ParseFloat(source)
+	f, err := float.Parse(source)
 	if err != nil {
 		return false, err
 	}
@@ -61,7 +61,7 @@ func (r Rate) RoundToDecimals(decimals int) Rate {
 // The special precision -1 uses the smallest number of digits
 // necessary such that ParseFloat will return f exactly.
 func (r Rate) Format(thousandsSep, decimalSep byte, precision int) string {
-	return strfmt.FormatFloat(float64(r), thousandsSep, decimalSep, precision, true)
+	return float.Format(float64(r), thousandsSep, decimalSep, precision, true)
 }
 
 // StringOr returns strconv.FormatFloat the pointed to rate or defaultVal if ptr is nil.

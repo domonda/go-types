@@ -1,4 +1,4 @@
-package txtfmt
+package strfmt
 
 import (
 	"reflect"

@@ -7,7 +7,7 @@ import (
 	"math"
 	"math/big"
 
-	"github.com/domonda/go-types/strfmt"
+	"github.com/domonda/go-types/float"
 )
 
 // Amount adds money related methods to float64
@@ -16,7 +16,7 @@ type Amount float64
 // ParseAmount parses an amount from str accepting only certain decimal digit counts.
 // If no acceptedDecimals are passed, then any decimal digit count is accepted.
 func ParseAmount(str string, acceptedDecimals ...int) (Amount, error) {
-	f, _, _, decimals, err := strfmt.ParseFloatDetails(str)
+	f, _, _, decimals, err := float.ParseDetails(str)
 	if err != nil {
 		return 0, err
 	}
@@ -47,7 +47,7 @@ func AmountFromPtr(ptr *Amount, defaultVal Amount) Amount {
 // returned for sourceWasNormalized and nil for err.
 // ScanString implements the strfmt.Scannable interface.
 func (a *Amount) ScanString(source string) (sourceWasNormalized bool, err error) {
-	f, err := strfmt.ParseFloat(source)
+	f, err := float.Parse(source)
 	if err != nil {
 		return false, err
 	}
@@ -144,7 +144,7 @@ func (ptr *Amount) FloatOr(defaultVal float64) float64 {
 // The special precision -1 uses the smallest number of digits
 // necessary such that ParseFloat will return f exactly.
 func (a Amount) Format(thousandsSep, decimalSep byte, precision int) string {
-	return strfmt.FormatFloat(float64(a), thousandsSep, decimalSep, precision, true)
+	return float.Format(float64(a), thousandsSep, decimalSep, precision, true)
 }
 
 // BigFloat returns m as a new big.Float
