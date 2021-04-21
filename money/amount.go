@@ -256,9 +256,9 @@ func ScaleAmountsToSumRoundToCents(amounts []Amount, sum Amount) []Amount {
 	return scaled
 }
 
-// Valid returns if a is not infinite or NaN
+// Valid returns if a is neither infinite nor NaN
 func (a Amount) Valid() bool {
-	return !math.IsNaN(float64(a)) && !math.IsInf(float64(a), 0)
+	return float.Valid(float64(a))
 }
 
 func (a Amount) ValidAndGreaterZero() bool {
@@ -272,16 +272,7 @@ func (a Amount) ValidAndSmallerZero() bool {
 // ValidAndHasSign returns if a.Valid() and
 // if it has the same sign than the passed int argument or any sign if 0 is passed.
 func (a Amount) ValidAndHasSign(sign int) bool {
-	if !a.Valid() {
-		return false
-	}
-	switch {
-	case sign > 0:
-		return a > 0
-	case sign < 0:
-		return a < 0
-	}
-	return true
+	return float.ValidAndHasSign(float64(a), sign)
 }
 
 // UnmarshalJSON implements encoding/json.Unmarshaler
