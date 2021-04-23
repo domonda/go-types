@@ -28,7 +28,7 @@ func (bic *NullableBIC) ScanString(source string) (normalized bool, err error) {
 	return true, nil
 }
 
-// Valid returns if this is a valid SWIFT Business Identifier Code
+// Valid returns true if bic is null or a valid SWIFT Business Identifier Code
 func (bic NullableBIC) Valid() bool {
 	return bic.Validate() == nil
 }

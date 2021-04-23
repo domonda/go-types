@@ -53,10 +53,15 @@ func (iban *IBAN) ScanString(source string) (normalized bool, err error) {
 	return newIBAN == IBAN(source), nil
 }
 
-// Valid returns if this is a valid SWIFT Business Identifier Code
+// Valid returns if this is a valid International Bank Account Number
 func (iban IBAN) Valid() bool {
+	return iban.Validate() == nil
+}
+
+// Validate returns an error if this is not a valid International Bank Account Number
+func (iban IBAN) Validate() error {
 	_, err := iban.Normalized()
-	return err == nil
+	return err
 }
 
 func (iban IBAN) ValidAndNormalized() bool {

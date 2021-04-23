@@ -30,10 +30,15 @@ func (iban *NullableIBAN) ScanString(source string) (normalized bool, err error)
 	return newIBAN == NullableIBAN(source), nil
 }
 
-// Valid returns if this is a valid SWIFT Business Identifier Code
+// Valid returns true if iban is null or a valid International Bank Account Number
 func (iban NullableIBAN) Valid() bool {
+	return iban.Validate() == nil
+}
+
+// Validate returns an error if this is not null and not a valid International Bank Account Number
+func (iban NullableIBAN) Validate() error {
 	_, err := iban.Normalized()
-	return err == nil
+	return err
 }
 
 func (iban NullableIBAN) ValidAndNormalized() bool {
