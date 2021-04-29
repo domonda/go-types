@@ -31,4 +31,11 @@ type IDs interface {
 
 	// AsSlice returns the contained IDs as IDSlice.
 	AsSlice() IDSlice
+
+	// ForEach calls the passed function for each ID.
+	// Any error from the callback function is returned
+	// by ForEach immediatly.
+	// Returning a sentinel error is a way to stop the loop
+	// with a known cause that might not be a real error.
+	ForEach(func(ID) error) error
 }

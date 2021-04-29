@@ -62,6 +62,21 @@ func (s IDSlice) AsSlice() IDSlice {
 	return s
 }
 
+// ForEach calls the passed function for each ID.
+// Any error from the callback function is returned
+// by ForEach immediatly.
+// Returning a sentinel error is a way to stop the loop
+// with a known cause that might not be a real error.
+func (s IDSlice) ForEach(callback func(ID) error) error {
+	for _, id := range s {
+		err := callback(id)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // String implements the fmt.Stringer interface.
 func (s IDSlice) String() string {
 	return "[" + strings.Join(s.Strings(), ",") + "]"

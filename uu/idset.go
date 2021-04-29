@@ -62,7 +62,8 @@ func (s IDSet) PrettyPrint(w io.Writer) {
 	s.AsSortedSlice().PrettyPrint(w)
 }
 
-// GetOne returns a random ID from the set or IDNil if the set is empty.
+// GetOne returns one ID in undefined order from the set
+// or IDNil if the set is empty.
 // Most useful to get the only ID in a set of size one.
 func (s IDSet) GetOne() ID {
 	for id := range s {
@@ -95,6 +96,21 @@ func (s IDSet) AsSlice() IDSlice {
 	return sl
 }
 
+// ForEach calls the passed function for each ID.
+// Any error from the callback function is returned
+// by ForEach immediatly.
+// Returning a sentinel error is a way to stop the loop
+// with a known cause that might not be a real error.
+func (s IDSet) ForEach(callback func(ID) error) error {
+	for id := range s {
+		err := callback(id)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // AsSortedSlice returns the IDs of the set as sorted IDSlice.
 func (s IDSet) AsSortedSlice() IDSlice {
 	sl := s.AsSlice()
@@ -112,6 +128,13 @@ func (s IDSet) AddSet(other IDSet) {
 	for id := range other {
 		s[id] = struct{}{}
 	}
+}
+
+func (s IDSet) AddIDs(ids IDs) {
+	ids.ForEach(func(id ID) error {
+		s[id] = struct{}{}
+		return nil
+	})
 }
 
 func (s IDSet) Add(id ID) {
