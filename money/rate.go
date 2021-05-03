@@ -1,6 +1,9 @@
 package money
 
 import (
+	"bytes"
+	"errors"
+	"fmt"
 	"math"
 	"math/big"
 	"strconv"
@@ -11,6 +14,24 @@ import (
 // Rate is a float64 underneath with additional methods
 // useful for money conversion rates and percentages.
 type Rate float64
+
+// ParseRate parses a rate from str accepting only certain decimal digit counts.
+// If no acceptedDecimals are passed, then any decimal digit count is accepted.
+func ParseRate(str string, acceptedDecimals ...int) (Rate, error) {
+	f, _, _, decimals, err := float.ParseDetails(str)
+	if err != nil {
+		return 0, err
+	}
+	if len(acceptedDecimals) == 0 {
+		return Rate(f), nil
+	}
+	for _, accepted := range acceptedDecimals {
+		if decimals == accepted {
+			return Rate(f), nil
+		}
+	}
+	return 0, fmt.Errorf("parsing %q returned %d decimals wich is not in accepted list of %v", str, decimals, acceptedDecimals)
+}
 
 // RateFromPtr dereferences ptr or returns defaultVal if it is nil
 func RateFromPtr(ptr *Rate, defaultVal Rate) Rate {
@@ -166,4 +187,31 @@ func (r Rate) ValidAndHasSign(sign int) bool {
 		return r < 0
 	}
 	return true
+}
+
+// UnmarshalJSON implements encoding/json.Unmarshaler
+// and accepts numbers, strings, and null.
+// JSON null will set the rate to zero.
+func (r *Rate) UnmarshalJSON(j []byte) error {
+	if len(j) == 0 {
+		return errors.New("can't unmarshal empty JSON")
+	}
+
+	if bytes.Equal(j, []byte("null")) {
+		*r = 0
+		return nil
+	}
+
+	s := string(j)
+	if len(j) > 2 && j[0] == '"' && j[len(j)-1] == '"' {
+		s = s[1 : len(j)-1]
+	}
+
+	rate, err := ParseRate(s)
+	if err != nil {
+		return fmt.Errorf("can't unmarshal JSON(%s) as money.Rate because of: %w", j, err)
+	}
+
+	*r = rate
+	return nil
 }

@@ -276,27 +276,28 @@ func (a Amount) ValidAndHasSign(sign int) bool {
 }
 
 // UnmarshalJSON implements encoding/json.Unmarshaler
-// and accepts numbers, strings and null.
-// null will set the amout to zero.
-func (a *Amount) UnmarshalJSON(b []byte) error {
-	if len(b) == 0 {
+// and accepts numbers, strings, and null.
+// JSON null will set the amout to zero.
+func (a *Amount) UnmarshalJSON(j []byte) error {
+	if len(j) == 0 {
 		return errors.New("can't unmarshal empty JSON")
 	}
 
-	if bytes.Equal(b, []byte("null")) {
+	if bytes.Equal(j, []byte("null")) {
 		*a = 0
 		return nil
 	}
 
-	s := string(b)
-	if len(b) > 2 && b[0] == '"' && b[len(b)-1] == '"' {
-		s = s[1 : len(b)-1]
+	s := string(j)
+	if len(j) > 2 && j[0] == '"' && j[len(j)-1] == '"' {
+		s = s[1 : len(j)-1]
 	}
 
 	amount, err := ParseAmount(s)
 	if err != nil {
-		return fmt.Errorf("can't unmarshal JSON(%s) as money.Amount because of: %w", b, err)
+		return fmt.Errorf("can't unmarshal JSON(%s) as money.Amount because of: %w", j, err)
 	}
+
 	*a = amount
 	return nil
 }
