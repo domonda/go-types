@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-var amountTable = map[string]Amount{
+var amountTable2Decimals = map[string]Amount{
 	"22.00":  22.00,
 	"123.45": 123.45,
 	"123,45": 123.45,
@@ -61,10 +61,14 @@ var nonStandardFormatted = map[string]Amount{
 	"1845.1800":    1845.1800,
 	"-153.8900":    -153.8900,
 	"-91.1000":     -91.1000,
+
+	// Commonly produced by PHP instead of zero
+	"3.5527136788005E-15": 3.5527136788005e-15,
+	"3.5527136788005e-15": 3.5527136788005e-15,
 }
 
 func Test_ParseAmount(t *testing.T) {
-	for str, refAmount := range amountTable {
+	for str, refAmount := range amountTable2Decimals {
 		amount, err := ParseAmount(str, 2)
 		if err != nil {
 			t.Errorf("Could not parse amount %s because of error: '%s'", str, err)
@@ -91,7 +95,7 @@ func Test_ParseAmount(t *testing.T) {
 }
 
 func Test_StringIsAmount(t *testing.T) {
-	for str := range amountTable {
+	for str := range amountTable2Decimals {
 		if !StringIsAmount(str, false) {
 			t.Errorf("String not detected as amount: '%s'", str)
 		}

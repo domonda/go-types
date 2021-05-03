@@ -45,7 +45,7 @@ func ParseDetails(str string) (f float64, thousandsSep, decimalSep byte, decimal
 	// detect the sign, allowed positions are start and end
 	for i, r := range str {
 		switch {
-		case r == 'e':
+		case r == 'e', r == 'E':
 			eIndex = i
 
 		case r == '-':
@@ -162,7 +162,7 @@ func ParseDetails(str string) (f float64, thousandsSep, decimalSep byte, decimal
 			}
 			lastNonDigitIndex = i
 
-		case r == 'e':
+		case r == 'e', r == 'E':
 			if i == 0 || eIndex != -1 {
 				return 0, 0, 0, 0, fmt.Errorf("e can't be the first or a repeating character: %q", str)
 			}
@@ -211,7 +211,7 @@ func ParseDetails(str string) (f float64, thousandsSep, decimalSep byte, decimal
 	pointPos := strings.IndexByte(floatStr, '.')
 	if pointPos != -1 {
 		if eIndex != -1 {
-			ePos := strings.IndexByte(floatStr, 'e')
+			ePos := strings.LastIndexAny(floatStr, "eE")
 			decimals = ePos - (pointPos + 1)
 		} else {
 			decimals = len(floatStr) - (pointPos + 1)
