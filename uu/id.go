@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"hash"
 	"io"
+	"strings"
 )
 
 // The nil UUID is special form of UUID that is specified to have all
@@ -281,6 +282,13 @@ func (id ID) String() string {
 	hex.Encode(b[24:36], id[10:16])
 
 	return string(b)
+}
+
+// StringUpper returns the upper case version
+// of the canonical string format:
+//   XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX
+func (id ID) StringUpper() string {
+	return strings.ToUpper(id.String())
 }
 
 // GoString returns a pseudo Go literal for the ID in the format:

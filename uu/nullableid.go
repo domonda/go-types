@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"reflect"
+	"strings"
 )
 
 var IDNull NullableID
@@ -135,6 +136,12 @@ func (n NullableID) IsNotNull() bool {
 // String returns the ID as string or "NULL"
 func (n NullableID) String() string {
 	return n.StringOr("NULL")
+}
+
+// StringUpper returns the upper case version
+// of the canonical string format, or "NULL".
+func (n NullableID) StringUpper() string {
+	return strings.ToUpper(n.String())
 }
 
 // StringOr returns the ID as string or the passed nullStr
