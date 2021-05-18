@@ -190,6 +190,68 @@ func IDFromPtr(ptr *ID, defaultVal ID) ID {
 	return *ptr
 }
 
+// IDFrom converts val to an ID or returns IDNil
+// if that's not possible.
+// Supported types are string, []byte, [16]byte,
+// ID, NullableID, and nil.
+// The returned ID is not validated.
+func IDFrom(val interface{}) ID {
+	switch x := val.(type) {
+	case string:
+		return IDFromStringOrNil(x)
+	case []byte:
+		return IDFromBytesOrNil(x)
+	case ID:
+		return x
+	case NullableID:
+		return ID(x)
+	case [16]byte:
+		return ID(x)
+	default:
+		return IDNil
+	}
+}
+
+// IDMustFrom converts val to an ID or panics
+// if that's not possible or the ID is not valid.
+// Supported types are string, []byte, [16]byte,
+// ID, NullableID, and nil.
+func IDMustFrom(val interface{}) ID {
+	switch x := val.(type) {
+	case string:
+		id, err := IDFromString(x)
+		if err != nil {
+			panic(err)
+		}
+		return id
+	case []byte:
+		id, err := IDFromBytes(x)
+		if err != nil {
+			panic(err)
+		}
+		return id
+	case ID:
+		if err := x.Validate(); err != nil {
+			panic(err)
+		}
+		return x
+	case NullableID:
+		if err := x.Validate(); err != nil {
+			panic(err)
+		}
+		return ID(x)
+	case [16]byte:
+		if err := ID(x).Validate(); err != nil {
+			panic(err)
+		}
+		return ID(x)
+	case nil:
+		return IDNil
+	default:
+		panic(fmt.Errorf("uu.IDMustFrom type not supported: %T", val))
+	}
+}
+
 // Version returns algorithm version used to generate UUID.
 func (id ID) Version() uint {
 	return uint(id[6] >> 4)
