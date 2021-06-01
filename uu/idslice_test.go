@@ -93,3 +93,33 @@ func TestIDSlice_Value(t *testing.T) {
 		})
 	}
 }
+
+func TestIDSlice_Scan(t *testing.T) {
+	tests := []struct {
+		name    string
+		value   interface{}
+		want    IDSlice
+		wantErr bool
+	}{
+		{name: "nil", value: nil, want: nil, wantErr: false},
+		{name: "empty", value: ``, want: nil, wantErr: false},
+		{name: "xxx", value: `xxx`, want: nil, wantErr: true},
+		{
+			name:  "21e70a0c-7f0e-44d8-8ae5-48992b89d0c5",
+			value: `{"21e70a0c-7f0e-44d8-8ae5-48992b89d0c5"}`,
+			want:  IDSlice{IDMustFromString("21e70a0c-7f0e-44d8-8ae5-48992b89d0c5")},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var s IDSlice
+			err := s.Scan(tt.value)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("IDSlice.Scan() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if !reflect.DeepEqual(s, tt.want) {
+				t.Errorf("IDSlice.Scan() = %v, want %v", s, tt.want)
+			}
+		})
+	}
+}

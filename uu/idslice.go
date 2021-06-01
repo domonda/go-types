@@ -241,7 +241,7 @@ func (s *IDSlice) Scan(value interface{}) (err error) {
 }
 
 func (s *IDSlice) scanBytes(src []byte) (err error) {
-	if src == nil {
+	if len(src) == 0 {
 		*s = nil
 		return nil
 	}
