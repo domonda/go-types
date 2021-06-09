@@ -69,6 +69,17 @@ func (set StringSet) Contains(str string) bool {
 	return has
 }
 
+// StringContainsAnyOfSet returns true if the passed string
+// contains any of the strings of the StringSet.
+func (set StringSet) StringContainsAnyOfSet(str string) bool {
+	for s := range set {
+		if strings.Contains(str, s) {
+			return true
+		}
+	}
+	return false
+}
+
 func (set StringSet) Delete(str string) {
 	delete(set, str)
 }
