@@ -13,6 +13,7 @@ import (
 	"hash"
 	"io"
 	"strings"
+	"unsafe"
 )
 
 // The nil UUID is special form of UUID that is specified to have all
@@ -480,29 +481,13 @@ func idFromHash(h hash.Hash, ns ID, name string) (id ID) {
 	return id
 }
 
-// IDCompare returns bytes.Compare result of a and b.
-func IDCompare(a, b ID) int {
-	return bytes.Compare(a[:], b[:])
+// Less returns true if the 128 bit unsigned integer value
+// of the id is less than the passed rhs.
+func (id ID) Less(rhs ID) bool {
+	l := (*[2]uint64)(unsafe.Pointer(&id[0]))
+	r := (*[2]uint64)(unsafe.Pointer(&rhs[0]))
+	return l[1] < r[1] || (l[1] == r[1] && l[0] < r[0])
 }
-
-// TODO test
-// func idCompareOptimized(a, b ID) int {
-// 	aWords := (*[2]uint64)(unsafe.Pointer(&a[0]))
-// 	bWords := (*[2]uint64)(unsafe.Pointer(&b[0]))
-// 	if aWords[1] < bWords[1] {
-// 		return -1
-// 	}
-// 	if aWords[1] > bWords[1] {
-// 		return +1
-// 	}
-// 	if aWords[0] < bWords[0] {
-// 		return -1
-// 	}
-// 	if aWords[0] > bWords[0] {
-// 		return +1
-// 	}
-// 	return 0
-// }
 
 func parseDashedFormat(text, original []byte) (newID ID, err error) {
 	if text[8] != '-' || text[13] != '-' || text[18] != '-' || text[23] != '-' {

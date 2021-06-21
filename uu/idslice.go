@@ -119,7 +119,7 @@ func (s IDSlice) Len() int { return len(s) }
 // Less reports whether the element with
 // index i should sort before the element with index j.
 // One of the methods to implement sort.Interface.
-func (s IDSlice) Less(i, j int) bool { return IDCompare(s[i], s[j]) < 0 }
+func (s IDSlice) Less(i, j int) bool { return s[i].Less(s[j]) }
 
 // Swap swaps the elements with indexes i and j.
 // One of the methods to implement sort.Interface.
