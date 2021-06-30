@@ -182,6 +182,16 @@ func (a Amount) Abs() Amount {
 	return Amount(math.Abs(float64(a)))
 }
 
+// Inverted returns the amount with inverted sign.
+func (a Amount) Inverted() Amount {
+	return -a
+}
+
+// Invert inverts the sign of the amount.
+func (a *Amount) Invert() {
+	*a = -*a
+}
+
 // WithPosSign returns the amount with a positive sign (abs) if true is passed,
 // or with a negative sign if false is passed.
 func (a Amount) WithPosSign(positive bool) Amount {
