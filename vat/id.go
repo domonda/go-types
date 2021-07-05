@@ -129,8 +129,8 @@ func (id ID) ValidateIsNormalized() error {
 	return nil
 }
 
-// NullableID returns the id as NullableID
-func (id ID) NullableID() NullableID {
+// Nullable returns the id as NullableID
+func (id ID) Nullable() NullableID {
 	return NullableID(id)
 }
 
