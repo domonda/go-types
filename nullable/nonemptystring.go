@@ -19,6 +19,13 @@ const NullNonEmptyString NonEmptyString = ""
 // interpreting it as not null SQL or JSON value.
 type NonEmptyString string
 
+// NonEmptyStringf formats a string using fmt.Sprintf
+// and returns it as NonEmptyString.
+// An empty string will be interpreted as null value.
+func NonEmptyStringf(format string, a ...interface{}) NonEmptyString {
+	return NonEmptyString(fmt.Sprintf(format, a...))
+}
+
 // NonEmptyStringFromPtr converts a string pointer to a NonEmptyString
 // interpreting nil as null value "".
 func NonEmptyStringFromPtr(ptr *string) NonEmptyString {
