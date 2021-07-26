@@ -97,6 +97,13 @@ func (bic BIC) Parse() (bankCode string, countryCode country.Code, branchCode st
 	return bankCode, countryCode, branchCode, true
 }
 
+// CountryCode of the BIC.
+// May be invalid if the BIC is invalid.
+func (bic BIC) CountryCode() country.Code {
+	_, cc, _, _ := bic.Parse()
+	return cc
+}
+
 func (bic BIC) TrimBranchCode() BIC {
 	if len(bic) <= 8 {
 		return bic

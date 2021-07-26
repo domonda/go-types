@@ -69,12 +69,14 @@ func (iban IBAN) ValidAndNormalized() bool {
 	return err == nil && iban == norm
 }
 
-// CountryCode returns the country code of the IBAN
+// CountryCode returns the country code of the IBAN.
+// May be invalid if the IBAN is invalid.
 func (iban IBAN) CountryCode() country.Code {
-	if !iban.Valid() {
-		return ""
+	norm, err := iban.Normalized()
+	if err != nil {
+		return country.Invalid
 	}
-	return country.Code(iban[:2])
+	return country.Code(norm[:2])
 }
 
 // Normalized returns the iban in normalized form,
