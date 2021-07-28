@@ -40,7 +40,7 @@ func (n NullableCode) Normalized() (NullableCode, error) {
 }
 
 func (n NullableCode) NormalizedOrNull() NullableCode {
-	normalized, _ = n.Normalized()
+	normalized, _ := n.Normalized()
 	return normalized
 }
 
