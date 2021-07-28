@@ -27,7 +27,7 @@ func (c Code) Validate() error {
 }
 
 func (c Code) Normalized() (Code, error) {
-	normalized := Code(strings.ToUpper(string(c)))
+	normalized := Code(strings.ToUpper(strings.TrimSpace(string(c))))
 	err := normalized.Validate()
 	if err != nil {
 		return Invalid, err

@@ -31,12 +31,17 @@ func (n NullableCode) Validate() error {
 }
 
 func (n NullableCode) Normalized() (NullableCode, error) {
-	normalized := NullableCode(strings.ToUpper(string(n)))
+	normalized := NullableCode(strings.ToUpper(strings.TrimSpace(string(n))))
 	err := normalized.Validate()
 	if err != nil {
 		return Null, err
 	}
 	return normalized, nil
+}
+
+func (n NullableCode) NormalizedOrNull() NullableCode {
+	normalized, _ = n.Normalized()
+	return normalized
 }
 
 func (n NullableCode) EnglishName() string {
