@@ -26,7 +26,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	buf, err := fsimpl.NewReadonlyFileBufferReadAll(response.Body)
+	buf, err := fsimpl.NewReadonlyFileBufferReadAll(response.Body, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
