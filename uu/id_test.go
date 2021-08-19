@@ -680,8 +680,8 @@ func TestIDFrom(t *testing.T) {
 			if got := IDFrom(tt.val); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("IDFrom() = %v, want %v", got, tt.want)
 			}
-			if got := IDMustFrom(tt.val); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("IDMustFrom() = %v, want %v", got, tt.want)
+			if got := IDMust(tt.val); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("IDMust() = %v, want %v", got, tt.want)
 			}
 		})
 	}

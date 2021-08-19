@@ -213,11 +213,11 @@ func IDFrom(val interface{}) ID {
 	}
 }
 
-// IDMustFrom converts val to an ID or panics
+// IDMust converts val to an ID or panics
 // if that's not possible or the ID is not valid.
 // Supported types are string, []byte, [16]byte,
 // ID, NullableID, and nil.
-func IDMustFrom(val interface{}) ID {
+func IDMust(val interface{}) ID {
 	switch x := val.(type) {
 	case string:
 		id, err := IDFromString(x)

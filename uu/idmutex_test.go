@@ -10,7 +10,7 @@ import (
 )
 
 func Test_IDMutex(t *testing.T) {
-	uuid := IDMustFromString("946521d6-9aef-4bb1-8a19-e0fc0c7e3665")
+	uuid := IDMust("946521d6-9aef-4bb1-8a19-e0fc0c7e3665")
 
 	idMutex := NewIDMutex()
 	assert.Panics(t, func() { idMutex.Unlock(uuid) }, "not locked string should panic")

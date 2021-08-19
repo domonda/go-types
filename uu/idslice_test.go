@@ -107,7 +107,7 @@ func TestIDSlice_Scan(t *testing.T) {
 		{
 			name:  "21e70a0c-7f0e-44d8-8ae5-48992b89d0c5",
 			value: `{"21e70a0c-7f0e-44d8-8ae5-48992b89d0c5"}`,
-			want:  IDSlice{IDMustFromString("21e70a0c-7f0e-44d8-8ae5-48992b89d0c5")},
+			want:  IDSlice{IDMust("21e70a0c-7f0e-44d8-8ae5-48992b89d0c5")},
 		},
 	}
 	for _, tt := range tests {
