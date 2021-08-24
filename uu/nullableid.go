@@ -45,6 +45,46 @@ func NullableIDFromPtr(ptr *ID) NullableID {
 	return NullableID(*ptr)
 }
 
+// NullableIDMust converts val to an ID or panics
+// if that's not possible or the ID is not valid.
+// Supported types are string, []byte, [16]byte,
+// ID, NullableID, and nil.
+func NullableIDMust(val interface{}) NullableID {
+	switch x := val.(type) {
+	case string:
+		id, err := NullableIDFromString(x)
+		if err != nil {
+			panic(err)
+		}
+		return id
+	case []byte:
+		id, err := NullableIDFromBytes(x)
+		if err != nil {
+			panic(err)
+		}
+		return id
+	case ID:
+		if err := x.Validate(); err != nil {
+			panic(err)
+		}
+		return x.Nullable()
+	case NullableID:
+		if err := x.Validate(); err != nil {
+			panic(err)
+		}
+		return x
+	case [16]byte:
+		if err := NullableID(x).Validate(); err != nil {
+			panic(err)
+		}
+		return NullableID(x)
+	case nil:
+		return IDNull
+	default:
+		panic(fmt.Errorf("uu.NullableIDMust type not supported: %T", val))
+	}
+}
+
 // Version returns algorithm version used to generate UUID.
 func (n NullableID) Version() uint {
 	return ID(n).Version()
@@ -104,10 +144,12 @@ func (n NullableID) PrettyPrint(w io.Writer) {
 }
 
 // GoString returns a pseudo Go literal for the ID in the format:
-//   uu.ID("xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx")
-// It compiles if uu.ID is replace by uu.IDMustFromString.
+//   uu.NullableIDMust(`xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`)
 func (n NullableID) GoString() string {
-	return `uu.ID("` + n.String() + `")`
+	if n.IsNull() {
+		return "uu.NullableIDMust(nil)"
+	}
+	return "uu.NullableIDMust(`" + n.String() + "`)"
 }
 
 // Hex returns the hex representation without dashes of the UUID
