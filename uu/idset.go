@@ -51,6 +51,22 @@ func IDSetFromString(str string) (IDSet, error) {
 	return MakeIDSetFromStrings(strings.Split(str, ","))
 }
 
+// IDSetMust converts the passed values to an IDSet
+// or panics if that's not possible or an ID is not valid.
+// Supported types are string, []byte, [16]byte,
+// ID, NullableID, and nil.
+// Returns nil if zero values are passed.
+func IDSetMust(vals ...interface{}) IDSet {
+	if len(vals) == 0 {
+		return nil
+	}
+	s := make(IDSet, len(vals))
+	for _, val := range vals {
+		s.Add(IDMust(val))
+	}
+	return s
+}
+
 // String implements the fmt.Stringer interface.
 func (s IDSet) String() string {
 	return "set" + s.AsSortedSlice().String()

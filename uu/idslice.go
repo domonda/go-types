@@ -50,6 +50,22 @@ func IDSliceMustFromStrings(strs ...string) IDSlice {
 	return s
 }
 
+// IDSliceMust converts the passed values to an IDSlice
+// or panics if that's not possible or an ID is not valid.
+// Supported types are string, []byte, [16]byte,
+// ID, NullableID, and nil.
+// Returns nil if zero values are passed.
+func IDSliceMust(vals ...interface{}) IDSlice {
+	if len(vals) == 0 {
+		return nil
+	}
+	s := make(IDSlice, len(vals))
+	for i, val := range vals {
+		s[i] = IDMust(val)
+	}
+	return s
+}
+
 // AsSet returns the IDs of the slice as a IDSet.
 func (s IDSlice) AsSet() IDSet {
 	set := make(IDSet, len(s))
