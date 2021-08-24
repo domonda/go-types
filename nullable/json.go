@@ -137,7 +137,7 @@ func (j JSON) String() string {
 }
 
 func (j JSON) GoString() string {
-	fmt.Sprintf("nullable.JSON(`%s`)", j)
+	return fmt.Sprintf("nullable.JSON(`%s`)", j)
 }
 
 func (j JSON) PrettyPrint(w io.Writer) {

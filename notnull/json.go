@@ -117,7 +117,7 @@ func (j JSON) String() string {
 }
 
 func (j JSON) GoString() string {
-	fmt.Sprintf("notnull.JSON(`%s`)", j)
+	return fmt.Sprintf("notnull.JSON(`%s`)", j)
 }
 
 func (j JSON) PrettyPrint(w io.Writer) {
