@@ -4,6 +4,8 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 )
 
 // JSON is a []byte slice containing JSON text.
@@ -77,7 +79,11 @@ func (j JSON) Value() (driver.Value, error) {
 
 // IsEmpty returns true if j is nil, or an empty JSON value like "", "{}", or "[]"
 func (j JSON) IsEmpty() bool {
-	return j == nil || string(j) == "{}" || string(j) == "[]"
+	switch string(j) {
+	case "", "{}", "[]":
+		return true
+	}
+	return false
 }
 
 // Scan stores the src in *j. No validation is done.
@@ -108,6 +114,10 @@ func (j JSON) String() string {
 		return "{}"
 	}
 	return string(j)
+}
+
+func (j JSON) PrettyPrint(w io.Writer) {
+	fmt.Fprintf(w, "`%s`", j)
 }
 
 // Clone returns a copy of j

@@ -5,6 +5,8 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 )
 
 // JSON is a []byte slice containing JSON text or nil
@@ -92,9 +94,8 @@ func (j JSON) IsEmpty() bool {
 	switch string(j) {
 	case "", "{}", "[]":
 		return true
-	default:
-		return false
 	}
+	return false
 }
 
 // Scan stores the src in *j. No validation is done.
@@ -133,6 +134,10 @@ func (j JSON) String() string {
 		return "null"
 	}
 	return string(j)
+}
+
+func (j JSON) PrettyPrint(w io.Writer) {
+	fmt.Fprintf(w, "`%s`", j)
 }
 
 // Clone returns a copy of j
