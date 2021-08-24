@@ -249,7 +249,7 @@ func IDMust(val interface{}) ID {
 	case nil:
 		return IDNil
 	default:
-		panic(fmt.Errorf("uu.IDMustFrom type not supported: %T", val))
+		panic(fmt.Errorf("uu.IDMust type not supported: %T", val))
 	}
 }
 
@@ -355,10 +355,9 @@ func (id ID) StringUpper() string {
 }
 
 // GoString returns a pseudo Go literal for the ID in the format:
-//   uu.ID("xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx")
-// It compiles if uu.ID is replace by uu.IDMustFromString.
+//   uu.IDMust(`xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`)
 func (id ID) GoString() string {
-	return `uu.ID("` + id.String() + `")`
+	return "uu.IDMust(`" + id.String() + "`)"
 }
 
 // PrettyPrint the ID in the format xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx.
