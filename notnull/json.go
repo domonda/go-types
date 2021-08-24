@@ -116,6 +116,10 @@ func (j JSON) String() string {
 	return string(j)
 }
 
+func (j JSON) GoString() string {
+	fmt.Sprintf("notnull.JSON(`%s`)", j)
+}
+
 func (j JSON) PrettyPrint(w io.Writer) {
 	fmt.Fprintf(w, "`%s`", j)
 }
