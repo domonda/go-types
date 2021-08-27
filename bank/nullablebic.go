@@ -4,7 +4,12 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
+
+	"github.com/domonda/go-types/nullable"
 )
+
+// Ensure that NullableBIC implements StringGetter
+var _ nullable.StringGetter = NullableBIC("")
 
 // BICNull is an empty string and will be treatet as SQL NULL.
 const BICNull NullableBIC = ""
@@ -87,6 +92,15 @@ func (bic *NullableBIC) Get() BIC {
 		panic("NULL bank.BIC")
 	}
 	return BIC(*bic)
+}
+
+// StringOr returns the NullableBIC as string
+// or the passed nullString if the NullableBIC is null.
+func (bic NullableBIC) StringOr(nullString string) string {
+	if bic.IsNull() {
+		return nullString
+	}
+	return string(bic)
 }
 
 // IsNull returns true if the NullableBIC is null.

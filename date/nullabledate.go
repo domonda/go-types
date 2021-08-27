@@ -10,6 +10,9 @@ import (
 	"github.com/domonda/go-types/nullable"
 )
 
+// Ensure that NullableDate implements StringGetter
+var _ nullable.StringGetter = NullableDate("")
+
 // Null is an empty string and will be treatet as SQL NULL.
 // date.Null.IsZero() == true
 var Null NullableDate
@@ -144,6 +147,15 @@ func (n NullableDate) String() string {
 		return string(n)
 	}
 	return string(norm)
+}
+
+// StringOr returns the NullableDate as string
+// or the passed nullString if the NullableDate is null.
+func (n NullableDate) StringOr(nullString string) string {
+	if n.IsNull() {
+		return nullString
+	}
+	return n.String()
 }
 
 // Normalized returns the date in normalized form,

@@ -6,7 +6,11 @@ import (
 	"fmt"
 
 	"github.com/domonda/go-types/country"
+	"github.com/domonda/go-types/nullable"
 )
+
+// Ensure that NullableID implements StringGetter
+var _ nullable.StringGetter = NullableID("")
 
 // Null is an empty string and will be treatet as SQL NULL.
 var Null NullableID
@@ -75,6 +79,15 @@ func (n NullableID) Get() ID {
 		panic("NULL vat.ID")
 	}
 	return ID(n)
+}
+
+// StringOr returns the NullableID as string
+// or the passed nullString if the NullableID is null.
+func (n NullableID) StringOr(nullString string) string {
+	if n.IsNull() {
+		return nullString
+	}
+	return string(n)
 }
 
 // Valid returns if id is a valid VAT ID or Null,

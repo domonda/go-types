@@ -5,7 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/domonda/go-types/nullable"
 )
+
+// Ensure that NullableCode implements StringGetter
+var _ nullable.StringGetter = NullableCode("")
 
 const Null NullableCode = ""
 
@@ -77,6 +82,15 @@ func (n NullableCode) Get() Code {
 		panic("NULL country.Code")
 	}
 	return Code(n)
+}
+
+// StringOr returns the NullableCode as string
+// or the passed nullString if the NullableCode is null.
+func (n NullableCode) StringOr(nullString string) string {
+	if n.IsNull() {
+		return nullString
+	}
+	return string(n)
 }
 
 // Scan implements the database/sql.Scanner interface.

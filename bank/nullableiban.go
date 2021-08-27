@@ -6,7 +6,11 @@ import (
 	"fmt"
 
 	"github.com/domonda/go-types/country"
+	"github.com/domonda/go-types/nullable"
 )
+
+// Ensure that NullableIBAN implements StringGetter
+var _ nullable.StringGetter = NullableIBAN("")
 
 // IBANNull is an empty string and will be treatet as SQL NULL.
 const IBANNull NullableIBAN = ""
@@ -136,6 +140,15 @@ func (iban *NullableIBAN) Get() IBAN {
 		panic("NULL bank.IBAN")
 	}
 	return IBAN(*iban)
+}
+
+// StringOr returns the NullableIBAN as string
+// or the passed nullString if the NullableIBAN is null.
+func (iban NullableIBAN) StringOr(nullString string) string {
+	if iban.IsNull() {
+		return nullString
+	}
+	return string(iban)
 }
 
 // IsNull returns true if the NullableIBAN is null.

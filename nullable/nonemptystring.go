@@ -8,6 +8,9 @@ import (
 	"strings"
 )
 
+// Ensure that NonEmptyString implements StringGetter
+var _ StringGetter = NonEmptyString("")
+
 // NullNonEmptyString is the SQL NULL and JSON null value for NonEmptyString.
 const NullNonEmptyString NonEmptyString = ""
 

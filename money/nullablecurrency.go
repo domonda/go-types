@@ -4,7 +4,12 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
+
+	"github.com/domonda/go-types/nullable"
 )
+
+// Ensure that NullableCurrency implements StringGetter
+var _ nullable.StringGetter = NullableCurrency("")
 
 // NullableCurrency holds a 3 character ISO 4217 alphabetic code,
 // or an empty string as valid value representing NULL in SQL databases.
@@ -53,6 +58,15 @@ func (n NullableCurrency) GetOr(defaultVal Currency) Currency {
 		return defaultVal
 	}
 	return Currency(n)
+}
+
+// StringOr returns the NullableCurrency as string
+// or the passed nullString if the NullableCurrency is null.
+func (n NullableCurrency) StringOr(nullString string) string {
+	if n.IsNull() {
+		return nullString
+	}
+	return string(n)
 }
 
 // Valid returns true if c is an empty string, or a valid 3 character ISO 4217 alphabetic code.
