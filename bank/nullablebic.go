@@ -33,6 +33,11 @@ func (bic NullableBIC) Valid() bool {
 	return bic.Validate() == nil
 }
 
+// ValidAndNotNull returns true if bic is not null and a valid SWIFT Business Identifier Code
+func (bic NullableBIC) ValidAndNotNull() bool {
+	return bic.IsNotNull() && bic.Valid()
+}
+
 // Validate returns an error if this is not a valid SWIFT Business Identifier Code
 func (bic NullableBIC) Validate() error {
 	if bic == BICNull {
@@ -96,9 +101,9 @@ func (bic NullableBIC) IsNotNull() bool {
 
 // MarshalJSON implements encoding/json.Marshaler
 // by returning the JSON null for an empty/null string.
-func (n NullableBIC) MarshalJSON() ([]byte, error) {
-	if n.IsNull() {
+func (bic NullableBIC) MarshalJSON() ([]byte, error) {
+	if bic.IsNull() {
 		return []byte(`null`), nil
 	}
-	return json.Marshal(string(n))
+	return json.Marshal(string(bic))
 }

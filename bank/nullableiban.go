@@ -35,6 +35,11 @@ func (iban NullableIBAN) Valid() bool {
 	return iban.Validate() == nil
 }
 
+// ValidAndNotNull returns true if iban is not null and a valid International Bank Account Number
+func (iban NullableIBAN) ValidAndNotNull() bool {
+	return iban.IsNotNull() && iban.Valid()
+}
+
 // Validate returns an error if this is not null and not a valid International Bank Account Number
 func (iban NullableIBAN) Validate() error {
 	_, err := iban.Normalized()
@@ -112,51 +117,51 @@ func (iban NullableIBAN) Value() (driver.Value, error) {
 }
 
 // Set sets an IBAN for this NullableIBAN
-func (n *NullableIBAN) Set(id IBAN) {
-	*n = NullableIBAN(id)
+func (iban *NullableIBAN) Set(id IBAN) {
+	*iban = NullableIBAN(id)
 }
 
 // SetNull sets the NullableIBAN to null
-func (n *NullableIBAN) SetNull() {
-	*n = IBANNull
+func (iban *NullableIBAN) SetNull() {
+	*iban = IBANNull
 }
 
 // Get returns the non nullable IBAN value
 // or panics if the NullableIBAN is null.
 // Note: check with IsNull before using Get!
-func (n *NullableIBAN) Get() IBAN {
-	if n.IsNull() {
+func (iban *NullableIBAN) Get() IBAN {
+	if iban.IsNull() {
 		panic("NULL bank.IBAN")
 	}
-	return IBAN(*n)
+	return IBAN(*iban)
 }
 
 // IsNull returns true if the NullableIBAN is null.
 // IsNull implements the nullable.Nullable interface.
-func (n NullableIBAN) IsNull() bool {
-	return n == IBANNull
+func (iban NullableIBAN) IsNull() bool {
+	return iban == IBANNull
 }
 
-func (n NullableIBAN) IsNotNull() bool {
-	return n != IBANNull
+func (iban NullableIBAN) IsNotNull() bool {
+	return iban != IBANNull
 }
 
 // String returns the normalized IBAN string if possible,
 // else it will be returned unchanged as string.
 // String implements the fmt.Stringer interface.
-func (n NullableIBAN) String() string {
-	norm, err := n.Normalized()
+func (iban NullableIBAN) String() string {
+	norm, err := iban.Normalized()
 	if err != nil {
-		return string(n)
+		return string(iban)
 	}
 	return string(norm)
 }
 
 // MarshalJSON implements encoding/json.Marshaler
 // by returning the JSON null for an empty/null string.
-func (n NullableIBAN) MarshalJSON() ([]byte, error) {
-	if n.IsNull() {
+func (iban NullableIBAN) MarshalJSON() ([]byte, error) {
+	if iban.IsNull() {
 		return []byte(`null`), nil
 	}
-	return json.Marshal(string(n))
+	return json.Marshal(string(iban))
 }
