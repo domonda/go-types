@@ -72,6 +72,8 @@ func (iban NullableIBAN) Normalized() (NullableIBAN, error) {
 	return NullableIBAN(normalized), nil
 }
 
+// NormalizedOrUnchanged returns the iban in normalized form,
+// or unchanged if the format has an error.
 func (iban NullableIBAN) NormalizedOrUnchanged() NullableIBAN {
 	normalized, err := iban.Normalized()
 	if err != nil {
