@@ -172,6 +172,18 @@ func (s IDSlice) ContainsAny(other IDSlice) bool {
 	return false
 }
 
+func (s IDSlice) Equal(other IDSlice) bool {
+	if len(s) != len(other) {
+		return false
+	}
+	for i := range s {
+		if s[i] != other[i] {
+			return false
+		}
+	}
+	return true
+}
+
 func (s IDSlice) ContainsAnyFromSet(set IDSet) bool {
 	for _, id := range s {
 		if set.Contains(id) {
