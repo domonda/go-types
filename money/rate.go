@@ -101,6 +101,14 @@ func (ptr *Rate) FloatOr(defaultVal float64) float64 {
 	return float64(*ptr)
 }
 
+// RateOr returns the pointed to rate or defaultVal if ptr is nil.
+func (ptr *Rate) RateOr(defaultVal Rate) Rate {
+	if ptr == nil {
+		return defaultVal
+	}
+	return *ptr
+}
+
 // BigFloat returns m as a new big.Float
 func (r Rate) BigFloat() *big.Float {
 	return big.NewFloat(float64(r))

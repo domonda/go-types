@@ -131,6 +131,14 @@ func (ptr *Amount) FloatOr(defaultVal float64) float64 {
 	return float64(*ptr)
 }
 
+// AmountOr returns the pointed to amount or defaultVal if ptr is nil.
+func (ptr *Amount) AmountOr(defaultVal Amount) Amount {
+	if ptr == nil {
+		return defaultVal
+	}
+	return *ptr
+}
+
 // Format formats the Amount similar to strconv.FormatFloat with the 'f' format option,
 // but with decimalSep as decimal separator instead of a point
 // and optional grouping of the integer part.
