@@ -254,3 +254,33 @@ func Test_Amount_ScaleAmountsToSumRoundToCents(t *testing.T) {
 		assert.Equal(t, test.expected, result)
 	}
 }
+
+func TestAmount_UnmarshalJSON(t *testing.T) {
+	tests := []struct {
+		name       string
+		json       []byte
+		wantAmount Amount
+		wantErr    bool
+	}{
+		{name: "nil", json: nil, wantErr: true},
+		{name: "JSON boolean", json: []byte(`true`), wantErr: true},
+		{name: "JSON non number string", json: []byte(`"true"`), wantErr: true},
+
+		{name: "JSON null", json: []byte(`null`), wantAmount: 0},
+		{name: "empty JSON string", json: []byte(`""`), wantAmount: 0},
+		{name: "0", json: []byte(`0`), wantAmount: 0},
+		{name: "-0.12345", json: []byte(`-0.12345`), wantAmount: -0.12345},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var amount Amount = 666 // Init with value different from default 0
+			if err := amount.UnmarshalJSON(tt.json); (err != nil) != tt.wantErr {
+				t.Errorf("Amount.UnmarshalJSON(%s) error = %v, wantErr %v", tt.json, err, tt.wantErr)
+				return
+			}
+			if !tt.wantErr && amount != tt.wantAmount {
+				t.Errorf("Amount.UnmarshalJSON(%s) got %f, want %f", tt.json, amount, tt.wantAmount)
+			}
+		})
+	}
+}

@@ -1,8 +1,6 @@
 package money
 
 import (
-	"bytes"
-	"errors"
 	"fmt"
 	"math"
 	"math/big"
@@ -295,20 +293,18 @@ func (a Amount) ValidAndHasSign(sign int) bool {
 
 // UnmarshalJSON implements encoding/json.Unmarshaler
 // and accepts numbers, strings, and null.
-// JSON null will set the amout to zero.
+// JSON null and "" will set the amout to zero.
 func (a *Amount) UnmarshalJSON(j []byte) error {
-	if len(j) == 0 {
-		return errors.New("can't unmarshal empty JSON")
-	}
+	s := string(j)
 
-	if bytes.Equal(j, []byte("null")) {
+	if s == `null` || s == `""` {
 		*a = 0
 		return nil
 	}
 
-	s := string(j)
-	if len(j) > 2 && j[0] == '"' && j[len(j)-1] == '"' {
-		s = s[1 : len(j)-1]
+	// Strip quotes
+	if l := len(s); l > 2 && s[0] == '"' && s[l-1] == '"' {
+		s = s[1 : l-1]
 	}
 
 	amount, err := ParseAmount(s)
