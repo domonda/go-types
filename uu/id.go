@@ -17,7 +17,7 @@ import (
 )
 
 // The nil UUID is special form of UUID that is specified to have all
-// 128 bits set to zero.
+// 128 bits set to zero: "00000000-0000-0000-0000-000000000000"
 var IDNil ID
 
 // ID is a UUID representation compliant with specification

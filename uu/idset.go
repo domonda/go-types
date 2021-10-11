@@ -48,6 +48,9 @@ func IDSetFromString(str string) (IDSet, error) {
 	if strings.HasPrefix(str, "[") && strings.HasSuffix(str, "]") {
 		str = str[1 : len(str)-1]
 	}
+	if str == "" {
+		return nil, nil
+	}
 	return MakeIDSetFromStrings(strings.Split(str, ","))
 }
 
