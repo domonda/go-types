@@ -47,11 +47,17 @@ func IDSetFromString(str string) (IDSet, error) {
 	str = strings.TrimPrefix(str, "set")
 	if strings.HasPrefix(str, "[") && strings.HasSuffix(str, "]") {
 		str = str[1 : len(str)-1]
+	} else if str == "null" || str == "NULL" {
+		return nil, nil
 	}
 	if str == "" {
 		return nil, nil
 	}
-	return MakeIDSetFromStrings(strings.Split(str, ","))
+	strs := strings.Split(str, ",")
+	for i, s := range strs {
+		strs[i] = strings.TrimSpace(s)
+	}
+	return MakeIDSetFromStrings(strs)
 }
 
 // IDSetMust converts the passed values to an IDSet

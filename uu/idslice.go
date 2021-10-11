@@ -20,11 +20,17 @@ type IDSlice []ID
 func IDSliceFromString(str string) (IDSlice, error) {
 	if strings.HasPrefix(str, "[") && strings.HasSuffix(str, "]") {
 		str = str[1 : len(str)-1]
+	} else if str == "null" || str == "NULL" {
+		return nil, nil
 	}
 	if str == "" {
 		return nil, nil
 	}
-	return IDSliceFromStrings(strings.Split(str, ","))
+	strs := strings.Split(str, ",")
+	for i, s := range strs {
+		strs[i] = strings.TrimSpace(s)
+	}
+	return IDSliceFromStrings(strs)
 }
 
 // IDSliceFromStrings parses an IDSlice from strings
