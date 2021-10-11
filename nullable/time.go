@@ -195,6 +195,27 @@ func (n Time) MarshalJSON() ([]byte, error) {
 	return json.Marshal(n.Time)
 }
 
+// MarshalText implements the encoding.TextMarshaler interface.
+// The time is formatted in RFC 3339 format, with sub-second precision added if present.
+// "NULL" is returned as text if the time is null.
+func (n Time) MarshalText() ([]byte, error) {
+	if n.IsNull() {
+		return []byte("NULL"), nil
+	}
+	return n.Time.MarshalText()
+}
+
+// UnmarshalText implements the encoding.TextUnmarshaler interface.
+// The time is expected to be in RFC 3339 format.
+// Empty text, "null", or "NULL" will set the time to null.
+func (n *Time) UnmarshalText(text []byte) error {
+	if len(text) == 0 || bytes.EqualFold(text, []byte("NULL")) {
+		n.SetNull()
+		return nil
+	}
+	return n.Time.UnmarshalText(text)
+}
+
 // PrettyPrint implements the pretty.Printer interface
 func (n Time) PrettyPrint(w io.Writer) {
 	if n.IsNull() {
