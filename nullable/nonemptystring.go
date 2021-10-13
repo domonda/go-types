@@ -57,8 +57,8 @@ func NonEmptyStringTrimSpace(str string) NonEmptyString {
 }
 
 // JoinNonEmptyStrings joins only those strings that are
-// not empty/null with the passed separator into a string.
-func JoinNonEmptyStrings(strs []NonEmptyString, separator string) NonEmptyString {
+// not empty/null with the passed separator between them.
+func JoinNonEmptyStrings(separator string, strs ...NonEmptyString) NonEmptyString {
 	var b strings.Builder
 	for _, s := range strs {
 		if s.IsNull() {
