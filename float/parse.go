@@ -18,7 +18,7 @@ func Parse(str string) (float64, error) {
 // and returns the detected integer thousands separator and decimal separator characters.
 // If a separator was not detected, then zero will be returned for thousandsSep or decimalSep.
 // See: https://en.wikipedia.org/wiki/Decimal_separator
-func ParseDetails(str string) (f float64, thousandsSep, decimalSep byte, decimals int, err error) {
+func ParseDetails(str string) (f float64, thousandsSep, decimalSep rune, decimals int, err error) {
 
 	var (
 		lastDigitIndex    = -1
@@ -118,8 +118,8 @@ func ParseDetails(str string) (f float64, thousandsSep, decimalSep byte, decimal
 					// reached the decimal separator
 					floatBuilder.WriteByte('.')
 					pointWritten = true
-					thousandsSep = byte(lastGroupingRune)
-					decimalSep = byte(r)
+					thousandsSep = lastGroupingRune
+					decimalSep = r
 				}
 			}
 			lastNonDigitIndex = i
@@ -192,11 +192,11 @@ func ParseDetails(str string) (f float64, thousandsSep, decimalSep byte, decimal
 			if lastDigitIndex-lastGroupingIndex != 3 {
 				return 0, 0, 0, 0, fmt.Errorf("thousands separators have to be 3 characters apart: %q", str)
 			}
-			thousandsSep = byte(lastGroupingRune)
+			thousandsSep = lastGroupingRune
 		} else {
 			floatBuilder.WriteByte('.')
 			pointWritten = true
-			decimalSep = byte(lastGroupingRune)
+			decimalSep = lastGroupingRune
 		}
 	}
 	if lastDigitIndex >= lastNonDigitIndex {

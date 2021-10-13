@@ -4,8 +4,8 @@ import "github.com/domonda/go-types/language"
 
 // FormatDef holds the definition for a float format
 type FormatDef struct {
-	ThousandsSep byte `json:"thousandsSep,string,omitempty"`
-	DecimalSep   byte `json:"decimalSep,string"`
+	ThousandsSep rune `json:"thousandsSep,string,omitempty"`
+	DecimalSep   rune `json:"decimalSep,string"`
 	Precision    int  `json:"precision"`
 	PadPrecision bool `json:"padPrecision"`
 }

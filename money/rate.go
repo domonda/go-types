@@ -79,7 +79,7 @@ func (r Rate) RoundToDecimals(decimals int) Rate {
 // Note that the last digit is not rounded!
 // The special precision -1 uses the smallest number of digits
 // necessary such that ParseFloat will return f exactly.
-func (r Rate) Format(thousandsSep, decimalSep byte, precision int) string {
+func (r Rate) Format(thousandsSep, decimalSep rune, precision int) string {
 	return float.Format(float64(r), thousandsSep, decimalSep, precision, true)
 }
 

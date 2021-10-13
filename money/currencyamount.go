@@ -52,7 +52,7 @@ func (ca *CurrencyAmount) String() string {
 	return fmt.Sprintf("%s %.2f", ca.Currency, ca.Amount)
 }
 
-func (ca *CurrencyAmount) Format(currencyFirst bool, thousandsSep, decimalSep byte, precision int) string {
+func (ca *CurrencyAmount) Format(currencyFirst bool, thousandsSep, decimalSep rune, precision int) string {
 	amountStr := ca.Amount.Format(thousandsSep, decimalSep, precision)
 	if ca.Currency == "" {
 		return amountStr

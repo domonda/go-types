@@ -19,8 +19,8 @@ func (f FormatterFunc) FormatValue(val reflect.Value, config *FormatConfig) stri
 
 type MoneyFormat struct {
 	CurrencyFirst bool
-	ThousandsSep  byte
-	DecimalSep    byte
+	ThousandsSep  rune
+	DecimalSep    rune
 	Precision     int
 }
 

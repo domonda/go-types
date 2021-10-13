@@ -48,7 +48,7 @@ func Test_ParseFloat(t *testing.T) {
 		"158,00 ":              {158, 0, ',', 2, false},
 	}
 
-	testFunc := func(str string, refFloat float64, refThousandsSep, refDecimalSep byte, refDecimals int) func(*testing.T) {
+	testFunc := func(str string, refFloat float64, refThousandsSep, refDecimalSep rune, refDecimals int) func(*testing.T) {
 		return func(t *testing.T) {
 			parsed, thousandsSep, decimalSep, decimals, err := ParseDetails(str)
 			assert.NoError(t, err)

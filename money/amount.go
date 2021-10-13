@@ -149,7 +149,7 @@ func (ptr *Amount) AmountOr(defaultVal Amount) Amount {
 // Note that the last digit is not rounded!
 // The special precision -1 uses the smallest number of digits
 // necessary such that ParseFloat will return f exactly.
-func (a Amount) Format(thousandsSep, decimalSep byte, precision int) string {
+func (a Amount) Format(thousandsSep, decimalSep rune, precision int) string {
 	return float.Format(float64(a), thousandsSep, decimalSep, precision, true)
 }
 

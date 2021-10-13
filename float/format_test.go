@@ -8,8 +8,8 @@ import (
 
 type floatInfo struct {
 	f            float64
-	thousandsSep byte
-	decimalSep   byte
+	thousandsSep rune
+	decimalSep   rune
 	decimals     int
 	padPrecision bool
 }
