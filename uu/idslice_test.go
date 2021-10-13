@@ -59,10 +59,11 @@ func TestIDSlice(t *testing.T) {
 		})
 	}
 
-	_, err = IDSliceFromString("")
-	assert.Error(t, err)
+	got, err := IDSliceFromString("")
+	assert.NoError(t, err)
+	assert.Nil(t, got)
 
-	got, err := IDSliceFromStrings(nil)
+	got, err = IDSliceFromStrings(nil)
 	assert.NoError(t, err)
 	assert.Nil(t, got)
 }
