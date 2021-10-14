@@ -2,7 +2,6 @@ package notnull
 
 import (
 	"database/sql/driver"
-	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -85,10 +84,16 @@ func (a *FloatArray) scanBytes(src []byte) (err error) {
 // MarshalJSON returns a as the JSON encoding of a.
 // MarshalJSON implements encoding/json.Marshaler.
 func (a FloatArray) MarshalJSON() ([]byte, error) {
-	if len(a) == 0 {
-		return []byte("[]"), nil
+	b := make([]byte, 1, 32)
+	b[0] = '['
+	for i := range a {
+		if i > 0 {
+			b = append(b, ',')
+		}
+		b = strconv.AppendFloat(b, a[i], 'f', -1, 64)
 	}
-	return json.Marshal([]float64(a))
+	b = append(b, ']')
+	return b, nil
 }
 
 // Len is the number of elements in the collection.
