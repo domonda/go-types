@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -31,8 +32,20 @@ func (a NullBoolArray) Bools() []bool {
 
 // String implements the fmt.Stringer interface.
 func (a NullBoolArray) String() string {
-	value, _ := a.Value()
-	return fmt.Sprintf("NullBoolArray%v", value)
+	var b strings.Builder
+	b.WriteByte('[')
+	for i := range a {
+		if i > 0 {
+			b.WriteString(", ")
+		}
+		if a[i].Valid {
+			b.WriteString(strconv.FormatBool(a[i].Bool))
+		} else {
+			b.WriteString("NULL")
+		}
+	}
+	b.WriteByte(']')
+	return b.String()
 }
 
 // Value implements the database/sql/driver.Valuer interface
@@ -71,16 +84,20 @@ func (a *NullBoolArray) Scan(src interface{}) error {
 		return nil
 	}
 
-	return fmt.Errorf("can't convert %T to NullBoolArray", src)
+	return fmt.Errorf("can't convert %T to notnull.NullBoolArray", src)
 }
 
 func (a *NullBoolArray) scanBytes(src []byte) error {
 	if len(src) == 0 {
 		*a = nil
+		return nil
 	}
-
 	if src[0] != '{' || src[len(src)-1] != '}' {
-		return fmt.Errorf("can't parse %q as NullBoolArray", string(src))
+		return fmt.Errorf("can't parse %q as notnull.NullBoolArray", string(src))
+	}
+	if len(src) == 2 { // src == "{}"
+		*a = nil
+		return nil
 	}
 
 	elements := strings.Split(string(src[1:len(src)-1]), ",")

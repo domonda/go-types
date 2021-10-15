@@ -56,16 +56,20 @@ func (a *FloatArray) Scan(src interface{}) error {
 		return nil
 	}
 
-	return fmt.Errorf("can't convert %T to FloatArray", src)
+	return fmt.Errorf("can't convert %T to notnull.FloatArray", src)
 }
 
 func (a *FloatArray) scanBytes(src []byte) (err error) {
 	if len(src) == 0 {
 		*a = nil
+		return nil
 	}
-
 	if src[0] != '{' || src[len(src)-1] != '}' {
-		return fmt.Errorf("can't parse %q as FloatArray", string(src))
+		return fmt.Errorf("can't parse %q as notnull.FloatArray", string(src))
+	}
+	if len(src) == 2 { // src == "{}"
+		*a = nil
+		return nil
 	}
 
 	elements := strings.Split(string(src[1:len(src)-1]), ",")
@@ -73,11 +77,10 @@ func (a *FloatArray) scanBytes(src []byte) (err error) {
 	for i, elem := range elements {
 		newArray[i], err = strconv.ParseFloat(elem, 64)
 		if err != nil {
-			return fmt.Errorf("can't parse %q as FloatArray because of: %w", string(src), err)
+			return fmt.Errorf("can't parse %q as notnull.FloatArray because of: %w", string(src), err)
 		}
 	}
 	*a = newArray
-
 	return nil
 }
 
