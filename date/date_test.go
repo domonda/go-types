@@ -326,8 +326,13 @@ func Test_YearMonthDay(t *testing.T) {
 		month time.Month
 		day   int
 	}{
+		// Normalized
 		"2010-12-31": {2010, 12, 31},
 		"2000-01-01": {2000, 1, 1},
+
+		// Not normalized
+		"31.12.2010":     {2010, 12, 31},
+		"1st. Jan. 2000": {2000, 1, 1},
 	}
 
 	for date, expected := range dates {
@@ -445,6 +450,32 @@ func TestDate_AddMonths(t *testing.T) {
 		t.Run(fmt.Sprintf("%s + %d", tt.date, tt.args.months), func(t *testing.T) {
 			if got := tt.date.AddMonths(tt.args.months); got != tt.want {
 				t.Errorf("Date.AddMonths() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestDate_YearMonthDay(t *testing.T) {
+	tests := []struct {
+		name      string
+		date      Date
+		wantYear  int
+		wantMonth time.Month
+		wantDay   int
+	}{
+		// TODO: Add test cases.
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotYear, gotMonth, gotDay := tt.date.YearMonthDay()
+			if gotYear != tt.wantYear {
+				t.Errorf("Date.YearMonthDay() gotYear = %v, want %v", gotYear, tt.wantYear)
+			}
+			if gotMonth != tt.wantMonth {
+				t.Errorf("Date.YearMonthDay() gotMonth = %v, want %v", gotMonth, tt.wantMonth)
+			}
+			if gotDay != tt.wantDay {
+				t.Errorf("Date.YearMonthDay() gotDay = %v, want %v", gotDay, tt.wantDay)
 			}
 		})
 	}

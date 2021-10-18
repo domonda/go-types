@@ -500,13 +500,41 @@ func (date Date) NextSunday() Date {
 // YearMonthDay returns the year, month, day components of the Date.
 // Zero values will be returned when the date is not valid.
 func (date Date) YearMonthDay() (year int, month time.Month, day int) {
-	if len(date) != Length {
+	norm, err := date.Normalized()
+	if err != nil {
 		return 0, 0, 0
 	}
-	year, _ = strconv.Atoi(string(date)[:4])
-	monthInt, _ := strconv.Atoi(string(date)[5:7])
-	day, _ = strconv.Atoi(string(date)[8:])
+	year, _ = strconv.Atoi(string(norm)[:4])
+	monthInt, _ := strconv.Atoi(string(norm)[5:7])
+	day, _ = strconv.Atoi(string(norm)[8:])
 	return year, time.Month(monthInt), day
+}
+
+// Year of the date
+func (date Date) Year() int {
+	year, _, _ := date.YearMonthDay()
+	return year
+}
+
+// Month of the date
+func (date Date) Month() time.Month {
+	_, month, _ := date.YearMonthDay()
+	return month
+}
+
+// Day within the month of the date
+func (date Date) Day() int {
+	_, _, day := date.YearMonthDay()
+	return day
+}
+
+// Weekday returns the date's day of the week.
+func (date Date) Weekday() time.Weekday {
+	t := date.Midnight()
+	if t.IsZero() {
+		return 0
+	}
+	return t.Weekday()
 }
 
 // ISOWeek returns the ISO 8601 year and week number in which the date occurs.
