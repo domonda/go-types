@@ -6,9 +6,9 @@ require (
 	github.com/domonda/go-pretty v0.0.0-20210202131827-b4ff5dbd12fd
 	github.com/guregu/null v4.0.0+incompatible
 	github.com/jinzhu/now v1.1.2
-	github.com/lib/pq v1.10.2
+	github.com/lib/pq v1.10.3
 	github.com/stretchr/testify v1.7.0
-	github.com/ungerik/go-fs v0.0.0-20210610150523-5dc2f3dd4d0a
+	github.com/ungerik/go-fs v0.0.0-20211026033919-c01ec0166b2d
 	github.com/ungerik/go-reflection v0.0.0-20210817083039-1053f336f275
 	golang.org/x/text v0.3.7
 )
