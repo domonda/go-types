@@ -98,6 +98,16 @@ func OfTodayIn(loc *time.Location) Date {
 	return OfTime(time.Now().In(loc))
 }
 
+// OfYesterday returns the date of yesterday in the local timezone.
+func OfYesterday() Date {
+	return OfTime(time.Now().Add(-24 * time.Hour))
+}
+
+// OfTomorrow returns the date of tomorrow in the local timezone.
+func OfTomorrow() Date {
+	return OfTime(time.Now().Add(24 * time.Hour))
+}
+
 // Parse returns the date part from time.Parse(layout, value)
 func Parse(layout, value string) (Date, error) {
 	t, err := time.Parse(layout, value)
