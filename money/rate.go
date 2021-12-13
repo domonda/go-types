@@ -142,14 +142,23 @@ func (r Rate) Abs() Rate {
 	return Rate(math.Abs(float64(r)))
 }
 
-// Inverted returns the rate with inverted sign.
-func (r Rate) Inverted() Rate {
-	return -r
+// AbsFloat returns the absolute value of r as float64.
+//
+// Special cases are:
+//	AbsFloat(±Inf) = +Inf
+//	AbsFloat(NaN) = NaN
+func (r Rate) AbsFloat() float64 {
+	return math.Abs(float64(r))
 }
 
 // Invert inverts the sign of the rate.
 func (r *Rate) Invert() {
 	*r = -*r
+}
+
+// Inverted returns the rate with inverted sign.
+func (r Rate) Inverted() Rate {
+	return -r
 }
 
 // WithPosSign returns the value with a positive sign (abs) if true is passed,
