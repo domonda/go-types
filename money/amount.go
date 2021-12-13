@@ -194,7 +194,7 @@ func (a Amount) Abs() Amount {
 //	AbsFloat(±Inf) = +Inf
 //	AbsFloat(NaN) = NaN
 func (a Amount) AbsFloat() float64 {
-	return math.Abs(float64(a)))
+	return math.Abs(float64(a))
 }
 
 // Invert inverts the sign of the amount.
