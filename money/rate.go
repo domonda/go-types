@@ -5,6 +5,8 @@ import (
 	"math"
 	"math/big"
 	"strconv"
+	"strings"
+	"unicode"
 
 	"github.com/domonda/go-types/float"
 )
@@ -15,10 +17,25 @@ type Rate float64
 
 // ParseRate parses a rate from str accepting only certain decimal digit counts.
 // If no acceptedDecimals are passed, then any decimal digit count is accepted.
+// If a string ends with '%' then the parsed number part will be divided by 100.
 func ParseRate(str string, acceptedDecimals ...int) (Rate, error) {
-	f, _, _, decimals, err := float.ParseDetails(str)
+	var (
+		s       = strings.TrimSpace(str)
+		percent = false
+	)
+	if l := len(s); l > 0 && s[l-1] == '%' {
+		percent = true
+		s = strings.TrimRightFunc(s[:l-1], unicode.IsSpace)
+	}
+	f, _, _, decimals, err := float.ParseDetails(s)
 	if err != nil {
+		if s != str {
+			err = fmt.Errorf("ParseRate(%q): %w", str, err)
+		}
 		return 0, err
+	}
+	if percent {
+		f /= 100
 	}
 	if len(acceptedDecimals) == 0 {
 		return Rate(f), nil
@@ -28,7 +45,7 @@ func ParseRate(str string, acceptedDecimals ...int) (Rate, error) {
 			return Rate(f), nil
 		}
 	}
-	return 0, fmt.Errorf("parsing %q returned %d decimals wich is not in accepted list of %v", str, decimals, acceptedDecimals)
+	return 0, fmt.Errorf("parsing %q returned %d decimals wich is not in accepted list of %v", s, decimals, acceptedDecimals)
 }
 
 // RateFromPtr dereferences ptr or returns defaultVal if it is nil
@@ -217,6 +234,7 @@ func (r Rate) ValidAndHasSign(sign int) bool {
 // UnmarshalJSON implements encoding/json.Unmarshaler
 // and accepts numbers, strings, and null.
 // JSON null or "" will set the rate to zero.
+// If a string ends with '%' then the parsed number part will be divided by 100.
 func (r *Rate) UnmarshalJSON(j []byte) error {
 	s := string(j)
 
