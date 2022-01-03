@@ -17,6 +17,7 @@ func TestParseRate(t *testing.T) {
 		{name: "15%", args: args{str: "15%"}, want: 0.15},
 		{name: "15 %", args: args{str: "15 %"}, want: 0.15},
 		{name: " 15 % ", args: args{str: " 15 % "}, want: 0.15},
+		{name: "8,382.00", args: args{str: "8,382.00"}, want: 8382},
 		// TODO more cases
 	}
 	for _, tt := range tests {
