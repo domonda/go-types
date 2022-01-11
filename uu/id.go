@@ -2,8 +2,8 @@ package uu
 
 import (
 	"bytes"
-	"crypto/md5"
-	"crypto/sha1"
+	"crypto/md5"  //#nosec G501 -- Needed for standard conform IDv3
+	"crypto/sha1" //#nosec G505 -- Needed for standard conform IDv5
 	"database/sql/driver"
 	"encoding/base64"
 	"encoding/binary"
@@ -67,6 +67,7 @@ func IDv2(domain byte) (id ID) {
 
 // IDv3 returns an ID based on MD5 hash of namespace UUID and name.
 func IDv3(ns ID, name string) ID {
+	//#nosec G401 -- Needed for standard conformity
 	id := idFromHash(md5.New(), ns, name)
 	id.SetVersion(3)
 	id.SetVariant()
@@ -83,6 +84,7 @@ func IDv4() (id ID) {
 
 // IDv5 returns an ID based on SHA-1 hash of namespace UUID and name.
 func IDv5(ns ID, name string) ID {
+	//#nosec G401 -- Needed for standard conformity
 	id := idFromHash(sha1.New(), ns, name)
 	id.SetVersion(5)
 	id.SetVariant()
@@ -363,7 +365,7 @@ func (id ID) GoString() string {
 // PrettyPrint the ID in the format xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx.
 // Implements pretty.Printer.
 func (id ID) PrettyPrint(w io.Writer) {
-	w.Write(id.StringBytes())
+	w.Write(id.StringBytes()) //#nosec G104 -- go-pretty does not check write errors
 }
 
 // Hex returns the hex representation without dashes of the UUID
@@ -483,8 +485,8 @@ func idFromHash(h hash.Hash, ns ID, name string) (id ID) {
 // Less returns true if the 128 bit unsigned integer value
 // of the id is less than the passed rhs.
 func (id ID) Less(rhs ID) bool {
-	l := (*[2]uint64)(unsafe.Pointer(&id[0]))
-	r := (*[2]uint64)(unsafe.Pointer(&rhs[0]))
+	l := (*[2]uint64)(unsafe.Pointer(&id[0]))  //#nosec G103 -- unsafe OK
+	r := (*[2]uint64)(unsafe.Pointer(&rhs[0])) //#nosec G103 -- unsafe OK
 	return l[1] < r[1] || (l[1] == r[1] && l[0] < r[0])
 }
 

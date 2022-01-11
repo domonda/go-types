@@ -219,7 +219,7 @@ func (n *Time) UnmarshalText(text []byte) error {
 // PrettyPrint implements the pretty.Printer interface
 func (n Time) PrettyPrint(w io.Writer) {
 	if n.IsNull() {
-		w.Write([]byte("null"))
+		w.Write([]byte("null")) //#nosec G104 -- go-pretty does not check write errors
 	} else {
 		pretty.Fprint(w, n.Time)
 	}

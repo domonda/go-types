@@ -159,7 +159,7 @@ func (s IDSet) AddIDs(ids IDs) {
 	ids.ForEach(func(id ID) error {
 		s[id] = struct{}{}
 		return nil
-	})
+	}) //#nosec G104 -- always returns nil
 }
 
 func (s IDSet) Add(id ID) {

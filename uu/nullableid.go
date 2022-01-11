@@ -140,7 +140,7 @@ func (n NullableID) GetOrNil() ID {
 // PrettyPrint the NullableID in the format xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx or as NULL.
 // Implements pretty.Printer.
 func (n NullableID) PrettyPrint(w io.Writer) {
-	w.Write([]byte(n.StringOr("NULL")))
+	w.Write([]byte(n.StringOr("NULL"))) //#nosec G104 -- go-pretty does not check write errors
 }
 
 // GoString returns a pseudo Go literal for the ID in the format:
