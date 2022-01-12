@@ -3,12 +3,12 @@ module github.com/domonda/go-types
 go 1.17
 
 require (
-	github.com/domonda/go-pretty v0.0.0-20220111114354-b0f333b12874
+	github.com/domonda/go-pretty v0.0.0-20220112155939-e3708bbb291e
 	github.com/guregu/null v4.0.0+incompatible
 	github.com/jinzhu/now v1.1.4
 	github.com/lib/pq v1.10.4
 	github.com/stretchr/testify v1.7.0
-	github.com/ungerik/go-fs v0.0.0-20211220110755-474b7460e511
+	github.com/ungerik/go-fs v0.0.0-20220112143733-3b868e71a05a
 	github.com/ungerik/go-reflection v0.0.0-20210817083039-1053f336f275
 	golang.org/x/text v0.3.7
 )

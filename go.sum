@@ -5,6 +5,8 @@ github.com/domonda/go-pretty v0.0.0-20210202131827-b4ff5dbd12fd h1:OGFdhMFO54ESh
 github.com/domonda/go-pretty v0.0.0-20210202131827-b4ff5dbd12fd/go.mod h1:zUVOQL+81aMK+Ye3kS7eDsk/aWnteWRSJ5fZWHdBWjc=
 github.com/domonda/go-pretty v0.0.0-20220111114354-b0f333b12874 h1:M7oe5FnZzBxC34dTRDLfLu72b88UWocuhhQ7DC/Rwo4=
 github.com/domonda/go-pretty v0.0.0-20220111114354-b0f333b12874/go.mod h1:zUVOQL+81aMK+Ye3kS7eDsk/aWnteWRSJ5fZWHdBWjc=
+github.com/domonda/go-pretty v0.0.0-20220112155939-e3708bbb291e h1:78yCSuJugiciDvOGjaY3IVa8zz7qVLTRvYLnafT1USA=
+github.com/domonda/go-pretty v0.0.0-20220112155939-e3708bbb291e/go.mod h1:zUVOQL+81aMK+Ye3kS7eDsk/aWnteWRSJ5fZWHdBWjc=
 github.com/guregu/null v4.0.0+incompatible h1:4zw0ckM7ECd6FNNddc3Fu4aty9nTlpkkzH7dPn4/4Gw=
 github.com/guregu/null v4.0.0+incompatible/go.mod h1:ePGpQaN9cw0tj45IR5E5ehMvsFlLlQZAkkOXZurJ3NM=
 github.com/jinzhu/now v1.1.2 h1:eVKgfIdy9b6zbWBMgFpfDPoAMifwSZagU9HmEU6zgiI=
@@ -31,6 +33,8 @@ github.com/ungerik/go-fs v0.0.0-20211026033919-c01ec0166b2d h1:2EU3Cpqnb/a/j0ImA
 github.com/ungerik/go-fs v0.0.0-20211026033919-c01ec0166b2d/go.mod h1:HlNZ9M8KcqiejmwpZ+jEJP+oTGBcHo+Qr5HcZN40vGE=
 github.com/ungerik/go-fs v0.0.0-20211220110755-474b7460e511 h1:rP0uWRg9pZJg++CH8GmiXAJxg1dIYs0XAsBpdLXyzZM=
 github.com/ungerik/go-fs v0.0.0-20211220110755-474b7460e511/go.mod h1:k77Wp0DvHn0VGHsXhYzw5Gwn3xAyEPA2iz7hDUUsZjs=
+github.com/ungerik/go-fs v0.0.0-20220112143733-3b868e71a05a h1:FL7TVll9mGFBPKtaFxAXOAiyw8RM7sPj84By67NphSk=
+github.com/ungerik/go-fs v0.0.0-20220112143733-3b868e71a05a/go.mod h1:k77Wp0DvHn0VGHsXhYzw5Gwn3xAyEPA2iz7hDUUsZjs=
 github.com/ungerik/go-reflection v0.0.0-20210817083039-1053f336f275 h1:rEbq/uvM8JFbaowSf0Wo7L7hXMA1gCFs4mwapK9KAiQ=
 github.com/ungerik/go-reflection v0.0.0-20210817083039-1053f336f275/go.mod h1:6Hnd2/4g3Tpt6TjvxHx8wXOZziwApVxRdIGkr7vNpXs=
 golang.org/x/text v0.3.7 h1:olpwvP2KacW1ZWvsR7uQhoyTYvKAupfQrRGBFM352Gk=
