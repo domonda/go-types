@@ -48,6 +48,14 @@ func ParseRate(str string, acceptedDecimals ...int) (Rate, error) {
 	return 0, fmt.Errorf("parsing %q returned %d decimals wich is not in accepted list of %v", s, decimals, acceptedDecimals)
 }
 
+// NewRate returns a pointer to a Rate
+// with the passed value.
+func NewRate(value float64) *Rate {
+	r := new(Rate)
+	*r = Rate(value)
+	return r
+}
+
 // RateFromPtr dereferences ptr or returns defaultVal if it is nil
 func RateFromPtr(ptr *Rate, defaultVal Rate) Rate {
 	if ptr == nil {
