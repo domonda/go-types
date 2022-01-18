@@ -8,8 +8,8 @@ require (
 	github.com/jinzhu/now v1.1.4
 	github.com/lib/pq v1.10.4
 	github.com/stretchr/testify v1.7.0
-	github.com/ungerik/go-fs v0.0.0-20220112143733-3b868e71a05a
-	github.com/ungerik/go-reflection v0.0.0-20210817083039-1053f336f275
+	github.com/ungerik/go-fs v0.0.0-20220112161406-846291d178e2
+	github.com/ungerik/go-reflection v0.0.0-20220113085621-6c5fc1f2694a
 	golang.org/x/text v0.3.7
 )
 
