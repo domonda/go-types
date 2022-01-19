@@ -1,7 +1,9 @@
 package float
 
 import (
+	"errors"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 )
@@ -19,6 +21,18 @@ func Parse(str string) (float64, error) {
 // If a separator was not detected, then zero will be returned for thousandsSep or decimalSep.
 // See: https://en.wikipedia.org/wiki/Decimal_separator
 func ParseDetails(str string) (f float64, thousandsSep, decimalSep rune, decimals int, err error) {
+	str = strings.TrimSpace(str)
+
+	switch str {
+	case "":
+		return 0, 0, 0, 0, errors.New("empty string can't be parsed as float")
+	case "NaN":
+		return math.NaN(), 0, 0, 0, nil
+	case "+Inf", "Inf":
+		return math.Inf(1), 0, 0, 0, nil
+	case "-Inf":
+		return math.Inf(-1), 0, 0, 0, nil
+	}
 
 	var (
 		lastDigitIndex    = -1
@@ -37,8 +51,6 @@ func ParseDetails(str string) (f float64, thousandsSep, decimalSep rune, decimal
 
 		floatBuilder strings.Builder
 	)
-
-	str = strings.TrimSpace(str)
 
 	floatBuilder.Grow(len(str))
 

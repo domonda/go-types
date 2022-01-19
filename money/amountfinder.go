@@ -22,7 +22,8 @@ const (
 
 var (
 	amountRegex = regexp.MustCompile(
-		commaAmountR +
+		`NaN|Inf|\+Inf|-Inf|` +
+			commaAmountR +
 			`|` +
 			commaPointsAmountR +
 			`|` +

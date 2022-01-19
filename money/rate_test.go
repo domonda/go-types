@@ -1,6 +1,9 @@
 package money
 
-import "testing"
+import (
+	"math"
+	"testing"
+)
 
 func TestParseRate(t *testing.T) {
 	type args struct {
@@ -18,7 +21,10 @@ func TestParseRate(t *testing.T) {
 		{name: "15 %", args: args{str: "15 %"}, want: 0.15},
 		{name: " 15 % ", args: args{str: " 15 % "}, want: 0.15},
 		{name: "8,382.00", args: args{str: "8,382.00"}, want: 8382},
-		// TODO more cases
+		{name: "NaN", args: args{str: `NaN`}, want: Rate(math.NaN())},
+		{name: "Inf", args: args{str: `Inf`}, want: Rate(math.Inf(1))},
+		{name: "+Inf", args: args{str: `+Inf`}, want: Rate(math.Inf(1))},
+		{name: "-Inf", args: args{str: `-Inf`}, want: Rate(math.Inf(-1))},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -27,7 +33,7 @@ func TestParseRate(t *testing.T) {
 				t.Errorf("ParseRate() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if got != tt.want {
+			if !equalInclNaN(float64(got), float64(tt.want)) {
 				t.Errorf("ParseRate() = %v, want %v", got, tt.want)
 			}
 		})

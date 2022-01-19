@@ -18,7 +18,7 @@ func ParseAmount(str string, acceptedDecimals ...int) (Amount, error) {
 	if err != nil {
 		return 0, err
 	}
-	if len(acceptedDecimals) == 0 {
+	if len(acceptedDecimals) == 0 || math.IsNaN(f) || math.IsInf(f, 0) {
 		return Amount(f), nil
 	}
 	for _, accepted := range acceptedDecimals {
@@ -166,6 +166,9 @@ func (a Amount) BigFloat() *big.Float {
 	return big.NewFloat(float64(a))
 }
 
+// Equal returns if two Amount pointers
+// point to Amounts with equal values
+// or equal addresses.
 func (a *Amount) Equal(b *Amount) bool {
 	if a == b {
 		return true
@@ -289,17 +292,31 @@ func ScaleAmountsToSumRoundToCents(amounts []Amount, sum Amount) []Amount {
 	return scaled
 }
 
-// Valid returns if a is neither infinite nor NaN
+// Valid returns if the amount is neither infinite nor NaN
 func (a Amount) Valid() bool {
-	return float.Valid(float64(a))
+	return !a.IsInf() && !a.IsNaN()
 }
 
+// ValidAndGreaterZero returns if the amount is neither infinite nor NaN
+// and greater than zero.
 func (a Amount) ValidAndGreaterZero() bool {
 	return a.Valid() && a > 0
 }
 
+// ValidAndSmallerZero returns if the amount is neither infinite nor NaN
+// and smaller than zero.
 func (a Amount) ValidAndSmallerZero() bool {
 	return a.Valid() && a < 0
+}
+
+// IsNaN returns if the amount is not a number (NaN)
+func (a Amount) IsNaN() bool {
+	return math.IsNaN(float64(a))
+}
+
+// IsNaN returns if the amount is positive or negative infinity
+func (a Amount) IsInf() bool {
+	return math.IsInf(float64(a), 0)
 }
 
 // ValidAndHasSign returns if a.Valid() and

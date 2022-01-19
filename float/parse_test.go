@@ -1,6 +1,7 @@
 package float
 
 import (
+	"math"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -46,13 +47,19 @@ func Test_ParseFloat(t *testing.T) {
 		"1000000.8989":         {1000000.8989, 0, '.', 4, false},
 		"1000000,8989":         {1000000.8989, 0, ',', 4, false},
 		"158,00 ":              {158, 0, ',', 2, false},
+		"NaN":                  {math.NaN(), 0, 0, 0, false},  // No sign prepending in test
+		"Inf":                  {math.Inf(1), 0, 0, 0, false}, // +Inf and -Inf will generated in test by prepending sign
 	}
 
 	testFunc := func(str string, refFloat float64, refThousandsSep, refDecimalSep rune, refDecimals int) func(*testing.T) {
 		return func(t *testing.T) {
 			parsed, thousandsSep, decimalSep, decimals, err := ParseDetails(str)
 			assert.NoError(t, err)
-			assert.Equal(t, refFloat, parsed, "ParseFloatDetails(%#v)", str)
+			if math.IsNaN(refFloat) {
+				assert.True(t, math.IsNaN(parsed), "ParseFloatDetails(%#v)", str)
+			} else {
+				assert.Equal(t, refFloat, parsed, "ParseFloatDetails(%#v)", str)
+			}
 			assert.Equal(t, string(refThousandsSep), string(thousandsSep), "ParseFloatDetails(%#v)", str)
 			assert.Equal(t, string(refDecimalSep), string(decimalSep), "ParseFloatDetails(%#v)", str)
 			assert.Equal(t, refDecimals, decimals, "ParseFloatDetails(%#v)", str)
@@ -61,21 +68,27 @@ func Test_ParseFloat(t *testing.T) {
 
 	for str, ref := range validDecimalFloats {
 		t.Run("no sign", testFunc(str, ref.f, ref.thousandsSep, ref.decimalSep, ref.decimals))
-
+		if str == "NaN" {
+			continue
+		}
 		t.Run("plus in front", testFunc("+"+str, ref.f, ref.thousandsSep, ref.decimalSep, ref.decimals))
-		t.Run("plus in front with space", testFunc("+ "+str, ref.f, ref.thousandsSep, ref.decimalSep, ref.decimals))
-		t.Run("plus on end", testFunc(str+"+", ref.f, ref.thousandsSep, ref.decimalSep, ref.decimals))
-		t.Run("plus on end with space", testFunc(str+" +", ref.f, ref.thousandsSep, ref.decimalSep, ref.decimals))
-
+		if str != "Inf" {
+			t.Run("plus in front with space", testFunc("+ "+str, ref.f, ref.thousandsSep, ref.decimalSep, ref.decimals))
+			t.Run("plus on end", testFunc(str+"+", ref.f, ref.thousandsSep, ref.decimalSep, ref.decimals))
+			t.Run("plus on end with space", testFunc(str+" +", ref.f, ref.thousandsSep, ref.decimalSep, ref.decimals))
+		}
 		t.Run("minus in front", testFunc("-"+str, -ref.f, ref.thousandsSep, ref.decimalSep, ref.decimals))
-		t.Run("minus in front with space", testFunc("- "+str, -ref.f, ref.thousandsSep, ref.decimalSep, ref.decimals))
-		t.Run("minus on end", testFunc(str+"-", -ref.f, ref.thousandsSep, ref.decimalSep, ref.decimals))
-		t.Run("minus on end with space", testFunc(str+" -", -ref.f, ref.thousandsSep, ref.decimalSep, ref.decimals))
+		if str != "Inf" {
+			t.Run("minus in front with space", testFunc("- "+str, -ref.f, ref.thousandsSep, ref.decimalSep, ref.decimals))
+			t.Run("minus on end", testFunc(str+"-", -ref.f, ref.thousandsSep, ref.decimalSep, ref.decimals))
+			t.Run("minus on end with space", testFunc(str+" -", -ref.f, ref.thousandsSep, ref.decimalSep, ref.decimals))
+		}
 	}
 }
 
 func Test_ParseFloat_invalid(t *testing.T) {
 	invalidDecimalFloats := []string{
+		"",
 		"xxx",
 		"e3",
 		"--1",

@@ -1,6 +1,7 @@
 package money
 
 import (
+	"math"
 	"math/rand"
 	"testing"
 
@@ -37,6 +38,11 @@ var amountTable2Decimals = map[string]Amount{
 	"-1.234.567,89":   -1234567.89,
 	"-10.234.567,89":  -10234567.89,
 	"-100.234.567,89": -100234567.89,
+
+	"NaN":  Amount(math.NaN()),
+	"Inf":  Amount(math.Inf(1)),
+	"+Inf": Amount(math.Inf(1)),
+	"-Inf": Amount(math.Inf(-1)),
 }
 
 var invalidAmounts = []string{
@@ -73,7 +79,7 @@ func Test_ParseAmount(t *testing.T) {
 		if err != nil {
 			t.Errorf("Could not parse amount %s because of error: '%s'", str, err)
 		}
-		if amount != refAmount {
+		if !equalInclNaN(float64(amount), float64(refAmount)) {
 			t.Errorf("Parsed '%s' amount %f != %f", str, amount, refAmount)
 		}
 	}
@@ -88,21 +94,8 @@ func Test_ParseAmount(t *testing.T) {
 		if err != nil {
 			t.Errorf("Could not parse amount %s because of error: '%s'", str, err)
 		}
-		if amount != refAmount {
+		if !equalInclNaN(float64(amount), float64(refAmount)) {
 			t.Errorf("Parsed '%s' amount %f != %f", str, amount, refAmount)
-		}
-	}
-}
-
-func Test_StringIsAmount(t *testing.T) {
-	for str := range amountTable2Decimals {
-		if !StringIsAmount(str, false) {
-			t.Errorf("String not detected as amount: '%s'", str)
-		}
-	}
-	for _, str := range invalidAmounts {
-		if StringIsAmount(str, false) {
-			t.Errorf("Invalid string detected as amount: '%s'", str)
 		}
 	}
 }
@@ -270,17 +263,36 @@ func TestAmount_UnmarshalJSON(t *testing.T) {
 		{name: "empty JSON string", json: []byte(`""`), wantAmount: 0},
 		{name: "0", json: []byte(`0`), wantAmount: 0},
 		{name: "-0.12345", json: []byte(`-0.12345`), wantAmount: -0.12345},
+		{name: "naked NaN", json: []byte(`NaN`), wantAmount: Amount(math.NaN())},
+		{name: "quoted NaN", json: []byte(`"NaN"`), wantAmount: Amount(math.NaN())},
+		{name: "naked Inf", json: []byte(`Inf`), wantAmount: Amount(math.Inf(1))},
+		{name: "quoted Inf", json: []byte(`"Inf"`), wantAmount: Amount(math.Inf(1))},
+		{name: "naked +Inf", json: []byte(`+Inf`), wantAmount: Amount(math.Inf(1))},
+		{name: "quoted +Inf", json: []byte(`"+Inf"`), wantAmount: Amount(math.Inf(1))},
+		{name: "naked -Inf", json: []byte(`-Inf`), wantAmount: Amount(math.Inf(-1))},
+		{name: "quoted -Inf", json: []byte(`"-Inf"`), wantAmount: Amount(math.Inf(-1))},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var amount Amount = 666 // Init with value different from default 0
-			if err := amount.UnmarshalJSON(tt.json); (err != nil) != tt.wantErr {
+			err := amount.UnmarshalJSON(tt.json)
+			if (err != nil) != tt.wantErr {
 				t.Errorf("Amount.UnmarshalJSON(%s) error = %v, wantErr %v", tt.json, err, tt.wantErr)
 				return
 			}
-			if !tt.wantErr && amount != tt.wantAmount {
+			if !tt.wantErr && !equalInclNaN(float64(amount), float64(tt.wantAmount)) {
 				t.Errorf("Amount.UnmarshalJSON(%s) got %f, want %f", tt.json, amount, tt.wantAmount)
 			}
 		})
 	}
+}
+
+func equalInclNaN(a, b float64) bool {
+	if math.IsNaN(a) {
+		return math.IsNaN(b)
+	}
+	if math.IsNaN(b) {
+		return false
+	}
+	return a == b
 }

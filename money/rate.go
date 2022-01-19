@@ -37,7 +37,7 @@ func ParseRate(str string, acceptedDecimals ...int) (Rate, error) {
 	if percent {
 		f /= 100
 	}
-	if len(acceptedDecimals) == 0 {
+	if len(acceptedDecimals) == 0 || math.IsNaN(f) || math.IsInf(f, 0) {
 		return Rate(f), nil
 	}
 	for _, accepted := range acceptedDecimals {
