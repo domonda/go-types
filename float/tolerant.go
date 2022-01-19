@@ -9,6 +9,11 @@ import (
 // that is tolerant in parsing non standard JSON
 type Tolerant float64
 
+// AsFloatPtr returns f as *float64
+func (f *Tolerant) AsFloatPtr() *float64 {
+	return (*float64)(f)
+}
+
 // Valid returns if the float is neither infinite nor NaN
 func (f Tolerant) Valid() bool {
 	return !f.IsInf() && !f.IsNaN()
