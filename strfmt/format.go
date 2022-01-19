@@ -11,8 +11,20 @@ import (
 	"github.com/ungerik/go-reflection"
 )
 
-// FormatValue formats the passed value following the format config.
-// If te value implements encoding.TextMarshaler and MarshalText
+// Format the passed value following the format config.
+// If the value implements encoding.TextMarshaler and MarshalText
+// does not return an error, then this string is returned instead
+// of more generic type conversions.
+func Format(value interface{}, config *FormatConfig) string {
+	val, ok := value.(reflect.Value)
+	if !ok {
+		val = reflect.ValueOf(value)
+	}
+	return FormatValue(val, config)
+}
+
+// FormatValue formats the passed reflect.Value following the format config.
+// If the value implements encoding.TextMarshaler and MarshalText
 // does not return an error, then this string is returned instead
 // of more generic type conversions.
 func FormatValue(val reflect.Value, config *FormatConfig) string {
