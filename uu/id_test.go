@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/domonda/go-pretty"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -729,6 +730,33 @@ func TestID_Less(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := tt.id.Less(tt.rhs); got != tt.want {
 				t.Errorf("ID.Less() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestID_PrettyPrint(t *testing.T) {
+	tests := []struct {
+		id   ID
+		want string
+	}{
+		{id: IDNil, want: "00000000-0000-0000-0000-000000000000"},
+		{id: IDMust("78c08786-f18d-442e-8598-30c9c59cc424"), want: "78c08786-f18d-442e-8598-30c9c59cc424"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.id.String(), func(t *testing.T) {
+			got := pretty.Sprint(tt.id)
+			if got != tt.want {
+				t.Errorf("ID.PrettyPrint() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+	// Test with pointer to ID
+	for _, tt := range tests {
+		t.Run(tt.id.String(), func(t *testing.T) {
+			got := pretty.Sprint(&tt.id)
+			if got != tt.want {
+				t.Errorf("ID.PrettyPrint() = %q, want %q", got, tt.want)
 			}
 		})
 	}

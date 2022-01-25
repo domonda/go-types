@@ -3,6 +3,8 @@ package uu
 import (
 	"encoding/json"
 	"testing"
+
+	"github.com/domonda/go-pretty"
 )
 
 func TestNullableIDValueNil(t *testing.T) {
@@ -138,5 +140,33 @@ func TestNullableID_UnmarshalJSON(t *testing.T) {
 	ref := ID{0x6b, 0xa7, 0xb8, 0x10, 0x9d, 0xad, 0x11, 0xd1, 0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4, 0x30, 0xc8}
 	if out.U != ref || !out.N.Valid() || out.N.Get() != ref {
 		t.Errorf("Error JSON unmarshaling")
+	}
+}
+
+func TestNullableID_PrettyPrint(t *testing.T) {
+	tests := []struct {
+		id   NullableID
+		want string
+	}{
+		{id: IDNull, want: "NULL"},
+		{id: IDNil.Nullable(), want: "NULL"},
+		{id: NullableIDMust("78c08786-f18d-442e-8598-30c9c59cc424"), want: "78c08786-f18d-442e-8598-30c9c59cc424"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.id.String(), func(t *testing.T) {
+			got := pretty.Sprint(tt.id)
+			if got != tt.want {
+				t.Errorf("NullableID.PrettyPrint() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+	// Test with pointer to NullableID
+	for _, tt := range tests {
+		t.Run(tt.id.String(), func(t *testing.T) {
+			got := pretty.Sprint(&tt.id)
+			if got != tt.want {
+				t.Errorf("NullableID.PrettyPrint() = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }
