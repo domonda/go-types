@@ -108,7 +108,7 @@ func (s IDSlice) String() string {
 }
 
 // PrettyPrint using IDSlice.String().
-// Implements pretty.Printer.
+// Implements the pretty.Printable interface.
 func (s IDSlice) PrettyPrint(w io.Writer) {
 	w.Write([]byte(s.String())) //#nosec G104 -- go-pretty does not check write errors
 }

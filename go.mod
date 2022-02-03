@@ -3,7 +3,7 @@ module github.com/domonda/go-types
 go 1.17
 
 require (
-	github.com/domonda/go-pretty v0.0.0-20220112155939-e3708bbb291e
+	github.com/domonda/go-pretty v0.0.0-20220203122647-ad6e3262a14c
 	github.com/guregu/null v4.0.0+incompatible
 	github.com/jinzhu/now v1.1.4
 	github.com/lib/pq v1.10.4

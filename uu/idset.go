@@ -82,7 +82,7 @@ func (s IDSet) String() string {
 }
 
 // PrettyPrint using s.AsSortedSlice().PrettyPrint(w).
-// Implements pretty.Stringer.
+// Implements the pretty.Printable interface.
 func (s IDSet) PrettyPrint(w io.Writer) {
 	s.AsSortedSlice().PrettyPrint(w)
 }

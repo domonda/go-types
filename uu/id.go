@@ -363,7 +363,7 @@ func (id ID) GoString() string {
 }
 
 // PrettyPrint the ID in the format xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx.
-// Implements pretty.Printer.
+// Implements the pretty.Printable interface.
 func (id ID) PrettyPrint(w io.Writer) {
 	w.Write(id.StringBytes()) //#nosec G104 -- go-pretty does not check write errors
 }
