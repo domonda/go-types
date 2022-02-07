@@ -144,7 +144,7 @@ func (n NullableCode) String() string {
 }
 
 // MarshalJSON implements encoding/json.Marshaler
-// by returning the JSON null for an empty/null string.
+// by returning the JSON null value for an empty (null) string.
 func (n NullableCode) MarshalJSON() ([]byte, error) {
 	if n.IsNull() {
 		return []byte(`null`), nil

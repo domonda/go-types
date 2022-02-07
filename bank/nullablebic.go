@@ -114,7 +114,7 @@ func (bic NullableBIC) IsNotNull() bool {
 }
 
 // MarshalJSON implements encoding/json.Marshaler
-// by returning the JSON null for an empty/null string.
+// by returning the JSON null value for an empty (null) string.
 func (bic NullableBIC) MarshalJSON() ([]byte, error) {
 	if bic.IsNull() {
 		return []byte(`null`), nil

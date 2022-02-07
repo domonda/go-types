@@ -173,7 +173,7 @@ func (iban NullableIBAN) String() string {
 }
 
 // MarshalJSON implements encoding/json.Marshaler
-// by returning the JSON null for an empty/null string.
+// by returning the JSON null value for an empty (null) string.
 func (iban NullableIBAN) MarshalJSON() ([]byte, error) {
 	if iban.IsNull() {
 		return []byte(`null`), nil

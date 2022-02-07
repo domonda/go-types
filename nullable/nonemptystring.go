@@ -161,7 +161,7 @@ func (n *NonEmptyString) UnmarshalText(text []byte) error {
 }
 
 // MarshalJSON implements encoding/json.Marshaler
-// by returning the JSON null for an empty/null string.
+// by returning the JSON null value for an empty (null) string.
 func (n NonEmptyString) MarshalJSON() ([]byte, error) {
 	if n.IsNull() {
 		return []byte(`null`), nil
