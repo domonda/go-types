@@ -33,22 +33,23 @@ func NewFormatConfig() *FormatConfig {
 		True:        "true",
 		False:       "false",
 		TypeFormatters: map[reflect.Type]Formatter{
-			reflect.TypeOf((*date.Date)(nil)).Elem():            FormatterFunc(formatDateString),
-			reflect.TypeOf((*date.NullableDate)(nil)).Elem():    FormatterFunc(formatNullableDateString),
-			reflect.TypeOf((*time.Time)(nil)).Elem():            FormatterFunc(formatTimeString),
-			reflect.TypeOf((*nullable.Time)(nil)).Elem():        FormatterFunc(formatNullableTimeString),
-			reflect.TypeOf((*time.Duration)(nil)).Elem():        FormatterFunc(formatDurationString),
-			reflect.TypeOf((*money.Amount)(nil)).Elem():         FormatterFunc(formatMoneyAmountString),
-			reflect.TypeOf((*money.CurrencyAmount)(nil)).Elem(): FormatterFunc(formatMoneyCurrencyAmountString),
+			reflect.TypeOf(date.Date("")):          FormatterFunc(formatDateString),
+			reflect.TypeOf(date.NullableDate("")):  FormatterFunc(formatNullableDateString),
+			reflect.TypeOf(time.Time{}):            FormatterFunc(formatTimeString),
+			reflect.TypeOf(nullable.Time{}):        FormatterFunc(formatNullableTimeString),
+			reflect.TypeOf(time.Duration(0)):       FormatterFunc(formatDurationString),
+			reflect.TypeOf(money.Amount(0)):        FormatterFunc(formatMoneyAmountString),
+			reflect.TypeOf(money.CurrencyAmount{}): FormatterFunc(formatMoneyCurrencyAmountString),
 		},
 	}
 }
 
 func NewEnglishFormatConfig() *FormatConfig {
 	config := NewFormatConfig()
-	config.True = "YES"
-	config.False = "NO"
 	config.Date = "02/01/2006"
+	config.Time = "02/01/2006 15:04:05"
+	config.True = "yes"
+	config.False = "no"
 	return config
 }
 
@@ -58,8 +59,9 @@ func NewGermanFormatConfig() *FormatConfig {
 	config.MoneyAmount = GermanMoneyFormat(true)
 	config.Percent = GermanFloatFormat(-1)
 	config.Date = "02.01.2006"
-	config.True = "JA"
-	config.False = "NEIN"
+	config.Time = "02.01.2006 15:04:05"
+	config.True = "ja"
+	config.False = "nein"
 	return config
 }
 
@@ -72,7 +74,11 @@ func formatNullableDateString(val reflect.Value, config *FormatConfig) string {
 }
 
 func formatTimeString(val reflect.Value, config *FormatConfig) string {
-	return val.Interface().(time.Time).Format(config.Time)
+	t := val.Interface().(time.Time)
+	if t.IsZero() {
+		return config.Nil
+	}
+	return t.Format(config.Time)
 }
 
 func formatNullableTimeString(val reflect.Value, config *FormatConfig) string {

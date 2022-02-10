@@ -3,79 +3,84 @@ package strfmt
 import (
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/domonda/go-types/bank"
 	"github.com/domonda/go-types/date"
 	"github.com/domonda/go-types/money"
+	"github.com/domonda/go-types/nullable"
 	"github.com/domonda/go-types/uu"
 )
 
-var caseSet = map[*FormatConfig]map[reflect.Value]string{
+var caseSet = map[*FormatConfig]map[interface{}]string{
 	NewEnglishFormatConfig(): {
-		// nills/nulls
-		reflect.ValueOf(voidStr()):                  "",
-		reflect.ValueOf(voidFloat()):                "",
-		reflect.ValueOf(uu.IDNull):                  "",
-		reflect.ValueOf(money.NullableCurrency("")): "",
-		reflect.ValueOf(bank.NullableIBAN("")):      "",
-		reflect.ValueOf(bank.NullableBIC("")):       "",
+		// nil and zero
+		"":                           "",
+		(*string)(nil):               "",
+		(*float64)(nil):              "",
+		reflect.ValueOf([]byte(nil)): "",
+		uu.IDNull:                    "",
+		money.NullableCurrency(""):   "",
+		bank.NullableIBAN(""):        "",
+		bank.NullableBIC(""):         "",
+		time.Time{}:                  "",
+		new(time.Time):               "",
+		nullable.Time{}:              "",
 		// booleans
-		reflect.ValueOf(true):  "YES",
-		reflect.ValueOf(false): "NO",
+		true:  "yes",
+		false: "no",
 		// amounts
-		reflect.ValueOf(money.Amount(123.456)):          "123.46",
-		reflect.ValueOf(ptrMoneyAmount(178.456)):        "178.46",
-		reflect.ValueOf(ptrPtrMoneyAmount(189.456)):     "189.46",
-		reflect.ValueOf(money.Amount(123456.789)):       "123,456.79",
-		reflect.ValueOf(ptrMoneyAmount(1789101.789)):    "1,789,101.79",
-		reflect.ValueOf(ptrPtrMoneyAmount(1891011.789)): "1,891,011.79",
-		// dates
-		reflect.ValueOf(date.Date("2020-12-01")):      "01/12/2020",
-		reflect.ValueOf(ptrDateDate("2021-12-01")):    "01/12/2021",
-		reflect.ValueOf(ptrPtrDateDate("2022-12-01")): "01/12/2022",
+		money.Amount(123.456):          "123.46",
+		ptrMoneyAmount(178.456):        "178.46",
+		ptrPtrMoneyAmount(189.456):     "189.46",
+		money.Amount(123456.789):       "123,456.79",
+		ptrMoneyAmount(1789101.789):    "1,789,101.79",
+		ptrPtrMoneyAmount(1891011.789): "1,891,011.79",
+		// date / time
+		date.Date("2020-12-01"):                            "01/12/2020",
+		ptrDateDate("2021-12-01"):                          "01/12/2021",
+		ptrPtrDateDate("2022-12-01"):                       "01/12/2022",
+		time.Date(2022, 02, 10, 14, 15, 59, 0, time.Local): "10/02/2022 14:15:59",
 	},
 	NewGermanFormatConfig(): {
-		// nills/nulls
-		reflect.ValueOf(voidStr()):                  "",
-		reflect.ValueOf(voidFloat()):                "",
-		reflect.ValueOf(uu.IDNull):                  "",
-		reflect.ValueOf(money.NullableCurrency("")): "",
-		reflect.ValueOf(bank.NullableIBAN("")):      "",
-		reflect.ValueOf(bank.NullableBIC("")):       "",
+		// nil and zero
+		"":                           "",
+		(*string)(nil):               "",
+		(*float64)(nil):              "",
+		reflect.ValueOf([]byte(nil)): "",
+		uu.IDNull:                    "",
+		money.NullableCurrency(""):   "",
+		bank.NullableIBAN(""):        "",
+		bank.NullableBIC(""):         "",
+		time.Time{}:                  "",
+		new(time.Time):               "",
 		// booleans
-		reflect.ValueOf(true):  "JA",
-		reflect.ValueOf(false): "NEIN",
+		true:  "ja",
+		false: "nein",
 		// amounts
-		reflect.ValueOf(money.Amount(123.456)):          "123,46",
-		reflect.ValueOf(ptrMoneyAmount(178.456)):        "178,46",
-		reflect.ValueOf(ptrPtrMoneyAmount(189.456)):     "189,46",
-		reflect.ValueOf(money.Amount(123456.789)):       "123.456,79",
-		reflect.ValueOf(ptrMoneyAmount(1789101.789)):    "1.789.101,79",
-		reflect.ValueOf(ptrPtrMoneyAmount(1891011.789)): "1.891.011,79",
-		// dates
-		reflect.ValueOf(date.Date("2020-12-01")):      "01.12.2020",
-		reflect.ValueOf(ptrDateDate("2021-12-01")):    "01.12.2021",
-		reflect.ValueOf(ptrPtrDateDate("2022-12-01")): "01.12.2022",
+		money.Amount(123.456):          "123,46",
+		ptrMoneyAmount(178.456):        "178,46",
+		ptrPtrMoneyAmount(189.456):     "189,46",
+		money.Amount(123456.789):       "123.456,79",
+		ptrMoneyAmount(1789101.789):    "1.789.101,79",
+		ptrPtrMoneyAmount(1891011.789): "1.891.011,79",
+		// date / time
+		date.Date("2020-12-01"):                            "01.12.2020",
+		ptrDateDate("2021-12-01"):                          "01.12.2021",
+		ptrPtrDateDate("2022-12-01"):                       "01.12.2022",
+		time.Date(2022, 02, 10, 14, 15, 59, 0, time.Local): "10.02.2022 14:15:59",
 	},
 }
 
-func Test_FormatValue(t *testing.T) {
+func TestFormat(t *testing.T) {
 	for config, cases := range caseSet {
 		for val, expected := range cases {
-			got := FormatValue(val, config)
+			got := Format(val, config)
 			if expected != got {
 				t.Fatalf("expected %s got %s", expected, got)
 			}
 		}
 	}
-}
-
-func voidStr() *string {
-	return nil
-}
-
-func voidFloat() *float64 {
-	return nil
 }
 
 func ptrMoneyAmount(a float64) *money.Amount {
