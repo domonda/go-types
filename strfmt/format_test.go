@@ -39,10 +39,10 @@ var caseSet = map[*FormatConfig]map[interface{}]string{
 		ptrMoneyAmount(1789101.789):    "1,789,101.79",
 		ptrPtrMoneyAmount(1891011.789): "1,891,011.79",
 		// date / time
-		date.Date("2020-12-01"):                            "01/12/2020",
-		ptrDateDate("2021-12-01"):                          "01/12/2021",
-		ptrPtrDateDate("2022-12-01"):                       "01/12/2022",
-		time.Date(2022, 02, 10, 14, 15, 59, 0, time.Local): "10/02/2022 14:15:59",
+		date.Date("2020-12-01"):                          "01/12/2020",
+		ptrDateDate("2021-12-01"):                        "01/12/2021",
+		ptrPtrDateDate("2022-12-01"):                     "01/12/2022",
+		time.Date(2022, 02, 10, 14, 15, 59, 0, time.UTC): "10/02/2022 14:15:59 UTC",
 	},
 	NewGermanFormatConfig(): {
 		// nil and zero
@@ -70,10 +70,10 @@ var caseSet = map[*FormatConfig]map[interface{}]string{
 		ptrMoneyAmount(1789101.789):    "1.789.101,79",
 		ptrPtrMoneyAmount(1891011.789): "1.891.011,79",
 		// date / time
-		date.Date("2020-12-01"):                            "01.12.2020",
-		ptrDateDate("2021-12-01"):                          "01.12.2021",
-		ptrPtrDateDate("2022-12-01"):                       "01.12.2022",
-		time.Date(2022, 02, 10, 14, 15, 59, 0, time.Local): "10.02.2022 14:15:59",
+		date.Date("2020-12-01"):                          "01.12.2020",
+		ptrDateDate("2021-12-01"):                        "01.12.2021",
+		ptrPtrDateDate("2022-12-01"):                     "01.12.2022",
+		time.Date(2022, 02, 10, 14, 15, 59, 0, time.UTC): "10.02.2022 14:15:59 UTC",
 	},
 }
 

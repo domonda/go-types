@@ -47,7 +47,7 @@ func NewFormatConfig() *FormatConfig {
 func NewEnglishFormatConfig() *FormatConfig {
 	config := NewFormatConfig()
 	config.Date = "02/01/2006"
-	config.Time = "02/01/2006 15:04:05"
+	config.Time = "02/01/2006 15:04:05 MST"
 	config.True = "yes"
 	config.False = "no"
 	return config
@@ -59,7 +59,7 @@ func NewGermanFormatConfig() *FormatConfig {
 	config.MoneyAmount = GermanMoneyFormat(true)
 	config.Percent = GermanFloatFormat(-1)
 	config.Date = "02.01.2006"
-	config.Time = "02.01.2006 15:04:05"
+	config.Time = "02.01.2006 15:04:05 MST"
 	config.True = "ja"
 	config.False = "nein"
 	return config
