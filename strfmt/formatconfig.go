@@ -82,6 +82,10 @@ func formatTimeString(val reflect.Value, config *FormatConfig) string {
 }
 
 func formatNullableTimeString(val reflect.Value, config *FormatConfig) string {
+	t := val.Interface().(nullable.Time)
+	if t.IsNull() {
+		return config.Nil
+	}
 	return val.Interface().(nullable.Time).Format(config.Time)
 }
 

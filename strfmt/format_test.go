@@ -25,7 +25,9 @@ var caseSet = map[*FormatConfig]map[interface{}]string{
 		bank.NullableBIC(""):         "",
 		time.Time{}:                  "",
 		new(time.Time):               "",
-		nullable.Time{}:              "",
+		nullable.TimeNull:            "",
+		reflect.Value{}:              "",
+		interface{}(nil):             "",
 		// booleans
 		true:  "yes",
 		false: "no",
@@ -54,6 +56,9 @@ var caseSet = map[*FormatConfig]map[interface{}]string{
 		bank.NullableBIC(""):         "",
 		time.Time{}:                  "",
 		new(time.Time):               "",
+		nullable.TimeNull:            "",
+		reflect.Value{}:              "",
+		interface{}(nil):             "",
 		// booleans
 		true:  "ja",
 		false: "nein",
@@ -77,7 +82,7 @@ func TestFormat(t *testing.T) {
 		for val, expected := range cases {
 			got := Format(val, config)
 			if expected != got {
-				t.Fatalf("expected %s got %s", expected, got)
+				t.Fatalf("Format(%#v) = %s, expected = %s", val, got, expected)
 			}
 		}
 	}

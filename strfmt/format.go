@@ -28,6 +28,9 @@ func Format(value interface{}, config *FormatConfig) string {
 // does not return an error, then this string is returned instead
 // of more generic type conversions.
 func FormatValue(val reflect.Value, config *FormatConfig) string {
+	if !val.IsValid() {
+		return config.Nil
+	}
 	derefVal, derefType := reflection.DerefValueAndType(val)
 	if f, ok := config.TypeFormatters[derefType]; ok && derefVal.IsValid() {
 		return f.FormatValue(derefVal, config)

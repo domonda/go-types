@@ -22,6 +22,7 @@ func TestReflectIsNull(t *testing.T) {
 		{"zero time.Time", reflect.ValueOf(time.Time{}), true},
 		{"zero time.Time ptr", reflect.ValueOf(new(time.Time)), true},
 		{"nil time.Time ptr", reflect.ValueOf((*time.Time)(nil)), true},
+		{"TimeNull", reflect.ValueOf(TimeNull), true},
 
 		{"0", reflect.ValueOf(0), false},
 		{"0 ptr", reflect.ValueOf(new(int)), false},
