@@ -11,6 +11,15 @@ import (
 	"github.com/domonda/go-pretty"
 )
 
+// TimeNull is a null Time value.
+//
+// Note: use Time.IsNull or IsNotNull to check for null
+// instead of comparing a Time with TimeNull
+// because Time.IsNull uses time.Time.IsZero internally
+// which can return true for times that are not
+// the empty time.Time{} default value.
+var TimeNull Time
+
 // Time represents a time.Time where the zero time instant
 // (which is the empty default value of the type)
 // is interpreted as SQL NULL and JSON null.
