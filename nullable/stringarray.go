@@ -1,6 +1,6 @@
 package nullable
 
-import "github.com/lib/pq"
+import "github.com/domonda/go-types/internal/pq"
 
 // StringArray implements the sql.Scanner and driver.Valuer interfaces
 // for a slice of strings.

@@ -4,7 +4,7 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 
-	"github.com/lib/pq"
+	"github.com/domonda/go-types/internal/pq"
 )
 
 // StringArray implements the sql.Scanner, driver.Valuer, and encoding/json.Marshaler interfaces

@@ -1,7 +1,7 @@
 package nullable
 
 import (
-	"github.com/lib/pq"
+	"github.com/domonda/go-types/internal/pq"
 )
 
 // BoolArray implements the sql.Scanner and driver.Valuer interfaces
