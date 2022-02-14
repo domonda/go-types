@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/guregu/null"
 	reflection "github.com/ungerik/go-reflection"
 
 	"github.com/domonda/go-types/language"
@@ -90,14 +89,6 @@ func (f *Format) AssignString(dest reflect.Value, source string /*, loc *time.Lo
 
 	case *nullable.Time:
 		*ptr = nullable.TimeFromPtr(tPtr)
-		return nil
-
-	case *null.Time:
-		if tPtr == nil {
-			*ptr = null.Time{}
-		} else {
-			*ptr = null.TimeFrom(*tPtr)
-		}
 		return nil
 	}
 

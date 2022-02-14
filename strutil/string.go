@@ -1,44 +1,5 @@
 package strutil
 
-import (
-	"github.com/guregu/null"
-)
-
-// NullStringFromPtr converts a string pointer to null.String
-// func NullStringFromPtr(stringPtr *string) (ns null.String) {
-// 	if stringPtr == nil {
-// 		return ns
-// 	}
-// 	ns.String = *stringPtr
-// 	ns.Valid = true
-// 	return ns
-// }
-
-// // NullStringValid converts a string to valid null.String
-// func NullStringValid(str string) (ns null.String) {
-// 	return null.String{
-// 		String: str,
-// 		Valid:  true,
-// 	}
-// }
-
-// // NullStringEmptyInvalid converts a string to valid null.String
-// func NullStringEmptyInvalid(str string) (ns null.String) {
-// 	return null.String{
-// 		String: str,
-// 		Valid:  str != "",
-// 	}
-// }
-
-// StringOrNil returns the string that stringPtr points,
-// or nil if stringPtr points to an empty string or is nil.
-// func StringOrNil(stringPtr *string) interface{} {
-// 	if stringPtr == nil || len(*stringPtr) == 0 {
-// 		return nil
-// 	}
-// 	return *stringPtr
-// }
-
 // EmptyStringToNil returns str or nil if it is empty.
 func EmptyStringToNil(str string) interface{} {
 	if str == "" {
@@ -53,14 +14,6 @@ func StringToPtrEmptyToNil(str string) *string {
 		return nil
 	}
 	return &str
-}
-
-// StringToNullString returns correct null.String
-func StringToNullString(str string) null.String {
-	if str == "" {
-		return null.NewString("", false)
-	}
-	return null.StringFrom(str)
 }
 
 // PtrFromString returns the address of a string
