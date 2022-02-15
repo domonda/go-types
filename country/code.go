@@ -35,6 +35,12 @@ func (c Code) Normalized() (Code, error) {
 	return normalized, nil
 }
 
+// IsEU indicates if a country is member of the European Union
+func (c Code) IsEU() bool {
+	_, ok := euCountries[c]
+	return ok
+}
+
 func (c Code) EnglishName() string {
 	return countryMap[c]
 }
