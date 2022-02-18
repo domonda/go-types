@@ -280,9 +280,12 @@ func (n NullableDate) EqualOrAfter(other NullableDate) bool {
 }
 
 // Before returns if the date is before the passed other one.
-// Returns false if any of the dates is null.
+// A null date is always before any other date.
 func (n NullableDate) Before(other NullableDate) bool {
-	if n.IsNull() || other.IsNull() {
+	if n.IsNull() {
+		return true
+	}
+	if other.IsNull() {
 		return false
 	}
 	return n.MidnightUTC().Get().Before(other.MidnightUTC().Get())
@@ -305,10 +308,10 @@ func (n NullableDate) AfterTime(other time.Time) bool {
 
 // BeforeTime returns if midnight of the date in location of the passed
 // time is before the time.
-// Returns false if the date is null.
+// Returns true if the date is null.
 func (n NullableDate) BeforeTime(other time.Time) bool {
 	if n.IsNull() {
-		return false
+		return true
 	}
 	return n.MidnightInLocation(other.Location()).Before(other)
 }
