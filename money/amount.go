@@ -13,6 +13,8 @@ type Amount float64
 
 // ParseAmount parses an amount from str accepting only certain decimal digit counts.
 // If no acceptedDecimals are passed, then any decimal digit count is accepted.
+// Infinity and NaN are parsed and returned without error.
+// The Amount.Valid method can be aused to check for infinity and NaN.
 func ParseAmount(str string, acceptedDecimals ...int) (Amount, error) {
 	f, _, _, decimals, err := float.ParseDetails(str)
 	if err != nil {
