@@ -79,6 +79,11 @@ func TestSplitArray(t *testing.T) {
 			array:      `[['meeting', 'lunch'], ['training', 'presentation']]`,
 			wantFields: []string{`['meeting', 'lunch']`, `['training', 'presentation']`},
 		},
+		{
+			name:       "{bestellungen@example.com,if.need.of.a.''declaration.of.compliance''.please.contact.us@example.com}",
+			array:      "{bestellungen@example.com,if.need.of.a.''declaration.of.compliance''.please.contact.us@example.com}",
+			wantFields: []string{`bestellungen@example.com`, `if.need.of.a.''declaration.of.compliance''.please.contact.us@example.com`},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

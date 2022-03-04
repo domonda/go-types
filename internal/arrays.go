@@ -73,8 +73,8 @@ func SplitArray(array string) ([]string, error) {
 			// withinQuote != 0
 			switch withinQuote {
 			case '\'':
-				if r == '\'' && rLast != '\'' {
-					// End of SQL quote because ' was not escapded as ''
+				if r == '\'' /*&& rLast != '\''*/ {
+					// End of SQL quote /* because ' was not escapded as '' */
 					withinQuote = 0
 				}
 			case '"':
@@ -95,7 +95,7 @@ func SplitArray(array string) ([]string, error) {
 		return nil, fmt.Errorf("array %q has not enough ']'", array)
 	}
 	if withinQuote != 0 {
-		return nil, fmt.Errorf("array %q has an unclosed '%s' quote", array, string(withinQuote))
+		return nil, fmt.Errorf("array %q has an unclosed %q quote", array, withinQuote)
 	}
 
 	// Rameining element after begin and separators
