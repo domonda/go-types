@@ -146,6 +146,10 @@ func TestFindAllAddresses(t *testing.T) {
 			text: `Me <Hello@world.com> for nothing! <for@example.com> some text with@at symbol`,
 			want: []Address{`Hello@world.com`, `for@example.com`},
 		},
+		{
+			text: "Leading spaces Fax +49 (0)66 66 666 666 what@a-test.com\n",
+			want: []Address{`what@a-test.com`},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.text, func(t *testing.T) {
