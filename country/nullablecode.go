@@ -94,7 +94,7 @@ func (n NullableCode) StringOr(nullString string) string {
 }
 
 // Scan implements the database/sql.Scanner interface.
-func (n *NullableCode) Scan(value interface{}) error {
+func (n *NullableCode) Scan(value any) error {
 	switch x := value.(type) {
 	case string:
 		*n = NullableCode(x)

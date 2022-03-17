@@ -174,7 +174,7 @@ func (set AddressSet) Validate() error {
 
 // Scan implements the database/sql.Scanner interface.
 // Supports scanning SQL strings and string arrays.
-func (set *AddressSet) Scan(value interface{}) error {
+func (set *AddressSet) Scan(value any) error {
 	switch s := value.(type) {
 	case string:
 		if s == "" {

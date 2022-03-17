@@ -202,7 +202,7 @@ func (iban IBAN) isCheckSumValid() bool {
 }
 
 // Scan implements the database/sql.Scanner interface.
-func (iban *IBAN) Scan(value interface{}) error {
+func (iban *IBAN) Scan(value any) error {
 	switch x := value.(type) {
 	case string:
 		*iban = IBAN(x)

@@ -65,7 +65,7 @@ func IDSetFromString(str string) (IDSet, error) {
 // Supported types are string, []byte, [16]byte,
 // ID, NullableID, and nil.
 // Returns nil if zero values are passed.
-func IDSetMust(vals ...interface{}) IDSet {
+func IDSetMust(vals ...any) IDSet {
 	if len(vals) == 0 {
 		return nil
 	}
@@ -253,7 +253,7 @@ func (s *IDSet) UnmarshalText(text []byte) error {
 // with the nil map value used as SQL NULL.
 // Id does assign a new IDSet to *set instead of modifying the existing map,
 // so it can be used with uninitialized IDSet variable.
-func (s *IDSet) Scan(value interface{}) error {
+func (s *IDSet) Scan(value any) error {
 	if value == nil {
 		*s = nil
 		return nil

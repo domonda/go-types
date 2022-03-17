@@ -25,7 +25,7 @@ func (t AccountType) Valid() bool {
 }
 
 // Scan implements the database/sql.Scanner interface.
-func (t *AccountType) Scan(value interface{}) error {
+func (t *AccountType) Scan(value any) error {
 	switch x := value.(type) {
 	case string:
 		*t = AccountType(x)

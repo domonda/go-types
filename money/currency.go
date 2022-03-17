@@ -121,7 +121,7 @@ func (c Currency) IsEUR() bool {
 }
 
 // Scan implements the database/sql.Scanner interface.
-func (c *Currency) Scan(value interface{}) error {
+func (c *Currency) Scan(value any) error {
 	switch x := value.(type) {
 	case string:
 		*c = Currency(x)

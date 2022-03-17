@@ -64,7 +64,7 @@ func IDSliceMustFromStrings(strs ...string) IDSlice {
 // Supported types are string, []byte, [16]byte,
 // ID, NullableID, and nil.
 // Returns nil if zero values are passed.
-func IDSliceMust(vals ...interface{}) IDSlice {
+func IDSliceMust(vals ...any) IDSlice {
 	if len(vals) == 0 {
 		return nil
 	}
@@ -261,7 +261,7 @@ func (s *IDSlice) UnmarshalText(text []byte) error {
 // with the nil map value used as SQL NULL.
 // Does *s = make(Slice) if *s == nil
 // so it can be used with an not initialized Slice variable
-func (s *IDSlice) Scan(value interface{}) (err error) {
+func (s *IDSlice) Scan(value any) (err error) {
 	switch x := value.(type) {
 	case string:
 		return s.scanBytes([]byte(x))

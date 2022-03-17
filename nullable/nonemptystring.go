@@ -25,7 +25,7 @@ type NonEmptyString string
 // NonEmptyStringf formats a string using fmt.Sprintf
 // and returns it as NonEmptyString.
 // An empty string will be interpreted as null value.
-func NonEmptyStringf(format string, a ...interface{}) NonEmptyString {
+func NonEmptyStringf(format string, a ...any) NonEmptyString {
 	return NonEmptyString(fmt.Sprintf(format, a...))
 }
 
@@ -128,7 +128,7 @@ func (n *NonEmptyString) SetNull() {
 }
 
 // Scan implements the database/sql.Scanner interface.
-func (n *NonEmptyString) Scan(value interface{}) error {
+func (n *NonEmptyString) Scan(value any) error {
 	switch s := value.(type) {
 	case nil:
 		n.SetNull()

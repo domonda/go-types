@@ -15,7 +15,7 @@ import (
 type StringArray []string
 
 // Scan implements the sql.Scanner interface.
-func (a *StringArray) Scan(src interface{}) error {
+func (a *StringArray) Scan(src any) error {
 	return (*pq.StringArray)(a).Scan(src)
 }
 

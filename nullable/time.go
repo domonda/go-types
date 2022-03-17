@@ -163,7 +163,7 @@ func (n *Time) SetNull() {
 }
 
 // Scan implements the database/sql.Scanner interface.
-func (n *Time) Scan(value interface{}) error {
+func (n *Time) Scan(value any) error {
 	switch t := value.(type) {
 	case nil:
 		*n = Time{}

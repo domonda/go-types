@@ -124,7 +124,7 @@ func (n *NullableCurrency) ScanString(source string) (sourceWasNormalized bool, 
 }
 
 // Scan implements the database/sql.Scanner interface.
-func (n *NullableCurrency) Scan(value interface{}) error {
+func (n *NullableCurrency) Scan(value any) error {
 	switch x := value.(type) {
 	case string:
 		*n = NullableCurrency(x)

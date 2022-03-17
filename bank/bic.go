@@ -124,7 +124,7 @@ func (bic BIC) ReceiverPaisFees() bool {
 }
 
 // Scan implements the database/sql.Scanner interface.
-func (bic *BIC) Scan(value interface{}) error {
+func (bic *BIC) Scan(value any) error {
 	switch x := value.(type) {
 	case string:
 		*bic = BIC(x)

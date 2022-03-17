@@ -100,7 +100,7 @@ func (iban NullableIBAN) NormalizedWithSpaces() (NullableIBAN, error) {
 }
 
 // Scan implements the database/sql.Scanner interface.
-func (iban *NullableIBAN) Scan(value interface{}) error {
+func (iban *NullableIBAN) Scan(value any) error {
 	switch x := value.(type) {
 	case string:
 		*iban = NullableIBAN(x)

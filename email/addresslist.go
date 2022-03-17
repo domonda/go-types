@@ -138,7 +138,7 @@ func (l AddressList) Nullable() NullableAddressList {
 
 // Scan implements the database/sql.Scanner interface.
 // Supports scanning SQL strings and string arrays.
-func (l *AddressList) Scan(value interface{}) error {
+func (l *AddressList) Scan(value any) error {
 	switch s := value.(type) {
 	case string:
 		if s == "" {

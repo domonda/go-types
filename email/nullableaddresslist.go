@@ -111,7 +111,7 @@ func (n *NullableAddressList) SetNull() {
 
 // Scan implements the database/sql.Scanner interface.
 // Supports scanning SQL strings and string arrays.
-func (n *NullableAddressList) Scan(value interface{}) error {
+func (n *NullableAddressList) Scan(value any) error {
 	switch s := value.(type) {
 	case nil:
 		n.SetNull()

@@ -130,7 +130,7 @@ func (n *NullableAddress) SetNull() {
 }
 
 // Scan implements the database/sql.Scanner interface.
-func (n *NullableAddress) Scan(value interface{}) error {
+func (n *NullableAddress) Scan(value any) error {
 	switch s := value.(type) {
 	case nil:
 		n.SetNull()

@@ -15,7 +15,7 @@ import (
 // If the value implements encoding.TextMarshaler and MarshalText
 // does not return an error, then this string is returned instead
 // of more generic type conversions.
-func Format(value interface{}, config *FormatConfig) string {
+func Format(value any, config *FormatConfig) string {
 	val, ok := value.(reflect.Value)
 	if !ok {
 		val = reflect.ValueOf(value)

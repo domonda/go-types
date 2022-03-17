@@ -43,7 +43,7 @@ func (a FloatArray) Value() (driver.Value, error) {
 }
 
 // Scan implements the sql.Scanner interface.
-func (a *FloatArray) Scan(src interface{}) error {
+func (a *FloatArray) Scan(src any) error {
 	switch src := src.(type) {
 	case []byte:
 		return a.scanBytes(src)

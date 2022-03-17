@@ -75,7 +75,7 @@ func Bool(boolVal bool, trueString, falseString string) string {
 	return falseString
 }
 
-func Interface(i interface{}) string {
+func Interface(i any) string {
 	v := reflect.ValueOf(i)
 
 	if v.IsNil() || !v.IsValid() {

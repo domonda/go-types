@@ -560,7 +560,7 @@ func (date Date) ISOWeek() (year, week int) {
 }
 
 // Scan implements the database/sql.Scanner interface.
-func (date *Date) Scan(value interface{}) (err error) {
+func (date *Date) Scan(value any) (err error) {
 	switch x := value.(type) {
 	case string:
 		d := Date(x)

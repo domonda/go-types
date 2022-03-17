@@ -198,7 +198,7 @@ func IDFromPtr(ptr *ID, defaultVal ID) ID {
 // Supported types are string, []byte, [16]byte,
 // ID, NullableID, and nil.
 // The returned ID is not validated.
-func IDFrom(val interface{}) ID {
+func IDFrom(val any) ID {
 	switch x := val.(type) {
 	case string:
 		return IDFromStringOrNil(x)
@@ -219,7 +219,7 @@ func IDFrom(val interface{}) ID {
 // if that's not possible or the ID is not valid.
 // Supported types are string, []byte, [16]byte,
 // ID, NullableID, and nil.
-func IDMust(val interface{}) ID {
+func IDMust(val any) ID {
 	switch x := val.(type) {
 	case string:
 		id, err := IDFromString(x)
@@ -440,7 +440,7 @@ func (id ID) Value() (driver.Value, error) {
 // Scan implements the sql.Scanner interface.
 // A 16-byte slice is handled by UnmarshalBinary, while
 // a longer byte slice or a string is handled by UnmarshalText.
-func (id *ID) Scan(src interface{}) error {
+func (id *ID) Scan(src any) error {
 	switch src := src.(type) {
 	case []byte:
 		if len(src) == 16 {

@@ -52,7 +52,7 @@ func (bic NullableBIC) Validate() error {
 }
 
 // Scan implements the database/sql.Scanner interface.
-func (bic *NullableBIC) Scan(value interface{}) error {
+func (bic *NullableBIC) Scan(value any) error {
 	switch x := value.(type) {
 	case string:
 		*bic = NullableBIC(x)

@@ -19,7 +19,7 @@ import (
 // as nil value ot the type JSON.
 type JSON []byte
 
-func MarshalJSON(source interface{}) (JSON, error) {
+func MarshalJSON(source any) (JSON, error) {
 	return json.Marshal(source)
 }
 
@@ -29,7 +29,7 @@ func (j JSON) IsNull() bool { return j == nil }
 
 // MarshalFrom marshalles source as JSON and sets it
 // at j when there was no error.
-func (j *JSON) MarshalFrom(source interface{}) error {
+func (j *JSON) MarshalFrom(source any) error {
 	jsonBytes, err := json.Marshal(source)
 	if err == nil {
 		if bytes.Equal(jsonBytes, []byte("null")) {
@@ -42,7 +42,7 @@ func (j *JSON) MarshalFrom(source interface{}) error {
 }
 
 // UnmarshalTo unmashalles the JSON of j to dest
-func (j JSON) UnmarshalTo(dest interface{}) error {
+func (j JSON) UnmarshalTo(dest any) error {
 	return json.Unmarshal(j, dest)
 }
 
@@ -99,7 +99,7 @@ func (j JSON) IsEmpty() bool {
 }
 
 // Scan stores the src in *j. No validation is done.
-func (j *JSON) Scan(src interface{}) error {
+func (j *JSON) Scan(src any) error {
 	switch x := src.(type) {
 	case nil:
 		*j = nil

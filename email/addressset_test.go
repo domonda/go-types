@@ -9,7 +9,7 @@ func TestAddressSet_Scan(t *testing.T) {
 	tests := []struct {
 		name    string
 		set     AddressSet
-		value   interface{}
+		value   any
 		want    AddressSet
 		wantErr bool
 	}{

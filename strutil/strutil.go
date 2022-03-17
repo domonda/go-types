@@ -281,7 +281,7 @@ func MapRuneIsAfterWordSeparator(str string) []bool {
 
 // EqualJSON returns true a and b are equal on a value basis,
 // or if their marshalled JSON representation is equal.
-func EqualJSON(a, b interface{}) bool {
+func EqualJSON(a, b any) bool {
 	if a == b {
 		return true
 	}

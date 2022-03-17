@@ -12,7 +12,7 @@ import (
 	"github.com/domonda/go-types/uu"
 )
 
-var caseSet = map[*FormatConfig]map[interface{}]string{
+var caseSet = map[*FormatConfig]map[any]string{
 	NewEnglishFormatConfig(): {
 		// nil and zero
 		"":                           "",
@@ -27,7 +27,7 @@ var caseSet = map[*FormatConfig]map[interface{}]string{
 		new(time.Time):               "",
 		nullable.TimeNull:            "",
 		reflect.Value{}:              "",
-		interface{}(nil):             "",
+		any(nil):                     "",
 		// booleans
 		true:  "yes",
 		false: "no",
@@ -58,7 +58,7 @@ var caseSet = map[*FormatConfig]map[interface{}]string{
 		new(time.Time):               "",
 		nullable.TimeNull:            "",
 		reflect.Value{}:              "",
-		interface{}(nil):             "",
+		any(nil):                     "",
 		// booleans
 		true:  "ja",
 		false: "nein",

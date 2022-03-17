@@ -201,7 +201,7 @@ func (id *ID) ScanString(source string) (normalized bool, err error) {
 }
 
 // Scan implements the database/sql.Scanner interface.
-func (id *ID) Scan(value interface{}) error {
+func (id *ID) Scan(value any) error {
 	switch x := value.(type) {
 	case string:
 		*id = ID(x).NormalizedUnchecked()

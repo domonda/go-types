@@ -1,7 +1,7 @@
 package strutil
 
 // EmptyStringToNil returns str or nil if it is empty.
-func EmptyStringToNil(str string) interface{} {
+func EmptyStringToNil(str string) any {
 	if str == "" {
 		return nil
 	}

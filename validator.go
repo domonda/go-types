@@ -109,7 +109,7 @@ var ErrInvalidValue = errors.New("invalid value")
 // The error from ValidatErr.Validate() is returned directly,
 // and ErrInvalidValue is returned if Validator.Valid() is false.
 // If v does not implement ValidatErr or Validator then nil will be returned.
-func Validate(v interface{}) error {
+func Validate(v any) error {
 	switch x := v.(type) {
 	case ValidatErr:
 		return x.Validate()
@@ -128,7 +128,7 @@ func Validate(v interface{}) error {
 // and ErrInvalidValue is returned if Validator.Valid() is false.
 // If v does not implement ValidatErr or Validator then nil and false
 // will be returned.
-func TryValidate(v interface{}) (err error, isValidator bool) {
+func TryValidate(v any) (err error, isValidator bool) {
 	switch x := v.(type) {
 	case ValidatErr:
 		return x.Validate(), true

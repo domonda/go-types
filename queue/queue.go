@@ -8,8 +8,8 @@ var (
 )
 
 type Queue interface {
-	Add(items ...interface{})
-	Next() <-chan interface{}
+	Add(items ...any)
+	Next() <-chan any
 	Len() int
 	Cap() int
 	Close()
@@ -17,9 +17,9 @@ type Queue interface {
 
 func New() Queue {
 	q := &queue{
-		channel: make(chan interface{}, ChanLen),
+		channel: make(chan any, ChanLen),
 		buffer: ringBuffer{
-			items: make([]interface{}, InitialBufferSize),
+			items: make([]any, InitialBufferSize),
 		},
 	}
 	q.bufferCond = sync.NewCond(&q.mutex)
@@ -30,7 +30,7 @@ func New() Queue {
 type queue struct {
 	mutex      sync.RWMutex
 	bufferCond *sync.Cond
-	channel    chan interface{}
+	channel    chan any
 	buffer     ringBuffer
 	closed     bool
 }
@@ -54,7 +54,7 @@ func (q *queue) fillChanFromBuffer() {
 	}
 }
 
-func (q *queue) Add(items ...interface{}) {
+func (q *queue) Add(items ...any) {
 	if len(items) == 0 {
 		return
 	}
@@ -93,7 +93,7 @@ func (q *queue) Add(items ...interface{}) {
 	q.bufferCond.Signal()
 }
 
-func (q *queue) Next() <-chan interface{} {
+func (q *queue) Next() <-chan any {
 	return q.channel
 }
 

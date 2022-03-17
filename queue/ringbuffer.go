@@ -1,7 +1,7 @@
 package queue
 
 type ringBuffer struct {
-	items []interface{}
+	items []any
 	first int
 	count int
 }
@@ -10,10 +10,10 @@ func (b *ringBuffer) isEmpty() bool {
 	return b.count == 0
 }
 
-func (b *ringBuffer) push(item interface{}) {
+func (b *ringBuffer) push(item any) {
 	if b.count == len(b.items) {
 		// Grow buffer if nothing free
-		newBuffer := make([]interface{}, len(b.items)*2)
+		newBuffer := make([]any, len(b.items)*2)
 		copy(newBuffer, b.items[b.first:])
 		copy(newBuffer[b.count-b.first:], b.items[:b.first])
 		b.items = newBuffer
@@ -25,7 +25,7 @@ func (b *ringBuffer) push(item interface{}) {
 	b.count++
 }
 
-func (b *ringBuffer) shift() interface{} {
+func (b *ringBuffer) shift() any {
 	if b.count == 0 {
 		panic("empty buffer")
 	}

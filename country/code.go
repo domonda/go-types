@@ -46,7 +46,7 @@ func (c Code) EnglishName() string {
 }
 
 // Scan implements the database/sql.Scanner interface.
-func (c *Code) Scan(value interface{}) error {
+func (c *Code) Scan(value any) error {
 	switch x := value.(type) {
 	case string:
 		*c = Code(x)

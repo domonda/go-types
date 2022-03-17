@@ -62,7 +62,7 @@ func (a NullFloatArray) Value() (driver.Value, error) {
 }
 
 // Scan implements the sql.Scanner interface
-func (a *NullFloatArray) Scan(src interface{}) error {
+func (a *NullFloatArray) Scan(src any) error {
 	switch src := src.(type) {
 	case []byte:
 		return a.scanBytes(src)

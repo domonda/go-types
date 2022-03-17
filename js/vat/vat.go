@@ -8,7 +8,7 @@ import (
 )
 
 func main() {
-	js.Global.Set("vat", map[string]interface{}{
+	js.Global.Set("vat", map[string]any{
 		"normalizeId": vat.NormalizeVATID,
 	})
 }

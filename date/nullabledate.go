@@ -187,7 +187,7 @@ func (n NullableDate) NormalizedOrUnchanged(lang ...language.Code) NullableDate 
 }
 
 // Scan implements the database/sql.Scanner interface.
-func (n *NullableDate) Scan(value interface{}) (err error) {
+func (n *NullableDate) Scan(value any) (err error) {
 	switch x := value.(type) {
 	case string:
 		d := Date(x)

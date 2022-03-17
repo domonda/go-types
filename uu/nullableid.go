@@ -49,7 +49,7 @@ func NullableIDFromPtr(ptr *ID) NullableID {
 // if that's not possible or the ID is not valid.
 // Supported types are string, []byte, [16]byte,
 // ID, NullableID, and nil.
-func NullableIDMust(val interface{}) NullableID {
+func NullableIDMust(val any) NullableID {
 	switch x := val.(type) {
 	case string:
 		id, err := NullableIDFromString(x)
@@ -218,7 +218,7 @@ func (n NullableID) Value() (driver.Value, error) {
 }
 
 // Scan implements the sql.Scanner interface.
-func (n *NullableID) Scan(src interface{}) error {
+func (n *NullableID) Scan(src any) error {
 	if src == nil {
 		*n = IDNull
 		return nil
@@ -232,7 +232,7 @@ func (n *NullableID) Scan(src interface{}) error {
 // It also supports unmarshalling a sql.NullString.
 func (n *NullableID) UnmarshalJSON(data []byte) error {
 	// TODO optimize
-	var v interface{}
+	var v any
 	err := json.Unmarshal(data, &v)
 	if err != nil {
 		return err
@@ -247,7 +247,7 @@ func (n *NullableID) UnmarshalJSON(data []byte) error {
 		*n = NullableID(id)
 		return err
 
-	case map[string]interface{}:
+	case map[string]any:
 		var ns sql.NullString
 		err = json.Unmarshal(data, &ns)
 		if err != nil || !ns.Valid {
