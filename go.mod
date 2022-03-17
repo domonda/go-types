@@ -27,7 +27,8 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/rivo/uniseg v0.2.0 // indirect
 	github.com/ssor/bom v0.0.0-20170718123548-6386211fdfcf // indirect
+	github.com/stretchr/objx v0.1.0 // indirect
 	github.com/teamwork/test v0.0.0-20200108114543-02621bae84ad // indirect
-	github.com/teamwork/utils v0.0.0-20211112162623-194b7eff720f // indirect
+	github.com/teamwork/utils v0.0.0-20220314153103-637fa45fa6cc // indirect
 	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
 )

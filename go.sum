@@ -43,6 +43,7 @@ github.com/rivo/uniseg v0.2.0/go.mod h1:J6wj4VEh+S6ZtnVlnTBMWIodfgj8LQOQFoIToxlJ
 github.com/rogpeppe/go-internal v1.8.1/go.mod h1:JeRgkft04UBgHMgCIwADu4Pn6Mtm5d4nPKWu0nJ5d+o=
 github.com/ssor/bom v0.0.0-20170718123548-6386211fdfcf h1:pvbZ0lM0XWPBqUKqFU8cmavspvIl9nulOYwdy6IFRRo=
 github.com/ssor/bom v0.0.0-20170718123548-6386211fdfcf/go.mod h1:RJID2RhlZKId02nZ62WenDCkgHFerpIOmW0iT7GKmXM=
+github.com/stretchr/objx v0.1.0 h1:4G4v2dO3VZwixGIRoQ5Lfboy6nUhCyYzaqnIAPPhYs4=
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
 github.com/stretchr/testify v1.7.1 h1:5TQK59W5E3v0r2duFAb7P95B6hEeOyEnHRa8MjYSMTY=
 github.com/stretchr/testify v1.7.1/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/h/Wwjteg=
@@ -51,8 +52,8 @@ github.com/teamwork/test v0.0.0-20200108114543-02621bae84ad h1:25sEr0awm0ZPancg5
 github.com/teamwork/test v0.0.0-20200108114543-02621bae84ad/go.mod h1:TIbx7tx6WHBjQeLRM4eWQZBL7kmBZ7/KI4x4v7Y5YmA=
 github.com/teamwork/tnef v0.0.0-20200108124832-7deabccfdb32 h1:j15wq0XPAY/HR/0+dtwUrIrF2ZTKbk7QIES2p4dAG+k=
 github.com/teamwork/tnef v0.0.0-20200108124832-7deabccfdb32/go.mod h1:v7dFaQrF/4+curx7UTH9rqTkHTgXqghfI3thANW150o=
-github.com/teamwork/utils v0.0.0-20211112162623-194b7eff720f h1:onniknH73Rgo3wJFPG8BIuptxBK0GYuaKpgsBmFSdg4=
-github.com/teamwork/utils v0.0.0-20211112162623-194b7eff720f/go.mod h1:3Fn0qxFeRNpvsg/9T1+btOOOKkd1qG2nPYKKcOmNpcs=
+github.com/teamwork/utils v0.0.0-20220314153103-637fa45fa6cc h1:BidxxRk9kopF5IGEyosTRtanaYVYTUbGJh9eULOhv04=
+github.com/teamwork/utils v0.0.0-20220314153103-637fa45fa6cc/go.mod h1:3Fn0qxFeRNpvsg/9T1+btOOOKkd1qG2nPYKKcOmNpcs=
 github.com/ungerik/go-fs v0.0.0-20220112161406-846291d178e2 h1:llAyIlnRSClt7tR0wfd6clTPvoM4bQ32oTp2Ihrelcc=
 github.com/ungerik/go-fs v0.0.0-20220112161406-846291d178e2/go.mod h1:k77Wp0DvHn0VGHsXhYzw5Gwn3xAyEPA2iz7hDUUsZjs=
 github.com/ungerik/go-reflection v0.0.0-20220113085621-6c5fc1f2694a h1:9vfYtqoyrPw08TbSLxkSXEflp6iXa3RL86Qjs+DrVas=
