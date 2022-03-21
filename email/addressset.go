@@ -7,6 +7,7 @@ import (
 	"sort"
 	"unsafe"
 
+	"github.com/domonda/go-types"
 	"github.com/domonda/go-types/notnull"
 	"github.com/domonda/go-types/nullable"
 )
@@ -100,22 +101,7 @@ func (set AddressSet) DeleteAll() {
 }
 
 func (set AddressSet) Sorted() []Address {
-	switch len(set) {
-	case 0:
-		return nil
-	case 1:
-		for addr := range set {
-			return []Address{addr}
-		}
-	}
-	s := make([]Address, len(set))
-	i := 0
-	for addr := range set {
-		s[i] = addr
-		i++
-	}
-	sort.Slice(s, func(i, j int) bool { return s[i] < s[j] })
-	return s
+	return types.SetToSortedSlice(set)
 }
 
 func (set AddressSet) Strings() []string {
