@@ -25,26 +25,6 @@ func (set Set[T]) Len() int {
 	return len(set)
 }
 
-// IsNull implements the nullable.Nullable interface
-// by returning true if the set is nil.
-func (set Set[T]) IsNull() bool {
-	return set == nil
-}
-
-// String implements the fmt.Stringer interface.
-func (set Set[T]) String() string { //#nosec
-	var b strings.Builder
-	b.WriteByte('[')
-	for i, val := range set.Sorted() {
-		if i > 0 {
-			b.WriteString(", ")
-		}
-		fmt.Fprintf(&b, "%#v", val)
-	}
-	b.WriteByte(']')
-	return b.String()
-}
-
 func (set Set[T]) Sorted() []T {
 	return SetToSortedSlice(set)
 }
@@ -157,8 +137,41 @@ func (set Set[T]) Difference(other Set[T]) Set[T] {
 	return diff
 }
 
+func (set Set[T]) Map(mapFunc func(T) (T, bool)) Set[T] {
+	result := make(Set[T], len(set))
+	for val := range set {
+		if mappedVal, ok := mapFunc(val); ok {
+			result.Add(mappedVal)
+		}
+	}
+	return result
+}
+
 func (set Set[T]) Equal(other Set[T]) bool {
 	return maps.Equal(set, other)
+}
+
+// IsNull implements the nullable.Nullable interface
+// by returning true if the set is nil.
+func (set Set[T]) IsNull() bool {
+	return set == nil
+}
+
+// String implements the fmt.Stringer interface.
+func (set Set[T]) String() string { //#nosec
+	if set == nil {
+		return "<nil>"
+	}
+	var b strings.Builder
+	b.WriteByte('[')
+	for i, val := range set.Sorted() {
+		if i > 0 {
+			b.WriteString(", ")
+		}
+		fmt.Fprintf(&b, "%#v", val)
+	}
+	b.WriteByte(']')
+	return b.String()
 }
 
 // MarshalJSON implements encoding/json.Marshaler
@@ -187,6 +200,20 @@ func (set *Set[T]) UnmarshalJSON(j []byte) error {
 		set.AddSlice(slice)
 	}
 	return nil
+}
+
+func ReduceSet[S ~map[T]struct{}, T constraints.Ordered, R any](set S, reduceFunc func(last R, val T) R) (result R) {
+	for val := range set {
+		result = reduceFunc(result, val)
+	}
+	return result
+}
+
+func ReduceSlice[S ~[]T, T constraints.Ordered, R any](slice S, reduceFunc func(last R, val T) R) (result R) {
+	for _, val := range slice {
+		result = reduceFunc(result, val)
+	}
+	return result
 }
 
 func SetToRandomizedSlice[S ~map[T]struct{}, T constraints.Ordered](set S) []T {
