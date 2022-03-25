@@ -470,6 +470,20 @@ var transliterations = map[rune]string{
 	'œ': "oe",
 }
 
+func ReplaceTransliterations(str string) string {
+	var b strings.Builder
+	runes := []rune(str)
+	for _, char := range runes {
+		repl, ok := transliterations[char]
+		if ok {
+			b.WriteString(repl)
+		} else {
+			b.WriteRune(char)
+		}
+	}
+	return b.String()
+}
+
 // var umlautHTMLEntities = map[string]string{
 // 	"Ä": "&Auml;",
 // 	"ä": "&auml;",
