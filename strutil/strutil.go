@@ -472,10 +472,8 @@ var transliterations = map[rune]string{
 
 func ReplaceTransliterations(str string) string {
 	var b strings.Builder
-	runes := []rune(str)
-	for _, char := range runes {
-		repl, ok := transliterations[char]
-		if ok {
+	for _, char := range str {
+		if repl, ok := transliterations[char]; ok {
 			b.WriteString(repl)
 		} else {
 			b.WriteRune(char)
