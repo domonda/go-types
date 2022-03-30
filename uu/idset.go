@@ -62,10 +62,8 @@ func IDSetFromString(str string) (IDSet, error) {
 
 // IDSetMust converts the passed values to an IDSet
 // or panics if that's not possible or an ID is not valid.
-// Supported types are string, []byte, [16]byte,
-// ID, NullableID, and nil.
 // Returns nil if zero values are passed.
-func IDSetMust(vals ...any) IDSet {
+func IDSetMust[T IDSource](vals ...T) IDSet {
 	if len(vals) == 0 {
 		return nil
 	}

@@ -61,10 +61,8 @@ func IDSliceMustFromStrings(strs ...string) IDSlice {
 
 // IDSliceMust converts the passed values to an IDSlice
 // or panics if that's not possible or an ID is not valid.
-// Supported types are string, []byte, [16]byte,
-// ID, NullableID, and nil.
 // Returns nil if zero values are passed.
-func IDSliceMust(vals ...any) IDSlice {
+func IDSliceMust[T IDSource](vals ...T) IDSlice {
 	if len(vals) == 0 {
 		return nil
 	}

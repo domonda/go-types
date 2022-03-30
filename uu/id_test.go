@@ -659,32 +659,76 @@ func TestID_Base64(t *testing.T) {
 
 func TestIDFrom(t *testing.T) {
 	refID := ID{0x6b, 0xa7, 0xb8, 0x10, 0x9d, 0xad, 0x11, 0xd1, 0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4, 0x30, 0xc8}
-	tests := []struct {
-		name string
-		val  any
-		want ID
-	}{
-		{name: "nil", val: nil, want: IDNil},
-		{name: "passthrough", val: refID, want: refID},
-		{name: "nullable", val: refID.Nullable(), want: refID},
-		{name: "6ba7b8109dad11d180b400c04fd430c8", val: "6ba7b8109dad11d180b400c04fd430c8", want: refID},
-		{name: "6ba7b810-9dad-11d1-80b4-00c04fd430c8", val: "6ba7b810-9dad-11d1-80b4-00c04fd430c8", want: refID},
-		{name: "{6ba7b810-9dad-11d1-80b4-00c04fd430c8}", val: "{6ba7b810-9dad-11d1-80b4-00c04fd430c8}", want: refID},
-		{name: "urn:uuid:6ba7b810-9dad-11d1-80b4-00c04fd430c8", val: "urn:uuid:6ba7b810-9dad-11d1-80b4-00c04fd430c8", want: refID},
-		{name: "6BA7B8109DAD11D180B400C04FD430C8", val: "6BA7B8109DAD11D180B400C04FD430C8", want: refID},
-		{name: "6BA7B810-9DAD-11D1-80B4-00C04FD430C8", val: "6BA7B810-9DAD-11D1-80B4-00C04FD430C8", want: refID},
-		{name: "byte slice", val: []byte{0x6b, 0xa7, 0xb8, 0x10, 0x9d, 0xad, 0x11, 0xd1, 0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4, 0x30, 0xc8}, want: refID},
-		{name: "byte array", val: [16]byte{0x6b, 0xa7, 0xb8, 0x10, 0x9d, 0xad, 0x11, 0xd1, 0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4, 0x30, 0xc8}, want: refID},
+
+	{
+		tests := []struct {
+			name string
+			val  string
+			want ID
+		}{
+			{name: "6ba7b8109dad11d180b400c04fd430c8", val: "6ba7b8109dad11d180b400c04fd430c8", want: refID},
+			{name: "6ba7b810-9dad-11d1-80b4-00c04fd430c8", val: "6ba7b810-9dad-11d1-80b4-00c04fd430c8", want: refID},
+			{name: "{6ba7b810-9dad-11d1-80b4-00c04fd430c8}", val: "{6ba7b810-9dad-11d1-80b4-00c04fd430c8}", want: refID},
+			{name: "urn:uuid:6ba7b810-9dad-11d1-80b4-00c04fd430c8", val: "urn:uuid:6ba7b810-9dad-11d1-80b4-00c04fd430c8", want: refID},
+			{name: "6BA7B8109DAD11D180B400C04FD430C8", val: "6BA7B8109DAD11D180B400C04FD430C8", want: refID},
+			{name: "6BA7B810-9DAD-11D1-80B4-00C04FD430C8", val: "6BA7B810-9DAD-11D1-80B4-00C04FD430C8", want: refID},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				if got := IDFrom(tt.val); !reflect.DeepEqual(got, tt.want) {
+					t.Errorf("IDFrom() = %v, want %v", got, tt.want)
+				}
+				if got := IDMust(tt.val); !reflect.DeepEqual(got, tt.want) {
+					t.Errorf("IDMust() = %v, want %v", got, tt.want)
+				}
+			})
+		}
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := IDFrom(tt.val); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("IDFrom() = %v, want %v", got, tt.want)
-			}
-			if got := IDMust(tt.val); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("IDMust() = %v, want %v", got, tt.want)
-			}
-		})
+	{
+		tests := []struct {
+			name string
+			val  []byte
+			want ID
+		}{
+			{name: "byte slice", val: []byte{0x6b, 0xa7, 0xb8, 0x10, 0x9d, 0xad, 0x11, 0xd1, 0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4, 0x30, 0xc8}, want: refID},
+			{name: "6ba7b8109dad11d180b400c04fd430c8", val: []byte("6ba7b8109dad11d180b400c04fd430c8"), want: refID},
+			{name: "6ba7b810-9dad-11d1-80b4-00c04fd430c8", val: []byte("6ba7b810-9dad-11d1-80b4-00c04fd430c8"), want: refID},
+			{name: "{6ba7b810-9dad-11d1-80b4-00c04fd430c8}", val: []byte("{6ba7b810-9dad-11d1-80b4-00c04fd430c8}"), want: refID},
+			{name: "urn:uuid:6ba7b810-9dad-11d1-80b4-00c04fd430c8", val: []byte("urn:uuid:6ba7b810-9dad-11d1-80b4-00c04fd430c8"), want: refID},
+			{name: "6BA7B8109DAD11D180B400C04FD430C8", val: []byte("6BA7B8109DAD11D180B400C04FD430C8"), want: refID},
+			{name: "6BA7B810-9DAD-11D1-80B4-00C04FD430C8", val: []byte("6BA7B810-9DAD-11D1-80B4-00C04FD430C8"), want: refID},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				if got := IDFrom(tt.val); !reflect.DeepEqual(got, tt.want) {
+					t.Errorf("IDFrom() = %v, want %v", got, tt.want)
+				}
+				if got := IDMust(tt.val); !reflect.DeepEqual(got, tt.want) {
+					t.Errorf("IDMust() = %v, want %v", got, tt.want)
+				}
+			})
+		}
+	}
+	{
+		tests := []struct {
+			name string
+			val  [16]byte
+			want ID
+		}{
+			{name: "passthrough", val: refID, want: refID},
+			{name: "nullable", val: refID.Nullable(), want: refID},
+			{name: "byte array", val: [16]byte{0x6b, 0xa7, 0xb8, 0x10, 0x9d, 0xad, 0x11, 0xd1, 0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4, 0x30, 0xc8}, want: refID},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				if got := IDFrom(tt.val); !reflect.DeepEqual(got, tt.want) {
+					t.Errorf("IDFrom() = %v, want %v", got, tt.want)
+				}
+				if got := IDMust(tt.val); !reflect.DeepEqual(got, tt.want) {
+					t.Errorf("IDMust() = %v, want %v", got, tt.want)
+				}
+			})
+		}
 	}
 }
 

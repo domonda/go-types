@@ -193,13 +193,15 @@ func IDFromPtr(ptr *ID, defaultVal ID) ID {
 	return *ptr
 }
 
+type IDSource interface {
+	string | []byte | ID | NullableID | [16]byte
+}
+
 // IDFrom converts val to an ID or returns IDNil
-// if that's not possible.
-// Supported types are string, []byte, [16]byte,
-// ID, NullableID, and nil.
+// if no conversion is not possible.
 // The returned ID is not validated.
-func IDFrom(val any) ID {
-	switch x := val.(type) {
+func IDFrom[T IDSource](val T) ID {
+	switch x := any(val).(type) {
 	case string:
 		return IDFromStringOrNil(x)
 	case []byte:
@@ -216,11 +218,9 @@ func IDFrom(val any) ID {
 }
 
 // IDMust converts val to an ID or panics
-// if that's not possible or the ID is not valid.
-// Supported types are string, []byte, [16]byte,
-// ID, NullableID, and nil.
-func IDMust(val any) ID {
-	switch x := val.(type) {
+// if the conversion is not possible or the ID is not valid.
+func IDMust[T IDSource](val T) ID {
+	switch x := any(val).(type) {
 	case string:
 		id, err := IDFromString(x)
 		if err != nil {
@@ -248,8 +248,6 @@ func IDMust(val any) ID {
 			panic(err)
 		}
 		return ID(x)
-	case nil:
-		return IDNil
 	default:
 		panic(fmt.Errorf("uu.IDMust type not supported: %T", val))
 	}
