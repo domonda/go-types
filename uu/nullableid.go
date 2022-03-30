@@ -45,12 +45,34 @@ func NullableIDFromPtr(ptr *ID) NullableID {
 	return NullableID(*ptr)
 }
 
+// NullableIDFromAny converts val to an ID or returns an error
+// if the conversion is not possible or the ID is not valid.
+// Returns IDNull and no error when val is nil.
+func NullableIDFromAny(val any) (NullableID, error) {
+	switch x := val.(type) {
+	case string:
+		return NullableIDFromString(x)
+	case []byte:
+		return NullableIDFromBytes(x)
+	case ID:
+		return NullableID(x), NullableID(x).Validate()
+	case NullableID:
+		return x, x.Validate()
+	case [16]byte:
+		return NullableID(x), NullableID(x).Validate()
+	case nil:
+		return IDNull, nil
+	default:
+		return IDNull, fmt.Errorf("uu.NullableIDFromAny type not supported: %T", val)
+	}
+}
+
 // NullableIDMust converts val to an ID or panics
 // if that's not possible or the ID is not valid.
 // Supported types are string, []byte, [16]byte,
 // ID, NullableID, and nil.
-func NullableIDMust(val any) NullableID {
-	switch x := val.(type) {
+func NullableIDMust[T IDSource](val T) NullableID {
+	switch x := any(val).(type) {
 	case string:
 		id, err := NullableIDFromString(x)
 		if err != nil {
@@ -78,8 +100,6 @@ func NullableIDMust(val any) NullableID {
 			panic(err)
 		}
 		return NullableID(x)
-	case nil:
-		return IDNull
 	default:
 		panic(fmt.Errorf("uu.NullableIDMust type not supported: %T", val))
 	}
@@ -107,7 +127,13 @@ func (n NullableID) Validate() error {
 	if n == IDNull {
 		return nil
 	}
-	return ID(n).Validate()
+	if v := n.Version(); v < 1 || v > 5 {
+		return ErrInvalidVersion(v)
+	}
+	if n.Variant() == IDVariantInvalid {
+		return ErrInvalidVariant
+	}
+	return nil
 }
 
 // Set sets an ID for this NullableID

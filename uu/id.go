@@ -8,7 +8,6 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"hash"
 	"io"
@@ -193,6 +192,28 @@ func IDFromPtr(ptr *ID, defaultVal ID) ID {
 	return *ptr
 }
 
+// IDFromAny converts val to an ID or returns an error
+// if the conversion is not possible or the ID is not valid.
+// Returns IDNil, ErrNilID when val is nil.
+func IDFromAny(val any) (ID, error) {
+	switch x := val.(type) {
+	case string:
+		return IDFromString(x)
+	case []byte:
+		return IDFromBytes(x)
+	case ID:
+		return x, x.Validate()
+	case NullableID:
+		return ID(x), ID(x).Validate()
+	case [16]byte:
+		return ID(x), ID(x).Validate()
+	case nil:
+		return IDNil, ErrNilID
+	default:
+		return IDNil, fmt.Errorf("uu.IDFromAny type not supported: %T", val)
+	}
+}
+
 type IDSource interface {
 	string | []byte | ID | NullableID | [16]byte
 }
@@ -281,11 +302,14 @@ func (id ID) Valid() bool {
 // Validate returns an error if the Variant and Version of this UUID are not supported.
 // A Nil UUID is not valid.
 func (id ID) Validate() error {
+	if id.IsNil() {
+		return ErrNilID
+	}
 	if v := id.Version(); v < 1 || v > 5 {
-		return fmt.Errorf("invalid UUID version: %d", v)
+		return ErrInvalidVersion(v)
 	}
 	if id.Variant() == IDVariantInvalid {
-		return errors.New("invalid UUID variant")
+		return ErrInvalidVariant
 	}
 	return nil
 }
