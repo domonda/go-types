@@ -21,10 +21,6 @@ func NewSet[T constraints.Ordered](vals ...T) Set[T] {
 	return set
 }
 
-func (set Set[T]) Len() int {
-	return len(set)
-}
-
 func (set Set[T]) Sorted() []T {
 	return SetToSortedSlice(set)
 }
@@ -98,6 +94,9 @@ func (set Set[T]) Clear() {
 }
 
 func (set Set[T]) Clone() Set[T] {
+	if set == nil {
+		return nil
+	}
 	return maps.Clone(set)
 }
 
@@ -149,6 +148,17 @@ func (set Set[T]) Map(mapFunc func(T) (T, bool)) Set[T] {
 
 func (set Set[T]) Equal(other Set[T]) bool {
 	return maps.Equal(set, other)
+}
+
+// Len returns the length of the set.
+// Returns zero for a nil set.
+func (set Set[T]) Len() int {
+	return len(set)
+}
+
+// IsEmpty returns true if the set is empty or nil.
+func (set Set[T]) IsEmpty() bool {
+	return len(set) == 0
 }
 
 // IsNull implements the nullable.Nullable interface

@@ -5,6 +5,8 @@ import (
 	"database/sql/driver"
 	"io"
 	"strings"
+
+	"golang.org/x/exp/maps"
 )
 
 // IDSet is a set of uu.IDs.
@@ -95,11 +97,6 @@ func (s IDSet) GetOne() ID {
 	return IDNil
 }
 
-// Len returns the length of the IDSet.
-func (s IDSet) Len() int {
-	return len(s)
-}
-
 // AsSet returns s unchanged to implement the IDs interface.
 func (s IDSet) AsSet() IDSet {
 	return s
@@ -178,10 +175,8 @@ func (s IDSet) Delete(id ID) {
 	delete(s, id)
 }
 
-func (s IDSet) DeleteAll() {
-	for id := range s {
-		delete(s, id)
-	}
+func (s IDSet) Clear() {
+	maps.Clear(s)
 }
 
 func (s IDSet) DeleteSlice(sl IDSlice) {
@@ -200,9 +195,7 @@ func (s IDSet) Clone() IDSet {
 	if s == nil {
 		return nil
 	}
-	clone := make(IDSet)
-	clone.AddSet(s)
-	return clone
+	return maps.Clone(s)
 }
 
 func (s IDSet) Diff(other IDSet) IDSet {
@@ -230,6 +223,22 @@ func (s IDSet) Equal(other IDSet) bool {
 		}
 	}
 	return true
+}
+
+// Len returns the length of the IDSet.
+func (s IDSet) Len() int {
+	return len(s)
+}
+
+// IsEmpty returns true if the set is empty or nil.
+func (s IDSet) IsEmpty() bool {
+	return len(s) == 0
+}
+
+// IsNull implements the nullable.Nullable interface
+// by returning true if the set is nil.
+func (s IDSet) IsNull() bool {
+	return s == nil
 }
 
 // MarshalText implements the encoding.TextMarshaler interface

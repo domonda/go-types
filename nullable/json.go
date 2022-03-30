@@ -146,6 +146,9 @@ func (j JSON) PrettyPrint(w io.Writer) {
 
 // Clone returns a copy of j
 func (j JSON) Clone() JSON {
+	if j == nil {
+		return nil
+	}
 	clone := make(JSON, len(j))
 	copy(clone, j)
 	return clone

@@ -3,6 +3,8 @@ package strutil
 import (
 	"sort"
 	"strings"
+
+	"golang.org/x/exp/maps"
 )
 
 type StringSet map[string]struct{}
@@ -93,10 +95,8 @@ func (set StringSet) Delete(str string) {
 	delete(set, str)
 }
 
-func (set StringSet) DeleteAll() {
-	for str := range set {
-		delete(set, str)
-	}
+func (set StringSet) Clear() {
+	maps.Clear(set)
 }
 
 func (set StringSet) DeleteSlice(s []string) {
@@ -112,9 +112,10 @@ func (set StringSet) DeleteSet(other StringSet) {
 }
 
 func (set StringSet) Clone() StringSet {
-	clone := make(StringSet, len(set))
-	clone.AddSet(set)
-	return clone
+	if set == nil {
+		return nil
+	}
+	return maps.Clone(set)
 }
 
 func (set StringSet) Diff(other StringSet) StringSet {

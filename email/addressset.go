@@ -10,6 +10,7 @@ import (
 	"github.com/domonda/go-types"
 	"github.com/domonda/go-types/notnull"
 	"github.com/domonda/go-types/nullable"
+	"golang.org/x/exp/maps"
 )
 
 // AddressSet is a set of unique email addresses
@@ -45,6 +46,22 @@ func NormalizedAddressPartSet(addrs ...Address) (AddressSet, error) {
 		set[norm] = struct{}{}
 	}
 	return set, nil
+}
+
+// Len returns the number of values in the set.
+func (set AddressSet) Len() int {
+	return len(set)
+}
+
+// IsEmpty returns true if the set is empty or nil.
+func (set AddressSet) IsEmpty() bool {
+	return len(set) == 0
+}
+
+// IsNull implements the nullable.Nullable interface
+// by returning true if the set is nil.
+func (set AddressSet) IsNull() bool {
+	return set == nil
 }
 
 func (set AddressSet) Contains(addr Address) bool {
@@ -90,14 +107,31 @@ func (set *AddressSet) AddAddressPart(addr Address) error {
 	return nil
 }
 
-func (set AddressSet) Delete(addr Address) {
-	delete(set, addr)
+func (set AddressSet) Delete(val Address) {
+	delete(set, val)
 }
 
-func (set AddressSet) DeleteAll() {
-	for addr := range set {
-		delete(set, addr)
+func (set AddressSet) DeleteSlice(vals []Address) {
+	for _, val := range vals {
+		delete(set, val)
 	}
+}
+
+func (set AddressSet) DeleteSet(other AddressSet) {
+	for str := range other {
+		delete(set, str)
+	}
+}
+
+func (set AddressSet) Clear() {
+	maps.Clear(set)
+}
+
+func (set AddressSet) Clone() AddressSet {
+	if set == nil {
+		return nil
+	}
+	return maps.Clone(set)
 }
 
 func (set AddressSet) Sorted() []Address {
