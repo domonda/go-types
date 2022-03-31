@@ -160,11 +160,10 @@ func parseAddress(addr string) (mailAddress *mail.Address, unparsed string, err 
 func ParseAddressList(list string) (addrs []*mail.Address, err error) {
 	list = strings.TrimSpace(list)
 
-	switch {
-	case list == "",
-		strings.HasPrefix(list, "undisclosed-recipients:"),
-		strings.EqualFold(list, "undisclosed-recipients"),
-		strings.EqualFold(list, "undisclosed recipients"):
+	switch ll := strings.ToLower(list) {
+	case ll == "",
+		strings.HasPrefix(ll, "undisclosed-recipients"),
+		strings.HasPrefix(ll, "undisclosed recipients"):
 		return nil, nil
 	}
 
