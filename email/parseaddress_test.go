@@ -166,6 +166,8 @@ func TestParseAddressList(t *testing.T) {
 		"undisclosed-recipients",
 		"undisclosed recipients",
 		"Undisclosed Recipients",
+		"undisclosed-recipients:;",
+		"Undisclosed-recipients:;",
 	}
 	for _, tt := range emptyLists {
 		parsed, err := ParseAddressList(tt)
