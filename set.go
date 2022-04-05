@@ -25,6 +25,16 @@ func (set Set[T]) Sorted() []T {
 	return SetToSortedSlice(set)
 }
 
+// GetOne returns one element of the set
+// or the default value for T if the set is empty.
+func (set Set[T]) GetOne() T {
+	for val := range set {
+		return val
+	}
+	var zero T
+	return zero
+}
+
 func (set Set[T]) Add(val T) {
 	set[val] = struct{}{}
 }

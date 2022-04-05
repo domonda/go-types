@@ -134,6 +134,15 @@ func (set AddressSet) Clone() AddressSet {
 	return maps.Clone(set)
 }
 
+// GetOne returns one address of the set
+// or an empty string if the set is empty.
+func (set AddressSet) GetOne() Address {
+	for addr := range set {
+		return addr
+	}
+	return ""
+}
+
 func (set AddressSet) Sorted() []Address {
 	return types.SetToSortedSlice(set)
 }
