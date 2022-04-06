@@ -15,11 +15,6 @@ func TestSplitArray(t *testing.T) {
 		wantErr    bool
 	}{
 		{
-			name:    "empty",
-			array:   ``,
-			wantErr: true,
-		},
-		{
 			name:       "null",
 			array:      `null`,
 			wantFields: nil,
@@ -37,6 +32,11 @@ func TestSplitArray(t *testing.T) {
 		{
 			name:       "empty{}",
 			array:      `{}`,
+			wantFields: nil,
+		},
+		{
+			name:       "empty{ }",
+			array:      `{ }`,
 			wantFields: nil,
 		},
 		{
@@ -80,9 +80,70 @@ func TestSplitArray(t *testing.T) {
 			wantFields: []string{`['meeting', 'lunch']`, `['training', 'presentation']`},
 		},
 		{
+			name:       `[['meeting', 'lunch'], 4, ['training', 'presentation']]`,
+			array:      `[['meeting', 'lunch'], 4, ['training', 'presentation']]`,
+			wantFields: []string{`['meeting', 'lunch']`, `4`, `['training', 'presentation']`},
+		},
+		{
 			name:       "{bestellungen@example.com,if.need.of.a.''declaration.of.compliance''.please.contact.us@example.com}",
 			array:      "{bestellungen@example.com,if.need.of.a.''declaration.of.compliance''.please.contact.us@example.com}",
 			wantFields: []string{`bestellungen@example.com`, `if.need.of.a.''declaration.of.compliance''.please.contact.us@example.com`},
+		},
+		{
+			name:       `["single ' quote", "within double quotes"]`,
+			array:      `["single ' quote", "within double quotes"]`,
+			wantFields: []string{`"single ' quote"`, `"within double quotes"`},
+		},
+		{
+			name:       `{"single ' quote", "within double quotes"}`,
+			array:      `{"single ' quote", "within double quotes"}`,
+			wantFields: []string{`"single ' quote"`, `"within double quotes"`},
+		},
+		{
+			name:       `{'double " quote', 'within single quotes'}`,
+			array:      `{'double " quote', 'within single quotes'}`,
+			wantFields: []string{`'double " quote'`, `'within single quotes'`},
+		},
+		{
+			name:       "{single_quote'@example.com}",
+			array:      "{single_quote'@example.com}",
+			wantFields: []string{`single_quote'@example.com`},
+		},
+		// Invalid
+		{
+			name:    "empty",
+			array:   ``,
+			wantErr: true,
+		},
+		{
+			name:    `empty ""`,
+			array:   `""`,
+			wantErr: true,
+		},
+		{
+			name:    "empty elements {,}",
+			array:   `{,}`,
+			wantErr: true,
+		},
+		{
+			name:    "empty elements {, ,}",
+			array:   `{, ,}`,
+			wantErr: true,
+		},
+		{
+			name:    `e{}`,
+			array:   `e{}`,
+			wantErr: true,
+		},
+		{
+			name:    `,{}`,
+			array:   `,{}`,
+			wantErr: true,
+		},
+		{
+			name:    ` [a, b] `,
+			array:   ` [a, b] `,
+			wantErr: true,
 		},
 	}
 	for _, tt := range tests {

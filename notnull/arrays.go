@@ -5,6 +5,7 @@ import (
 )
 
 // SplitArray splits an SQL or JSON array into its top level elements.
+// Array elements that are quoted strings will not be unquoted.
 // Returns a non nil empty slice in case of an empty array ("{}" or "[]")
 // or when passing "null" or "NULL" as array.
 func SplitArray(array string) ([]string, error) {

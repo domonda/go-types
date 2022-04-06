@@ -18,6 +18,11 @@ func TestAddressSet_Scan(t *testing.T) {
 			value: "{some@example.com,if.need.of.a.''declaration.of.compliance''.please.contact.us@example.com}",
 			want:  MakeAddressSet("some@example.com", "if.need.of.a.''declaration.of.compliance''.please.contact.us@example.com"),
 		},
+		{
+			name:  "{single_quote'@example.com}",
+			value: "{single_quote'@example.com}",
+			want:  MakeAddressSet("single_quote'@example.com"),
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

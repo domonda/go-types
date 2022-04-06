@@ -6,6 +6,7 @@ import (
 )
 
 // SplitArray splits an SQL or JSON array into its top level elements.
+// Array elements that are quoted strings will not be unquoted.
 // Returns nil in case of an empty array ("{}" or "[]").
 // Passing "null" or "NULL" as array will return nil without an error.
 func SplitArray(array string) ([]string, error) {
@@ -26,66 +27,86 @@ func SplitArray(array string) ([]string, error) {
 	if inner == "" {
 		return nil, nil
 	}
+	const (
+		beforeElem = iota
+		afterElem
+		inElem
+		inQuotedElem
+	)
 	var (
-		elems        []string
+		state        = beforeElem
 		objectDepth  = 0
 		bracketDepth = 0
-		elemStart    = 0
-		rLast        rune
-		withinQuote  rune
+		elemStart    = -1
+		lastRune     rune
+		quoteRune    rune
+		elems        []string
 	)
 	for i, r := range inner {
-		if withinQuote == 0 {
+		switch state {
+		case beforeElem:
+			switch r {
+			case ' ', '\t', '\n', '\r':
+				// skip
+			case ',':
+				return nil, fmt.Errorf("invalid comma before array element in %q", array)
+			case '{':
+				objectDepth++
+				elemStart = i
+				state = inElem
+			case '[':
+				bracketDepth++
+				elemStart = i
+				state = inElem
+			case '"', '\'':
+				quoteRune = r
+				elemStart = i
+				state = inQuotedElem
+			default:
+				elemStart = i
+				state = inElem
+			}
+
+		case inElem:
 			switch r {
 			case ',':
 				if objectDepth == 0 && bracketDepth == 0 {
-					elems = append(elems, strings.TrimSpace(inner[elemStart:i]))
-					elemStart = i + 1
+					elems = append(elems, inner[elemStart:i])
+					elemStart = -1
+					state = beforeElem
 				}
-
-			case '{':
-				objectDepth++
-
 			case '}':
 				objectDepth--
 				if objectDepth < 0 {
 					return nil, fmt.Errorf("array %q has too many '}'", array)
 				}
-
-			case '[':
-				bracketDepth++
-
 			case ']':
 				bracketDepth--
 				if bracketDepth < 0 {
 					return nil, fmt.Errorf("array %q has too many ']'", array)
 				}
-
-			case '"':
-				// Begin JSON string
-				withinQuote = r
-
-			case '\'':
-				// Begin SQL string
-				withinQuote = r
 			}
-		} else {
-			// withinQuote != 0
-			switch withinQuote {
-			case '\'':
-				if r == '\'' /*&& rLast != '\''*/ {
-					// End of SQL quote /* because ' was not escapded as '' */
-					withinQuote = 0
-				}
-			case '"':
-				if r == '"' && rLast != '\\' {
-					// End of JSON quote because " was not escapded as \"
-					withinQuote = 0
-				}
+
+		case inQuotedElem:
+			if r == quoteRune && (r != '"' || lastRune != '\\') {
+				elems = append(elems, inner[elemStart:i+1])
+				elemStart = -1
+				quoteRune = 0
+				state = afterElem
+			}
+
+		case afterElem:
+			switch r {
+			case ' ', '\t', '\n', '\r':
+				// skip
+			case ',':
+				state = beforeElem
+			default:
+				return nil, fmt.Errorf("invalid rune %q after array element in %q", r, array)
 			}
 		}
 
-		rLast = r
+		lastRune = r
 	}
 
 	if objectDepth != 0 {
@@ -94,13 +115,12 @@ func SplitArray(array string) ([]string, error) {
 	if bracketDepth != 0 {
 		return nil, fmt.Errorf("array %q has not enough ']'", array)
 	}
-	if withinQuote != 0 {
-		return nil, fmt.Errorf("array %q has an unclosed %q quote", array, withinQuote)
+	if state == inQuotedElem {
+		return nil, fmt.Errorf("array %q has an unclosed %s quote", array, string(quoteRune))
 	}
 
-	// Rameining element after begin and separators
-	if elemStart < len(inner) {
-		elems = append(elems, strings.TrimSpace(inner[elemStart:]))
+	if state == inElem {
+		elems = append(elems, inner[elemStart:])
 	}
 
 	return elems, nil

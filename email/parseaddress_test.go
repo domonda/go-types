@@ -60,6 +60,8 @@ var (
 		`witha+plus@gmail.com`:        {Name: ``, Address: "witha+plus@gmail.com"},
 		`endingwithnums777@gmail.com`: {Name: ``, Address: "endingwithnums777@gmail.com"},
 
+		`YouWon't@belivethisßällm.bHt`: {Name: ``, Address: "youwon't@belivethisßällm.bht"},
+
 		// `Non standard comma, in name <comma@example.com>`: {Name: `Non standard comma, in name`, Address: "comma@example.com"},
 	}
 
