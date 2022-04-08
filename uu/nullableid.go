@@ -156,6 +156,15 @@ func (n NullableID) Get() ID {
 	return ID(n)
 }
 
+// GetOr returns the non nullable ID value
+// or useIfNull if n is null.
+func (n NullableID) GetOr(useIfNull ID) ID {
+	if n.IsNull() {
+		useIfNull
+	}
+	return ID(n)
+}
+
 // GetOrNil returns the non nullable ID value
 // or the Nil UUID if n is null.
 // Use Get to ensure getting a non Nil UUID or panic.
