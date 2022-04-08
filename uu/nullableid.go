@@ -160,7 +160,7 @@ func (n NullableID) Get() ID {
 // or useIfNull if n is null.
 func (n NullableID) GetOr(useIfNull ID) ID {
 	if n.IsNull() {
-		useIfNull
+		return useIfNull
 	}
 	return ID(n)
 }
