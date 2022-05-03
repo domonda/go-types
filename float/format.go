@@ -22,7 +22,7 @@ import (
 // then the end of the fractional part will be padded with
 // '0' characters to reach the length of precision.
 // See: https://en.wikipedia.org/wiki/Decimal_separator
-func Format(f float64, thousandsSep, decimalSep rune, precision int, padPrecision bool) string {
+func Format[T float32 | float64](f T, thousandsSep, decimalSep rune, precision int, padPrecision bool) string {
 	if thousandsSep != 0 && thousandsSep != '.' && thousandsSep != ',' && thousandsSep != ' ' && thousandsSep != '\'' {
 		panic(fmt.Errorf("invalid thousandsSep: '%s'", string(thousandsSep)))
 	}
@@ -36,8 +36,8 @@ func Format(f float64, thousandsSep, decimalSep rune, precision int, padPrecisio
 		panic(fmt.Errorf("precision < -1: %d", precision))
 	}
 
-	str := strconv.FormatFloat(f, 'f', precision, 64)
-	if thousandsSep != 0 && math.Abs(f) >= 1000 {
+	str := strconv.FormatFloat(float64(f), 'f', precision, 64)
+	if thousandsSep != 0 && math.Abs(float64(f)) >= 1000 {
 		pointPos := strings.IndexByte(str, '.')
 		if pointPos == -1 {
 			pointPos = len(str)

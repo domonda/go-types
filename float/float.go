@@ -2,30 +2,30 @@ package float
 
 import "math"
 
-// RoundToDecimals returns the float64 rounded
+// RoundToDecimals returns the float rounded
 // to the passed number of decimal places.
-func RoundToDecimals(f float64, decimals int) float64 {
+func RoundToDecimals[T float32 | float64](f T, decimals int) T {
 	pow := math.Pow10(decimals)
-	return math.Round(f*pow) / pow
+	return T(math.Round(float64(f)*pow) / pow)
 }
 
 // DerefOr dereferences ptr or returns defaultVal if ptr is nil
-func DerefOr(ptr *float64, defaultVal float64) float64 {
+func DerefOr[T float32 | float64](ptr *T, defaultVal T) T {
 	if ptr == nil {
 		return defaultVal
 	}
 	return *ptr
 }
 
-// Valid returns if the passed float64 is neither infinite nor NaN
-func Valid(f float64) bool {
-	return !math.IsNaN(f) && !math.IsInf(f, 0)
+// Valid returns if the passed float is neither infinite nor NaN
+func Valid[T float32 | float64](f T) bool {
+	return !math.IsNaN(float64(f)) && !math.IsInf(float64(f), 0)
 }
 
-// ValidAndHasSign returns if Valid(f) and
-// if it has the same sign than the passed int argument
-// or any sign if 0 is passed.
-func ValidAndHasSign(f float64, sign int) bool {
+// ValidAndHasSign returns true if Valid(f) and
+// if it has the same sign than the passed non zero int argument.
+// If 0 is passed as sign then the sign check always returns true.
+func ValidAndHasSign[T float32 | float64](f T, sign int) bool {
 	if !Valid(f) {
 		return false
 	}
@@ -34,7 +34,6 @@ func ValidAndHasSign(f float64, sign int) bool {
 		return f > 0
 	case sign < 0:
 		return f < 0
-	default:
-		return true
 	}
+	return true
 }

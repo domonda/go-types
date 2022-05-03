@@ -3,7 +3,7 @@ module github.com/domonda/go-types
 go 1.18
 
 require (
-	github.com/domonda/go-errs v0.0.0-20220317124005-ae77873647f5
+	github.com/domonda/go-errs v0.0.0-20220429185920-b85918b964f9
 	github.com/domonda/go-pretty v0.0.0-20220317123925-dd9e6bef129a
 	github.com/jaytaylor/html2text v0.0.0-20211105163654-bc68cce691ba
 	github.com/jhillyerd/enmime v0.9.3
@@ -12,8 +12,8 @@ require (
 	github.com/teamwork/tnef v0.0.0-20200108124832-7deabccfdb32
 	github.com/ungerik/go-fs v0.0.0-20220112161406-846291d178e2
 	github.com/ungerik/go-reflection v0.0.0-20220113085621-6c5fc1f2694a
-	golang.org/x/exp v0.0.0-20220321124402-2d6d886f8a82
-	golang.org/x/net v0.0.0-20220225172249-27dd8689420f
+	golang.org/x/exp v0.0.0-20220428152302-39d4317da171
+	golang.org/x/net v0.0.0-20220425223048-2871e0cb64e4
 	golang.org/x/text v0.3.7
 	mvdan.cc/xurls/v2 v2.4.0
 )
