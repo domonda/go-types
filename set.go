@@ -31,8 +31,7 @@ func (set Set[T]) GetOne() T {
 	for val := range set {
 		return val
 	}
-	var zero T
-	return zero
+	return Zero[T]()
 }
 
 func (set Set[T]) Add(val T) {

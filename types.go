@@ -8,3 +8,9 @@ import "reflect"
 func ReflectTypeOf[T any]() reflect.Type {
 	return reflect.TypeOf((*T)(nil)).Elem()
 }
+
+// Zero value of the generic type T
+func Zero[T any]() T {
+	var zero T
+	return zero
+}
