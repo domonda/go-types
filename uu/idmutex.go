@@ -1,7 +1,6 @@
 package uu
 
 import (
-	"fmt"
 	"sync"
 )
 
@@ -12,31 +11,31 @@ import (
 // except that the key and the number of mutexes are dynamic.
 type IDMutex struct {
 	global sync.Mutex
-	locks  map[ID]*locker
+	locks  map[ID]*countedLock
 }
 
-type locker struct {
+type countedLock struct {
 	sync.Mutex
 	count int
 }
 
 // NewIDMutex returns a new IDMutex
 func NewIDMutex() *IDMutex {
-	return &IDMutex{locks: make(map[ID]*locker)}
+	return &IDMutex{locks: make(map[ID]*countedLock)}
 }
 
 // Lock the mutex for a given ID.
 func (m *IDMutex) Lock(id ID) {
 	m.global.Lock()
-	l := m.locks[id]
-	if l == nil {
-		l = new(locker)
-		m.locks[id] = l
+	lock := m.locks[id]
+	if lock == nil {
+		lock = new(countedLock)
+		m.locks[id] = lock
 	}
-	l.count++
+	lock.count++
 	m.global.Unlock()
 
-	l.Lock()
+	lock.Lock()
 }
 
 // Unlock the mutex for a given ID.
@@ -44,15 +43,15 @@ func (m *IDMutex) Unlock(id ID) {
 	m.global.Lock()
 	defer m.global.Unlock()
 
-	l := m.locks[id]
-	if l == nil {
-		panic(fmt.Sprintf("uu.IDMutex.Unlock called for non locked key: %s", id))
+	lock := m.locks[id]
+	if lock == nil {
+		panic("uu.IDMutex.Unlock called for non locked key " + id.String())
 	}
-	l.count--
-	if l.count == 0 {
+	lock.count--
+	if lock.count == 0 {
 		delete(m.locks, id)
 	}
-	l.Unlock()
+	lock.Unlock()
 }
 
 // IsLocked tells wether an ID is locked.

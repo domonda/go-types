@@ -12,31 +12,31 @@ import (
 // except that the key and the number of mutexes are dynamic.
 type KeyMutex[T comparable] struct {
 	global sync.Mutex
-	locks  map[T]*lockCount
+	locks  map[T]*countedLock
 }
 
-type lockCount struct {
+type countedLock struct {
 	sync.Mutex
 	count int
 }
 
 // NewKeyMutex returns a new KeyMutex
 func NewKeyMutex[T comparable]() *KeyMutex[T] {
-	return &KeyMutex[T]{locks: make(map[T]*lockCount)}
+	return &KeyMutex[T]{locks: make(map[T]*countedLock)}
 }
 
 // Lock the mutex for a given key
 func (m *KeyMutex[T]) Lock(key T) {
 	m.global.Lock()
-	l := m.locks[key]
-	if l == nil {
-		l = new(lockCount)
-		m.locks[key] = l
+	lock := m.locks[key]
+	if lock == nil {
+		lock = new(countedLock)
+		m.locks[key] = lock
 	}
-	l.count++
+	lock.count++
 	m.global.Unlock()
 
-	l.Lock()
+	lock.Lock()
 }
 
 // Unlock the mutex for a given key.
@@ -44,15 +44,15 @@ func (m *KeyMutex[T]) Unlock(key T) {
 	m.global.Lock()
 	defer m.global.Unlock()
 
-	l := m.locks[key]
-	if l == nil {
-		panic(fmt.Sprintf("KeyMutex.Unlock called for non locked key: %#v", key))
+	lock := m.locks[key]
+	if lock == nil {
+		panic(fmt.Sprintf("KeyMutex[%[1]T].Unlock(%[1]#v) called for non locked key", key))
 	}
-	l.count--
-	if l.count == 0 {
+	lock.count--
+	if lock.count == 0 {
 		delete(m.locks, key)
 	}
-	l.Unlock()
+	lock.Unlock()
 }
 
 // IsLocked tells wether a key is locked.
