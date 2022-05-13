@@ -251,6 +251,7 @@ const (
 	YE Code = "YE"
 	ZM Code = "ZM"
 	ZW Code = "ZW"
+	XK Code = "XK"
 )
 
 var countryMap = map[Code]string{
@@ -504,6 +505,7 @@ var countryMap = map[Code]string{
 	YE: "Yemen",
 	ZM: "Zambia",
 	ZW: "Zimbabwe",
+	XK: "Republic of Kosovo", // unofficial, but still can be used
 }
 
 var euCountries = map[Code]struct{}{
