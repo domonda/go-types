@@ -6,14 +6,14 @@ require (
 	github.com/domonda/go-errs v0.0.0-20220429185920-b85918b964f9
 	github.com/domonda/go-pretty v0.0.0-20220317123925-dd9e6bef129a
 	github.com/jaytaylor/html2text v0.0.0-20211105163654-bc68cce691ba
-	github.com/jhillyerd/enmime v0.9.3
+	github.com/jhillyerd/enmime v0.9.4
 	github.com/jinzhu/now v1.1.5
 	github.com/stretchr/testify v1.7.1
 	github.com/teamwork/tnef v0.0.0-20200108124832-7deabccfdb32
-	github.com/ungerik/go-fs v0.0.0-20220112161406-846291d178e2
+	github.com/ungerik/go-fs v0.0.0-20220512161433-311310666b2b
 	github.com/ungerik/go-reflection v0.0.0-20220113085621-6c5fc1f2694a
-	golang.org/x/exp v0.0.0-20220428152302-39d4317da171
-	golang.org/x/net v0.0.0-20220425223048-2871e0cb64e4
+	golang.org/x/exp v0.0.0-20220518171630-0b5c67f07fdf
+	golang.org/x/net v0.0.0-20220524220425-1d687d428aca
 	golang.org/x/text v0.3.7
 	mvdan.cc/xurls/v2 v2.4.0
 )
@@ -30,5 +30,5 @@ require (
 	github.com/ssor/bom v0.0.0-20170718123548-6386211fdfcf // indirect
 	github.com/teamwork/test v0.0.0-20200108114543-02621bae84ad // indirect
 	github.com/teamwork/utils v0.0.0-20220314153103-637fa45fa6cc // indirect
-	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
+	gopkg.in/yaml.v3 v3.0.0 // indirect
 )
