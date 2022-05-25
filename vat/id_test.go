@@ -35,6 +35,7 @@ var validVATIDs = map[string]string{
 	"CHE-123.456.788":  "CHE123456788",
 	"CHE123456788":     "CHE123456788",
 	"EU372008134":      "EU372008134", // MOSS scheme VAT
+	"EST 99600678":     "EST99600678", // Not a real ID, should also be invlaid, see also https://gist.github.com/svschannak/e79892f4fbc56df15bdb5496d0e67b85
 }
 
 var invalidVATIDs = []ID{

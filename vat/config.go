@@ -27,6 +27,11 @@ var vatidRegex = map[country.Code]*regexp.Regexp{
 	"DK": regexp.MustCompile(`^DK\s??\d{8}$`),
 	"EE": regexp.MustCompile(`^EE\s??\d{9}$`),
 	"EL": regexp.MustCompile(`^EL\s??\d{9}$`), // greece GR
+	// TODO improve ES like https://gist.github.com/svschannak/e79892f4fbc56df15bdb5496d0e67b85
+	// `^(ES)([A-Z]\d{8})$/`                       //** Spain (National juridical entities)
+	// `^(ES)([A-HN-SW]\d{7}[A-J])$/`              //** Spain (Other juridical entities)
+	// `^(ES)([0-9YZ]\d{7}[A-Z])$/`                //** Spain (Personal entities type 1)
+	// `^(ES)([KLMX]\d{7}[A-Z])$/`                 //** Spain (Personal entities type 2)
 	"ES": regexp.MustCompile(`^ES\s??[0-9A-Z]\s??\d{7}[0-9A-Z]$`),
 	"FI": regexp.MustCompile(`^FI\s??\d{8}$`),
 	"FR": regexp.MustCompile(`^FR\s??[0-9A-Z][0-9A-Z]\s??\d{9}$`),
