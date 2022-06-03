@@ -319,6 +319,11 @@ func (id ID) IsNil() bool {
 	return id == IDNil
 }
 
+// IsZero returns if the id is the Nil UUID value (all zeros)
+func (id ID) IsZero() bool {
+	return id == IDNil
+}
+
 // IsNotNil returns if the id is not the Nil UUID value (all zeros)
 func (id ID) IsNotNil() bool {
 	return id != IDNil
