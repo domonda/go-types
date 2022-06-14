@@ -53,6 +53,15 @@ func (n NullableDate) Date() Date {
 	return Date(n)
 }
 
+// DateOr returns the NullableDate as Date if it is not null,
+// else useIfNull will be returned.
+func (n NullableDate) DateOr(useIfNull Date) Date {
+	if n.IsNull() {
+		return useIfNull
+	}
+	return Date(n)
+}
+
 // IsNull returns true if the NullableDate is null.
 // IsNull implements the nullable.Nullable interface.
 func (n NullableDate) IsNull() bool {
