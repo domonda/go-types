@@ -6,6 +6,7 @@ import (
 )
 
 var validVATIDs = map[string]string{
+	// "ATU Nr. 1-022 3 006": "ATU10223006", // Real world encounter, but we'll probably never support this mess
 	"atu10223006":      "ATU10223006", // Example
 	"ATU10223006":      "ATU10223006", // Example
 	"ATU67554568":      "ATU67554568", // Real
