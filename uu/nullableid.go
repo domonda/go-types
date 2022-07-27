@@ -32,7 +32,7 @@ func NullableIDFromString(s string) (NullableID, error) {
 // or returns IDNull in case of a parsing error.
 // The Nil UUID "00000000-0000-0000-0000-000000000000"
 // is interpreted as NULL.
-func NullableIDFromStringOrNull(input string) NullableID {
+func NullableIDFromStringOrNull(s string) NullableID {
 	id, err := IDFromString(s)
 	if err != nil {
 		return IDNull

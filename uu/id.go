@@ -144,23 +144,23 @@ func IDFromBytes(b []byte) (ID, error) {
 	}
 }
 
-// IDFromBytesOrNil returns an ID converted from raw byte slice input.
+// IDFromBytesOrNil parses a byte slice as UUID.
 // Same behavior as IDFromBytes, but returns a Nil UUID on error.
-func IDFromBytesOrNil(input []byte) ID {
-	id, err := IDFromBytes(input)
+func IDFromBytesOrNil(s []byte) ID {
+	id, err := IDFromBytes(s)
 	if err != nil {
 		return IDNil
 	}
 	return id
 }
 
-// IDFromString returns an ID parsed from string input.
-// Input is expected in a form accepted by UnmarshalText.
-func IDFromString(text string) (ID, error) {
-	if len(text) < 22 {
-		return IDNil, fmt.Errorf("uu.ID string too short: %q", text)
+// IDFromString parses a string as ID.
+// The string is expected in a form accepted by UnmarshalText.
+func IDFromString(s string) (ID, error) {
+	if len(s) < 22 {
+		return IDNil, fmt.Errorf("uu.ID string too short: %q", s)
 	}
-	return IDFromBytes([]byte(text))
+	return IDFromBytes([]byte(s))
 }
 
 // NullableIDFromStringOrNull parses a string as UUID,
@@ -173,8 +173,8 @@ func IDFromStringOrNil(input string) ID {
 	return id
 }
 
-// IDMustFromString returns an ID parsed from string input.
-// Panics if there is an error
+// IDMustFromString parses a string as ID.
+// Panics if there is an error.
 func IDMustFromString(input string) ID {
 	id, err := IDFromString(input)
 	if err != nil {
