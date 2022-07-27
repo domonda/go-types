@@ -163,8 +163,8 @@ func IDFromString(text string) (ID, error) {
 	return IDFromBytes([]byte(text))
 }
 
-// IDFromStringOrNil returns an ID parsed from string input.
-// Same behavior as FromString, but returns a Nil UUID on error.
+// NullableIDFromStringOrNull parses a string as UUID,
+// or returns the Nil UUID in case of a parsing error.
 func IDFromStringOrNil(input string) ID {
 	id, err := IDFromString(input)
 	if err != nil {

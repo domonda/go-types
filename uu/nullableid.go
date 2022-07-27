@@ -28,7 +28,21 @@ func NullableIDFromString(s string) (NullableID, error) {
 	return NullableID(id), nil
 }
 
-// NullableIDFromBytes creates a new valid NullableID
+// NullableIDFromStringOrNull parses a string as UUID,
+// or returns IDNull in case of a parsing error.
+// The Nil UUID "00000000-0000-0000-0000-000000000000"
+// is interpreted as NULL.
+func NullableIDFromStringOrNull(input string) NullableID {
+	id, err := IDFromString(s)
+	if err != nil {
+		return IDNull
+	}
+	return NullableID(id)
+}
+
+// NullableIDFromBytes parses a byte slice as UUID.
+// The Nil UUID "00000000-0000-0000-0000-000000000000"
+// is interpreted as NULL.
 func NullableIDFromBytes(s []byte) (NullableID, error) {
 	id, err := IDFromBytes(s)
 	if err != nil {
@@ -37,7 +51,10 @@ func NullableIDFromBytes(s []byte) (NullableID, error) {
 	return NullableID(id), nil
 }
 
-// NullableIDFromPtr creates a new NullableID that be null if ptr is nil.
+// NullableIDFromPtr returns the passed ID as NullableID
+// if the ptr is not nil, or returns IDNull in case of a nil ptr.
+// The Nil UUID "00000000-0000-0000-0000-000000000000"
+// is interpreted as NULL.
 func NullableIDFromPtr(ptr *ID) NullableID {
 	if ptr == nil {
 		return IDNull
@@ -48,6 +65,8 @@ func NullableIDFromPtr(ptr *ID) NullableID {
 // NullableIDFromAny converts val to an ID or returns an error
 // if the conversion is not possible or the ID is not valid.
 // Returns IDNull and no error when val is nil.
+// The Nil UUID "00000000-0000-0000-0000-000000000000"
+// is interpreted as NULL.
 func NullableIDFromAny(val any) (NullableID, error) {
 	switch x := val.(type) {
 	case string:
@@ -71,6 +90,8 @@ func NullableIDFromAny(val any) (NullableID, error) {
 // if that's not possible or the ID is not valid.
 // Supported types are string, []byte, [16]byte,
 // ID, NullableID, and nil.
+// The Nil UUID "00000000-0000-0000-0000-000000000000"
+// is interpreted as NULL.
 func NullableIDMust[T IDSource](val T) NullableID {
 	switch x := any(val).(type) {
 	case string:
