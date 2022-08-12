@@ -9,7 +9,7 @@ var validVATIDs = map[string]string{
 	// "ATU Nr. 1-022 3 006": "ATU10223006", // Real world encounter, but we'll probably never support this mess
 	"atu10223006":      "ATU10223006", // Example
 	"ATU10223006":      "ATU10223006", // Example
-	"ATU67554568":      "ATU67554568", // Real
+	"ATU67554568":      "ATU67554568", // Real but inactive by now
 	"ATU68765099":      "ATU68765099", // Real
 	"ATU46983509":      "ATU46983509", // Real
 	"ATU65785527":      "ATU65785527", // Real
