@@ -162,6 +162,7 @@ func IsRuneAny(isRune ...IsRuneFunc) IsRuneFunc {
 // where any call to a removeRunes function reeturns true.
 func RemoveRunes(str []byte, removeRunes ...IsRuneFunc) []byte {
 	var buf bytes.Buffer
+	buf.Grow(len(str))
 	r, n := utf8.DecodeRune(str)
 	for r != utf8.RuneError {
 		doRemove := false
@@ -184,6 +185,7 @@ func RemoveRunes(str []byte, removeRunes ...IsRuneFunc) []byte {
 // where any call to a keepRunes function reeturns true.
 func KeepRunes(str []byte, keepRunes ...IsRuneFunc) []byte {
 	var buf bytes.Buffer
+	buf.Grow(len(str))
 	r, n := utf8.DecodeRune(str)
 	for r != utf8.RuneError {
 		for _, keep := range keepRunes {
@@ -203,6 +205,7 @@ func KeepRunes(str []byte, keepRunes ...IsRuneFunc) []byte {
 // If no rune was removed, the string is not copied.
 func RemoveRunesString(str string, removeRunes ...IsRuneFunc) string {
 	var b strings.Builder
+	b.Grow(len(str))
 	changed := false
 	for i, r := range str {
 		doRemove := false
@@ -250,6 +253,7 @@ func RemoveRunesString(str string, removeRunes ...IsRuneFunc) string {
 // where any call to a keepRunes function reeturns true.
 func KeepRunesString(str string, keepRunes ...IsRuneFunc) string {
 	var b strings.Builder
+	b.Grow(len(str))
 	for _, r := range str {
 		for _, keep := range keepRunes {
 			if keep(r) {
@@ -300,29 +304,26 @@ func EqualJSON(a, b any) bool {
 
 }
 
-func writeSafeFileNameRune(buf *bytes.Buffer, i int, r rune, lastWasPlaceholder bool) (wrotePlaceholder bool) {
+func writeSafeFileNameRune(b *strings.Builder, i int, r rune, lastWasPlaceholder bool) (wrotePlaceholder bool) {
 	if unicode.IsSpace(r) {
 		if i > 0 && !lastWasPlaceholder {
-			buf.WriteByte('_')
+			b.WriteByte('_')
 		}
 		return true
 	}
-
 	trans, ok := transliterations[r]
 	if ok {
-		buf.WriteString(trans)
+		b.WriteString(trans)
 		return false
 	}
-
 	if r == '-' || r == '_' || r >= '0' && r <= '9' || r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' {
-		buf.WriteRune(r)
+		b.WriteRune(r)
 		return false
-	} else {
-		if i > 0 && !lastWasPlaceholder {
-			buf.WriteByte('-')
-		}
-		return true
 	}
+	if i > 0 && !lastWasPlaceholder {
+		b.WriteByte('-')
+	}
+	return true
 }
 
 // MakeValidFileName replaces invalid filename characters with '_'.
@@ -360,13 +361,14 @@ func SanitizeFileName(name string) string {
 		ext = NormalizeExt(ext)
 	}
 
-	buf := bytes.NewBuffer(make([]byte, 0, len(name)))
+	b := strings.Builder{}
+	b.Grow(len(name))
 	lastWasPlaceholder := false
 	for i, r := range name {
-		lastWasPlaceholder = writeSafeFileNameRune(buf, i, r, lastWasPlaceholder)
+		lastWasPlaceholder = writeSafeFileNameRune(&b, i, r, lastWasPlaceholder)
 	}
 
-	return buf.String() + ext
+	return b.String() + ext
 }
 
 func NormalizeExt(ext string) string {
@@ -375,17 +377,18 @@ func NormalizeExt(ext string) string {
 		return norm
 	}
 
-	buf := bytes.NewBuffer(make([]byte, 0, len(ext)))
+	b := strings.Builder{}
+	b.Grow(len(ext))
 	lastWasPlaceholder := false
 	for i, r := range ext {
 		if i == 0 && r == '.' {
-			buf.WriteRune(r)
+			b.WriteRune(r)
 		} else {
-			lastWasPlaceholder = writeSafeFileNameRune(buf, i, r, lastWasPlaceholder)
+			lastWasPlaceholder = writeSafeFileNameRune(&b, i, r, lastWasPlaceholder)
 		}
 	}
 
-	return buf.String()
+	return b.String()
 }
 
 var normalizedExt = map[string]string{
@@ -472,6 +475,7 @@ var transliterations = map[rune]string{
 
 func ReplaceTransliterations(str string) string {
 	var b strings.Builder
+	b.Grow(len(str))
 	for _, char := range str {
 		if repl, ok := transliterations[char]; ok {
 			b.WriteString(repl)
