@@ -33,7 +33,11 @@ func NewIDMutex() *IDMutex {
 // before any any locking or unlocking.
 // Usable for debugging and logging.
 func NewIDMutexWithCallbacks(onLock, onUnlock func(ID)) *IDMutex {
-	return &IDMutex{locks: make(map[ID]*countedLock)}
+	return &IDMutex{
+		locks:    make(map[ID]*countedLock),
+		onLock:   onLock,
+		onUnlock: onUnlock,
+	}
 }
 
 // Lock the mutex for a given ID.
