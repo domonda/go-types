@@ -12,6 +12,9 @@ import (
 type IDMutex struct {
 	global sync.Mutex
 	locks  map[ID]*countedLock
+
+	onLock   func(ID)
+	onUnlock func(ID)
 }
 
 type countedLock struct {
@@ -24,8 +27,21 @@ func NewIDMutex() *IDMutex {
 	return &IDMutex{locks: make(map[ID]*countedLock)}
 }
 
+// NewIDMutexWithCallbacks returns a new IDMutex
+// where the passed functions are called back
+// as first operation from Lock and Unlock
+// before any any locking or unlocking.
+// Usable for debugging and logging.
+func NewIDMutexWithCallbacks(onLock, onUnlock func(ID)) *IDMutex {
+	return &IDMutex{locks: make(map[ID]*countedLock)}
+}
+
 // Lock the mutex for a given ID.
 func (m *IDMutex) Lock(id ID) {
+	if m.onLock != nil {
+		m.onLock(id)
+	}
+
 	m.global.Lock()
 	lock := m.locks[id]
 	if lock == nil {
@@ -40,6 +56,10 @@ func (m *IDMutex) Lock(id ID) {
 
 // Unlock the mutex for a given ID.
 func (m *IDMutex) Unlock(id ID) {
+	if m.onUnlock != nil {
+		m.onUnlock(id)
+	}
+
 	m.global.Lock()
 	defer m.global.Unlock()
 
