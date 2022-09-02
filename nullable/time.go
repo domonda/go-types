@@ -82,7 +82,7 @@ func TimeFromPtr(ptr *time.Time) Time {
 	return Time{Time: *ptr}
 }
 
-// Ptr returns a pointer to Time or nil if IsNull
+// Ptr returns a pointer to Time or nil if n is null
 func (n Time) Ptr() *time.Time {
 	if n.IsNull() {
 		return nil
@@ -90,12 +90,37 @@ func (n Time) Ptr() *time.Time {
 	return &n.Time
 }
 
-// UTC returns the time in UTC or the null time
+// UTC returns the time in UTC or null if n is null
 func (n Time) UTC() Time {
 	if n.IsNull() {
 		return n
 	}
-	return Time{Time: time.Now().UTC()}
+	return Time{Time: n.Time.UTC()}
+}
+
+// Add returns n+duration or null if n is null
+func (n Time) Add(duration time.Duration) Time {
+	if n.IsNull() {
+		return n
+	}
+	return Time{Time: n.Time.Add(duration)}
+}
+
+// AddDate returns the nullable time corresponding to adding the
+// given number of years, months, and days to t.
+// For example, AddDate(-1, 2, 3) applied to January 1, 2011
+// returns March 4, 2010.
+//
+// AddDate normalizes its result in the same way that Date does,
+// so, for example, adding one month to October 31 yields
+// December 1, the normalized form for November 31.
+//
+// Returns null if n is null.
+func (n Time) AddDate(years int, months int, days int) Time {
+	if n.IsNull() {
+		return n
+	}
+	return Time{Time: n.Time.AddDate(years, months, days)}
 }
 
 // IsNull returns true if the Time is null.
@@ -111,12 +136,12 @@ func (n Time) IsNotNull() bool {
 	return !n.IsNull()
 }
 
-// String returns Time.String() or "NULL" if Time.IsZero().
+// String returns Time.String() or "NULL" if n is null.
 func (n Time) String() string {
 	return n.StringOr("NULL")
 }
 
-// StringOr returns Time.String() or the passed nullStr if Time.IsZero().
+// StringOr returns Time.String() or the passed nullStr if n is null.
 func (n Time) StringOr(nullStr string) string {
 	if n.IsNull() {
 		return nullStr
@@ -125,7 +150,7 @@ func (n Time) StringOr(nullStr string) string {
 }
 
 // Format the time using time.Time.Format
-// or return "NULL" if n.IsNull().
+// or return "NULL" if n is null.
 func (n Time) Format(layout string) string {
 	if n.IsNull() {
 		return "NULL"
@@ -134,7 +159,7 @@ func (n Time) Format(layout string) string {
 }
 
 // AppendFormat the time to b using time.Time.AppendFormat
-// or append []byte("NULL") if n.IsNull().
+// or append []byte("NULL") if n is null.
 func (n Time) AppendFormat(b []byte, layout string) []byte {
 	if n.IsNull() {
 		return append(b, "NULL"...)
@@ -152,7 +177,8 @@ func (n Time) Get() time.Time {
 	return n.Time
 }
 
-// Set a time.Time
+// Set a time.Time.
+// Note that if t.IsZero() then n will be set to null.
 func (n *Time) Set(t time.Time) {
 	n.Time = t
 }
