@@ -20,9 +20,9 @@ var Null NullableID
 type NullableID string
 
 // NormalizedUnchecked returns a generic normalized version of ID without performing any format checks.
-func (n NullableID) NormalizedUnchecked() NullableID {
-	return NullableID(ID(n).NormalizedUnchecked())
-}
+// func (n NullableID) NormalizedUnchecked() NullableID {
+// 	return NullableID(ID(n).NormalizedUnchecked())
+// }
 
 // Normalized returns the id in normalized form,
 // or an error if the VAT ID is not Null and not valid.
@@ -192,9 +192,9 @@ func (n *NullableID) ScanString(source string) (normalized bool, err error) {
 func (n *NullableID) Scan(value any) error {
 	switch x := value.(type) {
 	case string:
-		*n = NullableID(x).NormalizedUnchecked()
+		*n = NullableID(x) // .NormalizedUnchecked()
 	case []byte:
-		*n = NullableID(x).NormalizedUnchecked()
+		*n = NullableID(x) // .NormalizedUnchecked()
 	case nil:
 		*n = Null
 	default:
@@ -205,11 +205,10 @@ func (n *NullableID) Scan(value any) error {
 
 // Value implements the driver database/sql/driver.Valuer interface.
 func (n NullableID) Value() (driver.Value, error) {
-	normalized := n.NormalizedUnchecked()
-	if normalized == Null {
+	if n == Null {
 		return nil, nil
 	}
-	return string(normalized), nil
+	return ID(n).Value()
 }
 
 // MarshalJSON implements encoding/json.Marshaler

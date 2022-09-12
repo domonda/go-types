@@ -3,6 +3,8 @@ package vat
 import (
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 var validVATIDs = map[string]string{
@@ -33,6 +35,9 @@ var validVATIDs = map[string]string{
 	"NO916634773":      "NO916634773",
 	"NO 916634773":     "NO916634773",
 	"NO 916634773 MVA": "NO916634773MVA",
+	"NO977074010MVA":   "NO977074010MVA",
+	"NO 977074010":     "NO977074010",
+	"NO 977074010 MVA": "NO977074010MVA",
 	"CHE-123.456.788":  "CHE123456788",
 	"CHE123456788":     "CHE123456788",
 	"EU372008134":      "EU372008134", // MOSS scheme VAT
@@ -43,6 +48,8 @@ var invalidVATIDs = []ID{
 	"atu12345678",
 	"AT/U.12345678",
 	" ATU12345678 ",
+	"No. 62-1764389",
+	"No.821764389",
 }
 
 func Test_NormalizeVATID(t *testing.T) {
@@ -58,9 +65,7 @@ func Test_NormalizeVATID(t *testing.T) {
 
 func Test_VATIDValid(t *testing.T) {
 	for _, invalidID := range invalidVATIDs {
-		if invalidID.Valid() {
-			t.Errorf("vat.ID should be invalid: %s", string(invalidID))
-		}
+		assert.Falsef(t, invalidID.Valid(), "vat.ID should be invalid: %s, Regex uses NormalizedUnchecked: %s", string(invalidID), string(invalidID /*.NormalizedUnchecked()*/))
 	}
 }
 
