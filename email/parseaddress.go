@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"unicode"
 	"unsafe"
 )
 
@@ -36,11 +37,27 @@ var (
 	nameAddressRegexp = regexp.MustCompile(nameAddressRegex)
 )
 
+func sanitizeAddr(s string) string {
+	return strings.Map(
+		func(r rune) rune {
+			if unicode.IsSpace(r) {
+				return ' '
+			}
+			if !unicode.IsGraphic(r) || r == unicode.ReplacementChar {
+				return -1
+			}
+			return r
+		},
+		s,
+	)
+}
+
 // FindAllAddresses uses the AddressRegexp to find all
 // email addresses without name part in the passed text.
 // The addresses are not normalized and returned
 // in the order they were found in the text.
 func FindAllAddresses(text string) []Address {
+	text = strings.TrimSpace(sanitizeAddr(text))
 	found := AddressRegexp.FindAllString(text, -1)
 	return *(*[]Address)(unsafe.Pointer(&found))
 }
@@ -81,7 +98,9 @@ func UniqueNormalizedAddressSlice(addrs []Address) []Address {
 // than the standard net/mail.ParseAddress function
 // fixing malformed addresses and lower cases the address part.
 func ParseAddress(addr string) (mailAddress *mail.Address, err error) {
-	if strings.TrimSpace(addr) == "" {
+	addr = strings.TrimSpace(sanitizeAddr(addr))
+
+	if addr == "" {
 		return nil, errors.New("empty email address")
 	}
 
@@ -158,7 +177,7 @@ func parseAddress(addr string) (mailAddress *mail.Address, unparsed string, err 
 // ParseAddressList returns an error if list does not contain
 // at least one address.
 func ParseAddressList(list string) (addrs []*mail.Address, err error) {
-	list = strings.TrimSpace(list)
+	list = strings.TrimSpace(sanitizeAddr(list))
 
 	switch ll := strings.ToLower(list); {
 	case ll == "",

@@ -15,9 +15,7 @@ var (
 	validEmailAddresses = map[string]*mail.Address{
 		`<erik@domonda.com>`:                                            {Name: "", Address: "erik@domonda.com"},
 		`"Unger, Erik" <u.erik@domonda.com>`:                            {Name: "Unger, Erik", Address: "u.erik@domonda.com"},
-		`"Unger, Erik"` + "\t<u.erik@domonda.com>":                      {Name: "Unger, Erik", Address: "u.erik@domonda.com"},
 		`Erik Unger <erik@domonda.com>`:                                 {Name: "Erik Unger", Address: "erik@domonda.com"},
-		"Erik\tUnger <erik@domonda.com>":                                {Name: "Erik Unger", Address: "erik@domonda.com"}, // Replace tabs in name with spaces
 		`Erik Unger    <erik@domonda.com>`:                              {Name: "Erik Unger", Address: "erik@domonda.com"},
 		`Erik Unger <Erik.Unger@domonda.com>`:                           {Name: "Erik Unger", Address: "erik.unger@domonda.com"},
 		`"Erik Unger" <erik@domonda.com>`:                               {Name: "Erik Unger", Address: "erik@domonda.com"},
@@ -37,6 +35,13 @@ var (
 		`Domonda < er+vk+baurauslagen+wirklich@domonda.com>`:            {Name: "Domonda", Address: "er+vk+baurauslagen+wirklich@domonda.com"},
 		`Domonda < er+vk+baurauslagen+wirklich@domonda.com >`:           {Name: "Domonda", Address: "er+vk+baurauslagen+wirklich@domonda.com"},
 		`_underscore@example.com`:                                       {Name: "", Address: "_underscore@example.com"},
+
+		// Special characters:
+		`"Unger, Erik"` + "\t<u.erik@domonda.com>":          {Name: "Unger, Erik", Address: "u.erik@domonda.com"},
+		"Erik\tUnger <erik@domonda.com>":                    {Name: "Erik Unger", Address: "erik@domonda.com"}, // Replace tabs in name with spaces
+		"Erik�Unger <erik@domonda.com>":                     {Name: "ErikUnger", Address: "erik@domonda.com"},
+		"Erik\nUnger <�erik@domonda.com�>":                  {Name: "Erik Unger", Address: "erik@domonda.com"},
+		`erik.unger@domonda.com <erik.unger@domonda.com>`: {Name: "erik.unger@domonda.com", Address: "erik.unger@domonda.com"},
 
 		// Not standard conform, but we still have to be able to parse them:
 		`"scanner@" <"example.at scanner"@example.at>`:     {Name: "scanner@", Address: "example.at.scanner@example.at"},
