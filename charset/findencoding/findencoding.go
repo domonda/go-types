@@ -1,6 +1,7 @@
 package findencoding
 
 import (
+	"context"
 	"fmt"
 
 	fs "github.com/ungerik/go-fs"
@@ -11,7 +12,7 @@ import (
 )
 
 func PrintFileWithAllEncodings(file fs.FileReader, maxBytes int) error {
-	sourceData, err := file.ReadAll()
+	sourceData, err := file.ReadAll(context.Background())
 	if err != nil {
 		return err
 	}

@@ -1,6 +1,7 @@
 package email
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/domonda/go-types/uu"
@@ -26,8 +27,8 @@ func NewAttachment(filename string, content []byte) *Attachment {
 	}
 }
 
-func NewAttachmentReadFile(file fs.FileReader) (*Attachment, error) {
-	data, err := file.ReadAll()
+func NewAttachmentReadFile(ctx context.Context, file fs.FileReader) (*Attachment, error) {
+	data, err := file.ReadAll(ctx)
 	if err != nil {
 		return nil, err
 	}

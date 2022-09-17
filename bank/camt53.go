@@ -1,6 +1,7 @@
 package bank
 
 import (
+	"context"
 	"time"
 
 	"github.com/domonda/go-types/date"
@@ -56,8 +57,8 @@ type CAMT53Entry struct {
 	Reference    string   `xml:"NtryDtls>TxDtls>RmtInf>Strd>CdtrRefInf>Ref"`
 }
 
-func ParseCAMT53XML(file fs.File) (camt *CAMT53, err error) {
-	err = file.ReadXML(&camt)
+func ParseCAMT53XML(ctx context.Context, file fs.File) (camt *CAMT53, err error) {
+	err = file.ReadXML(ctx, &camt)
 	if err != nil {
 		return nil, err
 	}

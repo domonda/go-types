@@ -2,6 +2,7 @@ package email
 
 import (
 	"bytes"
+	"context"
 
 	"github.com/jaytaylor/html2text"
 	"github.com/teamwork/tnef"
@@ -42,10 +43,10 @@ func ParseTNEFMessageBytes(messageBytes []byte) (msg *Message, err error) {
 	return msg, nil
 }
 
-func ParseTNEFMessageFile(file fs.FileReader) (msg *Message, err error) {
-	defer errs.WrapWithFuncParams(&err, file)
+func ParseTNEFMessageFile(ctx context.Context, file fs.FileReader) (msg *Message, err error) {
+	defer errs.WrapWithFuncParams(&err, ctx, file)
 
-	msgBytes, err := file.ReadAll()
+	msgBytes, err := file.ReadAll(ctx)
 	if err != nil {
 		return nil, err
 	}

@@ -2,6 +2,7 @@ package email
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -149,10 +150,10 @@ func (msg *Message) ReferencesMessageIDs() []string {
 	return ids
 }
 
-func ParseMessageFile(file fs.FileReader) (msg *Message, err error) {
-	defer errs.WrapWithFuncParams(&err, file)
+func ParseMessageFile(ctx context.Context, file fs.FileReader) (msg *Message, err error) {
+	defer errs.WrapWithFuncParams(&err, ctx, file)
 
-	data, err := file.ReadAll()
+	data, err := file.ReadAll(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -251,8 +252,8 @@ func (msg *Message) AddAttachment(filename string, content []byte) {
 	msg.Attachments = append(msg.Attachments, NewAttachment(filename, content))
 }
 
-func (msg *Message) AddAttachmentReadFile(file fs.FileReader) error {
-	attachment, err := NewAttachmentReadFile(file)
+func (msg *Message) AddAttachmentReadFile(ctx context.Context, file fs.FileReader) error {
+	attachment, err := NewAttachmentReadFile(ctx, file)
 	if err != nil {
 		return err
 	}
