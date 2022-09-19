@@ -59,7 +59,7 @@ func sanitizeAddr(s string) string {
 func FindAllAddresses(text string) []Address {
 	text = strings.TrimSpace(sanitizeAddr(text))
 	found := AddressRegexp.FindAllString(text, -1)
-	return *(*[]Address)(unsafe.Pointer(&found))
+	return *(*[]Address)(unsafe.Pointer(&found)) //#nosec G103 -- unsafe OK
 }
 
 // UniqueNormalizedAddressSlice returns the passed

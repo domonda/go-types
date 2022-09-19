@@ -245,5 +245,5 @@ func (set AddressSet) Value() (driver.Value, error) {
 		return "{}", nil
 	}
 	s := set.Sorted()
-	return (*notnull.StringArray)(unsafe.Pointer(&s)).Value()
+	return (*notnull.StringArray)(unsafe.Pointer(&s)).Value() //#nosec G103 -- unsafe OK
 }
