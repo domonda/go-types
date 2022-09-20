@@ -204,9 +204,9 @@ func (id *ID) ScanString(source string) (normalized bool, err error) {
 func (id *ID) Scan(value any) error {
 	switch x := value.(type) {
 	case string:
-		*id = ID(x) // .NormalizedUnchecked()
+		*id = ID(x)
 	case []byte:
-		*id = ID(x) // .NormalizedUnchecked()
+		*id = ID(x)
 	case nil:
 		return errors.New("can't scan SQL NULL as vat.ID")
 	default:
@@ -219,7 +219,7 @@ func (id *ID) Scan(value any) error {
 func (id ID) Value() (driver.Value, error) {
 	normalized, err := id.Normalized()
 	if err != nil {
-		return nil, err
+		return string(id), nil
 	}
 	return string(normalized), nil
 }

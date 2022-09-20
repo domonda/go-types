@@ -192,9 +192,9 @@ func (n *NullableID) ScanString(source string) (normalized bool, err error) {
 func (n *NullableID) Scan(value any) error {
 	switch x := value.(type) {
 	case string:
-		*n = NullableID(x) // .NormalizedUnchecked()
+		*n = NullableID(x)
 	case []byte:
-		*n = NullableID(x) // .NormalizedUnchecked()
+		*n = NullableID(x)
 	case nil:
 		*n = Null
 	default:
