@@ -165,7 +165,7 @@ func (n *NullableAddress) UnmarshalText(text []byte) error {
 // UnmarshalJSON implements the json.Unmarshaler interface
 // returning the JSON null value for and empty/NULL address.
 func (n *NullableAddress) UnmarshalJSON(data []byte) error {
-	if bytes.Equal(data, []byte("null")) {
+	if bytes.Equal(data, []byte(`null`)) {
 		n.SetNull()
 		return nil
 	}
@@ -175,7 +175,7 @@ func (n *NullableAddress) UnmarshalJSON(data []byte) error {
 // MarshalJSON implements the json.Marshaler interface.
 func (n NullableAddress) MarshalJSON() ([]byte, error) {
 	if n.IsNull() {
-		return []byte("null"), nil
+		return []byte(`null`), nil
 	}
 	return json.Marshal(string(n))
 }
