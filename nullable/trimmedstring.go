@@ -37,8 +37,15 @@ func TrimmedStringf(format string, a ...any) TrimmedString {
 	return TrimmedString(strings.TrimSpace(fmt.Sprintf(format, a...)))
 }
 
+// TrimmedStringFrom trims the passed str and returns it as TrimmedString
+// An empty trimmed string will be interpreted as null value.
+func TrimmedStringFrom(str string) TrimmedString {
+	return TrimmedString(strings.TrimSpace(str))
+}
+
 // TrimmedStringFromPtr converts a string pointer to a TrimmedString
 // interpreting nil as null value "".
+// An empty trimmed string will be interpreted as null value.
 func TrimmedStringFromPtr(ptr *string) TrimmedString {
 	if ptr == nil {
 		return ""
