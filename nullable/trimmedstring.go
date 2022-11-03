@@ -22,6 +22,9 @@ var (
 	_ json.Unmarshaler         = new(TrimmedString)
 )
 
+// NullTrimmedString is the NULL value "" for TrimmedString
+const NullTrimmedString TrimmedString = ""
+
 // TrimmedString is a string type where the empty trimmed string value
 // is interpreted as SQL NULL and JSON null by
 // implementing the sql.Scanner and driver.Valuer interfaces
