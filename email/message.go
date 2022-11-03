@@ -47,11 +47,11 @@ type Message struct {
 	// ProviderID is the optional ID of the message
 	// at the email provider like GMail that might be
 	// different from the RFC 822 Message-ID.
-	ProviderID nullable.NonEmptyString `json:"providerID,omitempty"`
+	ProviderID nullable.TrimmedString `json:"providerID,omitempty"`
 
 	// InReplyToProviderID is the ProviderID of the message
 	// that this message is a reply to.
-	InReplyToProviderID nullable.NonEmptyString `json:"inReplyToProviderID,omitempty"`
+	InReplyToProviderID nullable.TrimmedString `json:"inReplyToProviderID,omitempty"`
 
 	// ProviderLabels are optional labels from the email provider
 	// like GMail that are not encoded in the essage itself.
@@ -59,13 +59,13 @@ type Message struct {
 
 	// MessageID is the "Message-ID" header according to RFC 822/2822/5322.
 	// Find in Gmail via filter: rfc822msgid:MessageID
-	MessageID nullable.NonEmptyString `json:"messageID,omitempty"`
+	MessageID nullable.TrimmedString `json:"messageID,omitempty"`
 
 	// In-Reply-To header
-	InReplyTo nullable.NonEmptyString `json:"inReplyTo,omitempty"`
+	InReplyTo nullable.TrimmedString `json:"inReplyTo,omitempty"`
 
 	// References header
-	References nullable.NonEmptyString `json:"references,omitempty"`
+	References nullable.TrimmedString `json:"references,omitempty"`
 
 	// Date header
 	Date *time.Time `json:"date,omitempty"`
@@ -86,13 +86,13 @@ type Message struct {
 	Body string `json:"body,omitempty"`
 
 	// BodyHTML returns the HTML body if available.
-	BodyHTML nullable.NonEmptyString `json:"bodyHTML,omitempty"`
+	BodyHTML nullable.TrimmedString `json:"bodyHTML,omitempty"`
 
 	Attachments []*Attachment `json:"attachments,omitempty"`
 }
 
 // NewMessage returns a new message using the passed from, to, subject, body, and bodyHTML arguments.
-func NewMessage(from Address, to AddressList, subject, body string, bodyHTML nullable.NonEmptyString) *Message {
+func NewMessage(from Address, to AddressList, subject, body string, bodyHTML nullable.TrimmedString) *Message {
 	return &Message{
 		From:        from,
 		To:          to,

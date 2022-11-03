@@ -26,7 +26,7 @@ func ParseTNEFMessageBytes(messageBytes []byte) (msg *Message, err error) {
 
 	msg = &Message{
 		Body:        string(t.Body),
-		BodyHTML:    nullable.NonEmptyString(t.BodyHTML),
+		BodyHTML:    nullable.TrimmedStringFrom(string(t.BodyHTML)),
 		ExtraHeader: make(Header),
 	}
 	if len(t.Body) <= 1 && len(t.BodyHTML) > len(t.Body) {

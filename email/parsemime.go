@@ -22,12 +22,12 @@ func ParseMIMEMessage(reader io.Reader) (msg *Message, err error) {
 	}
 
 	msg = &Message{
-		MessageID:   nullable.NonEmptyString(envelope.GetHeader("Message-Id")),
-		InReplyTo:   nullable.NonEmptyString(envelope.GetHeader("In-Reply-To")),
-		References:  nullable.NonEmptyString(envelope.GetHeader("References")),
+		MessageID:   nullable.TrimmedStringFrom(envelope.GetHeader("Message-Id")),
+		InReplyTo:   nullable.TrimmedStringFrom(envelope.GetHeader("In-Reply-To")),
+		References:  nullable.TrimmedStringFrom(envelope.GetHeader("References")),
 		Subject:     strings.TrimSpace(envelope.GetHeader("Subject")),
 		Body:        envelope.Text,
-		BodyHTML:    nullable.NonEmptyString(envelope.HTML),
+		BodyHTML:    nullable.TrimmedStringFrom(envelope.HTML),
 		ExtraHeader: make(Header),
 	}
 	if date := envelope.GetHeader("Date"); date != "" {
