@@ -6,6 +6,7 @@ import (
 	"database/sql/driver"
 	"encoding"
 	"encoding/json"
+	"encoding/xml"
 	"errors"
 	"fmt"
 	"strings"
@@ -20,6 +21,8 @@ var (
 	_ encoding.TextUnmarshaler = new(TrimmedString)
 	_ json.Marshaler           = TrimmedString("")
 	_ json.Unmarshaler         = new(TrimmedString)
+	_ xml.Marshaler            = TrimmedString("")
+	_ xml.Unmarshaler          = new(TrimmedString)
 )
 
 // NullTrimmedString is the NULL value "" for TrimmedString
@@ -83,83 +86,83 @@ func JoinTrimmedStrings(separator string, strs ...TrimmedString) TrimmedString {
 }
 
 // Ptr returns the address of the string value or nil if n.IsNull()
-func (n TrimmedString) Ptr() *string {
-	if n.IsNull() {
+func (s TrimmedString) Ptr() *string {
+	if s.IsNull() {
 		return nil
 	}
-	return (*string)(&n)
+	return (*string)(&s)
 }
 
-// IsNull returns true if the string n is empty.
+// IsNull returns true if the string is empty.
 // IsNull implements the Nullable interface.
-func (n TrimmedString) IsNull() bool {
-	return n == "" || strings.TrimSpace(string(n)) == ""
+func (s TrimmedString) IsNull() bool {
+	return s == "" || strings.TrimSpace(string(s)) == ""
 }
 
-// IsNotNull returns true if the string n is not empty.
-func (n TrimmedString) IsNotNull() bool {
-	return !n.IsNull()
+// IsNotNull returns true if the string is not empty.
+func (s TrimmedString) IsNotNull() bool {
+	return !s.IsNull()
 }
 
 // StringOr returns the trimmed string value of n
 // or the passed nullString if n.IsNull()
-func (n TrimmedString) StringOr(nullString string) string {
-	if n.IsNull() {
+func (s TrimmedString) StringOr(nullString string) string {
+	if s.IsNull() {
 		return nullString
 	}
-	return n.String()
+	return s.String()
 }
 
 // String implements the fmt.Stringer interface
 // by returning a trimmed string that might be empty
 // in case of the NULL value or an underlying string
 // consisting only of whitespace.
-func (n TrimmedString) String() string {
-	return strings.TrimSpace(string(n))
+func (s TrimmedString) String() string {
+	return strings.TrimSpace(string(s))
 }
 
 // Get returns the non nullable string value
 // or panics if the TrimmedString is null.
 // Note: check with IsNull before using Get!
-func (n TrimmedString) Get() string {
-	if n.IsNull() {
+func (s TrimmedString) Get() string {
+	if s.IsNull() {
 		panic("NULL nullable.TrimmedString")
 	}
-	return n.String()
+	return s.String()
 }
 
 // Set the passed string as TrimmedString.
 // Passing an empty trimmed string will be interpreted as setting NULL.
-func (n *TrimmedString) Set(s string) {
-	*n = TrimmedString(strings.TrimSpace(s))
+func (s *TrimmedString) Set(str string) {
+	*s = TrimmedString(strings.TrimSpace(str))
 }
 
 // SetNull sets the string to its null value
-func (n *TrimmedString) SetNull() {
-	*n = ""
+func (s *TrimmedString) SetNull() {
+	*s = ""
 }
 
 // Value implements the driver database/sql/driver.Valuer interface.
-func (n TrimmedString) Value() (driver.Value, error) {
-	if n.IsNull() {
+func (s TrimmedString) Value() (driver.Value, error) {
+	if s.IsNull() {
 		return nil, nil
 	}
-	return n.String(), nil
+	return s.String(), nil
 }
 
 // Scan implements the database/sql.Scanner interface.
-func (n *TrimmedString) Scan(value any) error {
-	switch s := value.(type) {
+func (s *TrimmedString) Scan(value any) error {
+	switch x := value.(type) {
 	case nil:
-		n.SetNull()
+		s.SetNull()
 		return nil
 
 	case string:
-		s = strings.TrimSpace(s)
-		if s == "" {
+		x = strings.TrimSpace(x)
+		if x == "" {
 			return errors.New("can't scan empty trimmed string as nullable.TrimmedString")
 		}
-		*n = TrimmedString(s)
+		*s = TrimmedString(x)
 		return nil
 
 	default:
@@ -168,32 +171,32 @@ func (n *TrimmedString) Scan(value any) error {
 }
 
 // UnmarshalText implements the encoding.TextMarshaler interface
-func (n TrimmedString) MarshalText() ([]byte, error) {
-	if n.IsNull() {
+func (s TrimmedString) MarshalText() ([]byte, error) {
+	if s.IsNull() {
 		return nil, nil
 	}
-	return []byte(n.String()), nil
+	return []byte(s.String()), nil
 }
 
 // UnmarshalText implements the encoding.TextUnmarshaler interface
-func (n *TrimmedString) UnmarshalText(text []byte) error {
-	*n = TrimmedString(bytes.TrimSpace(text))
+func (s *TrimmedString) UnmarshalText(text []byte) error {
+	*s = TrimmedString(bytes.TrimSpace(text))
 	return nil
 }
 
 // MarshalJSON implements encoding/json.Marshaler
 // by returning the JSON null value for an empty (null) string.
-func (n TrimmedString) MarshalJSON() ([]byte, error) {
-	if n.IsNull() {
+func (s TrimmedString) MarshalJSON() ([]byte, error) {
+	if s.IsNull() {
 		return []byte(`null`), nil
 	}
-	return json.Marshal(n.String())
+	return json.Marshal(s.String())
 }
 
 // MarshalJSON implements encoding/json.Unmarshaler.
-func (n *TrimmedString) UnmarshalJSON(j []byte) error {
+func (s *TrimmedString) UnmarshalJSON(j []byte) error {
 	if bytes.Equal(j, []byte(`null`)) {
-		n.SetNull()
+		s.SetNull()
 		return nil
 	}
 	var str string
@@ -201,6 +204,20 @@ func (n *TrimmedString) UnmarshalJSON(j []byte) error {
 	if err != nil {
 		return fmt.Errorf("can't unmarshal JSON (%s) as nullable.TrimmedString because: %w", j, err)
 	}
-	n.Set(str)
+	s.Set(str)
+	return nil
+}
+
+func (s TrimmedString) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
+	return e.EncodeElement(s.String(), start)
+}
+
+func (s *TrimmedString) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	var str string
+	err := d.DecodeElement(&str, &start)
+	if err != nil {
+		return err
+	}
+	s.Set(str)
 	return nil
 }

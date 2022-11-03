@@ -13,7 +13,7 @@ func TestTrimmedString_MarshalJSON(t *testing.T) {
 		NullOmit TrimmedString `json:",omitempty"`
 		NonNull  TrimmedString
 	}
-	s := Struct{NonNull: "Hello"}
+	s := Struct{NonNull: "\tHello \n"}
 
 	j, err := json.Marshal(s)
 	assert.NoError(t, err)
@@ -29,9 +29,9 @@ func TestTrimmedString_UnmarshalJSON(t *testing.T) {
 	}
 	input := `{
 		"Null": null,
-		"NullOmit": "here",
+		"NullOmit": " here ",
 		"Empty": "",
-		"NonNull": "Hello"
+		"NonNull": "Hello   "
 	}`
 	expected := Struct{NullOmit: "here", NonNull: "Hello"}
 	var result Struct
