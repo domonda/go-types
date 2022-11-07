@@ -31,6 +31,9 @@ const (
 	// Layout used for the Date type, compatible with time.Time.Format()
 	Layout = "2006-01-02"
 
+	// Regular expression for the Layout
+	Regex = `\d{4}-\d{2}-\d{2}`
+
 	Length = 10 // len("2006-01-02")
 
 	// MinLength is the minimum length of a valid date
