@@ -55,7 +55,7 @@ func JoinTrimmedStrings(separator string, strs ...TrimmedString) TrimmedString {
 // IsEmpty indicates if the trimmed string is empty
 // which is also the case when the underlying
 // string consisting only of whitespace.
-func (s TrimmedString) IsEmpty() string {
+func (s TrimmedString) IsEmpty() bool {
 	return s == "" || s.String() == ""
 }
 
