@@ -123,6 +123,16 @@ func (n Time) AddDate(years int, months int, days int) Time {
 	return Time{Time: n.Time.AddDate(years, months, days)}
 }
 
+// Equal reports whether n and o represent the same time instant
+// or both are null.
+// Two times can be equal even if they are in different locations.
+// For example, 6:00 +0200 and 4:00 UTC are Equal.
+// See the documentation on the Time type for the pitfalls of using == with
+// Time values; most code should use Equal instead.
+func (n Time) Equal(o Time) bool {
+	return (n.IsNull() && o.IsNull()) || n.Time.Equal(o.Time)
+}
+
 // IsNull returns true if the Time is null.
 // Uses time.Time.IsZero internally.
 // IsNull implements the Nullable interface.
