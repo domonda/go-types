@@ -58,10 +58,20 @@ func SplitArray(array string) ([]string, error) {
 				bracketDepth++
 				elemStart = i
 				state = inElem
-			case '"', '\'':
+			case '"':
 				quoteRune = r
 				elemStart = i
 				state = inQuotedElem
+			case '\'':
+				if isSQL {
+					// Leading single quote is normal text: {'A,B}
+					elemStart = i
+					state = inElem
+				} else {
+					quoteRune = r
+					elemStart = i
+					state = inQuotedElem
+				}
 			default:
 				elemStart = i
 				state = inElem

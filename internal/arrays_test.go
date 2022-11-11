@@ -109,6 +109,12 @@ func TestSplitArray(t *testing.T) {
 			array:      "{single_quote'@example.com}",
 			wantFields: []string{`single_quote'@example.com`},
 		},
+		{
+			name:       "{'@example.com,service.wien@example.com,zaehler.wien@example.com}",
+			array:      "{'@example.com,service.wien@example.com,zaehler.wien@example.com}",
+			wantFields: []string{`'@example.com`, `service.wien@example.com`, `zaehler.wien@example.com`},
+		},
+
 		// Invalid
 		{
 			name:    "empty",
