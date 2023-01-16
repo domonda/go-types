@@ -195,6 +195,7 @@ func (a Amount) Copysign(sign Amount) Amount {
 // Abs returns the absolute value of a.
 //
 // Special cases are:
+//
 //	Abs(±Inf) = +Inf
 //	Abs(NaN) = NaN
 func (a Amount) Abs() Amount {
@@ -204,6 +205,7 @@ func (a Amount) Abs() Amount {
 // AbsFloat returns the absolute value of a as float64.
 //
 // Special cases are:
+//
 //	AbsFloat(±Inf) = +Inf
 //	AbsFloat(NaN) = NaN
 func (a Amount) AbsFloat() float64 {
@@ -248,6 +250,11 @@ func (a Amount) MultipliedByRate(rate Rate) Amount {
 // DividedByRate returns the amount divided by a rate.
 func (a Amount) DividedByRate(rate Rate) Amount {
 	return a / Amount(rate)
+}
+
+// Percentage returns the amount multiplied by (percent / 100).
+func (a Amount) Percentage(percent float64) Amount {
+	return a * Amount(percent) / 100
 }
 
 // SplitEquallyRoundToCents divides the amount equally into numAmounts amounts
