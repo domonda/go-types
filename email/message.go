@@ -153,7 +153,7 @@ func (msg *Message) ReferencesMessageIDs() []string {
 func ParseMessageFile(ctx context.Context, file fs.FileReader) (msg *Message, err error) {
 	defer errs.WrapWithFuncParams(&err, ctx, file)
 
-	data, err := file.ReadAll(ctx)
+	data, err := file.ReadAllContext(ctx)
 	if err != nil {
 		return nil, err
 	}

@@ -46,7 +46,7 @@ func ParseTNEFMessageBytes(messageBytes []byte) (msg *Message, err error) {
 func ParseTNEFMessageFile(ctx context.Context, file fs.FileReader) (msg *Message, err error) {
 	defer errs.WrapWithFuncParams(&err, ctx, file)
 
-	msgBytes, err := file.ReadAll(ctx)
+	msgBytes, err := file.ReadAllContext(ctx)
 	if err != nil {
 		return nil, err
 	}

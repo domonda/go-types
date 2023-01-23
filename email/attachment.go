@@ -28,7 +28,7 @@ func NewAttachment(filename string, content []byte) *Attachment {
 }
 
 func NewAttachmentReadFile(ctx context.Context, file fs.FileReader) (*Attachment, error) {
-	data, err := file.ReadAll(ctx)
+	data, err := file.ReadAllContext(ctx)
 	if err != nil {
 		return nil, err
 	}
