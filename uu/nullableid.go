@@ -200,7 +200,8 @@ func (n NullableID) PrettyPrint(w io.Writer) {
 }
 
 // GoString returns a pseudo Go literal for the ID in the format:
-//   uu.NullableIDMust(`xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`)
+//
+//	uu.NullableIDMust(`xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`)
 func (n NullableID) GoString() string {
 	if n.IsNull() {
 		return "uu.NullableIDMust(nil)"

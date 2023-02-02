@@ -358,7 +358,9 @@ func (id ID) StringBytes() []byte {
 }
 
 // String returns the canonical string representation of the UUID:
-//   xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+//
+//	xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+//
 // String implements the fmt.Stringer interface.
 func (id ID) String() string {
 	b := make([]byte, 36)
@@ -378,15 +380,17 @@ func (id ID) String() string {
 
 // StringUpper returns the upper case version
 // of the canonical string format:
-//   XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX
+//
+//	XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX
 func (id ID) StringUpper() string {
 	return strings.ToUpper(id.String())
 }
 
 // GoString returns a pseudo Go literal for the ID in the format:
-//   uu.IDMust(`xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`)
+//
+//	uu.IDFrom(`xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`)
 func (id ID) GoString() string {
-	return "uu.IDMust(`" + id.String() + "`)"
+	return "uu.IDFrom(`" + id.String() + "`)"
 }
 
 // PrettyPrint the ID in the format xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx.

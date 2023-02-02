@@ -624,9 +624,9 @@ func TestID_GoString(t *testing.T) {
 		id   ID
 		want string
 	}{
-		{"9256978d-18e6-4435-ad16-d7046d41b71a", IDMustFromString("9256978d-18e6-4435-ad16-d7046d41b71a"), "uu.IDMust(`9256978d-18e6-4435-ad16-d7046d41b71a`)"},
-		{"a92bb308-f0f9-43d2-b31d-c0962198c31c", IDMustFromString("a92bb308-f0f9-43d2-b31d-c0962198c31c"), "uu.IDMust(`a92bb308-f0f9-43d2-b31d-c0962198c31c`)"},
-		{"59a268e5-d820-4884-b120-10d1a9b0dd00", IDMustFromString("59a268e5-d820-4884-b120-10d1a9b0dd00"), "uu.IDMust(`59a268e5-d820-4884-b120-10d1a9b0dd00`)"},
+		{"9256978d-18e6-4435-ad16-d7046d41b71a", IDMustFromString("9256978d-18e6-4435-ad16-d7046d41b71a"), "uu.IDFrom(`9256978d-18e6-4435-ad16-d7046d41b71a`)"},
+		{"a92bb308-f0f9-43d2-b31d-c0962198c31c", IDMustFromString("a92bb308-f0f9-43d2-b31d-c0962198c31c"), "uu.IDFrom(`a92bb308-f0f9-43d2-b31d-c0962198c31c`)"},
+		{"59a268e5-d820-4884-b120-10d1a9b0dd00", IDMustFromString("59a268e5-d820-4884-b120-10d1a9b0dd00"), "uu.IDFrom(`59a268e5-d820-4884-b120-10d1a9b0dd00`)"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
