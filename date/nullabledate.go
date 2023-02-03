@@ -237,11 +237,11 @@ func (n NullableDate) Value() (driver.Value, error) {
 // or a null nullable.Time value if the date is not valid.
 func (n NullableDate) MidnightUTC() nullable.Time {
 	if n.IsZero() {
-		return nullable.Time{}
+		return nullable.TimeNull
 	}
 	t, err := nullable.TimeParse(Layout, string(n))
 	if err != nil {
-		return nullable.Time{}
+		return nullable.TimeNull
 	}
 	return t
 }
@@ -258,11 +258,11 @@ func (n NullableDate) Midnight() nullable.Time {
 // or a null nullable.Time value if the date is not valid.
 func (n NullableDate) MidnightInLocation(loc *time.Location) nullable.Time {
 	if n.IsZero() {
-		return nullable.Time{}
+		return nullable.TimeNull
 	}
 	t, err := nullable.TimeParseInLocation(Layout, string(n), loc)
 	if err != nil {
-		return nullable.Time{}
+		return nullable.TimeNull
 	}
 	return t
 }
