@@ -160,19 +160,19 @@ func (n Time) StringOr(nullStr string) string {
 }
 
 // Format the time using time.Time.Format
-// or return "NULL" if n is null.
+// or return and empty string if n is null.
 func (n Time) Format(layout string) string {
 	if n.IsNull() {
-		return "NULL"
+		return ""
 	}
 	return n.Time.Format(layout)
 }
 
 // AppendFormat the time to b using time.Time.AppendFormat
-// or append []byte("NULL") if n is null.
+// or b if n is null.
 func (n Time) AppendFormat(b []byte, layout string) []byte {
 	if n.IsNull() {
-		return append(b, "NULL"...)
+		return b
 	}
 	return n.Time.AppendFormat(b, layout)
 }
