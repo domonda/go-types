@@ -1,18 +1,18 @@
 module github.com/domonda/go-types
 
-go 1.19
+go 1.20
 
 require (
-	github.com/domonda/go-errs v0.0.0-20221201115330-819262069697
+	github.com/domonda/go-errs v0.0.0-20230207132857-bf0bda36a13a
 	github.com/domonda/go-pretty v0.0.0-20220317123925-dd9e6bef129a
 	github.com/jaytaylor/html2text v0.0.0-20211105163654-bc68cce691ba
 	github.com/jhillyerd/enmime v0.10.1
 	github.com/jinzhu/now v1.1.5
 	github.com/stretchr/testify v1.8.1
 	github.com/teamwork/tnef v0.0.0-20200108124832-7deabccfdb32
-	github.com/ungerik/go-fs v0.0.0-20230202111739-aab8cc43fed1
+	github.com/ungerik/go-fs v0.0.0-20230206141012-abb864f815e3
 	github.com/ungerik/go-reflection v0.0.0-20220113085621-6c5fc1f2694a
-	golang.org/x/exp v0.0.0-20230202163644-54bba9f4231b
+	golang.org/x/exp v0.0.0-20230206171751-46f607a40771
 	golang.org/x/net v0.5.0
 	golang.org/x/text v0.6.0
 	mvdan.cc/xurls/v2 v2.4.0
@@ -31,6 +31,6 @@ require (
 	github.com/ssor/bom v0.0.0-20170718123548-6386211fdfcf // indirect
 	github.com/teamwork/test v0.0.0-20200108114543-02621bae84ad // indirect
 	github.com/teamwork/utils v0.0.0-20220314153103-637fa45fa6cc // indirect
-	golang.org/x/sys v0.4.0 // indirect
+	golang.org/x/sys v0.5.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
