@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"strings"
 
 	"github.com/domonda/go-types/float"
 )
@@ -121,6 +122,12 @@ func (a Amount) String() string {
 	// }
 
 	// return b.String()
+}
+
+// GoString returns the amount as string
+// in full float64 precision for debugging
+func (a Amount) GoString() string {
+	return strings.TrimRight(strings.TrimRight(fmt.Sprintf("%.200f", float64(a)), "0"), ".")
 }
 
 // StringOr returns ptr.String() or defaultVal if ptr is nil.

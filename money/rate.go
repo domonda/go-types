@@ -80,6 +80,12 @@ func (r *Rate) ScanString(source string) (sourceWasNormalized bool, err error) {
 	return true, nil
 }
 
+// GoString returns the rate as string
+// in full float64 precision for debugging
+func (r Rate) GoString() string {
+	return strings.TrimRight(strings.TrimRight(fmt.Sprintf("%.200f", float64(r)), "0"), ".")
+}
+
 // RoundToInt returns the value rounded to an integer number
 func (r Rate) RoundToInt() Rate {
 	return Rate(math.Round(float64(r)))
@@ -161,6 +167,7 @@ func (r Rate) Copysign(sign Rate) Rate {
 // Abs returns the absolute value of r.
 //
 // Special cases are:
+//
 //	Abs(±Inf) = +Inf
 //	Abs(NaN) = NaN
 func (r Rate) Abs() Rate {
@@ -170,6 +177,7 @@ func (r Rate) Abs() Rate {
 // AbsFloat returns the absolute value of r as float64.
 //
 // Special cases are:
+//
 //	AbsFloat(±Inf) = +Inf
 //	AbsFloat(NaN) = NaN
 func (r Rate) AbsFloat() float64 {

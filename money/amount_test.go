@@ -296,3 +296,21 @@ func equalInclNaN(a, b float64) bool {
 	}
 	return a == b
 }
+
+func TestAmount_GoString(t *testing.T) {
+	tests := []struct {
+		a Amount
+		s string
+	}{
+		{a: 0, s: "0"},
+		{a: -0, s: "0"},
+		{a: 0.001, s: "0.001000000000000000020816681711721685132943093776702880859375"},
+		{a: 0.001000000000000000020816681711721685132943093776702880859375, s: "0.001000000000000000020816681711721685132943093776702880859375"},
+		{a: -100000.99, s: "-100000.990000000005238689482212066650390625"},
+	}
+	for _, tt := range tests {
+		if got := tt.a.GoString(); got != tt.s {
+			t.Errorf("Amount.GoString() = %v, want %v", got, tt.s)
+		}
+	}
+}
