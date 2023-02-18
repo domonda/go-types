@@ -13,8 +13,8 @@ require (
 	github.com/ungerik/go-fs v0.0.0-20230206141012-abb864f815e3
 	github.com/ungerik/go-reflection v0.0.0-20220113085621-6c5fc1f2694a
 	golang.org/x/exp v0.0.0-20230206171751-46f607a40771
-	golang.org/x/net v0.5.0
-	golang.org/x/text v0.6.0
+	golang.org/x/net v0.7.0
+	golang.org/x/text v0.7.0
 	mvdan.cc/xurls/v2 v2.4.0
 )
 
