@@ -14,12 +14,18 @@ import (
 
 // Recommended for debugging: https://regex101.com/
 const (
-	atextSpecial = `!#$%&'*+\-/=?^_{|}~` + "`"
-	atext        = `[a-zA-Z0-9` + atextSpecial + `][\.a-zA-Z0-9` + atextSpecial + `]*`
-	localPart    = `'?(?:[ \t]?(` + `[a-zA-Z0-9\.]` + `|` + atext + `|` + `"[^"]+"` + `))`
-	domainChars  = `a-zA-Z0-9` + `àáâãäåæāăąçćĉċčďđèéêëēĕėęěĝğġģĥħìíîïĩīĭįıðĵķĸĺļľłñńņňŋòóôõöøōŏőœŕŗřśŝşšţťŧùúûüũūŭůűųŵýŷÿźżžþßÀÁÂÃÄÅÆĀĂĄÇĆĈĊČĎĐÈÉÊËĒĔĖĘĚĜĞĠĢĤĦÌÍÎÏĨĪĬĮIÐĴĶĸĹĻĽŁÑŃŅŇŊÒÓÔÕÖØŌŎŐŒŔŖŘŚŜŞŠŢŤŦÙÚÛÜŨŪŬŮŰŲŴÝŶŸŹŻŽÞSS`
-	domainPart   = `([` + domainChars + `][\-\.` + domainChars + `]+\.[a-zA-Z]{2,})`
-	addressRegex = atext + `@` + domainPart
+	// RFC2821 and RFC2822 state clearly that only 7bit ASCII characters are allowed
+	// but addresses encountered in the wild may contain other characters like umlauts.
+	// See also https://www.jochentopf.com/email/chars.html
+	// Support depends on the server implementation, we have to be conservative
+	// and try to parse everything that's encountered in the wild.
+	umlautChars       = `àáâãäåæāăąçćĉċčďđèéêëēĕėęěĝğġģĥħìíîïĩīĭįıðĵķĸĺļľłñńņňŋòóôõöøōŏőœŕŗřśŝşšţťŧùúûüũūŭůűųŵýŷÿźżžþßÀÁÂÃÄÅÆĀĂĄÇĆĈĊČĎĐÈÉÊËĒĔĖĘĚĜĞĠĢĤĦÌÍÎÏĨĪĬĮIÐĴĶĸĹĻĽŁÑŃŅŇŊÒÓÔÕÖØŌŎŐŒŔŖŘŚŜŞŠŢŤŦÙÚÛÜŨŪŬŮŰŲŴÝŶŸŹŻŽÞSS`
+	atextSpecialChars = `!#$%&'*+\-/=?^_{|}~` + "`" + umlautChars
+	atext             = `[a-zA-Z0-9` + atextSpecialChars + `][\.a-zA-Z0-9` + atextSpecialChars + `]*`
+	localPart         = `'?(?:[ \t]?(` + `[a-zA-Z0-9\.]` + `|` + atext + `|` + `"[^"]+"` + `))`
+	domainChars       = `a-zA-Z0-9` + umlautChars
+	domainPart        = `([` + domainChars + `][\-\.` + domainChars + `]+\.[a-zA-Z]{2,})`
+	addressRegex      = atext + `@` + domainPart
 
 	quotedNamePart         = `"([^"]*)"[ \t]*<?`
 	unquotedNamePart       = `([^<@\.]*[^<@\s]|[^<,]*[^<,\s])[ \t]*<`                // Why |[^<,\s]+
@@ -97,6 +103,8 @@ func UniqueNormalizedAddressSlice(addrs []Address) []Address {
 // ParseAddress parses an email address less strict
 // than the standard net/mail.ParseAddress function
 // fixing malformed addresses and lower cases the address part.
+// If the name part is identical with the address part
+// then it will not be returned as name.
 func ParseAddress(addr string) (mailAddress *mail.Address, err error) {
 	addr = strings.TrimSpace(sanitizeAddr(addr))
 
@@ -168,6 +176,10 @@ func parseAddress(addr string) (mailAddress *mail.Address, unparsed string, err 
 		}
 	}
 
+	if mailAddress.Name == mailAddress.Address {
+		mailAddress.Name = ""
+	}
+
 	return mailAddress, unparsed, nil
 }
 
@@ -194,7 +206,7 @@ func ParseAddressList(list string) (addrs []*mail.Address, err error) {
 
 	for unparsed != "" {
 		if unparsed[0] != ',' {
-			return nil, fmt.Errorf("expected ',' after email address in list: '%s' | full list: '%s'", unparsed, list)
+			return nil, fmt.Errorf("expected ',' after parsing email address in unparsed part: '%s' | full list: '%s'", unparsed, list)
 		}
 		unparsed = strings.TrimLeft(unparsed[1:], " ")
 		mailAddress, unparsed, err = parseAddress(unparsed)

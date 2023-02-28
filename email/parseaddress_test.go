@@ -8,7 +8,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/domonda/go-types/strutil"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 var (
@@ -41,7 +43,7 @@ var (
 		"Erik\tUnger <erik@domonda.com>":                    {Name: "Erik Unger", Address: "erik@domonda.com"}, // Replace tabs in name with spaces
 		"Erik�Unger <erik@domonda.com>":                     {Name: "ErikUnger", Address: "erik@domonda.com"},
 		"Erik\nUnger <�erik@domonda.com�>":                  {Name: "Erik Unger", Address: "erik@domonda.com"},
-		`erik.unger@domonda.com <erik.unger@domonda.com>`: {Name: "erik.unger@domonda.com", Address: "erik.unger@domonda.com"},
+		`erik.unger@domonda.com <erik.unger@domonda.com>`: {Name: "", Address: "erik.unger@domonda.com"},
 
 		// Not standard conform, but we still have to be able to parse them:
 		`"scanner@" <"example.at scanner"@example.at>`:     {Name: "scanner@", Address: "example.at.scanner@example.at"},
@@ -65,7 +67,8 @@ var (
 		`witha+plus@gmail.com`:        {Name: ``, Address: "witha+plus@gmail.com"},
 		`endingwithnums777@gmail.com`: {Name: ``, Address: "endingwithnums777@gmail.com"},
 
-		`YouWon't@belivethisßällm.bHt`: {Name: ``, Address: "youwon't@belivethisßällm.bht"},
+		`YouWon't@belivethisßällm.bHt`:                      {Name: ``, Address: "youwon't@belivethisßällm.bht"},
+		`"alte.mücke@united-b.de" <alte.mücke@united-b.de>`: {Name: ``, Address: "alte.mücke@united-b.de"},
 
 		// `Non standard comma, in name <comma@example.com>`: {Name: `Non standard comma, in name`, Address: "comma@example.com"},
 	}
@@ -97,11 +100,24 @@ var (
 )
 
 func TestParseAddress(t *testing.T) {
+	// Print the very long and complex regex strings for debugging with https://regex101.com/
+	// Note that ` has to be removed from the regex for https://regex101.com/ to be able to parse it
+	// fmt.Fprintln(os.Stderr, "addressRegex:", strings.ReplaceAll(addressRegex, "`", ""))
+	// fmt.Fprintln(os.Stderr, "nameAddressRegex:", strings.ReplaceAll(nameAddressRegex, "`", ""))
+	// debugRegex := `^` + namePart // + localPart + `@` + domainPart
+	// fmt.Fprintln(os.Stderr, "debugRegex:", strings.ReplaceAll(debugRegex, "`", ""))
+
+	var (
+		result *mail.Address
+		err    error
+	)
+	// Quick first debug test before trying complete list:
+	// result, err = ParseAddress(`"alte.mücke@united-b.de" <alte.mücke@united-b.de>`)
+	// require.NoError(t, err)
+
 	// Test very special case
-	result, err := ParseAddress(`"\"Example\" <ar1@example.com>" <ar@example.com>`)
-	if err != nil {
-		t.Fatal(err)
-	}
+	result, err = ParseAddress(`"\"Example\" <ar1@example.com>" <ar@example.com>`)
+	require.NoError(t, err)
 	if result.Name != "Example" || result.Address != "ar@example.com" {
 		t.Fatalf("wrong result: %v", result)
 	}
@@ -186,17 +202,27 @@ func TestParseAddressList(t *testing.T) {
 		}
 	}
 
-	// Test specific list we had problems with before
-	// const problemList = "x@mail.example.com, x@mail-example.com, wow@xx.consulting, witha+plus@gmail.com, some_underscore@msn.com, refill@example24.de, nasa@7examples.com, erik@domonda.com <erik@domonda.com>, er+bill@mail-billwerk.co.uk, endingwithnums777@gmail.com, customerinfo@email.spammers.com, a@we-work.com, _underscore@example.com, Erik Unger <erik@domonda.com>, Erik Unger <Erik.Unger@domonda.com>, Erik Unger    <erik@domonda.com>, Domonda < er+vk+baurauslagen+wirklich@domonda.com>, Domonda < er+vk+baurauslagen+wirklich@domonda.com >, A!#$%&'*+-/=?^_{|}~@example.com, @Erik <erik@domonda.com>, =?utf-8?b?wqFIb2xhLCBzZcOxb3Ih?= <senor@hola.com>, <xy=erik@example.com>, <erik@domonda.com>, <'stupid@quoting.me'>, 'stupid@quoting.me', \"scanner@\" <example.at scanner@example.at>, \"\\\"Example\\\" <ar@example.com>\" <ar@example.com>, \"Unger, Erik\" <u.erik@domonda.com>, \"Unger, Erik\" <\"Unger, Erik\"@domonda.com>, \"Some.Name@xbüro-yy-zzz.de\" <Some.Name@xbüro-yy-zzz.de>, \"Erik Unger-Phd </Domonda-IT>\" <Erik.Unger-Phd@domonda-it.at>, \"Erik Unger\" <erik@domonda.com>, \"Erik Unger\" <\"Erik.Unger\"@domonda.com>, \"'stupid@quoting.me'\" <'stupid@quoting.me'>, \" Erik Unger \" <erik@domonda.com>" + `, "Unger, Erik"` + "\t<u.erik@domonda.com>, Erik\tUnger <erik@domonda.com>"
-	// parsed, err := ParseAddressList(problemList)
-	// if err != nil || len(parsed) != len(validEmailAddresses) {
-	// 	fmt.Println("Regex:", nameAddressRegex)
-	// 	fmt.Println("AddressList:", problemList)
-	// 	for _, addr := range parsed {
-	// 		fmt.Println(addr)
-	// 	}
-	// 	t.Fatalf("Error: %v\nlen(parsed): %d, len(validEmailAddresses): %d\nResult: %v\n\nproblemList: '%s'", err, len(parsed), len(validEmailAddresses), parsed, problemList)
-	// }
+	// Test specifics list we had problems with before
+	problemLists := map[string]int{
+		`"\"Example\" <ar1@example.com>" <ar@example.com>, test@example.com`: 2,
+
+		// The problem with this list is that `"\"Example\" <ar1@example.com>` gets parsed as: "Example" <ar1@example.com>
+		// and then `" <ar@example.com>, "alte.mücke@united-b.de` gets parsed as: " <ar@example.com>, " <alte.mücke@united-b.de>
+		// interpreting the double quote escaping accross 2 addresses including the , within the quotes
+		// TODO resolve this case
+		// `"\"Example\" <ar1@example.com>" <ar@example.com>, "alte.mücke@united-b.de" <alte.mücke@united-b.de>`: 2,
+	}
+	for problemList, numAddrs := range problemLists {
+		parsed, err := ParseAddressList(problemList)
+		if err != nil || len(parsed) != numAddrs {
+			fmt.Println("Regex:", nameAddressRegex)
+			fmt.Println("AddressList:", problemList)
+			for _, addr := range parsed {
+				fmt.Println(addr)
+			}
+			t.Fatalf("Error: %v\nlen(parsed): %d, numAddrs: %d\nResult: %v\n\nproblemList: '%s'", err, len(parsed), numAddrs, parsed, problemList)
+		}
+	}
 
 	// The test lists are created by joining all validEmailAddresses.
 	// First they are joined sorted and reverse-sorted by name to
@@ -208,6 +234,10 @@ func TestParseAddressList(t *testing.T) {
 	// For every list create variations with different separators
 	separators := []string{", ", ",", " ,", " , "}
 
+	dontUseFromValidEmailAddresses := strutil.NewStringSet(
+		`"alte.mücke@united-b.de" <alte.mücke@united-b.de>`,
+	)
+
 	// Map from joined address-list to source addresses
 	// which are also keys of validEmailAddresses
 	tests := make(map[string][]string)
@@ -215,7 +245,9 @@ func TestParseAddressList(t *testing.T) {
 	{
 		var sortedAddrs []string
 		for addr := range validEmailAddresses {
-			sortedAddrs = append(sortedAddrs, addr)
+			if !dontUseFromValidEmailAddresses.Contains(addr) {
+				sortedAddrs = append(sortedAddrs, addr)
+			}
 		}
 		sort.Strings(sortedAddrs)
 		for _, separator := range separators {
