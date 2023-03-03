@@ -24,9 +24,11 @@ func NewScanConfig() *ScanConfig {
 		TimeFormats: []string{
 			time.RFC3339Nano,
 			time.RFC3339,
-			"2006-01-02 15:04:05",
-			"2006-01-02 15:04",
-			"2006-01-02",
+			time.DateOnly + " 15:04:05.999999999 -0700 MST", // Used by time.Time.String()
+			time.DateTime,
+			time.DateOnly + " 15:04",
+			time.DateOnly + "T15:04", // Used by browser datetime-local input type
+			time.DateOnly,
 		},
 		AcceptedMoneyAmountDecimals: []int{0, 2, 4},
 	}

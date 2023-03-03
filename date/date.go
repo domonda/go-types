@@ -29,7 +29,7 @@ func StringIsDate(str string, lang ...language.Code) bool {
 
 const (
 	// Layout used for the Date type, compatible with time.Time.Format()
-	Layout = "2006-01-02"
+	Layout = time.DateOnly
 
 	// Regular expression for the Layout
 	Regex = `\d{4}-\d{2}-\d{2}`
