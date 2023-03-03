@@ -19,10 +19,11 @@ var typeSQLScanner = reflect.TypeOf((*sql.Scanner)(nil)).Elem()
 // slice of any dimension.
 //
 // For example:
-//  db.Query(`SELECT * FROM t WHERE id = ANY($1)`, pq.Array([]int{235, 401}))
 //
-//  var x []sql.NullInt64
-//  db.QueryRow(`SELECT ARRAY[235, 401]`).Scan(pq.Array(&x))
+//	db.Query(`SELECT * FROM t WHERE id = ANY($1)`, pq.Array([]int{235, 401}))
+//
+//	var x []sql.NullInt64
+//	db.QueryRow(`SELECT ARRAY[235, 401]`).Scan(pq.Array(&x))
 //
 // Scanning multi-dimensional arrays is not supported.  Arrays where the lower
 // bound is not one (such as `[0:0]={1}') are not supported.
@@ -407,7 +408,7 @@ func (a GenericArray) Scan(src any) error {
 		return a.scanBytes([]byte(src), dv)
 	case nil:
 		if dv.Kind() == reflect.Slice {
-			dv.Set(reflect.Zero(dv.Type()))
+			dv.SetZero()
 			return nil
 		}
 	}

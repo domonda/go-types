@@ -29,7 +29,7 @@ func Scan(dest reflect.Value, source string, config *ScanConfig) (err error) {
 		if config.IsNil(source) {
 			// If dest is a pointer type and source is a nil string
 			// then set pointer to nil (the zero value of the pointer)
-			dest.Set(reflect.Zero(dest.Type()))
+			dest.SetZero()
 			return nil
 		}
 		if dest.IsNil() {
