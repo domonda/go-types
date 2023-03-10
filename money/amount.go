@@ -281,31 +281,32 @@ func (a Amount) SplitEquallyRoundToCents(numAmounts int) []Amount {
 	return splitted
 }
 
-// ScaleAmountsToSumRoundToCents returns the passed amounts equally scaled
-// in a way that their sum is equal to the passed sum.
-// The scaled amounts are rounded to cents and it's assured,
-// that the sum of cents equals the passed sum in cents.
-func ScaleAmountsToSumRoundToCents(amounts []Amount, sum Amount) []Amount {
-	numAmounts := len(amounts)
-	if numAmounts == 0 {
+// SplitProportionaly splits an amount proportianly
+// to the passed weights into the same number of amounts
+// and makes sure that the sum the amounts rounded to cents
+// is identical to the amount rounded to cents.
+// The passed weights can be positive, negative, or zero.
+func (a Amount) SplitProportionaly(weights []Amount) []Amount {
+	numWeights := len(weights)
+	if numWeights == 0 {
 		return nil
 	}
 
 	compareSum := Amount(0)
-	for _, amount := range amounts {
-		compareSum += amount.Copysign(sum)
+	for _, amount := range weights {
+		compareSum += amount.Copysign(a)
 	}
-	scaleFactor := sum / compareSum
+	scaleFactor := a / compareSum
 
 	compareSum = 0
-	scaled := make([]Amount, numAmounts)
-	for i := 0; i < numAmounts-1; i++ {
-		scaled[i] = (amounts[i].Copysign(sum) * scaleFactor).RoundToCents()
-		compareSum += scaled[i]
+	split := make([]Amount, numWeights)
+	for i := 0; i < numWeights-1; i++ {
+		split[i] = (weights[i].Copysign(a) * scaleFactor).RoundToCents()
+		compareSum += split[i]
 	}
-	scaled[numAmounts-1] = (sum.RoundToCents() - compareSum).RoundToCents()
+	split[numWeights-1] = (a.RoundToCents() - compareSum).RoundToCents()
 
-	return scaled
+	return split
 }
 
 // Valid returns if the amount is neither infinite nor NaN

@@ -210,10 +210,10 @@ func Test_Amount_SplitEquallyRoundToCents(t *testing.T) {
 	}
 }
 
-func Test_Amount_ScaleAmountsToSumRoundToCents(t *testing.T) {
+func Test_Amount_SplitProportionaly(t *testing.T) {
 	data := []struct {
-		sum      Amount
-		amounts  []Amount
+		amount   Amount
+		weights  []Amount
 		expected []Amount
 	}{
 		{0, nil, nil},
@@ -228,6 +228,7 @@ func Test_Amount_ScaleAmountsToSumRoundToCents(t *testing.T) {
 		{100, []Amount{-1, +2, -3, +4}, []Amount{10, 20, 30, 40}},
 		{100, []Amount{11, 17, 37}, []Amount{16.92, 26.15, 56.93}},
 		{1, []Amount{11, 17, 37}, []Amount{0.17, 0.26, 0.57}},
+		{100, []Amount{1, 0, 1}, []Amount{50, 0, 50}},
 
 		{-0, nil, nil},
 		{-0, []Amount{-1}, []Amount{-0}},
@@ -241,9 +242,10 @@ func Test_Amount_ScaleAmountsToSumRoundToCents(t *testing.T) {
 		{-100, []Amount{-1, +2, -3, +4}, []Amount{-10, -20, -30, -40}},
 		{-100, []Amount{-11, 17, 37}, []Amount{-16.92, -26.15, -56.93}},
 		{-1, []Amount{-11, 17, 37}, []Amount{-0.17, -0.26, -0.57}},
+		{-100, []Amount{1, 0, 1}, []Amount{-50, 0, -50}},
 	}
 	for _, test := range data {
-		result := ScaleAmountsToSumRoundToCents(test.amounts, test.sum)
+		result := test.amount.SplitProportionaly(test.weights)
 		assert.Equal(t, test.expected, result)
 	}
 }
