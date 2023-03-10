@@ -272,6 +272,9 @@ func (a Amount) SplitEqually(count int) []Amount {
 	if count < 1 {
 		return nil
 	}
+	if count == 1 {
+		return []Amount{a} // Don't introduce rounding errors
+	}
 	result := make([]Amount, count)
 	part := (a / Amount(count)).RoundToCents()
 	for i := 0; i < count-1; i++ {
@@ -287,11 +290,13 @@ func (a Amount) SplitEqually(count int) []Amount {
 // is identical to the amount rounded to cents.
 // The passed weights can be positive, negative, or zero.
 func (a Amount) SplitProportionally(weights []Amount) []Amount {
-	numWeights := len(weights)
-	if numWeights == 0 {
+	count := len(weights)
+	if count == 0 {
 		return nil
 	}
-
+	if count == 1 {
+		return []Amount{a} // Don't introduce rounding errors
+	}
 	compareSum := Amount(0)
 	for _, amount := range weights {
 		compareSum += amount.Copysign(a)
@@ -299,12 +304,12 @@ func (a Amount) SplitProportionally(weights []Amount) []Amount {
 	scaleFactor := a / compareSum
 
 	compareSum = 0
-	result := make([]Amount, numWeights)
-	for i := 0; i < numWeights-1; i++ {
+	result := make([]Amount, count)
+	for i := 0; i < count-1; i++ {
 		result[i] = (weights[i].Copysign(a) * scaleFactor).RoundToCents()
 		compareSum += result[i]
 	}
-	result[numWeights-1] = (a.RoundToCents() - compareSum).RoundToCents()
+	result[count-1] = (a.RoundToCents() - compareSum).RoundToCents()
 
 	return result
 }
