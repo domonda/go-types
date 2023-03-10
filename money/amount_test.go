@@ -182,7 +182,7 @@ func Test_Amount_RoundToCents(t *testing.T) {
 	}
 }
 
-func Test_Amount_SplitEquallyRoundToCents(t *testing.T) {
+func Test_Amount_SplitEqually(t *testing.T) {
 	type input struct {
 		amount     Amount
 		numAmounts int
@@ -205,12 +205,12 @@ func Test_Amount_SplitEquallyRoundToCents(t *testing.T) {
 		{amount: -1, numAmounts: 17}:      {-0.06, -0.06, -0.06, -0.06, -0.06, -0.06, -0.06, -0.06, -0.06, -0.06, -0.06, -0.06, -0.06, -0.06, -0.06, -0.06, -0.04},
 	}
 	for input, expected := range data {
-		result := input.amount.SplitEquallyRoundToCents(input.numAmounts)
+		result := input.amount.SplitEqually(input.numAmounts)
 		assert.Equal(t, expected, result)
 	}
 }
 
-func Test_Amount_SplitProportionaly(t *testing.T) {
+func Test_Amount_SplitProportionally(t *testing.T) {
 	data := []struct {
 		amount   Amount
 		weights  []Amount
@@ -245,7 +245,7 @@ func Test_Amount_SplitProportionaly(t *testing.T) {
 		{-100, []Amount{1, 0, 1}, []Amount{-50, 0, -50}},
 	}
 	for _, test := range data {
-		result := test.amount.SplitProportionaly(test.weights)
+		result := test.amount.SplitProportionally(test.weights)
 		assert.Equal(t, test.expected, result)
 	}
 }

@@ -264,29 +264,29 @@ func (a Amount) Percentage(percent float64) Amount {
 	return a * Amount(percent) / 100
 }
 
-// SplitEquallyRoundToCents divides the amount equally into numAmounts amounts
-// that are rounded to cents and that sum up to the initial amount rounded to cents.
+// SplitEqually divides the amount equally into count amounts
+// that are rounded to cents and sum up to the initial amount rounded to cents.
 // The last amount may slightly differ from the others amounts to guarantee
 // that the sum of the rounded cents equals the rounded cents of the initial amount.
-func (a Amount) SplitEquallyRoundToCents(numAmounts int) []Amount {
-	if numAmounts < 1 {
+func (a Amount) SplitEqually(count int) []Amount {
+	if count < 1 {
 		return nil
 	}
-	splitted := make([]Amount, numAmounts)
-	part := (a / Amount(numAmounts)).RoundToCents()
-	for i := 0; i < numAmounts-1; i++ {
-		splitted[i] = part
+	result := make([]Amount, count)
+	part := (a / Amount(count)).RoundToCents()
+	for i := 0; i < count-1; i++ {
+		result[i] = part
 	}
-	splitted[numAmounts-1] = (a.RoundToCents() - (part * Amount(numAmounts-1))).RoundToCents()
-	return splitted
+	result[count-1] = (a.RoundToCents() - (part * Amount(count-1))).RoundToCents()
+	return result
 }
 
-// SplitProportionaly splits an amount proportianly
+// SplitProportionally splits an amount proportianly
 // to the passed weights into the same number of amounts
 // and makes sure that the sum the amounts rounded to cents
 // is identical to the amount rounded to cents.
 // The passed weights can be positive, negative, or zero.
-func (a Amount) SplitProportionaly(weights []Amount) []Amount {
+func (a Amount) SplitProportionally(weights []Amount) []Amount {
 	numWeights := len(weights)
 	if numWeights == 0 {
 		return nil
@@ -299,14 +299,14 @@ func (a Amount) SplitProportionaly(weights []Amount) []Amount {
 	scaleFactor := a / compareSum
 
 	compareSum = 0
-	split := make([]Amount, numWeights)
+	result := make([]Amount, numWeights)
 	for i := 0; i < numWeights-1; i++ {
-		split[i] = (weights[i].Copysign(a) * scaleFactor).RoundToCents()
-		compareSum += split[i]
+		result[i] = (weights[i].Copysign(a) * scaleFactor).RoundToCents()
+		compareSum += result[i]
 	}
-	split[numWeights-1] = (a.RoundToCents() - compareSum).RoundToCents()
+	result[numWeights-1] = (a.RoundToCents() - compareSum).RoundToCents()
 
-	return split
+	return result
 }
 
 // Valid returns if the amount is neither infinite nor NaN
