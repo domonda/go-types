@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"unsafe"
 )
 
 var (
@@ -119,6 +120,88 @@ func (s TrimmedString) StringOr(nullString string) string {
 // consisting only of whitespace.
 func (s TrimmedString) String() string {
 	return strings.TrimSpace(string(s))
+}
+
+// ToValidUTF8 returns a copy of the TrimmedString with each run of invalid UTF-8 byte sequences
+// replaced by the replacement string, which may be empty.
+func (s TrimmedString) ToValidUTF8(replacement string) TrimmedString {
+	return TrimmedStringFrom(strings.ToValidUTF8(s.String(), replacement))
+}
+
+// ToUpper returns s with all Unicode letters mapped to their upper case.
+func (s TrimmedString) ToUpper() TrimmedString {
+	return TrimmedString(strings.ToUpper(s.String()))
+}
+
+// ToLower returns s with all Unicode letters mapped to their lower case.
+func (s TrimmedString) ToLower() TrimmedString {
+	return TrimmedString(strings.ToLower(s.String()))
+}
+
+// Contains reports whether substr is within s.
+func (s TrimmedString) Contains(substr string) bool {
+	return strings.Contains(s.String(), substr)
+}
+
+// ContainsAny reports whether any Unicode code points in chars are within s.
+func (s TrimmedString) ContainsAny(chars string) bool {
+	return strings.ContainsAny(s.String(), chars)
+}
+
+// ContainsRune reports whether the Unicode code point r is within s.
+func (s TrimmedString) ContainsRune(r rune) bool {
+	return strings.ContainsRune(s.String(), r)
+}
+
+// HasPrefix tests whether the TrimmedString begins with prefix.
+func (s TrimmedString) HasPrefix(prefix string) bool {
+	return strings.HasPrefix(s.String(), prefix)
+}
+
+// HasSuffix tests whether the TrimmedString ends with suffix.
+func (s TrimmedString) HasSuffix(suffix string) bool {
+	return strings.HasSuffix(s.String(), suffix)
+}
+
+// TrimPrefix returns s without the provided leading prefix string.
+// If the TrimmedString doesn't start with prefix, s is returned unchanged.
+func (s TrimmedString) TrimPrefix(prefix string) TrimmedString {
+	return TrimmedStringFrom(strings.TrimPrefix(s.String(), prefix))
+}
+
+// TrimSuffix returns s without the provided trailing suffix string.
+// If the TrimmedString doesn't end with suffix, s is returned unchanged.
+func (s TrimmedString) TrimSuffix(suffix string) TrimmedString {
+	return TrimmedStringFrom(strings.TrimSuffix(s.String(), suffix))
+}
+
+// ReplaceAll returns a copy of the TrimmedString with all
+// non-overlapping instances of old replaced by new.
+// If old is empty, it matches at the beginning of the string
+// and after each UTF-8 sequence, yielding up to k+1 replacements
+// for a k-rune string.
+func (s TrimmedString) ReplaceAll(old, new string) TrimmedString {
+	return TrimmedString(strings.TrimSpace(strings.ReplaceAll(s.String(), old, new)))
+}
+
+// Split slices s into all substrings separated by sep and returns a slice of
+// the substrings between those separators.
+//
+// If s does not contain sep and sep is not empty, Split returns a
+// slice of length 1 whose only element is s.
+//
+// If sep is empty, Split splits after each UTF-8 sequence. If both s
+// and sep are empty, Split returns an empty slice.
+//
+// It is equivalent to SplitN with a count of -1.
+//
+// To split around the first instance of a separator, see Cut.
+func (s TrimmedString) Split(sep string) []TrimmedString {
+	substrings := strings.Split(s.String(), sep)
+	for i, substring := range substrings {
+		substrings[i] = strings.TrimSpace(substring)
+	}
+	return *(*[]TrimmedString)(unsafe.Pointer(&substrings))
 }
 
 // Get returns the non nullable string value
