@@ -189,7 +189,7 @@ func Test_Amount_SplitEqually(t *testing.T) {
 	}
 	data := map[input][]Amount{
 		{amount: 100, numAmounts: 0}:     nil,
-		{amount: 100.005, numAmounts: 1}: {100.01},
+		{amount: 100.005, numAmounts: 1}: {100.005}, // Single amount won't be rounded to cents
 		{amount: 100.005, numAmounts: 2}: {50, 50.01},
 		{amount: 100, numAmounts: 3}:     {33.33, 33.33, 33.34},
 		{amount: 0.01, numAmounts: 5}:    {0, 0, 0, 0, 0.01},
@@ -197,7 +197,7 @@ func Test_Amount_SplitEqually(t *testing.T) {
 		{amount: 1, numAmounts: 17}:      {0.06, 0.06, 0.06, 0.06, 0.06, 0.06, 0.06, 0.06, 0.06, 0.06, 0.06, 0.06, 0.06, 0.06, 0.06, 0.06, 0.04},
 
 		{amount: -100, numAmounts: 0}:     nil,
-		{amount: -100.005, numAmounts: 1}: {-100.01},
+		{amount: -100.005, numAmounts: 1}: {-100.005}, // Single amount won't be rounded to cents
 		{amount: -100.005, numAmounts: 2}: {-50, -50.01},
 		{amount: -100, numAmounts: 3}:     {-33.33, -33.33, -33.34},
 		{amount: -0.01, numAmounts: 5}:    {-0, -0, -0, -0, -0.01},
