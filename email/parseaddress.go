@@ -24,7 +24,7 @@ const (
 	atext             = `[a-zA-Z0-9` + atextSpecialChars + `][\.a-zA-Z0-9` + atextSpecialChars + `]*`
 	localPart         = `'?(?:[ \t]?(` + `[a-zA-Z0-9\.]` + `|` + atext + `|` + `"[^"]+"` + `))`
 	domainChars       = `a-zA-Z0-9` + umlautChars
-	domainPart        = `([` + domainChars + `][\-\.` + domainChars + `]+\.[a-zA-Z]{2,})`
+	domainPart        = `([` + domainChars + `][\-\.` + domainChars + `]*\.[a-zA-Z]{2,})`
 	addressRegex      = atext + `@` + domainPart
 
 	quotedNamePart         = `"([^"]*)"[ \t]*<?`

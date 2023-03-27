@@ -70,6 +70,9 @@ var (
 		`YouWon't@belivethisßällm.bHt`:                      {Name: ``, Address: "youwon't@belivethisßällm.bht"},
 		`"alte.mücke@united-b.de" <alte.mücke@united-b.de>`: {Name: ``, Address: "alte.mücke@united-b.de"},
 
+		`<some.name@t.pl>`: {Name: ``, Address: "some.name@t.pl"}, // Allow single character domain
+		`"Dipl.-Ing. Extra (Wichtig" <some.name@t.pl>`: {Name: `Dipl.-Ing. Extra (Wichtig`, Address: "some.name@t.pl"},
+
 		// `Non standard comma, in name <comma@example.com>`: {Name: `Non standard comma, in name`, Address: "comma@example.com"},
 	}
 
@@ -125,7 +128,9 @@ func TestParseAddress(t *testing.T) {
 	for addr, expected := range validEmailAddresses {
 		t.Run(addr, func(t *testing.T) {
 			result, err := ParseAddress(addr)
-			assert.NoError(t, err, "valid email address")
+			if !assert.NoError(t, err, "valid email address") {
+				fmt.Println("DEBUG addressRegex:", addressRegex)
+			}
 			assert.Equal(t, expected, result, "address: %s", addr)
 		})
 	}
