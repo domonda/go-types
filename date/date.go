@@ -460,6 +460,10 @@ func (date Date) AddDate(years int, months int, days int) Date {
 	return OfTime(date.MidnightUTC().AddDate(years, months, days))
 }
 
+func (date Date) Sub(other Date) time.Duration {
+	return date.MidnightUTC().Sub(other.MidnightUTC())
+}
+
 func (date Date) BeginningOfWeek() Date {
 	n := (now.Now{Time: date.MidnightUTC()})
 	return OfTime(n.BeginningOfWeek())
