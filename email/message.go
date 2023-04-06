@@ -402,7 +402,6 @@ func (msg *Message) BuildRawMessage() (raw []byte, err error) {
 			part.Content = att.File.FileData
 			part.FileName = att.File.FileName
 			part.Disposition = "attachment"
-			part.Header = make(textproto.MIMEHeader)
 			root.AddChild(part)
 		}
 	}
