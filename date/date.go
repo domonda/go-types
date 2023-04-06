@@ -460,6 +460,22 @@ func (date Date) AddDate(years int, months int, days int) Date {
 	return OfTime(date.MidnightUTC().AddDate(years, months, days))
 }
 
+func (date Date) AddYears(years int) Date {
+	return OfTime(date.Midnight().AddDate(years, 0, 0))
+}
+
+func (date Date) AddMonths(months int) Date {
+	return OfTime(date.Midnight().AddDate(0, months, 0))
+}
+
+func (date Date) AddDays(days int) Date {
+	return OfTime(date.Midnight().AddDate(0, 0, days))
+}
+
+func (date Date) Add(d time.Duration) Date {
+	return OfTime(date.MidnightUTC().Add(d))
+}
+
 func (date Date) Sub(other Date) time.Duration {
 	return date.MidnightUTC().Sub(other.MidnightUTC())
 }
@@ -633,22 +649,6 @@ func (date Date) BeforeToday() bool {
 
 func (date Date) BeforeTodayInUTC() bool {
 	return date.Before(OfNowInUTC())
-}
-
-func (date Date) Add(years, months, days int) Date {
-	return OfTime(date.Midnight().AddDate(years, months, days))
-}
-
-func (date Date) AddYears(years int) Date {
-	return OfTime(date.Midnight().AddDate(years, 0, 0))
-}
-
-func (date Date) AddMonths(months int) Date {
-	return OfTime(date.Midnight().AddDate(0, months, 0))
-}
-
-func (date Date) AddDays(days int) Date {
-	return OfTime(date.Midnight().AddDate(0, 0, days))
 }
 
 func isDateSeparatorRune(r rune) bool {
