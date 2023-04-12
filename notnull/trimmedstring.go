@@ -7,7 +7,6 @@ import (
 	"encoding"
 	"encoding/json"
 	"encoding/xml"
-	"errors"
 	"fmt"
 	"strings"
 	"unsafe"
@@ -28,6 +27,7 @@ var (
 // TrimmedString is a string type where
 // all marshaller and unmarshaller will trim
 // whitespace first before returning or using a value.
+// TrimmedString can hold an empty string.
 type TrimmedString string
 
 // TrimmedStringf formats a string using fmt.Sprintf
@@ -163,11 +163,11 @@ func (s TrimmedString) Value() (driver.Value, error) {
 func (s *TrimmedString) Scan(value any) error {
 	switch x := value.(type) {
 	case string:
-		x = strings.TrimSpace(x)
-		if x == "" {
-			return errors.New("can't scan empty trimmed string as notnull.TrimmedString")
-		}
-		*s = TrimmedString(x)
+		*s = TrimmedString(strings.TrimSpace(x))
+		return nil
+
+	case []byte:
+		*s = TrimmedString(bytes.TrimSpace(x))
 		return nil
 
 	default:

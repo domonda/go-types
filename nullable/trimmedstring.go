@@ -33,8 +33,9 @@ const NullTrimmedString TrimmedString = ""
 // is interpreted as SQL NULL and JSON null by
 // implementing the sql.Scanner and driver.Valuer interfaces
 // and also json.Marshaler and json.Unmarshaler.
-// Note that this type can't hold an empty string without
-// interpreting it as not null SQL or JSON value.
+//
+// Note that this type can't hold a not null empty string,
+// because it will interpret it as null SQL or JSON value.
 type TrimmedString string
 
 // TrimmedStringf formats a string using fmt.Sprintf
@@ -242,7 +243,15 @@ func (s *TrimmedString) Scan(value any) error {
 
 	case string:
 		x = strings.TrimSpace(x)
-		if x == "" {
+		if len(x) == 0 {
+			return errors.New("can't scan empty trimmed string as nullable.TrimmedString")
+		}
+		*s = TrimmedString(x)
+		return nil
+
+	case []byte:
+		x = bytes.TrimSpace(x)
+		if len(x) == 0 {
 			return errors.New("can't scan empty trimmed string as nullable.TrimmedString")
 		}
 		*s = TrimmedString(x)

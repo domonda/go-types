@@ -129,16 +129,23 @@ func (n *NonEmptyString) SetNull() {
 
 // Scan implements the database/sql.Scanner interface.
 func (n *NonEmptyString) Scan(value any) error {
-	switch s := value.(type) {
+	switch x := value.(type) {
 	case nil:
 		n.SetNull()
 		return nil
 
 	case string:
-		if s == "" {
+		if len(x) == 0 {
 			return errors.New("can't scan empty string as nullable.NonEmptyString")
 		}
-		*n = NonEmptyString(s)
+		*n = NonEmptyString(x)
+		return nil
+
+	case []byte:
+		if len(x) == 0 {
+			return errors.New("can't scan empty string as nullable.NonEmptyString")
+		}
+		*n = NonEmptyString(x)
 		return nil
 
 	default:
