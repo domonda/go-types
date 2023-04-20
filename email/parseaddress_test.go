@@ -74,6 +74,9 @@ var (
 		`"Dipl.-Ing. Extra (Wichtig" <some.name@t.pl>`: {Name: `Dipl.-Ing. Extra (Wichtig`, Address: "some.name@t.pl"},
 
 		// `Non standard comma, in name <comma@example.com>`: {Name: `Non standard comma, in name`, Address: "comma@example.com"},
+
+		// TODO
+		// `Zögern, Voll | IST.live <zv@ist-live.de>`: {Name: `Zögern, Voll | IST.live`, Address: "zv@ist-live.de"},
 	}
 
 	invalidEmailAddresses = map[string]struct{}{
@@ -129,7 +132,7 @@ func TestParseAddress(t *testing.T) {
 		t.Run(addr, func(t *testing.T) {
 			result, err := ParseAddress(addr)
 			if !assert.NoError(t, err, "valid email address") {
-				fmt.Println("DEBUG addressRegex:", addressRegex)
+				fmt.Println("DEBUG nameAddressRegex:", nameAddressRegex)
 			}
 			assert.Equal(t, expected, result, "address: %s", addr)
 		})

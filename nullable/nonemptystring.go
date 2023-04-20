@@ -11,8 +11,8 @@ import (
 // Ensure that NonEmptyString implements StringGetter
 var _ StringGetter = NonEmptyString("")
 
-// NullNonEmptyString is the SQL NULL and JSON null value for NonEmptyString.
-const NullNonEmptyString NonEmptyString = ""
+// NonEmptyStringNull is the SQL NULL and JSON null value for NonEmptyString.
+const NonEmptyStringNull NonEmptyString = ""
 
 // NonEmptyString is a string type where the empty string value
 // is interpreted as SQL NULL and JSON null by
