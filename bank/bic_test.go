@@ -28,12 +28,14 @@ var invalidBICs = []BIC{
 	"bKAUATWW",
 	"GIBAATWWX01",
 	"GENODEFOJEV",
-	"AUTOBANK",    // valid syntax, but not a BIC
-	"DIENSTGEBER", // valid syntax, but not a BIC
-	"GELISTET",    // valid syntax, but not a BIC
-	"FACILITY",    // valid syntax, but not a BIC
 	"AMTSGERICHT", // valid syntax, but not a BIC
+	"AUTOBANK",    // valid syntax, but not a BIC
 	"DEUTSCHLAND", // valid syntax, but not a BIC
+	"DIENSTGEBER", // valid syntax, but not a BIC
+	"DOCUMENT",    // valid syntax, but not a BIC
+	"DOKUMENT",    // valid syntax, but not a BIC
+	"FACILITY",    // valid syntax, but not a BIC
+	"GELISTET",    // valid syntax, but not a BIC
 	"GESAMTNETTO", // valid syntax, but not a BIC
 }
 

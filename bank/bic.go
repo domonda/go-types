@@ -144,11 +144,13 @@ func (bic BIC) Value() (driver.Value, error) {
 }
 
 var falseBICs = map[BIC]struct{}{
-	"AUTOBANK":    {},
-	"DIENSTGEBER": {},
-	"GELISTET":    {},
-	"FACILITY":    {},
 	"AMTSGERICHT": {},
+	"AUTOBANK":    {},
 	"DEUTSCHLAND": {},
+	"DIENSTGEBER": {},
+	"DOCUMENT":    {},
+	"DOKUMENT":    {},
+	"FACILITY":    {},
+	"GELISTET":    {},
 	"GESAMTNETTO": {},
 }
