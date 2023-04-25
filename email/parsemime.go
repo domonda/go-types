@@ -76,6 +76,7 @@ func ParseMIMEMessage(reader io.Reader) (msg *Message, err error) {
 
 	for _, attachment := range envelope.Attachments {
 		msg.Attachments = append(msg.Attachments, &Attachment{
+			PartID:      attachment.PartID,
 			ContentID:   attachment.ContentID,
 			ContentType: attachment.ContentType,
 			File: fs.MemFile{

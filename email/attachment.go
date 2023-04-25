@@ -10,15 +10,10 @@ import (
 )
 
 type Attachment struct {
+	PartID      string     `json:"partID,omitempty"`
 	ContentID   string     `json:"contentID,omitempty"`
 	ContentType string     `json:"contentType,omitempty"`
 	File        fs.MemFile `json:"file"`
-}
-
-func (a *Attachment) FileReader() fs.FileReader { return &a.File }
-
-func (a *Attachment) String() string {
-	return fmt.Sprintf("Attachment{ID: `%s`, File: `%s`, Size: %d}", a.ContentID, a.File.FileName, len(a.File.FileData))
 }
 
 func NewAttachment(filename string, content []byte) *Attachment {
@@ -38,4 +33,12 @@ func NewAttachmentReadFile(ctx context.Context, file fs.FileReader) (*Attachment
 		return nil, err
 	}
 	return NewAttachment(file.Name(), data), nil
+}
+
+func (a *Attachment) FileReader() fs.FileReader {
+	return &a.File
+}
+
+func (a *Attachment) String() string {
+	return fmt.Sprintf("Attachment{ID: `%s`, File: `%s`, Size: %d}", a.PartID, a.File.FileName, len(a.File.FileData))
 }
