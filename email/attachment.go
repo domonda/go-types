@@ -2,6 +2,7 @@ package email
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 
 	"github.com/domonda/go-types/uu"
@@ -15,6 +16,10 @@ type Attachment struct {
 }
 
 func (a *Attachment) FileReader() fs.FileReader { return &a.File }
+
+func (a *Attachment) String() string {
+	return fmt.Sprintf("Attachment{ID: `%s`, File: `%s`, Size: %d}", a.ContentID, a.File.FileName, len(a.File.FileData))
+}
 
 func NewAttachment(filename string, content []byte) *Attachment {
 	return &Attachment{

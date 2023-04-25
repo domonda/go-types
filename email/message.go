@@ -54,7 +54,7 @@ type Message struct {
 	InReplyToProviderID nullable.TrimmedString `json:"inReplyToProviderID,omitempty"`
 
 	// ProviderLabels are optional labels from the email provider
-	// like GMail that are not encoded in the essage itself.
+	// like GMail that are not encoded in the message itself.
 	ProviderLabels []string `json:"providerLabels,omitempty"`
 
 	// MessageID is the "Message-ID" header according to RFC 822/2822/5322.
@@ -238,7 +238,7 @@ func (msg *Message) FeedbackID() string {
 
 func (msg *Message) String() string {
 	return fmt.Sprintf(
-		"Message{Subject: %q, From: %s, DeliveredTo: %s, MessageID: %s, ProviderID: %s, Labels: %q}",
+		"Message{Subject: `%s`, From: %s, DeliveredTo: %s, MessageID: %s, ProviderID: %s, Labels: %s}",
 		msg.Subject,
 		msg.From,
 		msg.DeliveredTo(),
