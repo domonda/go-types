@@ -13,7 +13,7 @@ import (
 // Valid values for decimalSep are '.' and ','.
 // If thousandsSep is not zero, then the integer part of the number is grouped
 // with thousandsSep between every group of 3 digits from right to left.
-// Valid values for thousandsSep are [0, ',', '.', '\'']
+// Valid rune values for thousandsSep are 0, ',', '.', "'"
 // and thousandsSep must be different from decimalSep.
 // The precision argument controls the number of digits (excluding the exponent).
 // The special precision -1 uses the smallest number of digits
@@ -22,7 +22,7 @@ import (
 // then the end of the fractional part will be padded with
 // '0' characters to reach the length of precision.
 // See: https://en.wikipedia.org/wiki/Decimal_separator
-func Format[T float32 | float64](f T, thousandsSep, decimalSep rune, precision int, padPrecision bool) string {
+func Format[T ~float32 | ~float64](f T, thousandsSep, decimalSep rune, precision int, padPrecision bool) string {
 	if thousandsSep != 0 && thousandsSep != '.' && thousandsSep != ',' && thousandsSep != ' ' && thousandsSep != '\'' {
 		panic(fmt.Errorf("invalid thousandsSep: '%s'", string(thousandsSep)))
 	}
