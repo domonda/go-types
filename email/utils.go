@@ -46,21 +46,22 @@ func formatDate(t *time.Time) string {
 	return t.Format(time.RFC1123Z)
 }
 
+var extractBodyURLsRegexp = xurls.Strict()
+
 // ExtractBodyURLs returns all HTTP URLs from the message body
-func ExtractBodyURLs(msg *Message) []string {
-	regex := xurls.Strict()
+func ExtractBodyURLs(msg *Message) strutil.StringSet {
 	urls := make(strutil.StringSet)
-	for _, url := range regex.FindAllString(msg.Body, -1) {
+	for _, url := range extractBodyURLsRegexp.FindAllString(msg.Body, -1) {
 		if strings.HasPrefix(url, "http") {
 			urls.Add(url)
 		}
 	}
-	for _, url := range regex.FindAllString(string(msg.BodyHTML), -1) {
+	for _, url := range extractBodyURLsRegexp.FindAllString(string(msg.BodyHTML), -1) {
 		if strings.HasPrefix(url, "http") {
 			urls.Add(url)
 		}
 	}
-	return urls.Sorted()
+	return urls
 }
 
 // func HTMLEmbedImages(html string, attachments []fs.FileReader) (inlinedHTML string, unusedAttachments []fs.FileReader) {
