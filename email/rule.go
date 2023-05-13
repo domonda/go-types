@@ -4,9 +4,9 @@ type Rule interface {
 	AppliesToMessage(msg *Message) bool
 }
 
-type FuleFunc func(*Message) bool
+type RuleFunc func(*Message) bool
 
-func (f FuleFunc) AppliesToMessage(msg *Message) bool {
+func (f RuleFunc) AppliesToMessage(msg *Message) bool {
 	return f(msg)
 }
 
