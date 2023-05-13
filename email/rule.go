@@ -4,10 +4,16 @@ type Rule interface {
 	AppliesToMessage(msg *Message) bool
 }
 
+type BoolRule bool
+
+func (r BoolRule) AppliesToMessage(*Message) bool {
+	return bool(r)
+}
+
 type AllRule []Rule
 
-func (all AllRule) AppliesToMessage(msg *Message) bool {
-	for _, rule := range all {
+func (r AllRule) AppliesToMessage(msg *Message) bool {
+	for _, rule := range r {
 		if !rule.AppliesToMessage(msg) {
 			return false
 		}
@@ -17,8 +23,8 @@ func (all AllRule) AppliesToMessage(msg *Message) bool {
 
 type AnyRule []Rule
 
-func (any AnyRule) AppliesToMessage(msg *Message) bool {
-	for _, rule := range any {
+func (r AnyRule) AppliesToMessage(msg *Message) bool {
+	for _, rule := range r {
 		if rule.AppliesToMessage(msg) {
 			return true
 		}
