@@ -399,8 +399,8 @@ func (msg *Message) BuildRawMessage() (raw []byte, err error) {
 		root.AddChild(part)
 		for _, att := range msg.Attachments {
 			part := enmime.NewPart(att.ContentType)
-			part.Content = att.File.FileData
-			part.FileName = att.File.FileName
+			part.Content = att.FileData
+			part.FileName = att.FileName
 			part.Disposition = "attachment"
 			root.AddChild(part)
 		}
