@@ -4,6 +4,12 @@ type Rule interface {
 	AppliesToMessage(msg *Message) bool
 }
 
+type FuleFunc func(*Message) bool
+
+func (f FuleFunc) AppliesToMessage(msg *Message) bool {
+	return f(msg)
+}
+
 type BoolRule bool
 
 func (r BoolRule) AppliesToMessage(*Message) bool {
