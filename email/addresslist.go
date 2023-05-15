@@ -27,7 +27,7 @@ func NormalizeAddressList(list string) (normalized []string, err error) {
 		if appended[a.Address] {
 			continue
 		}
-		normalized = append(normalized, a.String())
+		normalized = append(normalized, string(AddressFrom(a)))
 		appended[a.Address] = true
 	}
 	return normalized, nil
@@ -94,7 +94,7 @@ func (l AddressList) Split() ([]Address, error) {
 	}
 	a := make([]Address, len(parsed))
 	for i, p := range parsed {
-		a[i] = Address(p.String())
+		a[i] = AddressFrom(p)
 	}
 	return a, nil
 }
@@ -127,7 +127,7 @@ func (l AddressList) Normalized() (AddressList, error) {
 		if i > 0 {
 			b.WriteString(", ")
 		}
-		b.WriteString(p.String())
+		b.WriteString(string(AddressFrom(p)))
 	}
 	return AddressList(b.String()), nil
 }

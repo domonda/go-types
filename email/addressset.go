@@ -7,10 +7,11 @@ import (
 	"sort"
 	"unsafe"
 
+	"golang.org/x/exp/maps"
+
 	"github.com/domonda/go-types"
 	"github.com/domonda/go-types/notnull"
 	"github.com/domonda/go-types/nullable"
-	"golang.org/x/exp/maps"
 )
 
 // AddressSet is a set of unique email addresses

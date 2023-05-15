@@ -9,11 +9,18 @@ import (
 // with an optional name part before the mandatory address part.
 type Address string
 
-func AddressFrom(a *mail.Address) Address {
-	if a == nil {
+func AddressFrom(addr *mail.Address) Address {
+	if addr == nil {
 		return ""
 	}
-	return Address(a.String())
+	if addr.Name == "" {
+		// Without name just return the address part.
+		// parsed.String() always puts the address part
+		// within angle brackets which is only needed
+		// if there is also a name part.
+		return Address(addr.Address)
+	}
+	return Address(addr.String())
 }
 
 // NormalizedAddress parses an email address less strict
@@ -31,14 +38,7 @@ func (a Address) Normalized() (Address, error) {
 	if err != nil {
 		return "", err
 	}
-	if parsed.Name == "" {
-		// Without name just return the address part.
-		// parsed.String() always puts the address part
-		// within angle brackets which is only needed
-		// if there is also a name part.
-		return Address(parsed.Address), nil
-	}
-	return Address(parsed.String()), nil
+	return AddressFrom(parsed), nil
 }
 
 // Parse the Address as *mail.Address less strict than
