@@ -79,6 +79,7 @@ func ParseMIMEMessage(reader io.Reader) (msg *Message, err error) {
 			PartID:      part.PartID,
 			ContentID:   part.ContentID,
 			ContentType: part.ContentType,
+			Inline:      false,
 			MemFile: fs.MemFile{
 				FileName: part.FileName,
 				FileData: part.Content,
@@ -90,6 +91,7 @@ func ParseMIMEMessage(reader io.Reader) (msg *Message, err error) {
 			PartID:      part.PartID,
 			ContentID:   part.ContentID,
 			ContentType: part.ContentType,
+			Inline:      true,
 			MemFile: fs.MemFile{
 				FileName: part.FileName,
 				FileData: part.Content,

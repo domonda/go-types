@@ -248,12 +248,12 @@ func (msg *Message) String() string {
 	)
 }
 
-func (msg *Message) AddAttachment(filename string, content []byte) {
-	msg.Attachments = append(msg.Attachments, NewAttachment(filename, content))
+func (msg *Message) AddAttachment(partID, filename string, content []byte) {
+	msg.Attachments = append(msg.Attachments, NewAttachment(partID, filename, content))
 }
 
-func (msg *Message) AddAttachmentReadFile(ctx context.Context, file fs.FileReader) error {
-	attachment, err := NewAttachmentReadFile(ctx, file)
+func (msg *Message) AddAttachmentReadFile(ctx context.Context, partID string, file fs.FileReader) error {
+	attachment, err := NewAttachmentReadFile(ctx, partID, file)
 	if err != nil {
 		return err
 	}

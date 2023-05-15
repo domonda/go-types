@@ -3,6 +3,7 @@ package email
 import (
 	"bytes"
 	"context"
+	"fmt"
 
 	"github.com/jaytaylor/html2text"
 	"github.com/teamwork/tnef"
@@ -36,8 +37,12 @@ func ParseTNEFMessageBytes(messageBytes []byte) (msg *Message, err error) {
 		}
 		msg.BodyHTML.Set(html)
 	}
-	for _, attachment := range t.Attachments {
-		msg.Attachments = append(msg.Attachments, NewAttachment(attachment.Title, attachment.Data))
+	for i, attachment := range t.Attachments {
+		msg.Attachments = append(msg.Attachments, &Attachment{
+			PartID:  fmt.Sprintf("TNEF%d", i),
+			Inline:  false, // ??
+			MemFile: fs.MemFile{FileName: attachment.Title, FileData: attachment.Data},
+		})
 	}
 
 	return msg, nil

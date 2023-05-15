@@ -18,11 +18,14 @@ type Attachment struct {
 	PartID      string `json:"partID,omitempty"`
 	ContentID   string `json:"contentID,omitempty"`
 	ContentType string `json:"contentType,omitempty"`
+	Inline      bool   `json:"inline,omitempty"`
+
 	fs.MemFile
 }
 
-func NewAttachment(filename string, content []byte) *Attachment {
+func NewAttachment(partID, filename string, content []byte) *Attachment {
 	return &Attachment{
+		PartID:      partID,
 		ContentID:   uu.IDv4().Hex(),
 		ContentType: http.DetectContentType(content),
 		MemFile: fs.MemFile{
@@ -32,12 +35,12 @@ func NewAttachment(filename string, content []byte) *Attachment {
 	}
 }
 
-func NewAttachmentReadFile(ctx context.Context, file fs.FileReader) (*Attachment, error) {
+func NewAttachmentReadFile(ctx context.Context, partID string, file fs.FileReader) (*Attachment, error) {
 	data, err := file.ReadAllContext(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return NewAttachment(file.Name(), data), nil
+	return NewAttachment(partID, file.Name(), data), nil
 }
 
 func (a *Attachment) String() string {
