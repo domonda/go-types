@@ -74,14 +74,25 @@ func ParseMIMEMessage(reader io.Reader) (msg *Message, err error) {
 		}
 	}
 
-	for _, attachment := range envelope.Attachments {
+	for _, part := range envelope.Attachments {
 		msg.Attachments = append(msg.Attachments, &Attachment{
-			PartID:      attachment.PartID,
-			ContentID:   attachment.ContentID,
-			ContentType: attachment.ContentType,
+			PartID:      part.PartID,
+			ContentID:   part.ContentID,
+			ContentType: part.ContentType,
 			MemFile: fs.MemFile{
-				FileName: attachment.FileName,
-				FileData: attachment.Content,
+				FileName: part.FileName,
+				FileData: part.Content,
+			},
+		})
+	}
+	for _, part := range envelope.Inlines {
+		msg.Attachments = append(msg.Attachments, &Attachment{
+			PartID:      part.PartID,
+			ContentID:   part.ContentID,
+			ContentType: part.ContentType,
+			MemFile: fs.MemFile{
+				FileName: part.FileName,
+				FileData: part.Content,
 			},
 		})
 	}
