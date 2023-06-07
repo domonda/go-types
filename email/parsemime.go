@@ -22,6 +22,8 @@ func ParseMIMEMessage(reader io.Reader) (msg *Message, err error) {
 	}
 
 	msg = &Message{
+		// From:        Address(envelope.GetHeader("From")),
+		// ReplyTo:     NullableAddress(strings.TrimSpace(envelope.GetHeader("Reply-To"))),
 		MessageID:   nullable.TrimmedStringFrom(envelope.GetHeader("Message-Id")),
 		InReplyTo:   nullable.TrimmedStringFrom(envelope.GetHeader("In-Reply-To")),
 		References:  nullable.TrimmedStringFrom(envelope.GetHeader("References")),

@@ -41,12 +41,6 @@ func MustNullable(str string) NullableDate {
 	return d
 }
 
-// IsZero returns true when the date is any of ["", "0000-00-00", "0001-01-01", "null", "NULL"]
-// "0001-01-01" is treated as zero because it's the zero value of time.Time.
-func (n NullableDate) IsZero() bool {
-	return Date(n).IsZero()
-}
-
 // Date returns the NullableDate as Date without checking if it's null.
 // See also Get which panics on null.
 func (n NullableDate) Date() Date {
@@ -62,7 +56,13 @@ func (n NullableDate) DateOr(useIfNull Date) Date {
 	return Date(n)
 }
 
-// IsNull returns true if the NullableDate is null.
+// IsZero returns true when the date is any of ["", "0000-00-00", "0001-01-01", "null", "NULL"]
+// "0001-01-01" is treated as zero because it's the zero value of time.Time.
+func (n NullableDate) IsZero() bool {
+	return Date(n).IsZero()
+}
+
+// IsNull returns true if the NullableDate is null or zero.
 // IsNull implements the nullable.Nullable interface.
 func (n NullableDate) IsNull() bool {
 	return n.IsZero()
@@ -195,44 +195,6 @@ func (n NullableDate) NormalizedOrUnchanged(lang ...language.Code) NullableDate 
 	return normalized
 }
 
-// Scan implements the database/sql.Scanner interface.
-func (n *NullableDate) Scan(value any) (err error) {
-	switch x := value.(type) {
-	case string:
-		d := Date(x)
-		if !d.IsZero() {
-			d, err = d.Normalized()
-			if err != nil {
-				return err
-			}
-		}
-		*n = d.Nullable()
-		return nil
-
-	case time.Time:
-		*n = OfTime(x).Nullable()
-		return nil
-
-	case nil:
-		*n = Null
-		return nil
-	}
-
-	return fmt.Errorf("can't scan value '%#v' of type %T as data.NullableDate", value, value)
-}
-
-// Value implements the driver database/sql/driver.Valuer interface.
-func (n NullableDate) Value() (driver.Value, error) {
-	if n.IsZero() {
-		return nil, nil
-	}
-	normalized, err := Date(n).Normalized()
-	if err != nil {
-		return nil, err
-	}
-	return string(normalized), nil
-}
-
 // MidnightUTC returns the midnight (00:00) nullable.Time of the date in UTC,
 // or a null nullable.Time value if the date is not valid.
 func (n NullableDate) MidnightUTC() nullable.Time {
@@ -291,13 +253,13 @@ func (n NullableDate) EqualOrAfter(other NullableDate) bool {
 // Before returns if the date is before the passed other one.
 // A null date is always before any other date.
 func (n NullableDate) Before(other NullableDate) bool {
-	if n.IsNull() {
-		return true
-	}
 	if other.IsNull() {
 		return false
 	}
-	return n.MidnightUTC().Get().Before(other.MidnightUTC().Get())
+	if n.IsNull() {
+		return true
+	}
+	return Date(n).Before(Date(other))
 }
 
 // EqualOrBefore returns if the date is equal or before the passed other one.
@@ -312,6 +274,9 @@ func (n NullableDate) AfterTime(other time.Time) bool {
 	if n.IsNull() {
 		return false
 	}
+	if other.IsZero() {
+		return true
+	}
 	return n.MidnightInLocation(other.Location()).After(other)
 }
 
@@ -320,18 +285,216 @@ func (n NullableDate) AfterTime(other time.Time) bool {
 // Returns true if the date is null.
 func (n NullableDate) BeforeTime(other time.Time) bool {
 	if n.IsNull() {
-		return true
+		return !other.IsZero()
 	}
 	return n.MidnightInLocation(other.Location()).Before(other)
+}
+
+func (n NullableDate) AddDate(years int, months int, days int) NullableDate {
+	if n.IsNull() {
+		return Null
+	}
+	return Date(n).AddDate(years, months, days).Nullable()
+}
+
+func (n NullableDate) AddYears(years int) NullableDate {
+	if n.IsNull() {
+		return Null
+	}
+	return Date(n).AddYears(years).Nullable()
+}
+
+func (n NullableDate) AddMonths(months int) NullableDate {
+	if n.IsNull() {
+		return Null
+	}
+	return Date(n).AddMonths(months).Nullable()
+}
+
+func (n NullableDate) AddDays(days int) NullableDate {
+	if n.IsNull() {
+		return Null
+	}
+	return Date(n).AddDays(days).Nullable()
+}
+
+func (n NullableDate) Add(d time.Duration) NullableDate {
+	if n.IsNull() {
+		return Null
+	}
+	return Date(n).Add(d).Nullable()
+}
+
+func (n NullableDate) Sub(other NullableDate) time.Duration {
+	if n.IsNull() || other.IsNull() || other == n {
+		return 0
+	}
+	return Date(n).Sub(Date(other))
+}
+
+func (n NullableDate) BeginningOfWeek() NullableDate {
+	if n.IsNull() {
+		return Null
+	}
+	return Date(n).BeginningOfWeek().Nullable()
+}
+
+func (n NullableDate) BeginningOfMonth() NullableDate {
+	if n.IsNull() {
+		return Null
+	}
+	return Date(n).BeginningOfMonth().Nullable()
+}
+
+func (n NullableDate) BeginningOfQuarter() NullableDate {
+	if n.IsNull() {
+		return Null
+	}
+	return Date(n).BeginningOfQuarter().Nullable()
+}
+
+func (n NullableDate) BeginningOfYear() NullableDate {
+	if n.IsNull() {
+		return Null
+	}
+	return Date(n).BeginningOfYear().Nullable()
+}
+
+func (n NullableDate) EndOfWeek() NullableDate {
+	if n.IsNull() {
+		return Null
+	}
+	return Date(n).EndOfWeek().Nullable()
+}
+
+func (n NullableDate) EndOfMonth() NullableDate {
+	if n.IsNull() {
+		return Null
+	}
+	return Date(n).EndOfMonth().Nullable()
+}
+
+func (n NullableDate) EndOfQuarter() NullableDate {
+	if n.IsNull() {
+		return Null
+	}
+	return Date(n).EndOfQuarter().Nullable()
+}
+
+func (n NullableDate) EndOfYear() NullableDate {
+	if n.IsNull() {
+		return Null
+	}
+	return Date(n).EndOfYear().Nullable()
+}
+
+func (n NullableDate) LastMonday() NullableDate {
+	if n.IsNull() {
+		return Null
+	}
+	return Date(n).LastMonday().Nullable()
+}
+
+func (n NullableDate) NextSunday() NullableDate {
+	if n.IsNull() {
+		return Null
+	}
+	return Date(n).NextSunday().Nullable()
+}
+
+// YearMonthDay returns the year, month, day components of the Date.
+// Zero values will be returned when the date is not valid or null.
+func (n NullableDate) YearMonthDay() (year int, month time.Month, day int) {
+	if n.IsNull() {
+		return 0, 0, 0
+	}
+	return Date(n).YearMonthDay()
+}
+
+// Year of the date
+// or zero if the date is null.
+func (n NullableDate) Year() int {
+	year, _, _ := n.YearMonthDay()
+	return year
+}
+
+// Month of the date
+// or zero if the date is null.
+func (n NullableDate) Month() time.Month {
+	_, month, _ := n.YearMonthDay()
+	return month
+}
+
+// Day within the month of the date
+// or zero if the date is null.
+func (n NullableDate) Day() int {
+	_, _, day := n.YearMonthDay()
+	return day
+}
+
+// Weekday returns the date's day of the week
+// or zero if the date is null.
+func (n NullableDate) Weekday() time.Weekday {
+	if n.IsNull() {
+		return 0
+	}
+	return Date(n).Weekday()
 }
 
 // ISOWeek returns the ISO 8601 year and week number in which the date occurs.
 // Week ranges from 1 to 53. Jan 01 to Jan 03 of year n might belong to
 // week 52 or 53 of year n-1, and Dec 29 to Dec 31 might belong to week 1
 // of year n+1.
+// Returns zeros if the date is not valid or null.
 func (n NullableDate) ISOWeek() (year, week int) {
-	// Date.ISOWeek can handle zero/null
+	if n.IsNull() {
+		return 0, 0
+	}
 	return Date(n).ISOWeek()
+}
+
+func (n NullableDate) IsToday() bool {
+	if n.IsNull() {
+		return false
+	}
+	return Date(n).IsToday()
+}
+
+func (n NullableDate) IsTodayInUTC() bool {
+	if n.IsNull() {
+		return false
+	}
+	return Date(n).IsTodayInUTC()
+}
+
+func (n NullableDate) AfterToday() bool {
+	if n.IsNull() {
+		return false
+	}
+	return Date(n).AfterToday()
+}
+
+func (n NullableDate) AfterTodayInUTC() bool {
+	if n.IsNull() {
+		return false
+	}
+	return Date(n).AfterTodayInUTC()
+}
+
+// Null is always before today.
+func (n NullableDate) BeforeToday() bool {
+	if n.IsNull() {
+		return true
+	}
+	return Date(n).BeforeToday()
+}
+
+// Null is always before today.
+func (n NullableDate) BeforeTodayInUTC() bool {
+	if n.IsNull() {
+		return true
+	}
+	return Date(n).BeforeTodayInUTC()
 }
 
 // Format returns n.MidnightUTC().Format(layout),
@@ -344,6 +507,44 @@ func (n NullableDate) Format(layout string) string {
 		return string(n)
 	}
 	return n.MidnightUTC().Format(layout)
+}
+
+// Scan implements the database/sql.Scanner interface.
+func (n *NullableDate) Scan(value any) (err error) {
+	switch x := value.(type) {
+	case string:
+		d := Date(x)
+		if !d.IsZero() {
+			d, err = d.Normalized()
+			if err != nil {
+				return err
+			}
+		}
+		*n = d.Nullable()
+		return nil
+
+	case time.Time:
+		*n = OfTime(x).Nullable()
+		return nil
+
+	case nil:
+		*n = Null
+		return nil
+	}
+
+	return fmt.Errorf("can't scan value '%#v' of type %T as data.NullableDate", value, value)
+}
+
+// Value implements the driver database/sql/driver.Valuer interface.
+func (n NullableDate) Value() (driver.Value, error) {
+	if n.IsZero() {
+		return nil, nil
+	}
+	normalized, err := Date(n).Normalized()
+	if err != nil {
+		return nil, err
+	}
+	return string(normalized), nil
 }
 
 // MarshalJSON implements encoding/json.Marshaler

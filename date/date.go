@@ -315,6 +315,13 @@ func (date Date) Nullable() NullableDate {
 	return NullableDate(date)
 }
 
+// IsZero returns true when the date is any of ["", "0000-00-00", "0001-01-01"]
+// "0001-01-01" is treated as zero because it's the zero value of time.Time.
+// "0000-00-00" may be the zero value of other date implementations.
+func (date Date) IsZero() bool {
+	return date == "" || date == "0001-01-01" || date == "0000-00-00"
+}
+
 // Validate returns an error if the date is not in a valid, normalizeable format.
 func (date Date) Validate() error {
 	_, err := date.Normalized()
@@ -574,12 +581,37 @@ func (date Date) Weekday() time.Weekday {
 // Week ranges from 1 to 53. Jan 01 to Jan 03 of year n might belong to
 // week 52 or 53 of year n-1, and Dec 29 to Dec 31 might belong to week 1
 // of year n+1.
+// Returns zeros if the date is not valid.
 func (date Date) ISOWeek() (year, week int) {
 	t := date.MidnightUTC()
 	if t.IsZero() {
 		return 0, 0
 	}
 	return t.ISOWeek()
+}
+
+func (date Date) IsToday() bool {
+	return date == OfToday()
+}
+
+func (date Date) IsTodayInUTC() bool {
+	return date == OfNowInUTC()
+}
+
+func (date Date) AfterToday() bool {
+	return date.After(OfToday())
+}
+
+func (date Date) AfterTodayInUTC() bool {
+	return date.After(OfNowInUTC())
+}
+
+func (date Date) BeforeToday() bool {
+	return date.Before(OfToday())
+}
+
+func (date Date) BeforeTodayInUTC() bool {
+	return date.Before(OfNowInUTC())
 }
 
 // Scan implements the database/sql.Scanner interface.
@@ -618,37 +650,6 @@ func (date Date) Value() (driver.Value, error) {
 		return nil, err
 	}
 	return string(normalized), nil
-}
-
-// IsZero returns true when the date is any of ["", "0000-00-00", "0001-01-01"]
-// "0001-01-01" is treated as zero because it's the zero value of time.Time.
-// "0000-00-00" may be the zero value of other date implementations.
-func (date Date) IsZero() bool {
-	return date == "" || date == "0000-00-00" || date == "0001-01-01"
-}
-
-func (date Date) IsToday() bool {
-	return date == OfToday()
-}
-
-func (date Date) IsTodayInUTC() bool {
-	return date == OfNowInUTC()
-}
-
-func (date Date) AfterToday() bool {
-	return date.After(OfToday())
-}
-
-func (date Date) AfterTodayInUTC() bool {
-	return date.After(OfNowInUTC())
-}
-
-func (date Date) BeforeToday() bool {
-	return date.Before(OfToday())
-}
-
-func (date Date) BeforeTodayInUTC() bool {
-	return date.Before(OfNowInUTC())
 }
 
 func isDateSeparatorRune(r rune) bool {
