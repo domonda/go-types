@@ -66,7 +66,7 @@ func (n NullableAddress) NamePart() (string, error) {
 // of an email address that may also contain a name part.
 func (n NullableAddress) AddressPart() (NullableAddress, error) {
 	if n.IsNull() {
-		return n, nil
+		return "", nil
 	}
 	a, err := Address(n).AddressPart()
 	return NullableAddress(a), err

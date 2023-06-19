@@ -70,11 +70,12 @@ type Message struct {
 	// Date header
 	Date *time.Time `json:"date,omitempty"`
 
-	From    Address             `json:"from,omitempty"`
-	ReplyTo NullableAddress     `json:"replyTo,omitempty"`
-	To      AddressList         `json:"to,omitempty"`
-	Cc      NullableAddressList `json:"cc,omitempty"`
-	Bcc     NullableAddressList `json:"bcc,omitempty"`
+	From        Address             `json:"from,omitempty"`
+	ReplyTo     NullableAddress     `json:"replyTo,omitempty"`
+	To          AddressList         `json:"to,omitempty"`
+	DeliveredTo NullableAddress     `json:"deliveredTo,omitempty"`
+	Cc          NullableAddressList `json:"cc,omitempty"`
+	Bcc         NullableAddressList `json:"bcc,omitempty"`
 
 	// ExtraHeader can be used for additional header data
 	// not covered by the other fields of the struct.
@@ -195,12 +196,12 @@ func (msg *Message) ReplyToAddress() Address {
 	return msg.ReplyTo.Get()
 }
 
-// DeliveredTo returns the normalized address part
-// of the "Delivered-To" header if available.
-func (msg *Message) DeliveredTo() NullableAddress {
-	addr, _ := NullableAddress(msg.ExtraHeader.Get("Delivered-To")).AddressPart()
-	return addr
-}
+// // DeliveredTo returns the normalized address part
+// // of the "Delivered-To" header if available.
+// func (msg *Message) DeliveredTo() NullableAddress {
+// 	addr, _ := NullableAddress(msg.ExtraHeader.Get("Delivered-To")).AddressPart()
+// 	return addr
+// }
 
 // Returns if the "Auto-Submitted" header is set
 // and has a different value than "no".
@@ -241,7 +242,7 @@ func (msg *Message) String() string {
 		"Message{Subject: `%s`, From: %s, DeliveredTo: %s, MessageID: %s, ProviderID: %s, Labels: %s}",
 		msg.Subject,
 		msg.From,
-		msg.DeliveredTo(),
+		msg.DeliveredTo,
 		msg.MessageID,
 		msg.ProviderID,
 		msg.ProviderLabels,

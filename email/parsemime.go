@@ -53,6 +53,10 @@ func ParseMIMEMessage(reader io.Reader) (msg *Message, err error) {
 		}
 		msg.To = msg.To.Append(addrs...)
 	}
+	msg.DeliveredTo, err = NullableAddress(envelope.GetHeader("Delivered-To")).AddressPart()
+	if err != nil {
+		return nil, fmt.Errorf("can't parse email header 'Delivered-To': %w", err)
+	}
 	for _, cc := range envelope.GetHeaderValues("Cc") {
 		addrs, err := AddressList(cc).Split()
 		if err != nil {
