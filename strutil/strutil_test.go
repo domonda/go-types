@@ -1,6 +1,7 @@
 package strutil
 
 import (
+	"math"
 	"strings"
 	"testing"
 	"unicode"
@@ -150,6 +151,26 @@ func TestSanitizeFileName(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := SanitizeFileName(tt.args.name); got != tt.want {
 				t.Errorf("SanitizeFileName() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestReplaceTransliterationsMaxLen(t *testing.T) {
+	tests := []struct {
+		str    string
+		maxLen int
+		want   string
+	}{
+		{"", math.MaxInt, ""},
+		{"Österreich", math.MaxInt, "Oesterreich"},
+		{"Österreich", 3, "Oes"},
+		{"Öster\uFFFDeich", 100, "Oestereich"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.str, func(t *testing.T) {
+			if got := ReplaceTransliterationsMaxLen(tt.str, tt.maxLen); got != tt.want {
+				t.Errorf("ReplaceTransliterationsMaxLen(%#v) = %#v, want %#v", tt.str, got, tt.want)
 			}
 		})
 	}

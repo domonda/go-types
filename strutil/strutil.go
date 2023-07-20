@@ -3,6 +3,7 @@ package strutil
 import (
 	"bytes"
 	"encoding/json"
+	"math"
 	"net/url"
 	"path"
 	"strings"
@@ -397,7 +398,7 @@ var normalizedExt = map[string]string{
 	".jpg": ".jpeg",
 }
 
-// A very limited list of transliterations to catch common european names translated to urls.
+// A very limited list of transliterations to catch common European special characters.
 // This set could be expanded with at least caps and many more characters.
 var transliterations = map[rune]string{
 	'À': "A",
@@ -473,14 +474,39 @@ var transliterations = map[rune]string{
 	'œ': "oe",
 }
 
+// ReplaceTransliterations returns the string sanitized
+// as valid UTF-8 with common European special characters
+// transliterated to single or multiple ANSI characters.
 func ReplaceTransliterations(str string) string {
+	return ReplaceTransliterationsMaxLen(str, math.MaxInt)
+}
+
+// ReplaceTransliterationsMaxLen returns the string sanitized
+// as valid UTF-8 with common European special characters
+// transliterated to single or multiple ANSI characters.
+//
+// The maxLen argument limits the number of runes returned.
+func ReplaceTransliterationsMaxLen(str string, maxLen int) string {
 	var b strings.Builder
-	b.Grow(len(str))
-	for _, char := range str {
-		if repl, ok := transliterations[char]; ok {
+	if len(str) < maxLen {
+		b.Grow(len(str))
+	} else {
+		b.Grow(maxLen)
+	}
+	l := 0
+	for _, r := range str {
+		if r == unicode.ReplacementChar {
+			continue // Ignore invalid UTF-8 sequences
+		}
+		if repl, ok := transliterations[r]; ok {
 			b.WriteString(repl)
+			l += len(repl)
 		} else {
-			b.WriteRune(char)
+			b.WriteRune(r)
+			l++
+		}
+		if l >= maxLen {
+			break
 		}
 	}
 	return b.String()
