@@ -20,7 +20,7 @@ func StringIsBIC(str string) bool {
 	return BIC(str).Valid()
 }
 
-// BIC is a SWIFT Business Identifier Code.
+// BIC is a SWIFT Business Identifier Code (also know as SWIFT-Code).
 // BIC implements the database/sql.Scanner and database/sql/driver.Valuer interfaces
 // and will treat an empty BIC string as SQL NULL value.
 type BIC string
