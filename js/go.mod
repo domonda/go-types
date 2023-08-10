@@ -7,7 +7,7 @@ toolchain go1.21.0
 // Parent module in same repo
 replace github.com/domonda/go-types => ../
 
-require github.com/domonda/go-types v0.0.0-20230804121416-56575927f09a
+require github.com/domonda/go-types v0.0.0-20230810133443-7fcb0a5a218b
 
 // External
 require github.com/gopherjs/gopherjs v1.18.0-beta3
