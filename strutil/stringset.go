@@ -1,10 +1,9 @@
 package strutil
 
 import (
+	"maps"
 	"sort"
 	"strings"
-
-	"golang.org/x/exp/maps"
 )
 
 type StringSet map[string]struct{}
@@ -96,7 +95,7 @@ func (set StringSet) Delete(str string) {
 }
 
 func (set StringSet) Clear() {
-	maps.Clear(set)
+	clear(set)
 }
 
 func (set StringSet) DeleteSlice(s []string) {

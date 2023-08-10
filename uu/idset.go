@@ -4,9 +4,8 @@ import (
 	"bytes"
 	"database/sql/driver"
 	"io"
+	"maps"
 	"strings"
-
-	"golang.org/x/exp/maps"
 )
 
 // IDSet is a set of uu.IDs.
@@ -176,7 +175,7 @@ func (s IDSet) Delete(id ID) {
 }
 
 func (s IDSet) Clear() {
-	maps.Clear(s)
+	clear(s)
 }
 
 func (s IDSet) DeleteSlice(sl IDSlice) {

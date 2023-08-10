@@ -4,10 +4,9 @@ import (
 	"database/sql/driver"
 	"errors"
 	"fmt"
+	"maps"
 	"sort"
 	"unsafe"
-
-	"golang.org/x/exp/maps"
 
 	"github.com/domonda/go-types"
 	"github.com/domonda/go-types/notnull"
@@ -125,7 +124,7 @@ func (set AddressSet) DeleteSet(other AddressSet) {
 }
 
 func (set AddressSet) Clear() {
-	maps.Clear(set)
+	clear(set)
 }
 
 func (set AddressSet) Clone() AddressSet {

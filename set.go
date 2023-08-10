@@ -2,18 +2,17 @@ package types
 
 import (
 	"bytes"
+	"cmp"
 	"encoding/json"
 	"fmt"
+	"maps"
+	"slices"
 	"strings"
-
-	"golang.org/x/exp/constraints"
-	"golang.org/x/exp/maps"
-	"golang.org/x/exp/slices"
 )
 
-type Set[T constraints.Ordered] map[T]struct{}
+type Set[T cmp.Ordered] map[T]struct{}
 
-func NewSet[T constraints.Ordered](vals ...T) Set[T] {
+func NewSet[T cmp.Ordered](vals ...T) Set[T] {
 	set := make(Set[T], len(vals))
 	for _, val := range vals {
 		set[val] = struct{}{}
@@ -99,7 +98,7 @@ func (set Set[T]) DeleteSet(other Set[T]) {
 }
 
 func (set Set[T]) Clear() {
-	maps.Clear(set)
+	clear(set)
 }
 
 func (set Set[T]) Clone() Set[T] {
@@ -221,21 +220,21 @@ func (set *Set[T]) UnmarshalJSON(j []byte) error {
 	return nil
 }
 
-func ReduceSet[S ~map[T]struct{}, T constraints.Ordered, R any](set S, reduceFunc func(last R, val T) R) (result R) {
+func ReduceSet[S ~map[T]struct{}, T cmp.Ordered, R any](set S, reduceFunc func(last R, val T) R) (result R) {
 	for val := range set {
 		result = reduceFunc(result, val)
 	}
 	return result
 }
 
-func ReduceSlice[S ~[]T, T constraints.Ordered, R any](slice S, reduceFunc func(last R, val T) R) (result R) {
+func ReduceSlice[S ~[]T, T cmp.Ordered, R any](slice S, reduceFunc func(last R, val T) R) (result R) {
 	for _, val := range slice {
 		result = reduceFunc(result, val)
 	}
 	return result
 }
 
-func SetToRandomizedSlice[S ~map[T]struct{}, T constraints.Ordered](set S) []T {
+func SetToRandomizedSlice[S ~map[T]struct{}, T cmp.Ordered](set S) []T {
 	l := len(set)
 	if l == 0 {
 		return nil
@@ -249,7 +248,7 @@ func SetToRandomizedSlice[S ~map[T]struct{}, T constraints.Ordered](set S) []T {
 	return slice
 }
 
-func SetToSortedSlice[S ~map[T]struct{}, T constraints.Ordered](set S) []T {
+func SetToSortedSlice[S ~map[T]struct{}, T cmp.Ordered](set S) []T {
 	l := len(set)
 	switch l {
 	case 0:
