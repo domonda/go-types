@@ -1,6 +1,7 @@
 package money
 
 import (
+	"database/sql/driver"
 	"fmt"
 	"strings"
 )
@@ -10,8 +11,8 @@ type CurrencyAmount struct {
 	Amount   Amount
 }
 
-func NewCurrencyAmount(currency Currency, amount Amount) *CurrencyAmount {
-	return &CurrencyAmount{Currency: currency, Amount: amount}
+func NewCurrencyAmount(currency Currency, amount Amount) CurrencyAmount {
+	return CurrencyAmount{Currency: currency, Amount: amount}
 }
 
 // ParseCurrencyAmount parses a currency and an amount from str with acceptedDecimals.
@@ -48,11 +49,11 @@ func ParseCurrencyAmount(str string, acceptedDecimals ...int) (result CurrencyAm
 }
 
 // String implements the fmt.Stringer interface.
-func (ca *CurrencyAmount) String() string {
-	return fmt.Sprintf("%s %.2f", ca.Currency, ca.Amount)
+func (ca CurrencyAmount) String() string {
+	return ca.Format(true, 0, '.', 2)
 }
 
-func (ca *CurrencyAmount) Format(currencyFirst bool, thousandsSep, decimalSep rune, precision int) string {
+func (ca CurrencyAmount) Format(currencyFirst bool, thousandsSep, decimalSep rune, precision int) string {
 	amountStr := ca.Amount.Format(thousandsSep, decimalSep, precision)
 	if ca.Currency == "" {
 		return amountStr
@@ -63,7 +64,7 @@ func (ca *CurrencyAmount) Format(currencyFirst bool, thousandsSep, decimalSep ru
 	return amountStr + " " + string(ca.Currency)
 }
 
-func (ca *CurrencyAmount) GoString() string {
+func (ca CurrencyAmount) GoString() string {
 	return fmt.Sprintf("{Currency: %#v, Amount: %#v}", ca.Currency, ca.Amount)
 }
 
@@ -81,4 +82,31 @@ func (ca *CurrencyAmount) ScanString(source string) (sourceWasNormalized bool, e
 	}
 	*ca = parsed
 	return ca.String() == source, nil
+}
+
+// Scan implements the database/sql.Scanner interface
+// using ParseCurrencyAmount.
+func (ca *CurrencyAmount) Scan(value any) (err error) {
+	var parsed CurrencyAmount
+	switch x := value.(type) {
+	case string:
+		parsed, err = ParseCurrencyAmount(x)
+	case []byte:
+		parsed, err = ParseCurrencyAmount(string(x))
+	case float64:
+		parsed.Amount = Amount(x)
+	default:
+		return fmt.Errorf("can't scan SQL value of type %T as money.CurrencyAmount", value)
+	}
+	if err != nil {
+		return err
+	}
+	*ca = parsed
+	return nil
+}
+
+// Value implements the database/sql/driver.Valuer interface
+// by returning the result of the String method.
+func (ca CurrencyAmount) Value() (driver.Value, error) {
+	return ca.String(), nil
 }
