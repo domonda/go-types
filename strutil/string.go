@@ -2,6 +2,9 @@ package strutil
 
 import "strings"
 
+// Ptr returns the passed string as pointer value.
+func Ptr(str string) *string { return &str }
+
 // EmptyStringToNil returns str or nil if it is empty.
 func EmptyStringToNil(str string) any {
 	if str == "" {
@@ -10,17 +13,9 @@ func EmptyStringToNil(str string) any {
 	return str
 }
 
-// StringToPtrEmptyToNil returns a pointer to str or nil if it str is empty.
-func StringToPtrEmptyToNil(str string) *string {
-	if str == "" {
-		return nil
-	}
-	return &str
-}
-
-// PtrFromString returns the address of a string
+// StringToPtrEmptyToNil returns the address of a string
 // or nil if the string is empty.
-func PtrFromString(str string) *string {
+func StringToPtrEmptyToNil(str string) *string {
 	if str == "" {
 		return nil
 	}
