@@ -135,6 +135,7 @@ func TestToSnakeCase(t *testing.T) {
 		"(Hello World!)":       "_hello_world__",
 		"DocumentID":           "document_id",
 		"HTMLHandler":          "htmlhandler",
+		"Straßenadresse":       "straßenadresse",
 		"もしもしWorld":            "もしもし_world",
 	}
 	for str, expected := range testCases {
