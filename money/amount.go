@@ -319,6 +319,12 @@ func (a Amount) Valid() bool {
 	return !a.IsInf() && !a.IsNaN()
 }
 
+// ValidAndPositive returns if the amount is neither infinite nor NaN
+// and greater than or equal zero.
+func (a Amount) ValidAndPositive() bool {
+	return a.Valid() && a >= 0
+}
+
 // ValidAndGreaterZero returns if the amount is neither infinite nor NaN
 // and greater than zero.
 func (a Amount) ValidAndGreaterZero() bool {

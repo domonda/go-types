@@ -224,6 +224,10 @@ func (r Rate) Valid() bool {
 	return !math.IsNaN(float64(r)) && !math.IsInf(float64(r), 0)
 }
 
+func (r Rate) ValidAndPositive() bool {
+	return r.Valid() && r >= 0
+}
+
 func (r Rate) ValidAndGreaterZero() bool {
 	return r.Valid() && r > 0
 }
