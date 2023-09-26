@@ -28,7 +28,7 @@ const (
 	addressRegex      = atext + `@` + domainPart
 
 	quotedNamePart         = `"([^"]*)"[ \t]*<?`
-	unquotedNamePart       = `([^<@\.]*[^<@\s]|[^<,]*[^<,\s])[ \t]*<`                // Why |[^<,\s]+
+	unquotedNamePart       = `([^<@]*[^<@\s]|[^<,]*[^<,\s])[ \t]*<`
 	rfc2047EncodedNamePart = `=\?[[:ascii:]]+\?[[:ascii:]]+\?[[:ascii:]]+\?=[ \t]*<` // Example: =?utf-8?b?wqFIb2xhLCBzZcOxb3Ih?= <
 	emptyNamePart          = `<?`
 	namePart               = `(?:` + quotedNamePart + `|` + unquotedNamePart + `|` + rfc2047EncodedNamePart + `|` + emptyNamePart + `)`

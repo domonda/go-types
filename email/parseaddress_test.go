@@ -10,7 +10,6 @@ import (
 
 	"github.com/domonda/go-types/strutil"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 var (
@@ -75,8 +74,8 @@ var (
 
 		// `Non standard comma, in name <comma@example.com>`: {Name: `Non standard comma, in name`, Address: "comma@example.com"},
 
-		// TODO
-		// `Zögern, Voll | IST.live <zv@ist-live.de>`: {Name: `Zögern, Voll | IST.live`, Address: "zv@ist-live.de"},
+		`"Hello, World | example.com" <hw@example.com>`: {Name: `Hello, World | example.com`, Address: "hw@example.com"},
+		`Hello, World | example.com <hw@example.com>`:   {Name: `Hello, World | example.com`, Address: "hw@example.com"},
 	}
 
 	invalidEmailAddresses = map[string]struct{}{
@@ -123,8 +122,10 @@ func TestParseAddress(t *testing.T) {
 
 	// Test very special case
 	result, err = ParseAddress(`"\"Example\" <ar1@example.com>" <ar@example.com>`)
-	require.NoError(t, err)
-	if result.Name != "Example" || result.Address != "ar@example.com" {
+	if !assert.NoError(t, err, "valid email address") {
+		fmt.Println("DEBUG nameAddressRegex:", nameAddressRegex)
+	}
+	if result.Name != `Example` || result.Address != `ar@example.com` {
 		t.Fatalf("wrong result: %v", result)
 	}
 
