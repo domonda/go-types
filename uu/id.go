@@ -12,6 +12,7 @@ import (
 	"hash"
 	"io"
 	"strings"
+	"time"
 	"unsafe"
 )
 
@@ -73,7 +74,7 @@ func IDv3(ns ID, name string) ID {
 	return id
 }
 
-// IDv4 returns random generated UUID.
+// IDv4 returns a random generated UUID.
 func IDv4() (id ID) {
 	safeRandom(id[:])
 	id.SetVersion(4)
@@ -86,6 +87,17 @@ func IDv5(ns ID, name string) ID {
 	//#nosec G401 -- Needed for standard conformity
 	id := idFromHash(sha1.New(), ns, name)
 	id.SetVersion(5)
+	id.SetVariant()
+	return id
+}
+
+// IDv7 returns an ID with the first 48 bits
+// containing a sortable timestamp and random
+// data after the version and variant information.
+func IDv7() (id ID) {
+	*(*int64)(unsafe.Pointer(&id[0])) = time.Now().UnixMilli() //#nosec G103 -- unsafe OK
+	safeRandom(id[6:])
+	id.SetVersion(7)
 	id.SetVariant()
 	return id
 }
@@ -305,7 +317,7 @@ func (id ID) Validate() error {
 	if id.IsNil() {
 		return ErrNilID
 	}
-	if v := id.Version(); v < 1 || v > 5 {
+	if v := id.Version(); v < 1 || v > 7 {
 		return ErrInvalidVersion(v)
 	}
 	if id.Variant() == IDVariantInvalid {

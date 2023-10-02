@@ -90,7 +90,8 @@ func initStorage() {
 }
 
 func safeRandom(dest []byte) {
-	if _, err := rand.Read(dest); err != nil {
+	_, err := rand.Read(dest)
+	if err != nil {
 		panic(err)
 	}
 }
