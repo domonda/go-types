@@ -229,6 +229,7 @@ func Test_Amount_SplitProportionally(t *testing.T) {
 		{100, []Amount{11, 17, 37}, []Amount{16.92, 26.15, 56.93}},
 		{1, []Amount{11, 17, 37}, []Amount{0.17, 0.26, 0.57}},
 		{100, []Amount{1, 0, 1}, []Amount{50, 0, 50}},
+		{250.00, []Amount{333.33, 83.33, 0.01}, []Amount{200, 50, 0}}, // Note that the 1 cent amount got rounded to 0
 
 		{-0, nil, nil},
 		{-0, []Amount{-1}, []Amount{-0}},

@@ -286,9 +286,10 @@ func (a Amount) SplitEqually(count int) []Amount {
 
 // SplitProportionally splits an amount proportianly
 // to the passed weights into the same number of amounts
-// and makes sure that the sum the amounts rounded to cents
+// that get round to cents and makes sure that the sum
 // is identical to the amount rounded to cents.
-// The passed weights can be positive, negative, or zero.
+// The passed weights can be positive, negative, or zero,
+// so the result amounts can also be positive, negative, or zero.
 func (a Amount) SplitProportionally(weights []Amount) []Amount {
 	count := len(weights)
 	if count == 0 {
