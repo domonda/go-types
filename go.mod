@@ -12,7 +12,7 @@ require (
 	github.com/teamwork/tnef v0.0.0-20200108124832-7deabccfdb32
 	github.com/ungerik/go-fs v0.0.0-20230828210517-6ca798932ba7
 	github.com/ungerik/go-reflection v0.0.0-20230810134712-a63435f6bc7e
-	golang.org/x/net v0.15.0
+	golang.org/x/net v0.17.0
 	golang.org/x/text v0.13.0
 	mvdan.cc/xurls/v2 v2.5.0
 )
@@ -30,6 +30,6 @@ require (
 	github.com/ssor/bom v0.0.0-20170718123548-6386211fdfcf // indirect
 	github.com/teamwork/test v0.0.0-20200108114543-02621bae84ad // indirect
 	github.com/teamwork/utils v0.0.0-20220314153103-637fa45fa6cc // indirect
-	golang.org/x/sys v0.12.0 // indirect
+	golang.org/x/sys v0.13.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
