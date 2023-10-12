@@ -5,9 +5,9 @@ import (
 	"bytes"
 	"encoding/csv"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 	"os/exec"
 	"path"
 
@@ -70,7 +70,7 @@ func main() {
 	fmt.Fprintln(goFileBuf, "}")
 
 	goFilePath := "../iso6393names.go"
-	err = ioutil.WriteFile(goFilePath, goFileBuf.Bytes(), 0600)
+	err = os.WriteFile(goFilePath, goFileBuf.Bytes(), 0600)
 	if err != nil {
 		log.Fatal(err)
 	}
