@@ -25,7 +25,7 @@ func Scan(dest reflect.Value, source string, config *ScanConfig) (err error) {
 		return scaner.ScanString(dest, source, config)
 	}
 
-	if dest.Kind() == reflect.Ptr {
+	if dest.Kind() == reflect.Pointer {
 		if config.IsNil(source) {
 			// If dest is a pointer type and source is a nil string
 			// then set pointer to nil (the zero value of the pointer)

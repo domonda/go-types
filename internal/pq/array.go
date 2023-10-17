@@ -355,7 +355,7 @@ func (GenericArray) evaluateDestination(rt reflect.Type) (reflect.Type, func([]b
 	// TODO calculate the assign function for other types
 	// TODO repeat this section on the element type of arrays or slices (multidimensional)
 	{
-		if reflect.PtrTo(rt).Implements(typeSQLScanner) {
+		if reflect.PointerTo(rt).Implements(typeSQLScanner) {
 			// dest is always addressable because it is an element of a slice.
 			assign = func(src []byte, dest reflect.Value) (err error) {
 				ss := dest.Addr().Interface().(sql.Scanner)
@@ -387,7 +387,7 @@ FoundType:
 func (a GenericArray) Scan(src any) error {
 	dpv := reflect.ValueOf(a.A)
 	switch {
-	case dpv.Kind() != reflect.Ptr:
+	case dpv.Kind() != reflect.Pointer:
 		return fmt.Errorf("pq: destination %T is not a pointer to array or slice", a.A)
 	case dpv.IsNil():
 		return fmt.Errorf("pq: destination %T is nil", a.A)

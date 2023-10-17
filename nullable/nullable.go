@@ -21,7 +21,7 @@ type Zeroable interface {
 // with true returned for the zero value of reflect.Value.
 func ReflectIsNull(v reflect.Value) bool {
 	switch v.Kind() {
-	case reflect.Ptr:
+	case reflect.Pointer:
 		if v.IsNil() {
 			return true
 		}

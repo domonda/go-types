@@ -22,18 +22,18 @@ func CanMarshalJSON(t reflect.Type) bool {
 		return true
 	}
 	kind := t.Kind()
-	if kind != reflect.Ptr && reflect.PtrTo(t).Implements(jsonMarshalerType) {
+	if kind != reflect.Pointer && reflect.PointerTo(t).Implements(jsonMarshalerType) {
 		return true
 	}
 
 	if t.Implements(textMarshalerType) {
 		return true
 	}
-	if kind != reflect.Ptr && reflect.PtrTo(t).Implements(textMarshalerType) {
+	if kind != reflect.Pointer && reflect.PointerTo(t).Implements(textMarshalerType) {
 		return true
 	}
 
-	if kind == reflect.Ptr {
+	if kind == reflect.Pointer {
 		t = t.Elem()
 		kind = t.Kind()
 	}
