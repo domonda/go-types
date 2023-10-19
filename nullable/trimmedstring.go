@@ -285,7 +285,7 @@ func (s TrimmedString) MarshalJSON() ([]byte, error) {
 	return json.Marshal(s.String())
 }
 
-// MarshalJSON implements encoding/json.Unmarshaler.
+// UnmarshalJSON implements encoding/json.Unmarshaler.
 func (s *TrimmedString) UnmarshalJSON(j []byte) error {
 	if bytes.Equal(j, []byte(`null`)) {
 		s.SetNull()

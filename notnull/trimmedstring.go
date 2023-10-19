@@ -191,7 +191,7 @@ func (s TrimmedString) MarshalJSON() ([]byte, error) {
 	return json.Marshal(s.String())
 }
 
-// MarshalJSON implements encoding/json.Unmarshaler
+// UnmarshalJSON implements encoding/json.Unmarshaler
 func (s *TrimmedString) UnmarshalJSON(j []byte) error {
 	var str string
 	err := json.Unmarshal(j, &str)
