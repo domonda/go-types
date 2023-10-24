@@ -93,6 +93,20 @@ func (n NullableCode) StringOr(nullString string) string {
 	return string(n)
 }
 
+// String returns the normalized code if possible,
+// else it will be returned unchanged as string.
+// String implements the fmt.Stringer interface.
+func (n NullableCode) String() string {
+	if n.IsNull() {
+		return ""
+	}
+	norm, err := n.Normalized()
+	if err != nil {
+		return string(n)
+	}
+	return string(norm)
+}
+
 // Scan implements the database/sql.Scanner interface.
 func (n *NullableCode) Scan(value any) error {
 	switch x := value.(type) {
@@ -130,17 +144,6 @@ func (n *NullableCode) ScanString(source string) (normalized bool, err error) {
 	}
 	*n = newNullableCode
 	return newNullableCode == NullableCode(source), nil
-}
-
-// String returns the normalized code if possible,
-// else it will be returned unchanged as string.
-// String implements the fmt.Stringer interface.
-func (n NullableCode) String() string {
-	norm, err := n.Normalized()
-	if err != nil {
-		return string(n)
-	}
-	return string(norm)
 }
 
 // MarshalJSON implements encoding/json.Marshaler
