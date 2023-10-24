@@ -4,6 +4,7 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -27,6 +28,11 @@ func (a IntArray) String() string {
 	}
 	b.WriteByte(']')
 	return b.String()
+}
+
+// Contains reports if the passed value is present in a.
+func (a IntArray) Contains(value int64) bool {
+	return slices.Contains(a, value)
 }
 
 // Value implements the database/sql/driver.Valuer interface

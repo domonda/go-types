@@ -3,6 +3,7 @@ package notnull
 import (
 	"database/sql/driver"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -26,6 +27,11 @@ func (a FloatArray) String() string {
 	}
 	b.WriteByte(']')
 	return b.String()
+}
+
+// Contains reports if the passed value is present in a.
+func (a FloatArray) Contains(value float64) bool {
+	return slices.Contains(a, value)
 }
 
 // Value implements the database/sql/driver.Valuer interface

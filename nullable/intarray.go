@@ -3,6 +3,7 @@ package nullable
 import (
 	"database/sql/driver"
 	"fmt"
+	"slices"
 
 	"github.com/domonda/go-types/notnull"
 )
@@ -21,6 +22,11 @@ func (a IntArray) IsNull() bool { return a == nil }
 func (a IntArray) String() string {
 	value, _ := a.Value()
 	return fmt.Sprintf("IntArray%v", value)
+}
+
+// Contains reports if the passed value is present in a.
+func (a IntArray) Contains(value int64) bool {
+	return slices.Contains(a, value)
 }
 
 // Value implements the database/sql/driver.Valuer interface

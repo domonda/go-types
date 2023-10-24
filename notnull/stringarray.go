@@ -3,6 +3,7 @@ package notnull
 import (
 	"database/sql/driver"
 	"encoding/json"
+	"slices"
 
 	"github.com/domonda/go-types/internal/pq"
 )
@@ -13,6 +14,11 @@ import (
 // for SQL and JSON.
 // Use nullable.StringArray if the nil value should be treated as SQL and JSON null.
 type StringArray []string
+
+// Contains reports if the passed value is present in a.
+func (a StringArray) Contains(value string) bool {
+	return slices.Contains(a, value)
+}
 
 // Scan implements the sql.Scanner interface.
 func (a *StringArray) Scan(src any) error {

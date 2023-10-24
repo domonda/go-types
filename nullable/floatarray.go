@@ -2,6 +2,7 @@ package nullable
 
 import (
 	"database/sql/driver"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -40,6 +41,11 @@ func (a FloatArray) StringOr(nilStr string) string {
 		return nilStr
 	}
 	return a.String()
+}
+
+// Contains reports if the passed value is present in a.
+func (a FloatArray) Contains(value float64) bool {
+	return slices.Contains(a, value)
 }
 
 // Value implements the database/sql/driver.Valuer interface
