@@ -1,6 +1,9 @@
 package date
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 var ParseTimeDefaultLayouts = []string{
 	time.RFC3339Nano,
@@ -13,16 +16,15 @@ var ParseTimeDefaultLayouts = []string{
 // It uses time.Parse with the passed layouts
 // and returns the first valid parsed time.
 // If no layouts are passed, then ParseTimeDefaultLayouts will be used.
-// The bool result indicates if a valid time could be parsed.
-func ParseTime(str string, layouts ...string) (time.Time, bool) {
+func ParseTime(str string, layouts ...string) (time.Time, error) {
 	if len(layouts) == 0 {
 		layouts = ParseTimeDefaultLayouts
 	}
 	for _, layout := range layouts {
 		t, err := time.Parse(layout, str)
 		if err == nil {
-			return t, true
+			return t, nil
 		}
 	}
-	return time.Time{}, false
+	return time.Time{}, fmt.Errorf("could not parse %q as time with layouts %v", str, layouts)
 }
