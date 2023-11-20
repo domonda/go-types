@@ -69,6 +69,13 @@ func BOMOfBytes(b []byte) BOM {
 	return NoBOM
 }
 
+func TrimBOM(b []byte, bom BOM) []byte {
+	if bytes.HasPrefix(b, bomUTF8) {
+		return b[len(bomUTF8):]
+	}
+	return b
+}
+
 func SplitBOM(b []byte) (BOM, []byte) {
 	bom := BOMOfBytes(b)
 	return bom, b[len(bom):]

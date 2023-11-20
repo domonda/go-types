@@ -10,9 +10,9 @@ require (
 	github.com/jinzhu/now v1.1.5
 	github.com/stretchr/testify v1.8.4
 	github.com/teamwork/tnef v0.0.0-20200108124832-7deabccfdb32
-	github.com/ungerik/go-fs v0.0.0-20231106220413-6640c23708ce
+	github.com/ungerik/go-fs v0.0.0-20231118104034-e3470c063fed
 	github.com/ungerik/go-reflection v0.0.0-20230810134712-a63435f6bc7e
-	golang.org/x/net v0.17.0
+	golang.org/x/net v0.18.0
 	golang.org/x/text v0.14.0
 	mvdan.cc/xurls/v2 v2.5.0
 )
