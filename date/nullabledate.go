@@ -4,6 +4,7 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/domonda/go-types/language"
@@ -234,6 +235,17 @@ func (n NullableDate) NormalizedEqual(other NullableDate) bool {
 	a, _ := n.Normalized()
 	b, _ := other.Normalized()
 	return a == b
+}
+
+// Compare compares n with the passed other NullableDate.
+// If n is before the other, it returns -1;
+// if n is after the other, it returns +1;
+// if they're the same, it returns 0.
+// A null date is always before a non-null date.
+func (n NullableDate) Compare(other NullableDate) int {
+	a, _ := n.Normalized()
+	b, _ := other.Normalized()
+	return strings.Compare(string(a), string(b))
 }
 
 // After returns if the date is after the passed other one.

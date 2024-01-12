@@ -431,6 +431,16 @@ func (date Date) NormalizedEqual(other Date) bool {
 	return a == b
 }
 
+// Compare compares the date with the passed other Date.
+// If the date is before the other, it returns -1;
+// if the date is after the other, it returns +1;
+// if they're the same, it returns 0.
+func (date Date) Compare(other Date) int {
+	a, _ := date.Normalized()
+	b, _ := other.Normalized()
+	return strings.Compare(string(a), string(b))
+}
+
 // After returns if the date is after the passed other one.
 func (date Date) After(other Date) bool {
 	return date.MidnightUTC().After(other.MidnightUTC())
