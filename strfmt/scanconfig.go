@@ -1,7 +1,9 @@
 package strfmt
 
 import (
+	"fmt"
 	"reflect"
+	"strings"
 	"time"
 )
 
@@ -82,4 +84,22 @@ func (c *ScanConfig) ParseTime(str string) (t time.Time, ok bool) {
 		}
 	}
 	return time.Time{}, false
+}
+
+func scanTimeString(dest reflect.Value, str string, config *ScanConfig) error {
+	t, ok := config.ParseTime(strings.TrimSpace(str))
+	if !ok {
+		return fmt.Errorf("can't scan %q as time.Time", str)
+	}
+	dest.Set(reflect.ValueOf(t))
+	return nil
+}
+
+func scanDurationString(dest reflect.Value, str string, config *ScanConfig) error {
+	d, err := time.ParseDuration(strings.TrimSpace(str))
+	if err != nil {
+		return fmt.Errorf("can't scan %q as time.Duration because %w", str, err)
+	}
+	dest.Set(reflect.ValueOf(d))
+	return nil
 }

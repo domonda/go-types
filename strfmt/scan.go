@@ -6,7 +6,6 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
-	"time"
 
 	types "github.com/domonda/go-types"
 	"github.com/domonda/go-types/float"
@@ -100,23 +99,5 @@ func Scan(dest reflect.Value, source string, config *ScanConfig) (err error) {
 		return fmt.Errorf("error validating %s value scanned from %q because %w", dest.Type(), source, err)
 	}
 
-	return nil
-}
-
-func scanTimeString(dest reflect.Value, str string, config *ScanConfig) error {
-	t, ok := config.ParseTime(strings.TrimSpace(str))
-	if !ok {
-		return fmt.Errorf("can't scan %q as time.Time", str)
-	}
-	dest.Set(reflect.ValueOf(t))
-	return nil
-}
-
-func scanDurationString(dest reflect.Value, str string, config *ScanConfig) error {
-	d, err := time.ParseDuration(strings.TrimSpace(str))
-	if err != nil {
-		return fmt.Errorf("can't scan %q as time.Duration because %w", str, err)
-	}
-	dest.Set(reflect.ValueOf(d))
 	return nil
 }
