@@ -594,16 +594,6 @@ func SanitizeLineEndingsBytes(text []byte) []byte {
 	return text
 }
 
-// StringIn returns if str is in (equals any of) strs.
-func StringIn(str string, strs []string) bool {
-	for _, s := range strs {
-		if s == str {
-			return true
-		}
-	}
-	return false
-}
-
 // SubStringIn returns if subString is equal or a substring of any of strs.
 func SubStringIn(subString string, strs []string) bool {
 	for _, s := range strs {
