@@ -2,6 +2,7 @@ package country
 
 import (
 	"database/sql/driver"
+	"encoding/json"
 	"fmt"
 	"strings"
 )
@@ -15,24 +16,27 @@ const Invalid Code = ""
 type Code string
 
 func (c Code) Valid() bool {
-	_, ok := countryMap[c]
+	_, ok := countryMap[c.normalized()]
 	return ok
 }
 
 func (c Code) Validate() error {
-	if !c.Valid() {
-		return fmt.Errorf("invalid country.Code: %q", string(c))
+	if c.Valid() {
+		return nil
 	}
-	return nil
+	return fmt.Errorf("invalid country.Code: %q", string(c))
 }
 
 func (c Code) Normalized() (Code, error) {
-	normalized := Code(strings.ToUpper(strings.TrimSpace(string(c))))
-	err := normalized.Validate()
-	if err != nil {
-		return Invalid, err
+	norm := c.normalized()
+	if _, ok := countryMap[norm]; !ok {
+		return "", fmt.Errorf("invalid country.Code: %q", string(c))
 	}
-	return normalized, nil
+	return norm, nil
+}
+
+func (c Code) normalized() Code {
+	return Code(strings.ToUpper(strings.TrimSpace(string(c))))
 }
 
 // NormalizedWithAltCodes uses AltCodes to map
@@ -47,12 +51,12 @@ func (c Code) NormalizedWithAltCodes() (Code, error) {
 
 // IsEU indicates if a country is member of the European Union
 func (c Code) IsEU() bool {
-	_, ok := euCountries[c]
+	_, ok := euCountries[c.normalized()]
 	return ok
 }
 
 func (c Code) EnglishName() string {
-	return countryMap[c]
+	return countryMap[c.normalized()]
 }
 
 // Scan implements the database/sql.Scanner interface.
@@ -75,7 +79,12 @@ func (c Code) Value() (driver.Value, error) {
 	if c == Invalid {
 		return nil, nil
 	}
-	return string(c), nil
+	return string(c.normalized()), nil
+}
+
+// MarshalJSON implements encoding/json.Marshaler
+func (c Code) MarshalJSON() ([]byte, error) {
+	return json.Marshal(string(c.normalized()))
 }
 
 // ScanString tries to parse and assign the passed
@@ -98,11 +107,7 @@ func (c *Code) ScanString(source string) (normalized bool, err error) {
 // else it will be returned unchanged as string.
 // String implements the fmt.Stringer interface.
 func (c Code) String() string {
-	norm, err := c.Normalized()
-	if err != nil {
-		return string(c)
-	}
-	return string(norm)
+	return string(c.normalized())
 }
 
 // Nullable returns the Code as NullableCode.

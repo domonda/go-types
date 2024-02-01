@@ -2,7 +2,6 @@ package country
 
 import (
 	"database/sql/driver"
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -29,19 +28,21 @@ func (n NullableCode) ValidAndNotNull() bool {
 }
 
 func (n NullableCode) Validate() error {
-	if !n.Valid() {
-		return fmt.Errorf("invalid country.Code: %q", string(n))
+	if n.Valid() {
+		return nil
 	}
-	return nil
+	return fmt.Errorf("invalid country.NullableCode: %q", string(n))
 }
 
 func (n NullableCode) Normalized() (NullableCode, error) {
-	normalized := NullableCode(strings.ToUpper(strings.TrimSpace(string(n))))
-	err := normalized.Validate()
-	if err != nil {
-		return Null, err
+	norm := Code(n).normalized()
+	if norm == "" {
+		return Null, nil
 	}
-	return normalized, nil
+	if _, ok := countryMap[Code(norm)]; !ok {
+		return Null, fmt.Errorf("invalid country.NullableCode: %q", string(n))
+	}
+	return NullableCode(norm), nil
 }
 
 // NormalizedWithAltCodes uses AltCodes to map
@@ -57,6 +58,11 @@ func (n NullableCode) NormalizedWithAltCodes() (NullableCode, error) {
 func (n NullableCode) NormalizedOrNull() NullableCode {
 	normalized, _ := n.Normalized()
 	return normalized
+}
+
+// IsEU indicates if a country is member of the European Union
+func (n NullableCode) IsEU() bool {
+	return Code(n).IsEU()
 }
 
 func (n NullableCode) EnglishName() string {
@@ -76,7 +82,7 @@ func (n NullableCode) IsNotNull() bool {
 
 // Set sets an ID for this NullableCode
 func (n *NullableCode) Set(code Code) {
-	*n = NullableCode(code)
+	*n = NullableCode(code.normalized())
 }
 
 // SetNull sets the NullableCode to null
@@ -137,7 +143,16 @@ func (n NullableCode) Value() (driver.Value, error) {
 	if n == Null {
 		return nil, nil
 	}
-	return string(n), nil
+	return Code(n).Value()
+}
+
+// MarshalJSON implements encoding/json.Marshaler
+// by returning the JSON null value for an empty (null) string.
+func (n NullableCode) MarshalJSON() ([]byte, error) {
+	if n.IsNull() {
+		return []byte(`null`), nil
+	}
+	return Code(n).MarshalJSON()
 }
 
 // ScanString tries to parse and assign the passed
@@ -154,13 +169,4 @@ func (n *NullableCode) ScanString(source string) (normalized bool, err error) {
 	}
 	*n = newNullableCode
 	return newNullableCode == NullableCode(source), nil
-}
-
-// MarshalJSON implements encoding/json.Marshaler
-// by returning the JSON null value for an empty (null) string.
-func (n NullableCode) MarshalJSON() ([]byte, error) {
-	if n.IsNull() {
-		return []byte(`null`), nil
-	}
-	return json.Marshal(string(n))
 }
