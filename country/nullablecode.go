@@ -44,6 +44,16 @@ func (n NullableCode) Normalized() (NullableCode, error) {
 	return normalized, nil
 }
 
+// NormalizedWithAltCodes uses AltCodes to map
+// to ISO 3166-1 alpha 2 codes or return the
+// result of Normalized() if no mapping exists.
+func (n NullableCode) NormalizedWithAltCodes() (NullableCode, error) {
+	if norm, ok := AltCodes[strings.ToUpper(strings.TrimSpace(string(n)))]; ok {
+		return norm.Nullable(), nil
+	}
+	return n.Normalized()
+}
+
 func (n NullableCode) NormalizedOrNull() NullableCode {
 	normalized, _ := n.Normalized()
 	return normalized

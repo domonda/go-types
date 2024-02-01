@@ -254,6 +254,25 @@ const (
 	XK Code = "XK"
 )
 
+// AltCodes
+var AltCodes = map[string]Code{
+	// Common codes from other standards
+	"A":   AT,
+	"DEU": DE,
+
+	// ITU letter codes
+	"AUT": AT,
+	"B":   BR,
+	"D":   DE,
+	"E":   ES,
+	"F":   FR,
+	"G":   GB,
+	"I":   IT,
+	"J":   JP,
+	"S":   SE,
+	"SUI": CH,
+}
+
 var countryMap = map[Code]string{
 	AF: "Afghanistan",
 	AX: "Åland Islands",

@@ -35,6 +35,16 @@ func (c Code) Normalized() (Code, error) {
 	return normalized, nil
 }
 
+// NormalizedWithAltCodes uses AltCodes to map
+// to ISO 3166-1 alpha 2 codes or return the
+// result of Normalized() if no mapping exists.
+func (c Code) NormalizedWithAltCodes() (Code, error) {
+	if norm, ok := AltCodes[strings.ToUpper(strings.TrimSpace(string(c)))]; ok {
+		return norm, nil
+	}
+	return c.Normalized()
+}
+
 // IsEU indicates if a country is member of the European Union
 func (c Code) IsEU() bool {
 	_, ok := euCountries[c]
