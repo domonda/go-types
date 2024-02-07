@@ -4,12 +4,7 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
-
-	"github.com/domonda/go-types/nullable"
 )
-
-// Ensure that NullableCurrency implements StringGetter
-var _ nullable.StringGetter = NullableCurrency("")
 
 // NullableCurrency holds a 3 character ISO 4217 alphabetic code,
 // or an empty string as valid value representing NULL in SQL databases.

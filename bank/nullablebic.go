@@ -4,12 +4,7 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
-
-	"github.com/domonda/go-types/nullable"
 )
-
-// Ensure that NullableBIC implements StringGetter
-var _ nullable.StringGetter = NullableBIC("")
 
 // BICNull is an empty string and will be treatet as SQL NULL.
 const BICNull NullableBIC = ""

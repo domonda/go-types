@@ -14,7 +14,6 @@ import (
 )
 
 var (
-	_ StringGetter             = TrimmedString("")
 	_ fmt.Stringer             = TrimmedString("")
 	_ driver.Valuer            = TrimmedString("")
 	_ sql.Scanner              = new(TrimmedString)

@@ -11,9 +11,6 @@ import (
 	"github.com/domonda/go-types/nullable"
 )
 
-// Ensure that NullableDate implements StringGetter
-var _ nullable.StringGetter = NullableDate("")
-
 // Null is an empty string and will be treatet as SQL NULL.
 // date.Null.IsZero() == true
 var Null NullableDate

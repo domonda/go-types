@@ -6,11 +6,7 @@ import (
 	"fmt"
 
 	"github.com/domonda/go-types/country"
-	"github.com/domonda/go-types/nullable"
 )
-
-// Ensure that NullableID implements StringGetter
-var _ nullable.StringGetter = NullableID("")
 
 // Null is an empty string and will be treatet as SQL NULL.
 var Null NullableID

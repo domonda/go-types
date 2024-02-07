@@ -4,12 +4,7 @@ import (
 	"database/sql/driver"
 	"fmt"
 	"strings"
-
-	"github.com/domonda/go-types/nullable"
 )
-
-// Ensure that NullableCode implements StringGetter
-var _ nullable.StringGetter = NullableCode("")
 
 const Null NullableCode = ""
 
