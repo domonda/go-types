@@ -103,8 +103,13 @@ func (a Address) DomainPart() string {
 // is from a known email provider using the
 // ProviderDomains global configuration variable.
 func (a Address) IsFromKnownEmailProvider() bool {
-	_, is := ProviderDomains[a.DomainPart()]
-	return is
+	if _, is := ProviderDomains[a.DomainPart()]; is {
+		return true
+	}
+	if strings.Contains(string(a), "-not-valid@airbnb.com") {
+		return true
+	}
+	return false
 }
 
 func (a Address) AsList() AddressList {

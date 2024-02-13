@@ -44,3 +44,24 @@ func TestAddressFrom(t *testing.T) {
 		})
 	}
 }
+
+func TestAddress_IsFromKnownEmailProvider(t *testing.T) {
+	tests := []struct {
+		a    Address
+		want bool
+	}{
+		{``, false},
+		{`example@domonda.com`, false},
+		{`"Example User" <example@domonda.com>`, false},
+		{`example@gmail.com`, true},
+		{`guest123-not-valid@airbnb.com`, true},
+		{`"Guest 123" <guest123-not-valid@airbnb.com>`, true},
+	}
+	for _, tt := range tests {
+		t.Run(string(tt.a), func(t *testing.T) {
+			if got := tt.a.IsFromKnownEmailProvider(); got != tt.want {
+				t.Errorf("Address(%#v).IsFromKnownEmailProvider() = %v, want %v", tt.a, got, tt.want)
+			}
+		})
+	}
+}
