@@ -1,6 +1,8 @@
 package email
 
-var emailProviderDomains = map[string]struct{}{
+// ProviderDomains is a set of known email provider domain names.
+// Used by Address.IsFromKnownEmailProvider.
+var ProviderDomains = map[string]struct{}{
 	"aaa.eu":            {},
 	"aim.com":           {},
 	"alice.it":          {},
