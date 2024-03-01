@@ -562,19 +562,31 @@ func (date Date) YearMonthDay() (year int, month time.Month, day int) {
 
 // Year of the date
 func (date Date) Year() int {
-	year, _, _ := date.YearMonthDay()
+	norm, err := date.Normalized()
+	if err != nil {
+		return 0
+	}
+	year, _ := strconv.Atoi(string(norm)[:4])
 	return year
 }
 
 // Month of the date
 func (date Date) Month() time.Month {
-	_, month, _ := date.YearMonthDay()
-	return month
+	norm, err := date.Normalized()
+	if err != nil {
+		return 0
+	}
+	monthInt, _ := strconv.Atoi(string(norm)[5:7])
+	return time.Month(monthInt)
 }
 
 // Day within the month of the date
 func (date Date) Day() int {
-	_, _, day := date.YearMonthDay()
+	norm, err := date.Normalized()
+	if err != nil {
+		return 0
+	}
+	day, _ := strconv.Atoi(string(norm)[8:])
 	return day
 }
 
