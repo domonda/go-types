@@ -30,7 +30,7 @@ func (set Set[T]) GetOne() T {
 	for val := range set {
 		return val
 	}
-	return Zero[T]()
+	return *new(T)
 }
 
 func (set Set[T]) Add(val T) {
