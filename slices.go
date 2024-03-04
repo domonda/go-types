@@ -14,3 +14,13 @@ func SliceContainsAll[T comparable](outer []T, inner ...T) bool {
 	}
 	return true
 }
+
+// SliceContainsAny returns true if outer contains any element of inner.
+func SliceContainsAny[T comparable](outer []T, inner ...T) bool {
+	for _, innerElem := range inner {
+		if slices.Contains(outer, innerElem) {
+			return true
+		}
+	}
+	return false
+}
