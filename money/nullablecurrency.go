@@ -104,23 +104,28 @@ func (n NullableCurrency) NormalizedOrNull() NullableCurrency {
 
 // ScanString tries to parse and assign the passed
 // source string as value of the implementing type.
-// It returns an error if source could not be parsed.
-// If the source string could be parsed, but was not
-// in the expected normalized format, then false is
-// returned for wasNormalized and nil for err.
-// ScanString implements the strfmt.Scannable interface.
-func (n *NullableCurrency) ScanString(source string) (wasNormalized bool, err error) {
+//
+// If validate is true, the source string is checked
+// for validity before it is assigned to the type.
+//
+// If validate is false and the source string
+// can still be assigned in some non-normalized way
+// it will be assigned without returning an error.
+func (n *NullableCurrency) ScanString(source string, validate bool) error {
 	switch source {
-	case "NULL", "null", "nil":
+	case "", "NULL", "null", "nil":
 		n.SetNull()
-		return false, nil
+		return nil
 	}
-	newC, err := NullableCurrency(source).Normalized()
+	newCurrency, err := NullableCurrency(source).Normalized()
 	if err != nil {
-		return false, err
+		if validate {
+			return err
+		}
+		newCurrency = NullableCurrency(source)
 	}
-	*n = newC
-	return newC == NullableCurrency(source), nil
+	*n = newCurrency
+	return nil
 }
 
 // Scan implements the database/sql.Scanner interface.

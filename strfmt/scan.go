@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/domonda/go-errs"
 	"github.com/domonda/go-types/float"
 )
 
@@ -14,6 +15,8 @@ import (
 // If dest is an assignable nil pointer variable,
 // then a new object of the pointed to type will be allocated and set.
 func Scan(dest reflect.Value, source string, config *ScanConfig) (err error) {
+	defer errs.WrapWithFuncParams(&err, dest.Interface(), source, config)
+
 	if config == nil {
 		return fmt.Errorf("can't scan %q using nil ScanConfig", source)
 	}
@@ -42,8 +45,7 @@ func Scan(dest reflect.Value, source string, config *ScanConfig) (err error) {
 
 	switch x := dest.Addr().Interface().(type) {
 	case Scannable:
-		_, err = x.ScanString(source)
-		return err
+		return x.ScanString(source, config.ValidateFunc != nil)
 
 	case encoding.TextUnmarshaler:
 		return x.UnmarshalText([]byte(source))

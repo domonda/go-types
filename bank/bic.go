@@ -27,18 +27,19 @@ type BIC string
 
 // ScanString tries to parse and assign the passed
 // source string as value of the implementing type.
-// It returns an error if source could not be parsed.
-// If the source string could be parsed, but was not
-// in the expected normalized format, then false is
-// returned for normalized and nil for err.
-// ScanString implements the strfmt.Scannable interface.
-func (bic *BIC) ScanString(source string) (wasNormalized bool, err error) {
-	err = BIC(source).Validate()
-	if err != nil {
-		return false, err
+//
+// If validate is true, the source string is checked
+// for validity before it is assigned to the type.
+//
+// If validate is false and the source string
+// can still be assigned in some non-normalized way
+// it will be assigned without returning an error.
+func (bic *BIC) ScanString(source string, validate bool) error {
+	if validate && BIC(source).Validate() != nil {
+		return BIC(source).Validate()
 	}
 	*bic = BIC(source)
-	return true, nil
+	return nil
 }
 
 // Valid returns if this is a valid SWIFT Business Identifier Code

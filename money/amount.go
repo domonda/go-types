@@ -50,18 +50,19 @@ func AmountFromPtr(ptr *Amount, defaultVal Amount) Amount {
 
 // ScanString tries to parse and assign the passed
 // source string as value of the implementing type.
-// It returns an error if source could not be parsed.
-// If the source string could be parsed, but was not
-// in the expected normalized format, then false is
-// returned for wasNormalized and nil for err.
-// ScanString implements the strfmt.Scannable interface.
-func (a *Amount) ScanString(source string) (wasNormalized bool, err error) {
+//
+// If validate is true, then the Amount.Valid method is checked
+// to return an error if the floating point value is infinite or NaN.
+func (a *Amount) ScanString(source string, validate bool) error {
 	f, err := float.Parse(source)
 	if err != nil {
-		return false, err
+		return err
+	}
+	if validate && !Amount(f).Valid() {
+		return fmt.Errorf("invalid amount: %q", source)
 	}
 	*a = Amount(f)
-	return true, nil
+	return nil
 }
 
 // Cents returns the amount rounded to cents

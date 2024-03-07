@@ -14,23 +14,24 @@ type NullableBIC string
 
 // ScanString tries to parse and assign the passed
 // source string as value of the implementing type.
-// It returns an error if source could not be parsed.
-// If the source string could be parsed, but was not
-// in the expected normalized format, then false is
-// returned for wasNormalized and nil for err.
-// ScanString implements the strfmt.Scannable interface.
-func (bic *NullableBIC) ScanString(source string) (wasNormalized bool, err error) {
+//
+// If validate is true, the source string is checked
+// for validity before it is assigned to the type.
+//
+// If validate is false and the source string
+// can still be assigned in some non-normalized way
+// it will be assigned without returning an error.
+func (bic *NullableBIC) ScanString(source string, validate bool) error {
 	switch source {
-	case "NULL", "null", "nil":
+	case "", "NULL", "null", "nil":
 		bic.SetNull()
-		return false, nil
+		return nil
 	}
-	err = NullableBIC(source).Validate()
-	if err != nil {
-		return false, err
+	if validate && NullableBIC(source).Validate() != nil {
+		return NullableBIC(source).Validate()
 	}
 	*bic = NullableBIC(source)
-	return true, nil
+	return nil
 }
 
 // Valid returns true if bic is null or a valid SWIFT Business Identifier Code

@@ -89,18 +89,23 @@ func (c Code) MarshalJSON() ([]byte, error) {
 
 // ScanString tries to parse and assign the passed
 // source string as value of the implementing type.
-// It returns an error if source could not be parsed.
-// If the source string could be parsed, but was not
-// in the expected normalized format, then false is
-// returned for wasNormalized and nil for err.
-// ScanString implements the strfmt.Scannable interface.
-func (c *Code) ScanString(source string) (wasNormalized bool, err error) {
-	newCode := Code(strings.ToUpper(source))
-	if !newCode.Valid() {
-		return false, fmt.Errorf("invalid country.Code: '%s'", source)
+//
+// If validate is true, the source string is checked
+// for validity before it is assigned to the type.
+//
+// If validate is false and the source string
+// can still be assigned in some non-normalized way
+// it will be assigned without returning an error.
+func (c *Code) ScanString(source string, validate bool) error {
+	code, err := Code(source).NormalizedWithAltCodes()
+	if err != nil {
+		if validate {
+			return err
+		}
+		code = Code(source)
 	}
-	*c = newCode
-	return newCode == Code(source), nil
+	*c = code
+	return nil
 }
 
 // String returns the normalized code if possible,

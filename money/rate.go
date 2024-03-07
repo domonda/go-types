@@ -66,18 +66,23 @@ func RateFromPtr(ptr *Rate, defaultVal Rate) Rate {
 
 // ScanString tries to parse and assign the passed
 // source string as value of the implementing type.
-// It returns an error if source could not be parsed.
-// If the source string could be parsed, but was not
-// in the expected normalized format, then false is
-// returned for wasNormalized and nil for err.
-// ScanString implements the strfmt.Scannable interface.
-func (r *Rate) ScanString(source string) (wasNormalized bool, err error) {
+//
+// If validate is true, the source string is checked
+// for validity before it is assigned to the type.
+//
+// If validate is false and the source string
+// can still be assigned in some non-normalized way
+// it will be assigned without returning an error.
+func (r *Rate) ScanString(source string, validate bool) error {
 	f, err := float.Parse(source)
 	if err != nil {
-		return false, err
+		return err
+	}
+	if validate && !Rate(f).Valid() {
+		return fmt.Errorf("invalid rate: %q", source)
 	}
 	*r = Rate(f)
-	return true, nil
+	return nil
 }
 
 // GoString returns the rate as string

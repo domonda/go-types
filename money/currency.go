@@ -28,18 +28,23 @@ func NormalizeCurrency(str string) (Currency, error) {
 
 // ScanString tries to parse and assign the passed
 // source string as value of the implementing type.
-// It returns an error if source could not be parsed.
-// If the source string could be parsed, but was not
-// in the expected normalized format, then false is
-// returned for wasNormalized and nil for err.
-// ScanString implements the strfmt.Scannable interface.
-func (c *Currency) ScanString(source string) (wasNormalized bool, err error) {
-	newC, err := Currency(source).Normalized()
+//
+// If validate is true, the source string is checked
+// for validity before it is assigned to the type.
+//
+// If validate is false and the source string
+// can still be assigned in some non-normalized way
+// it will be assigned without returning an error.
+func (c *Currency) ScanString(source string, validate bool) error {
+	newCurrency, err := Currency(source).Normalized()
 	if err != nil {
-		return false, err
+		if validate {
+			return err
+		}
+		newCurrency = Currency(source)
 	}
-	*c = newC
-	return newC == Currency(source), nil
+	*c = newCurrency
+	return nil
 }
 
 // GetOrDefault returns the value c references if it is valid and c is not nil.

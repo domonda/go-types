@@ -12,13 +12,15 @@ import (
 var DefaultScanConfig = NewScanConfig()
 
 type ScanConfig struct {
-	TrueStrings                 []string                 `json:"trueStrings"`
-	FalseStrings                []string                 `json:"falseStrings"`
-	NilStrings                  []string                 `json:"nilStrings"`
-	TimeFormats                 []string                 `json:"timeFormats"`
-	AcceptedMoneyAmountDecimals []int                    `json:"acceptedMoneyAmountDecimals,omitempty"`
-	TypeScanners                map[reflect.Type]Scanner `json:"-"`
-	ValidateFunc                func(any) error          `json:"-"`
+	TrueStrings                 []string `json:"trueStrings"`
+	FalseStrings                []string `json:"falseStrings"`
+	NilStrings                  []string `json:"nilStrings"`
+	TimeFormats                 []string `json:"timeFormats"`
+	AcceptedMoneyAmountDecimals []int    `json:"acceptedMoneyAmountDecimals,omitempty"`
+
+	TypeScanners map[reflect.Type]Scanner `json:"-"`
+	// Use nil to disable validation
+	ValidateFunc func(any) error `json:"-"`
 }
 
 func NewScanConfig() *ScanConfig {

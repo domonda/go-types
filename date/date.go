@@ -259,18 +259,23 @@ func FromUntilFromYearAndMonths(year, months string) (fromDate, untilDate Date, 
 
 // ScanString tries to parse and assign the passed
 // source string as value of the implementing type.
-// It returns an error if source could not be parsed.
-// If the source string could be parsed, but was not
-// in the expected normalized format, then false is
-// returned for wasNormalized and nil for err.
-// ScanString implements the strfmt.Scannable interface.
-func (date *Date) ScanString(source string) (wasNormalized bool, err error) {
+//
+// If validate is true, the source string is checked
+// for validity before it is assigned to the type.
+//
+// If validate is false and the source string
+// can still be assigned in some non-normalized way
+// it will be assigned without returning an error.
+func (date *Date) ScanString(source string, validate bool) error {
 	newDate, err := Date(source).Normalized()
 	if err != nil {
-		return false, err
+		if validate {
+			return err
+		}
+		newDate = Date(source)
 	}
 	*date = newDate
-	return newDate == Date(source), nil
+	return nil
 }
 
 func (date *Date) ScanStringWithLang(source string, lang language.Code) (wasNormalized bool, monthMustBeFirst bool, err error) {

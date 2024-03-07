@@ -70,18 +70,19 @@ func (ca CurrencyAmount) GoString() string {
 
 // ScanString tries to parse and assign the passed
 // source string as value of the implementing type.
-// It returns an error if source could not be parsed.
-// If the source string could be parsed, but was not
-// in the expected normalized format, then false is
-// returned for wasNormalized and nil for err.
-// ScanString implements the strfmt.Scannable interface.
-func (ca *CurrencyAmount) ScanString(source string) (wasNormalized bool, err error) {
+//
+// If validate is true, then the Amount.Valid method is checked
+// to return an error if the floating point value is infinite or NaN.
+func (ca *CurrencyAmount) ScanString(source string, validate bool) error {
 	parsed, err := ParseCurrencyAmount(source, 0, 2)
 	if err != nil {
-		return false, err
+		return err
+	}
+	if validate && !parsed.Amount.Valid() {
+		return fmt.Errorf("invalid amount: %q", source)
 	}
 	*ca = parsed
-	return ca.String() == source, nil
+	return nil
 }
 
 // Scan implements the database/sql.Scanner interface
