@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"strings"
 
-	types "github.com/domonda/go-types"
 	"github.com/domonda/go-types/float"
 )
 
@@ -90,13 +89,11 @@ func Scan(dest reflect.Value, source string, config *ScanConfig) (err error) {
 		return fmt.Errorf("can't scan %q as destination type %s", source, dest.Type())
 	}
 
-	// Validate scanned value if dest or dest pointer implements types.ValidatErr or types.Validator
-	err, isValidator := types.TryValidate(dest.Interface())
-	if !isValidator {
-		err, isValidator = types.TryValidate(dest.Addr().Interface())
-	}
-	if err != nil {
-		return fmt.Errorf("error validating %s value scanned from %q because %w", dest.Type(), source, err)
+	if config.ValidateFunc != nil {
+		err = config.ValidateFunc(dest.Interface())
+		if err != nil {
+			return fmt.Errorf("error validating %s value scanned from %q because %w", dest.Type(), source, err)
+		}
 	}
 
 	return nil

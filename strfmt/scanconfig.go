@@ -5,6 +5,8 @@ import (
 	"reflect"
 	"strings"
 	"time"
+
+	types "github.com/domonda/go-types"
 )
 
 var DefaultScanConfig = NewScanConfig()
@@ -16,6 +18,7 @@ type ScanConfig struct {
 	TimeFormats                 []string                 `json:"timeFormats"`
 	AcceptedMoneyAmountDecimals []int                    `json:"acceptedMoneyAmountDecimals,omitempty"`
 	TypeScanners                map[reflect.Type]Scanner `json:"-"`
+	ValidateFunc                func(any) error          `json:"-"`
 }
 
 func NewScanConfig() *ScanConfig {
@@ -33,6 +36,7 @@ func NewScanConfig() *ScanConfig {
 			time.DateOnly,
 		},
 		AcceptedMoneyAmountDecimals: []int{0, 2, 4},
+		ValidateFunc:                types.Validate,
 	}
 	c.initTypeScanners()
 	return c

@@ -135,7 +135,7 @@ func Validate(v any) error {
 // and ErrInvalidValue is returned if Validator.Valid() is false.
 // If v does not implement ValidatErr or Validator then nil and false
 // will be returned.
-func TryValidate(v any) (err error, isValidator bool) {
+func TryValidate(v any) (err error, isValidatable bool) {
 	switch x := v.(type) {
 	case ValidatErr:
 		return x.Validate(), true
