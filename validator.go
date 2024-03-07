@@ -1,6 +1,13 @@
 package types
 
-import "errors"
+import (
+	"cmp"
+	"errors"
+	"fmt"
+	"reflect"
+	"slices"
+	"strings"
+)
 
 // Validator can be implemented by types that can validate their data.
 type Validator interface {
@@ -140,5 +147,66 @@ func TryValidate(v any) (err error, isValidator bool) {
 		}
 	default:
 		return nil, false
+	}
+}
+
+// DeepValidate validates all fields of a struct, all elements of a slice or array,
+// and all values of a map by recursively calling Validate or Valid methods.
+func DeepValidate(v any) error {
+	return deepValidate(reflect.ValueOf(v))
+}
+
+func deepValidate(v reflect.Value, path ...string) error {
+	err := Validate(v.Interface())
+	if err != nil && len(path) > 0 {
+		err = fmt.Errorf("%s: %w", strings.Join(path, " -> "), err)
+	}
+	if v.Kind() == reflect.Ptr {
+		if v.IsNil() {
+			return err
+		}
+		v = v.Elem()
+	}
+	switch v.Kind() {
+	case reflect.Struct:
+		for i := 0; i < v.NumField(); i++ {
+			name := fmt.Sprintf("struct field %s", v.Type().Field(i).Name)
+			err = errors.Join(err, deepValidate(v.Field(i), append(path, name)...))
+		}
+	case reflect.Map:
+		keys := v.MapKeys()
+		slices.SortFunc(keys, ReflectCompare)
+		for _, key := range keys {
+			name := fmt.Sprintf("map value [%#v]", key.Interface())
+			err = errors.Join(err, deepValidate(v.MapIndex(key), append(path, name)...))
+		}
+	case reflect.Slice, reflect.Array:
+		for i := 0; i < v.Len(); i++ {
+			name := fmt.Sprintf("elememt [%d]", i)
+			err = errors.Join(err, deepValidate(v.Index(i), append(path, name)...))
+		}
+	}
+	return err
+}
+
+// ReflectCompare compares two reflect.Values of the same type.
+// The function panics if the types of a and b
+// are not idential or not orderable.
+// Orderable types are variantes of integers, floats, and strings.
+func ReflectCompare(a, b reflect.Value) int {
+	if a.Type() != b.Type() {
+		panic("values are not of the same type")
+	}
+	switch a.Kind() {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return cmp.Compare(a.Int(), b.Int())
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+		return cmp.Compare(a.Uint(), b.Uint())
+	case reflect.Float32, reflect.Float64:
+		return cmp.Compare(a.Float(), b.Float())
+	case reflect.String:
+		return cmp.Compare(a.String(), b.String())
+	default:
+		panic("values are not of an orderable type")
 	}
 }

@@ -58,12 +58,12 @@ func (s *LenString) Validate() error {
 }
 
 func (s *LenString) validateLen(str string) error {
-	l := len(s.str)
+	l := len(str)
 	if l < s.min {
-		return fmt.Errorf("length %d of LenString %q is shorter than minimum of %d", l, s.str, s.min)
+		return fmt.Errorf("length %d of LenString %q is shorter than minimum of %d", l, str, s.min)
 	}
 	if l > s.max {
-		return fmt.Errorf("length %d of LenString %q is longer than maximum of %d", l, s.str, s.max)
+		return fmt.Errorf("length %d of LenString %q is longer than maximum of %d", l, str, s.max)
 	}
 	return nil
 }
