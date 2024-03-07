@@ -30,9 +30,9 @@ type BIC string
 // It returns an error if source could not be parsed.
 // If the source string could be parsed, but was not
 // in the expected normalized format, then false is
-// returned for sourceWasNormalized and nil for err.
+// returned for normalized and nil for err.
 // ScanString implements the strfmt.Scannable interface.
-func (bic *BIC) ScanString(source string) (normalized bool, err error) {
+func (bic *BIC) ScanString(source string) (wasNormalized bool, err error) {
 	err = BIC(source).Validate()
 	if err != nil {
 		return false, err

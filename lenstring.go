@@ -132,9 +132,9 @@ func (s *LenString) UnmarshalJSON(text []byte) error {
 // It returns an error if source could not be parsed.
 // If the source string could be parsed, but was not
 // in the expected normalized format, then false is
-// returned for sourceWasNormalized and nil for err.
+// returned for wasNormalized and nil for err.
 // ScanString implements the strfmt.Scannable interface.
-func (s *LenString) ScanString(source string) (normalized bool, err error) {
+func (s *LenString) ScanString(source string) (wasNormalized bool, err error) {
 	err = s.SetString(source)
 	if err != nil {
 		return false, err

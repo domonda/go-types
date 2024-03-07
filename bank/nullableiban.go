@@ -19,9 +19,14 @@ type NullableIBAN string
 // It returns an error if source could not be parsed.
 // If the source string could be parsed, but was not
 // in the expected normalized format, then false is
-// returned for sourceWasNormalized and nil for err.
+// returned for wasNormalized and nil for err.
 // ScanString implements the strfmt.Scannable interface.
-func (iban *NullableIBAN) ScanString(source string) (normalized bool, err error) {
+func (iban *NullableIBAN) ScanString(source string) (wasNormalized bool, err error) {
+	switch source {
+	case "NULL", "null", "nil":
+		iban.SetNull()
+		return false, nil
+	}
 	newIBAN, err := NullableIBAN(source).Normalized()
 	if err != nil {
 		return false, err

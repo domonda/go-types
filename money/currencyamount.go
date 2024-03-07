@@ -73,9 +73,9 @@ func (ca CurrencyAmount) GoString() string {
 // It returns an error if source could not be parsed.
 // If the source string could be parsed, but was not
 // in the expected normalized format, then false is
-// returned for sourceWasNormalized and nil for err.
+// returned for wasNormalized and nil for err.
 // ScanString implements the strfmt.Scannable interface.
-func (ca *CurrencyAmount) ScanString(source string) (sourceWasNormalized bool, err error) {
+func (ca *CurrencyAmount) ScanString(source string) (wasNormalized bool, err error) {
 	parsed, err := ParseCurrencyAmount(source, 0, 2)
 	if err != nil {
 		return false, err

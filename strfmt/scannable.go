@@ -6,6 +6,6 @@ type Scannable interface {
 	// It returns an error if source could not be parsed.
 	// If the source string could be parsed, but was not
 	// in the expected normalized format, then false is
-	// returned for sourceWasNormalized and nil for err.
-	ScanString(source string) (sourceWasNormalized bool, err error)
+	// returned for wasNormalized and nil for err.
+	ScanString(source string) (wasNormalized bool, err error)
 }

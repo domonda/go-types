@@ -262,9 +262,9 @@ func FromUntilFromYearAndMonths(year, months string) (fromDate, untilDate Date, 
 // It returns an error if source could not be parsed.
 // If the source string could be parsed, but was not
 // in the expected normalized format, then false is
-// returned for sourceWasNormalized and nil for err.
+// returned for wasNormalized and nil for err.
 // ScanString implements the strfmt.Scannable interface.
-func (date *Date) ScanString(source string) (sourceWasNormalized bool, err error) {
+func (date *Date) ScanString(source string) (wasNormalized bool, err error) {
 	newDate, err := Date(source).Normalized()
 	if err != nil {
 		return false, err
@@ -273,7 +273,7 @@ func (date *Date) ScanString(source string) (sourceWasNormalized bool, err error
 	return newDate == Date(source), nil
 }
 
-func (date *Date) ScanStringWithLang(source string, lang language.Code) (sourceWasNormalized bool, monthMustBeFirst bool, err error) {
+func (date *Date) ScanStringWithLang(source string, lang language.Code) (wasNormalized bool, monthMustBeFirst bool, err error) {
 	newDate, monthMustBeFirst, err := normalizeAndCheckDate(source, lang)
 	if err != nil {
 		return false, false, err
