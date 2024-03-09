@@ -152,7 +152,7 @@ func IDFromBytes(b []byte) (ID, error) {
 		return parseDashedFormat(text, b)
 
 	default:
-		return IDNil, fmt.Errorf("uu.IDFromBytes expects 16, 22, 32, or 36 bytes, but got %d", len(b))
+		return IDNil, fmt.Errorf("uu.IDFromBytes expects 16, 22, 32, or 36 bytes, but got %d: %q", len(b), b)
 	}
 }
 
