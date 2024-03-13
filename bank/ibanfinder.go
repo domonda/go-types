@@ -11,7 +11,7 @@ func (ibanFinder) FindAllIndex(str []byte, n int) (result [][]int) {
 	max := strLen - IBANMinLength
 	for i := 0; i <= max; i++ {
 		countryCode := country.Code(str[i : i+2])
-		countryLength, found := ibanCountryLengthMap[countryCode]
+		countryLength, found := countryIBANLength[countryCode]
 		if found {
 			end := i + countryLength
 			if end <= strLen {

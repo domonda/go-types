@@ -93,7 +93,7 @@ func (iban IBAN) Normalized() (IBAN, error) {
 	case len(iban) < IBANMinLength:
 		return "", errors.New("IBAN too short")
 	}
-	countryLength, found := ibanCountryLengthMap[country.Code(iban[:2])]
+	countryLength, found := countryIBANLength[country.Code(iban[:2])]
 	if !found {
 		return "", errors.New("invalid IBAN country code")
 	}
@@ -226,108 +226,116 @@ func (iban IBAN) Value() (driver.Value, error) {
 	return string(iban), nil
 }
 
-func (iban *IBAN) BankAndAccountNumbers() (bankNr, accountNr string, err error) {
+func (iban *IBAN) BankAndAccountNumbers() (bankNo, accountNo string, err error) {
 	country := iban.CountryCode()
 	if country == "" {
 		return "", "", fmt.Errorf("invalid IBAN: %q", string(*iban))
 	}
-	getNumbers, found := bankAndAccountNumbers[country]
+	getNumbers, found := getBankAndAccountNumbers[country]
 	if !found {
 		return "", "", fmt.Errorf("can't extract bank and account numbers from IBAN: %q", string(*iban))
 	}
-	bankNr, accountNr = getNumbers(string(*iban))
-	return bankNr, accountNr, nil
+	return getNumbers(string(*iban))
 }
 
-var bankAndAccountNumbers = map[country.Code]func(string) (string, string){
-	"AT": func(iban string) (string, string) {
-		return iban[4:9], iban[9:]
+var getBankAndAccountNumbers = map[country.Code]func(string) (string, string, error){
+	country.AT: func(iban string) (string, string, error) {
+		if len(iban) < countryIBANLength[country.AT] {
+			return "", "", errors.New("IBAN too short")
+		}
+		return iban[4:9], iban[9:], nil
 	},
-	"CH": func(iban string) (string, string) {
-		return iban[4:9], iban[9:]
+	country.CH: func(iban string) (string, string, error) {
+		if len(iban) < countryIBANLength[country.CH] {
+			return "", "", errors.New("IBAN too short")
+		}
+		return iban[4:9], iban[9:], nil
 	},
-	"DE": func(iban string) (string, string) {
-		return iban[4:12], iban[12:]
+	country.DE: func(iban string) (string, string, error) {
+		if len(iban) < countryIBANLength[country.DE] {
+			return "", "", errors.New("IBAN too short")
+		}
+		return iban[4:12], iban[12:], nil
 	},
 }
 
-var ibanCountryLengthMap = map[country.Code]int{
-	"AL": 28,
-	"AD": 24,
-	"AT": 20,
-	"AZ": 28,
-	"BH": 22,
-	"BY": 28,
-	"BE": 16,
-	"BA": 20,
-	"BR": 29,
-	"BG": 22,
-	"CR": 22,
-	"HR": 21,
-	"CY": 28,
-	"CZ": 24,
-	"DK": 18,
-	"DO": 28,
-	"SV": 28,
-	"EE": 20,
-	"FO": 18,
-	"FI": 18,
-	"FR": 27,
-	"GE": 22,
-	"DE": 22,
-	"GI": 23,
-	"GR": 27,
-	"GL": 18,
-	"GT": 28,
-	"HU": 28,
-	"IS": 26,
-	"IQ": 23,
-	"IE": 22,
-	"IL": 23,
-	"IT": 27,
-	"JO": 30,
-	"KZ": 20,
-	"XK": 20,
-	"KW": 30,
-	"LV": 21,
-	"LB": 28,
-	"LI": 21,
-	"LT": 20,
-	"LU": 20,
-	"MK": 19,
-	"MT": 31,
-	"MR": 27,
-	"MU": 30,
-	"MD": 24,
-	"MC": 27,
-	"ME": 22,
-	"NL": 18,
-	"NO": 15,
-	"PK": 24,
-	"PS": 29,
-	"PL": 28,
-	"PT": 25,
-	"QA": 29,
-	"RO": 24,
-	"LC": 32,
-	"SM": 27,
-	"ST": 25,
-	"SA": 24,
-	"RS": 22,
-	"SC": 31,
-	"SK": 24,
-	"SI": 19,
-	"ES": 24,
-	"SE": 24,
-	"CH": 21,
-	"TL": 23,
-	"TN": 24,
-	"TR": 26,
-	"UA": 29,
-	"AE": 23,
-	"GB": 22,
-	"VG": 24,
+var countryIBANLength = map[country.Code]int{
+	country.AL: 28,
+	country.AD: 24,
+	country.AT: 20,
+	country.AZ: 28,
+	country.BH: 22,
+	country.BY: 28,
+	country.BE: 16,
+	country.BA: 20,
+	country.BR: 29,
+	country.BG: 22,
+	country.CR: 22,
+	country.HR: 21,
+	country.CY: 28,
+	country.CZ: 24,
+	country.DK: 18,
+	country.DO: 28,
+	country.SV: 28,
+	country.EE: 20,
+	country.FO: 18,
+	country.FI: 18,
+	country.FR: 27,
+	country.GE: 22,
+	country.DE: 22,
+	country.GI: 23,
+	country.GR: 27,
+	country.GL: 18,
+	country.GT: 28,
+	country.HU: 28,
+	country.IS: 26,
+	country.IQ: 23,
+	country.IE: 22,
+	country.IL: 23,
+	country.IT: 27,
+	country.JO: 30,
+	country.KZ: 20,
+	country.XK: 20,
+	country.KW: 30,
+	country.LV: 21,
+	country.LB: 28,
+	country.LI: 21,
+	country.LT: 20,
+	country.LU: 20,
+	country.MK: 19,
+	country.MT: 31,
+	country.MR: 27,
+	country.MU: 30,
+	country.MD: 24,
+	country.MC: 27,
+	country.ME: 22,
+	country.NL: 18,
+	country.NO: 15,
+	country.PK: 24,
+	country.PS: 29,
+	country.PL: 28,
+	country.PT: 25,
+	country.QA: 29,
+	country.RO: 24,
+	country.LC: 32,
+	country.SM: 27,
+	country.ST: 25,
+	country.SA: 24,
+	country.RS: 22,
+	country.SC: 31,
+	country.SK: 24,
+	country.SI: 19,
+	country.ES: 24,
+	country.SE: 24,
+	country.CH: 21,
+	country.TL: 23,
+	country.TN: 24,
+	country.TR: 26,
+	country.UA: 29,
+	country.AE: 23,
+	country.GB: 22,
+	country.VG: 24,
 
-	"GG": 22, // valid BIC but, can use GB or FR in IBAN
-	"JE": 22, // valid BIC but, can use GB or FR in IBAN
+	country.GG: 22, // valid BIC but, can use GB or FR in IBAN
+	country.JE: 22, // valid BIC but, can use GB or FR in IBAN
 }

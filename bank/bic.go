@@ -64,7 +64,7 @@ func (bic BIC) Validate() error {
 		return fmt.Errorf("invalid BIC %q: no regex match", string(bic))
 	}
 	countryCode := country.Code(subMatches[2])
-	_, isValidCountry := ibanCountryLengthMap[countryCode]
+	_, isValidCountry := countryIBANLength[countryCode]
 	if !isValidCountry {
 		return fmt.Errorf("invalid BIC %q country code: %q", string(bic), countryCode)
 	}
@@ -85,7 +85,7 @@ func (bic BIC) Parse() (bankCode string, countryCode country.Code, branchCode st
 		return "", "", "", false
 	}
 	countryCode = country.Code(subMatches[2])
-	_, isValidCountry := ibanCountryLengthMap[countryCode]
+	_, isValidCountry := countryIBANLength[countryCode]
 	if !isValidCountry {
 		return "", "", "", false
 	}

@@ -42,7 +42,7 @@ func (bicFinder) FindAllIndex(str []byte, n int) [][]int {
 		// }
 		bic := str[matchIndices[0]:matchIndices[1]]
 		countryCode := country.Code(str[matchIndices[2]:matchIndices[3]])
-		_, isValidCountry := ibanCountryLengthMap[countryCode]
+		_, isValidCountry := countryIBANLength[countryCode]
 		_, isFalse := falseBICs[BIC(bic)]
 		if isValidCountry && !isFalse && bicExactRegex.Match(bic) {
 			// BIC must also be surrounded by line bounds,
