@@ -93,3 +93,20 @@ func Join[T ~string](elems []T, sep string) string {
 	}
 	return b.String()
 }
+
+// CompareStringsShorterFirst compares two strings by length first and then by lexicographical order.
+func CompareStringsShorterFirst[T ~string](a, b T) int {
+	if len(a) < len(b) {
+		return -1
+	}
+	if len(a) > len(b) {
+		return +1
+	}
+	if a < b {
+		return -1
+	}
+	if a > b {
+		return +1
+	}
+	return 0
+}
