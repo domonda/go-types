@@ -26,14 +26,5 @@ func Valid[T ~float32 | ~float64](f T) bool {
 // if it has the same sign than the passed non zero int argument.
 // If 0 is passed as sign then the sign check always returns true.
 func ValidAndHasSign[T ~float32 | ~float64](f T, sign int) bool {
-	if !Valid(f) {
-		return false
-	}
-	switch {
-	case sign > 0:
-		return f > 0
-	case sign < 0:
-		return f < 0
-	}
-	return true
+	return Valid(f) && (sign == 0 || (f < 0) == (sign < 0))
 }
