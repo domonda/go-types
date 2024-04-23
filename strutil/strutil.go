@@ -3,7 +3,6 @@ package strutil
 import (
 	"bytes"
 	"encoding/json"
-	"math"
 	"net/url"
 	"path"
 	"strings"
@@ -478,7 +477,7 @@ var transliterations = map[rune]string{
 // as valid UTF-8 with common European special characters
 // transliterated to single or multiple ANSI characters.
 func ReplaceTransliterations(str string) string {
-	return ReplaceTransliterationsMaxLen(str, math.MaxInt)
+	return ReplaceTransliterationsMaxLen(str, -1)
 }
 
 // ReplaceTransliterationsMaxLen returns the string sanitized
@@ -486,30 +485,50 @@ func ReplaceTransliterations(str string) string {
 // transliterated to single or multiple ANSI characters.
 //
 // The maxLen argument limits the number of runes returned.
+// A negative value means no limit.
 func ReplaceTransliterationsMaxLen(str string, maxLen int) string {
-	var b strings.Builder
-	if len(str) < maxLen {
-		b.Grow(len(str))
-	} else {
-		b.Grow(maxLen)
+	if str == "" || maxLen == 0 {
+		return ""
 	}
-	l := 0
-	for _, r := range str {
+	b := strings.Builder{}
+	numRunes := 0
+	for i, r := range str {
+		if maxLen > 0 && numRunes >= maxLen {
+			if b.Len() > 0 {
+				return b.String()
+			}
+			return str[:i]
+		}
 		if r == unicode.ReplacementChar {
+			if b.Len() == 0 {
+				// If unchanged yet, write from start of string up to first change
+				b.Grow(min(len(str), maxLen))
+				b.WriteString(str[:i])
+			}
 			continue // Ignore invalid UTF-8 sequences
 		}
 		if repl, ok := transliterations[r]; ok {
+			if b.Len() == 0 {
+				// If unchanged yet, write from start of string up to first change
+				b.Grow(min(len(str), maxLen))
+				b.WriteString(str[:i])
+			}
 			b.WriteString(repl)
-			l += len(repl)
+			numRunes += len(repl)
 		} else {
-			b.WriteRune(r)
-			l++
-		}
-		if l >= maxLen {
-			break
+			if b.Len() > 0 {
+				// Only write if there was a change before
+				b.WriteRune(r)
+			}
+			numRunes++
 		}
 	}
-	return b.String()
+	if b.Len() > 0 {
+		// Return changed string in b
+		return b.String()
+	}
+	// No changes, return original string
+	return str
 }
 
 // var umlautHTMLEntities = map[string]string{
