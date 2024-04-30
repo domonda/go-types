@@ -91,6 +91,15 @@ func (n NullableDate) Get() Date {
 	return Date(n)
 }
 
+// GetOr returns the non nullable Date value
+// or the passed defaultDate if the NullableDate is null.
+func (n NullableDate) GetOr(defaultDate Date) Date {
+	if n.IsNull() {
+		return defaultDate
+	}
+	return Date(n)
+}
+
 // Valid returns if the format of the date is correct, see Format
 // n.IsZero() is valid
 func (n NullableDate) Valid() bool {

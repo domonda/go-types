@@ -178,10 +178,10 @@ func (n NullableID) Get() ID {
 }
 
 // GetOr returns the non nullable ID value
-// or useIfNull if n is null.
-func (n NullableID) GetOr(useIfNull ID) ID {
+// or defaultID if the NullableID is null.
+func (n NullableID) GetOr(defaultID ID) ID {
 	if n.IsNull() {
-		return useIfNull
+		return defaultID
 	}
 	return ID(n)
 }

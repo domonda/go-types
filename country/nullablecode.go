@@ -95,11 +95,20 @@ func (n NullableCode) Get() Code {
 	return Code(n)
 }
 
-// StringOr returns the NullableCode as string
-// or the passed nullString if the NullableCode is null.
-func (n NullableCode) StringOr(nullString string) string {
+// GetOr returns the non nullable Code value
+// or the passed defaultCode if the NullableCode is null.
+func (n NullableCode) GetOr(defaultCode Code) Code {
 	if n.IsNull() {
-		return nullString
+		return defaultCode
+	}
+	return Code(n)
+}
+
+// StringOr returns the NullableCode as string
+// or the passed defaultString if the NullableCode is null.
+func (n NullableCode) StringOr(defaultString string) string {
+	if n.IsNull() {
+		return defaultString
 	}
 	return string(n)
 }

@@ -118,6 +118,15 @@ func (n NullableAddress) Get() Address {
 	return Address(n)
 }
 
+// GetOr returns the non nullable Address value
+// or the passed defaultAddress if the NullableAddress is null.
+func (n NullableAddress) GetOr(defaultAddress Address) Address {
+	if n.IsNull() {
+		return defaultAddress
+	}
+	return Address(n)
+}
+
 // Set the passed Address as NullableAddress.
 // Passing an empty string will be interpreted as setting NULL.
 func (n *NullableAddress) Set(s Address) {

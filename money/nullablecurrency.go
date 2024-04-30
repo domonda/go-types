@@ -56,10 +56,10 @@ func (n NullableCurrency) GetOr(defaultVal Currency) Currency {
 }
 
 // StringOr returns the NullableCurrency as string
-// or the passed nullString if the NullableCurrency is null.
-func (n NullableCurrency) StringOr(nullString string) string {
+// or the passed defaultString if the NullableCurrency is null.
+func (n NullableCurrency) StringOr(defaultString string) string {
 	if n.IsNull() {
-		return nullString
+		return defaultString
 	}
 	return string(n)
 }

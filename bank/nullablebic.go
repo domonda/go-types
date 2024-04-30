@@ -88,18 +88,27 @@ func (bic *NullableBIC) SetNull() {
 // Get returns the non nullable BIC value
 // or panics if the NullableBIC is null.
 // Note: check with IsNull before using Get!
-func (bic *NullableBIC) Get() BIC {
+func (bic NullableBIC) Get() BIC {
 	if bic.IsNull() {
 		panic("NULL bank.BIC")
 	}
-	return BIC(*bic)
+	return BIC(bic)
+}
+
+// GetOr returns the non nullable BIC value
+// or the passed defaultBIC if the NullableBIC is null.
+func (bic NullableBIC) GetOr(defaultBIC BIC) BIC {
+	if bic.IsNull() {
+		return defaultBIC
+	}
+	return BIC(bic)
 }
 
 // StringOr returns the NullableBIC as string
-// or the passed nullString if the NullableBIC is null.
-func (bic NullableBIC) StringOr(nullString string) string {
+// or the passed defaultString if the NullableBIC is null.
+func (bic NullableBIC) StringOr(defaultString string) string {
 	if bic.IsNull() {
-		return nullString
+		return defaultString
 	}
 	return string(bic)
 }

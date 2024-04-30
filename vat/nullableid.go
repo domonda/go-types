@@ -77,6 +77,15 @@ func (n NullableID) Get() ID {
 	return ID(n)
 }
 
+// GetOr returns the non nullable ID value
+// or the passed defaultID if the NullableID is null.
+func (n NullableID) GetOr(defaultID ID) ID {
+	if n.IsNull() {
+		return defaultID
+	}
+	return ID(n)
+}
+
 // StringOr returns the NullableID as string
 // or the passed nullString if the NullableID is null.
 func (n NullableID) StringOr(nullString string) string {

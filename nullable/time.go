@@ -187,6 +187,15 @@ func (n Time) Get() time.Time {
 	return n.Time
 }
 
+// GetOr returns the non nullable time.Time value
+// or the passed defaultTime if the Time is null.
+func (n Time) GetOr(defaultTime time.Time) time.Time {
+	if n.IsNull() {
+		return defaultTime
+	}
+	return n.Time
+}
+
 // Set a time.Time.
 // Note that if t.IsZero() then n will be set to null.
 func (n *Time) Set(t time.Time) {

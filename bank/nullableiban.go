@@ -141,18 +141,27 @@ func (iban *NullableIBAN) SetNull() {
 // Get returns the non nullable IBAN value
 // or panics if the NullableIBAN is null.
 // Note: check with IsNull before using Get!
-func (iban *NullableIBAN) Get() IBAN {
+func (iban NullableIBAN) Get() IBAN {
 	if iban.IsNull() {
 		panic("NULL bank.IBAN")
 	}
-	return IBAN(*iban)
+	return IBAN(iban)
+}
+
+// GetOr returns the non nullable IBAN value
+// or the passed defaultIBAN if the NullableIBAN is null.
+func (iban NullableIBAN) GetOr(defaultIBAN IBAN) IBAN {
+	if iban.IsNull() {
+		return defaultIBAN
+	}
+	return IBAN(iban)
 }
 
 // StringOr returns the NullableIBAN as string
-// or the passed nullString if the NullableIBAN is null.
-func (iban NullableIBAN) StringOr(nullString string) string {
+// or the passed defaultString if the NullableIBAN is null.
+func (iban NullableIBAN) StringOr(defaultString string) string {
 	if iban.IsNull() {
-		return nullString
+		return defaultString
 	}
 	return string(iban)
 }
