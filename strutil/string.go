@@ -1,6 +1,9 @@
 package strutil
 
-import "strings"
+import (
+	"strings"
+	"unsafe"
+)
 
 // Ptr returns the passed string as pointer value.
 func Ptr(str string) *string { return &str }
@@ -109,4 +112,12 @@ func CompareStringsShorterFirst[T ~string](a, b T) int {
 		return +1
 	}
 	return 0
+}
+
+// ConvertSlice converts a slice of one string type
+// type to another string type.
+// It does this by reinterpreting the slice's underlying
+// memory using unsafe.Pointer.
+func ConvertSlice[T, S ~string](s []S) []T {
+	return *(*[]T)(unsafe.Pointer(&s))
 }
