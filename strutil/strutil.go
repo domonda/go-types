@@ -473,20 +473,20 @@ var transliterations = map[rune]string{
 	'œ': "oe",
 }
 
-// ReplaceTransliterations returns the string sanitized
+// TransliterateSpecialCharacters returns the string sanitized
 // as valid UTF-8 with common European special characters
 // transliterated to single or multiple ANSI characters.
-func ReplaceTransliterations(str string) string {
-	return ReplaceTransliterationsMaxLen(str, -1)
+func TransliterateSpecialCharacters(str string) string {
+	return TransliterateSpecialCharactersMaxLen(str, -1)
 }
 
-// ReplaceTransliterationsMaxLen returns the string sanitized
+// TransliterateSpecialCharactersMaxLen returns the string sanitized
 // as valid UTF-8 with common European special characters
 // transliterated to single or multiple ANSI characters.
 //
 // The maxLen argument limits the number of runes returned.
 // A negative value means no limit.
-func ReplaceTransliterationsMaxLen(str string, maxLen int) string {
+func TransliterateSpecialCharactersMaxLen(str string, maxLen int) string {
 	if str == "" || maxLen == 0 {
 		return ""
 	}

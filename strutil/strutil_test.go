@@ -179,7 +179,7 @@ func TestReplaceTransliterationsMaxLen(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.str, func(t *testing.T) {
-			if got := ReplaceTransliterationsMaxLen(tt.str, tt.maxLen); got != tt.want {
+			if got := TransliterateSpecialCharactersMaxLen(tt.str, tt.maxLen); got != tt.want {
 				t.Errorf("ReplaceTransliterationsMaxLen(%#v) = %#v, want %#v", tt.str, got, tt.want)
 			}
 		})
