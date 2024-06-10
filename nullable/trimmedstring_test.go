@@ -40,3 +40,27 @@ func TestTrimmedString_UnmarshalJSON(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, expected, result)
 }
+
+func TestTrimmedString_IsNull(t *testing.T) {
+	tests := []struct {
+		s    TrimmedString
+		want bool
+	}{
+		{s: "", want: true},
+		{s: " ", want: true},
+		{s: " \n\t", want: true},
+		{s: "a", want: false},
+		{s: "NULL", want: false},
+		{s: "  NULL  ", want: false},
+		{s: "null", want: false},
+		{s: "nil", want: false},
+		{s: "<nil>", want: false},
+	}
+	for _, tt := range tests {
+		t.Run(string(tt.s), func(t *testing.T) {
+			if got := tt.s.IsNull(); got != tt.want {
+				t.Errorf("TrimmedString.IsNull(%#v) = %v, want %v", tt.s, got, tt.want)
+			}
+		})
+	}
+}

@@ -9,6 +9,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"strings"
+	"unicode"
 	"unsafe"
 )
 
@@ -55,9 +56,14 @@ func JoinTrimmedStrings(separator string, strs ...TrimmedString) TrimmedString {
 
 // IsEmpty indicates if the trimmed string is empty
 // which is also the case when the underlying
-// string consisting only of whitespace.
+// string consists only of whitespace.
 func (s TrimmedString) IsEmpty() bool {
-	return s == "" || s.String() == ""
+	for _, r := range s {
+		if !unicode.IsSpace(r) {
+			return false
+		}
+	}
+	return true
 }
 
 // String implements the fmt.Stringer interface

@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"unicode"
 	"unsafe"
 )
 
@@ -95,9 +96,15 @@ func (s TrimmedString) Ptr() *string {
 }
 
 // IsNull returns true if the string is empty.
+//
 // IsNull implements the Nullable interface.
 func (s TrimmedString) IsNull() bool {
-	return s == "" || strings.TrimSpace(string(s)) == ""
+	for _, r := range s {
+		if !unicode.IsSpace(r) {
+			return false
+		}
+	}
+	return true
 }
 
 // IsNotNull returns true if the string is not empty.
