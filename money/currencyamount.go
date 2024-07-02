@@ -4,6 +4,8 @@ import (
 	"database/sql/driver"
 	"fmt"
 	"strings"
+
+	"github.com/domonda/go-types/strutil"
 )
 
 type CurrencyAmount struct {
@@ -18,7 +20,7 @@ func NewCurrencyAmount(currency Currency, amount Amount) CurrencyAmount {
 // ParseCurrencyAmount parses a currency and an amount from str with acceptedDecimals.
 // If acceptedDecimals is empty, then any decimal number is accepted.
 func ParseCurrencyAmount(str string, acceptedDecimals ...int) (result CurrencyAmount, err error) {
-	str = strings.TrimSpace(str)
+	str = strutil.TrimSpace(str)
 
 	// Find first separator between currency and amount
 	if pos := strings.IndexAny(str, " .,'-+0123456789"); pos != -1 {

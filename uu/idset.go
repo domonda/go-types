@@ -6,6 +6,8 @@ import (
 	"io"
 	"maps"
 	"strings"
+
+	"github.com/domonda/go-types/strutil"
 )
 
 // IDSet is a set of uu.IDs.
@@ -56,7 +58,7 @@ func IDSetFromString(str string) (IDSet, error) {
 	}
 	strs := strings.Split(str, ",")
 	for i, s := range strs {
-		strs[i] = strings.TrimSpace(s)
+		strs[i] = strutil.TrimSpace(s)
 	}
 	return MakeIDSetFromStrings(strs)
 }

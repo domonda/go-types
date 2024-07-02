@@ -1,7 +1,6 @@
 package notnull
 
 import (
-	"bytes"
 	"database/sql"
 	"database/sql/driver"
 	"encoding"
@@ -9,8 +8,9 @@ import (
 	"encoding/xml"
 	"fmt"
 	"strings"
-	"unicode"
 	"unsafe"
+
+	"github.com/domonda/go-types/strutil"
 )
 
 var (
@@ -34,12 +34,12 @@ type TrimmedString string
 // TrimmedStringf formats a string using fmt.Sprintf
 // and returns it as TrimmedString.
 func TrimmedStringf(format string, a ...any) TrimmedString {
-	return TrimmedString(strings.TrimSpace(fmt.Sprintf(format, a...)))
+	return TrimmedString(strutil.TrimSpace(fmt.Sprintf(format, a...)))
 }
 
 // TrimmedStringFrom trims the passed str and returns it as TrimmedString
 func TrimmedStringFrom(str string) TrimmedString {
-	return TrimmedString(strings.TrimSpace(str))
+	return TrimmedString(strutil.TrimSpace(str))
 }
 
 // JoinTrimmedStrings joins trimmed strings with the passed separator between them
@@ -49,7 +49,7 @@ func JoinTrimmedStrings(separator string, strs ...TrimmedString) TrimmedString {
 		if b.Len() > 0 {
 			b.WriteString(separator)
 		}
-		b.WriteString(strings.TrimSpace(string(s)))
+		b.WriteString(strutil.TrimSpace(string(s)))
 	}
 	return TrimmedString(b.String())
 }
@@ -59,7 +59,7 @@ func JoinTrimmedStrings(separator string, strs ...TrimmedString) TrimmedString {
 // string consists only of whitespace.
 func (s TrimmedString) IsEmpty() bool {
 	for _, r := range s {
-		if !unicode.IsSpace(r) {
+		if !strutil.IsSpace(r) {
 			return false
 		}
 	}
@@ -70,7 +70,7 @@ func (s TrimmedString) IsEmpty() bool {
 // by returning a trimmed string that might be empty
 // if the underlying string consisting only of whitespace.
 func (s TrimmedString) String() string {
-	return strings.TrimSpace(string(s))
+	return strutil.TrimSpace(string(s))
 }
 
 // ToValidUTF8 returns a copy of the TrimmedString with each run of invalid UTF-8 byte sequences
@@ -132,7 +132,7 @@ func (s TrimmedString) TrimSuffix(suffix string) TrimmedString {
 // and after each UTF-8 sequence, yielding up to k+1 replacements
 // for a k-rune string.
 func (s TrimmedString) ReplaceAll(old, new string) TrimmedString {
-	return TrimmedString(strings.TrimSpace(strings.ReplaceAll(s.String(), old, new)))
+	return TrimmedString(strutil.TrimSpace(strings.ReplaceAll(s.String(), old, new)))
 }
 
 // Split slices s into all substrings separated by sep and returns a slice of
@@ -150,14 +150,14 @@ func (s TrimmedString) ReplaceAll(old, new string) TrimmedString {
 func (s TrimmedString) Split(sep string) []TrimmedString {
 	substrings := strings.Split(s.String(), sep)
 	for i, substring := range substrings {
-		substrings[i] = strings.TrimSpace(substring)
+		substrings[i] = strutil.TrimSpace(substring)
 	}
 	return *(*[]TrimmedString)(unsafe.Pointer(&substrings))
 }
 
 // Set the passed string as TrimmedString
 func (s *TrimmedString) Set(str string) {
-	*s = TrimmedString(strings.TrimSpace(str))
+	*s = TrimmedString(strutil.TrimSpace(str))
 }
 
 // Value implements the driver database/sql/driver.Valuer interface
@@ -169,11 +169,11 @@ func (s TrimmedString) Value() (driver.Value, error) {
 func (s *TrimmedString) Scan(value any) error {
 	switch x := value.(type) {
 	case string:
-		*s = TrimmedString(strings.TrimSpace(x))
+		*s = TrimmedString(strutil.TrimSpace(x))
 		return nil
 
 	case []byte:
-		*s = TrimmedString(bytes.TrimSpace(x))
+		*s = TrimmedString(strutil.TrimSpaceBytes(x))
 		return nil
 
 	default:
@@ -188,7 +188,7 @@ func (s TrimmedString) MarshalText() ([]byte, error) {
 
 // UnmarshalText implements the encoding.TextUnmarshaler interface
 func (s *TrimmedString) UnmarshalText(text []byte) error {
-	*s = TrimmedString(bytes.TrimSpace(text))
+	*s = TrimmedString(strutil.TrimSpaceBytes(text))
 	return nil
 }
 

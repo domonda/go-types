@@ -3,13 +3,13 @@ package date
 import (
 	"fmt"
 	"reflect"
-	"strings"
 	"time"
 
 	reflection "github.com/ungerik/go-reflection"
 
 	"github.com/domonda/go-types/language"
 	"github.com/domonda/go-types/nullable"
+	"github.com/domonda/go-types/strutil"
 )
 
 type Format struct {
@@ -32,7 +32,7 @@ func (f *Format) Parse(str string, langHints ...language.Code) (normalized strin
 }
 
 func (f *Format) AssignString(dest reflect.Value, source string /*, loc *time.Location*/) error {
-	source = strings.TrimSpace(source)
+	source = strutil.TrimSpace(source)
 
 	tPtr := new(time.Time)
 	if source != "" {

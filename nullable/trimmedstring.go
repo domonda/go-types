@@ -10,8 +10,9 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"unicode"
 	"unsafe"
+
+	"github.com/domonda/go-types/strutil"
 )
 
 var (
@@ -42,13 +43,13 @@ type TrimmedString string
 // and returns it as TrimmedString.
 // An empty trimmed string will be interpreted as null value.
 func TrimmedStringf(format string, a ...any) TrimmedString {
-	return TrimmedString(strings.TrimSpace(fmt.Sprintf(format, a...)))
+	return TrimmedString(strutil.TrimSpace(fmt.Sprintf(format, a...)))
 }
 
 // TrimmedStringFrom trims the passed str and returns it as TrimmedString
 // An empty trimmed string will be interpreted as null value.
 func TrimmedStringFrom(str string) TrimmedString {
-	return TrimmedString(strings.TrimSpace(str))
+	return TrimmedString(strutil.TrimSpace(str))
 }
 
 // TrimmedStringFromPtr converts a string pointer to a TrimmedString
@@ -58,7 +59,7 @@ func TrimmedStringFromPtr(ptr *string) TrimmedString {
 	if ptr == nil {
 		return ""
 	}
-	return TrimmedString(strings.TrimSpace(*ptr))
+	return TrimmedString(strutil.TrimSpace(*ptr))
 }
 
 // TrimmedStringFromError converts an error to a TrimmedString
@@ -68,7 +69,7 @@ func TrimmedStringFromError(err error) TrimmedString {
 	if err == nil {
 		return ""
 	}
-	return TrimmedString(strings.TrimSpace(err.Error()))
+	return TrimmedString(strutil.TrimSpace(err.Error()))
 }
 
 // JoinTrimmedStrings joins only those strings that are
@@ -82,7 +83,7 @@ func JoinTrimmedStrings(separator string, strs ...TrimmedString) TrimmedString {
 		if b.Len() > 0 {
 			b.WriteString(separator)
 		}
-		b.WriteString(strings.TrimSpace(string(s)))
+		b.WriteString(strutil.TrimSpace(string(s)))
 	}
 	return TrimmedString(b.String())
 }
@@ -100,7 +101,7 @@ func (s TrimmedString) Ptr() *string {
 // IsNull implements the Nullable interface.
 func (s TrimmedString) IsNull() bool {
 	for _, r := range s {
-		if !unicode.IsSpace(r) {
+		if !strutil.IsSpace(r) {
 			return false
 		}
 	}
@@ -126,7 +127,7 @@ func (s TrimmedString) StringOr(nullString string) string {
 // in case of the NULL value or an underlying string
 // consisting only of whitespace.
 func (s TrimmedString) String() string {
-	return strings.TrimSpace(string(s))
+	return strutil.TrimSpace(string(s))
 }
 
 // ToValidUTF8 returns a copy of the TrimmedString with each run of invalid UTF-8 byte sequences
@@ -188,7 +189,7 @@ func (s TrimmedString) TrimSuffix(suffix string) TrimmedString {
 // and after each UTF-8 sequence, yielding up to k+1 replacements
 // for a k-rune string.
 func (s TrimmedString) ReplaceAll(old, new string) TrimmedString {
-	return TrimmedString(strings.TrimSpace(strings.ReplaceAll(s.String(), old, new)))
+	return TrimmedString(strutil.TrimSpace(strings.ReplaceAll(s.String(), old, new)))
 }
 
 // Split slices s into all substrings separated by sep and returns a slice of
@@ -206,7 +207,7 @@ func (s TrimmedString) ReplaceAll(old, new string) TrimmedString {
 func (s TrimmedString) Split(sep string) []TrimmedString {
 	substrings := strings.Split(s.String(), sep)
 	for i, substring := range substrings {
-		substrings[i] = strings.TrimSpace(substring)
+		substrings[i] = strutil.TrimSpace(substring)
 	}
 	return *(*[]TrimmedString)(unsafe.Pointer(&substrings))
 }
@@ -224,7 +225,7 @@ func (s TrimmedString) Get() string {
 // Set the passed string as TrimmedString.
 // Passing an empty trimmed string will be interpreted as setting NULL.
 func (s *TrimmedString) Set(str string) {
-	*s = TrimmedString(strings.TrimSpace(str))
+	*s = TrimmedString(strutil.TrimSpace(str))
 }
 
 // SetNull sets the string to its null value
@@ -248,7 +249,7 @@ func (s *TrimmedString) Scan(value any) error {
 		return nil
 
 	case string:
-		x = strings.TrimSpace(x)
+		x = strutil.TrimSpace(x)
 		if len(x) == 0 {
 			return errors.New("can't scan empty trimmed string as nullable.TrimmedString")
 		}
@@ -256,7 +257,7 @@ func (s *TrimmedString) Scan(value any) error {
 		return nil
 
 	case []byte:
-		x = bytes.TrimSpace(x)
+		x = strutil.TrimSpaceBytes(x)
 		if len(x) == 0 {
 			return errors.New("can't scan empty trimmed string as nullable.TrimmedString")
 		}
@@ -278,7 +279,7 @@ func (s TrimmedString) MarshalText() ([]byte, error) {
 
 // UnmarshalText implements the encoding.TextUnmarshaler interface
 func (s *TrimmedString) UnmarshalText(text []byte) error {
-	*s = TrimmedString(bytes.TrimSpace(text))
+	*s = TrimmedString(strutil.TrimSpaceBytes(text))
 	return nil
 }
 

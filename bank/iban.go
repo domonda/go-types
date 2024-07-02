@@ -8,7 +8,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"unicode"
 
 	"github.com/domonda/go-types/country"
 	"github.com/domonda/go-types/strutil"
@@ -97,7 +96,7 @@ func (iban IBAN) Normalized() (IBAN, error) {
 	if !found {
 		return "", errors.New("invalid IBAN country code")
 	}
-	normalized := IBAN(strutil.RemoveRunesString(string(iban), unicode.IsSpace))
+	normalized := IBAN(strutil.RemoveRunesString(string(iban), strutil.IsSpace))
 	if len(normalized) != countryLength {
 		// fmt.Println(normalized, len(normalized), countryLength)
 		return "", errors.New("wrong IBAN length")

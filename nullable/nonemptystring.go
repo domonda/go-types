@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/domonda/go-types/strutil"
 )
 
 // NonEmptyStringNull is the SQL NULL and JSON null value for NonEmptyString.
@@ -92,7 +94,7 @@ func (n NonEmptyString) IsNotNull() bool {
 // characters trimmed from beginning and end.
 // A potentially resulting empty string will be interpreted as null.
 func (n NonEmptyString) TrimSpace() NonEmptyString {
-	return NonEmptyString(strings.TrimSpace(string(n)))
+	return strutil.TrimSpace(n)
 }
 
 // StringOr returns the string value of n or the passed nullString if n.IsNull()

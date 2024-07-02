@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"reflect"
 	"strconv"
-	"strings"
 
 	"github.com/domonda/go-errs"
 	"github.com/domonda/go-types/float"
+	"github.com/domonda/go-types/strutil"
 )
 
 // Scan source into dest using the given ScanConfig.
@@ -56,7 +56,7 @@ func Scan(dest reflect.Value, source string, config *ScanConfig) (err error) {
 		dest.SetString(source)
 
 	case reflect.Bool:
-		s := strings.TrimSpace(source)
+		s := strutil.TrimSpace(source)
 		switch {
 		case config.IsTrue(s):
 			dest.SetBool(true)
@@ -67,14 +67,14 @@ func Scan(dest reflect.Value, source string, config *ScanConfig) (err error) {
 		}
 
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		i, err := strconv.ParseInt(strings.TrimSpace(source), 10, 64)
+		i, err := strconv.ParseInt(strutil.TrimSpace(source), 10, 64)
 		if err != nil {
 			return fmt.Errorf("can't scan %q as int because %w", source, err)
 		}
 		dest.SetInt(i)
 
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		u, err := strconv.ParseUint(strings.TrimSpace(source), 10, 64)
+		u, err := strconv.ParseUint(strutil.TrimSpace(source), 10, 64)
 		if err != nil {
 			return fmt.Errorf("can't scan %q as uint because %w", source, err)
 		}

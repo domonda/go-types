@@ -47,13 +47,13 @@ func isVATIDTrimRune(r rune) bool {
 
 // NormalizedUnchecked returns a generic normalized version of ID without performing any format checks.
 // func (id ID) NormalizedUnchecked() ID {
-// 	return ID(strings.ToUpper(strutil.RemoveRunesString(string(id), unicode.IsSpace, unicode.IsPunct)))
+// 	return ID(strings.ToUpper(strutil.RemoveRunesString(string(id), strutil.IsSpace, unicode.IsPunct)))
 // }
 
 // Normalized returns the id in normalized form,
 // or an error if the VAT ID is not valid.
 func (id ID) Normalized() (ID, error) {
-	normalized := ID(strings.ToUpper(strutil.RemoveRunesString(string(id), unicode.IsSpace, unicode.IsPunct)))
+	normalized := ID(strings.ToUpper(strutil.RemoveRunesString(string(id), strutil.IsSpace, unicode.IsPunct)))
 
 	// Check length
 	if len(normalized) < IDMinLength {

@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/domonda/go-types/strutil"
 )
 
 const Invalid Code = ""
@@ -36,14 +38,14 @@ func (c Code) Normalized() (Code, error) {
 }
 
 func (c Code) normalized() Code {
-	return Code(strings.ToUpper(strings.TrimSpace(string(c))))
+	return Code(strings.ToUpper(strutil.TrimSpace(string(c))))
 }
 
 // NormalizedWithAltCodes uses AltCodes to map
 // to ISO 3166-1 alpha 2 codes or return the
 // result of Normalized() if no mapping exists.
 func (c Code) NormalizedWithAltCodes() (Code, error) {
-	if norm, ok := AltCodes[strings.ToUpper(strings.TrimSpace(string(c)))]; ok {
+	if norm, ok := AltCodes[strings.ToUpper(strutil.TrimSpace(string(c)))]; ok {
 		return norm, nil
 	}
 	return c.Normalized()

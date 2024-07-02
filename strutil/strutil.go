@@ -305,7 +305,7 @@ func EqualJSON(a, b any) bool {
 }
 
 func writeSafeFileNameRune(b *strings.Builder, i int, r rune, lastWasPlaceholder bool) (wrotePlaceholder bool) {
-	if unicode.IsSpace(r) {
+	if IsSpace(r) {
 		if i > 0 && !lastWasPlaceholder {
 			b.WriteByte('_')
 		}
@@ -329,7 +329,7 @@ func writeSafeFileNameRune(b *strings.Builder, i int, r rune, lastWasPlaceholder
 // MakeValidFileName replaces invalid filename characters with '_'.
 // See also SanitizeFileName that does more than just replacing characters.
 func MakeValidFileName(name string) string {
-	name = strings.TrimSpace(name)
+	name = TrimSpace(name)
 	i := strings.IndexAny(name, "\\/:*\"<>|\n\r\t")
 	for i != -1 {
 		if i > 0 && i < len(name)-1 {
@@ -348,7 +348,7 @@ func MakeValidFileName(name string) string {
 // SanitizeFileName creates a nice sane filename.
 // It does more than just replacing invalid characters.
 func SanitizeFileName(name string) string {
-	name = strings.TrimSpace(name)
+	name = TrimSpace(name)
 	if strings.IndexAny(name, "%+") != -1 {
 		n, err := url.QueryUnescape(name)
 		if err == nil && n != "" {
@@ -657,16 +657,4 @@ func ToSnakeCase(s string) string {
 		lastWasUpper = isUpper
 	}
 	return b.String()
-}
-
-// CutTrimSpace slices s around the first instance of sep,
-// returning the text before and after sep with all leading
-// and trailing white space removed, as defined by Unicode.
-// The found result reports whether sep appears in s.
-// If sep does not appear in s, cut returns s, "", false.
-func CutTrimSpace(s, sep string) (before, after string, found bool) {
-	if i := strings.Index(s, sep); i >= 0 {
-		return strings.TrimSpace(s[:i]), strings.TrimSpace(s[i+len(sep):]), true
-	}
-	return s, "", false
 }

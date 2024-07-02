@@ -4,6 +4,8 @@ import (
 	"database/sql/driver"
 	"fmt"
 	"strings"
+
+	"github.com/domonda/go-types/strutil"
 )
 
 const Null NullableCode = ""
@@ -44,7 +46,7 @@ func (n NullableCode) Normalized() (NullableCode, error) {
 // to ISO 3166-1 alpha 2 codes or return the
 // result of Normalized() if no mapping exists.
 func (n NullableCode) NormalizedWithAltCodes() (NullableCode, error) {
-	if norm, ok := AltCodes[strings.ToUpper(strings.TrimSpace(string(n)))]; ok {
+	if norm, ok := AltCodes[strings.ToUpper(strutil.TrimSpace(string(n)))]; ok {
 		return norm.Nullable(), nil
 	}
 	return n.Normalized()

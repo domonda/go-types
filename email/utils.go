@@ -102,7 +102,7 @@ func HTMLToPlaintext(html []byte, delimiter string) (string, error) {
 		if tt != xhtml.TextToken {
 			continue
 		}
-		text := bytes.TrimSpace(tokenizer.Text())
+		text := strutil.TrimSpaceBytes(tokenizer.Text())
 		if len(text) == 0 {
 			continue
 		}

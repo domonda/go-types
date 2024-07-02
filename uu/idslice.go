@@ -7,6 +7,8 @@ import (
 	"io"
 	"sort"
 	"strings"
+
+	"github.com/domonda/go-types/strutil"
 )
 
 // IDSlice is a slice of uu.IDs.
@@ -28,7 +30,7 @@ func IDSliceFromString(str string) (IDSlice, error) {
 	}
 	strs := strings.Split(str, ",")
 	for i, s := range strs {
-		strs[i] = strings.TrimSpace(s)
+		strs[i] = strutil.TrimSpace(s)
 	}
 	return IDSliceFromStrings(strs)
 }
@@ -365,7 +367,7 @@ func (s *IDSlice) UnmarshalJSON(data []byte) error {
 	if len(data) > 2 {
 		for i, next := 1, 1; i < len(data); i++ {
 			if data[i] == ',' || i == len(data)-1 {
-				str := bytes.TrimSpace(data[next:i])
+				str := strutil.TrimSpaceBytes(data[next:i])
 				if len(str) < 2 || str[0] != '"' || str[len(str)-1] != '"' {
 					return fmt.Errorf("can't parse as uu.IDSlice because not a JSON string array: %s", data)
 				}

@@ -329,7 +329,7 @@ func TestParseAddressList(t *testing.T) {
 	// Invalid addresses are also invalid lists
 	// except for empty trimmed strings wich are an empty list
 	for addr := range invalidEmailAddresses {
-		if strings.TrimSpace(addr) == "" {
+		if strutil.TrimSpace(addr) == "" {
 			continue
 		}
 		t.Run(addr, func(t *testing.T) {

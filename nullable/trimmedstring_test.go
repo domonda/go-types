@@ -3,6 +3,7 @@ package nullable
 import (
 	"encoding/json"
 	"testing"
+	"unicode"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -59,7 +60,24 @@ func TestTrimmedString_IsNull(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(string(tt.s), func(t *testing.T) {
 			if got := tt.s.IsNull(); got != tt.want {
-				t.Errorf("TrimmedString.IsNull(%#v) = %v, want %v", tt.s, got, tt.want)
+				t.Errorf("TrimmedString(%#v).IsNull = %#v, want %#v", tt.s, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestTrimmedString_String(t *testing.T) {
+	assert.False(t, unicode.IsSpace('\u200b'), "unicode.IsSpace does not report ZERO WIDTH SPACE")
+	tests := []struct {
+		s    TrimmedString
+		want string
+	}{
+		{s: "\u200bZERO WIDTH SPACE\r\n", want: "ZERO WIDTH SPACE"},
+	}
+	for _, tt := range tests {
+		t.Run(string(tt.s), func(t *testing.T) {
+			if got := tt.s.String(); got != tt.want {
+				t.Errorf("TrimmedString(%#v).String() = %#v, want %#v", tt.s, got, tt.want)
 			}
 		})
 	}

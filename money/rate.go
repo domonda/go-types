@@ -6,9 +6,9 @@ import (
 	"math/big"
 	"strconv"
 	"strings"
-	"unicode"
 
 	"github.com/domonda/go-types/float"
+	"github.com/domonda/go-types/strutil"
 )
 
 // Rate is a float64 underneath with additional methods
@@ -20,12 +20,12 @@ type Rate float64
 // If a string ends with '%' then the parsed number part will be divided by 100.
 func ParseRate(str string, acceptedDecimals ...int) (Rate, error) {
 	var (
-		s       = strings.TrimSpace(str)
+		s       = strutil.TrimSpace(str)
 		percent = false
 	)
 	if l := len(s); l > 0 && s[l-1] == '%' {
 		percent = true
-		s = strings.TrimRightFunc(s[:l-1], unicode.IsSpace)
+		s = strings.TrimRightFunc(s[:l-1], strutil.IsSpace)
 	}
 	f, _, _, decimals, err := float.ParseDetails(s)
 	if err != nil {

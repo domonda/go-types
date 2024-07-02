@@ -3,10 +3,10 @@ package strfmt
 import (
 	"fmt"
 	"reflect"
-	"strings"
 	"time"
 
 	types "github.com/domonda/go-types"
+	"github.com/domonda/go-types/strutil"
 )
 
 var DefaultScanConfig = NewScanConfig()
@@ -93,7 +93,7 @@ func (c *ScanConfig) ParseTime(str string) (t time.Time, ok bool) {
 }
 
 func scanTimeString(dest reflect.Value, str string, config *ScanConfig) error {
-	t, ok := config.ParseTime(strings.TrimSpace(str))
+	t, ok := config.ParseTime(strutil.TrimSpace(str))
 	if !ok {
 		return fmt.Errorf("can't scan %q as time.Time", str)
 	}
@@ -102,7 +102,7 @@ func scanTimeString(dest reflect.Value, str string, config *ScanConfig) error {
 }
 
 func scanDurationString(dest reflect.Value, str string, config *ScanConfig) error {
-	d, err := time.ParseDuration(strings.TrimSpace(str))
+	d, err := time.ParseDuration(strutil.TrimSpace(str))
 	if err != nil {
 		return fmt.Errorf("can't scan %q as time.Duration because %w", str, err)
 	}

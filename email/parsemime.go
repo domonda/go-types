@@ -4,13 +4,13 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"strings"
 
 	"github.com/jhillyerd/enmime"
 	"github.com/ungerik/go-fs"
 
 	"github.com/domonda/go-errs"
 	"github.com/domonda/go-types/nullable"
+	"github.com/domonda/go-types/strutil"
 )
 
 func ParseMIMEMessage(reader io.Reader) (msg *Message, err error) {
@@ -23,11 +23,11 @@ func ParseMIMEMessage(reader io.Reader) (msg *Message, err error) {
 
 	msg = &Message{
 		// From:        Address(envelope.GetHeader("From")),
-		// ReplyTo:     NullableAddress(strings.TrimSpace(envelope.GetHeader("Reply-To"))),
+		// ReplyTo:     NullableAddress(strutil.TrimSpace(envelope.GetHeader("Reply-To"))),
 		MessageID:   nullable.TrimmedStringFrom(envelope.GetHeader("Message-Id")),
 		InReplyTo:   nullable.TrimmedStringFrom(envelope.GetHeader("In-Reply-To")),
 		References:  nullable.TrimmedStringFrom(envelope.GetHeader("References")),
-		Subject:     strings.TrimSpace(envelope.GetHeader("Subject")),
+		Subject:     strutil.TrimSpace(envelope.GetHeader("Subject")),
 		Body:        envelope.Text,
 		BodyHTML:    nullable.TrimmedStringFrom(envelope.HTML),
 		ExtraHeader: make(Header),

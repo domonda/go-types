@@ -6,6 +6,8 @@ import (
 	"math"
 	"strconv"
 	"strings"
+
+	"github.com/domonda/go-types/strutil"
 )
 
 // Parse a float string compatible with Format.
@@ -21,7 +23,7 @@ func Parse(str string) (float64, error) {
 // If a separator was not detected, then zero will be returned for thousandsSep or decimalSep.
 // See: https://en.wikipedia.org/wiki/Decimal_separator
 func ParseDetails(str string) (f float64, thousandsSep, decimalSep rune, decimals int, err error) {
-	str = strings.TrimSpace(str)
+	str = strutil.TrimSpace(str)
 
 	switch str {
 	case "":
@@ -91,7 +93,7 @@ func ParseDetails(str string) (f float64, thousandsSep, decimalSep rune, decimal
 	eIndex = -1
 
 	// remove the sign from the string and trim space in case the removal left one
-	trimmedSignsStr := strings.TrimSpace(str[skipFirst : len(str)-skipLast])
+	trimmedSignsStr := strutil.TrimSpace(str[skipFirst : len(str)-skipLast])
 	for i, r := range trimmedSignsStr {
 		switch {
 		case r >= '0' && r <= '9':

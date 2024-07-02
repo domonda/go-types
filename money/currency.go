@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/domonda/go-types/strutil"
 )
 
 // StringIsCurrency returns if a string can be parsed as Currency.
@@ -80,7 +82,7 @@ func (c *Currency) ValidPtr() bool {
 
 // Normalized normalizes a currency string
 func (c Currency) Normalized() (Currency, error) {
-	str := strings.TrimSpace(string(c))
+	str := strutil.TrimSpace(string(c))
 
 	result, found := currencySymbolToCode[str]
 	if found {

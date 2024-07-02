@@ -10,6 +10,8 @@ import (
 	"strings"
 	"unicode"
 	"unsafe"
+
+	"github.com/domonda/go-types/strutil"
 )
 
 // Recommended for debugging: https://regex101.com/
@@ -46,7 +48,7 @@ var (
 func sanitizeAddr(s string) string {
 	return strings.Map(
 		func(r rune) rune {
-			if unicode.IsSpace(r) {
+			if strutil.IsSpace(r) {
 				return ' '
 			}
 			if !unicode.IsGraphic(r) || r == unicode.ReplacementChar {
@@ -63,7 +65,7 @@ func sanitizeAddr(s string) string {
 // The addresses are not normalized and returned
 // in the order they were found in the text.
 func FindAllAddresses(text string) []Address {
-	text = strings.TrimSpace(sanitizeAddr(text))
+	text = strutil.TrimSpace(sanitizeAddr(text))
 	found := AddressRegexp.FindAllString(text, -1)
 	return *(*[]Address)(unsafe.Pointer(&found)) //#nosec G103 -- unsafe OK
 }
@@ -106,7 +108,7 @@ func UniqueNormalizedAddressSlice(addrs []Address) []Address {
 // If the name part is identical with the address part
 // then it will not be returned as name.
 func ParseAddress(addr string) (mailAddress *mail.Address, err error) {
-	addr = strings.TrimSpace(sanitizeAddr(addr))
+	addr = strutil.TrimSpace(sanitizeAddr(addr))
 
 	if addr == "" {
 		return nil, errors.New("empty email address")
@@ -117,7 +119,7 @@ func ParseAddress(addr string) (mailAddress *mail.Address, err error) {
 		return nil, err
 	}
 
-	if strings.TrimSpace(unparsed) != "" {
+	if strutil.TrimSpace(unparsed) != "" {
 		return nil, fmt.Errorf("parsed email address %s as %s with unexpected remaining characters: %s", addr, mailAddress, unparsed)
 	}
 
@@ -147,7 +149,7 @@ func parseAddress(addr string) (mailAddress *mail.Address, unparsed string, err 
 		name = strings.ReplaceAll(name, `"`, ``)
 		name = strings.ReplaceAll(name, `\`, ``)
 		name = strings.ReplaceAll(name, "\t", " ")
-		name = strings.TrimSpace(name)
+		name = strutil.TrimSpace(name)
 	}
 
 	local := strings.ToLower(addr[i[6]:i[7]])
@@ -189,7 +191,7 @@ func parseAddress(addr string) (mailAddress *mail.Address, unparsed string, err 
 // ParseAddressList returns an error if list does not contain
 // at least one address.
 func ParseAddressList(list string) (addrs []*mail.Address, err error) {
-	list = strings.TrimSpace(sanitizeAddr(list))
+	list = strutil.TrimSpace(sanitizeAddr(list))
 
 	switch ll := strings.ToLower(list); {
 	case ll == "",

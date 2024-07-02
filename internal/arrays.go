@@ -3,6 +3,8 @@ package internal
 import (
 	"fmt"
 	"strings"
+
+	"github.com/domonda/go-types/strutil"
 )
 
 // SplitArray splits an SQL or JSON array into its top level elements.
@@ -23,7 +25,7 @@ func SplitArray(array string) ([]string, error) {
 		}
 		return nil, fmt.Errorf("%q is not a SQL or JSON array", array)
 	}
-	inner := strings.TrimSpace(array[1 : len(array)-1])
+	inner := strutil.TrimSpace(array[1 : len(array)-1])
 	if inner == "" {
 		return nil, nil
 	}

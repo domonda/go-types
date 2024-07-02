@@ -17,6 +17,7 @@ import (
 
 	"github.com/domonda/go-errs"
 	"github.com/domonda/go-types/nullable"
+	"github.com/domonda/go-types/strutil"
 )
 
 type Header = textproto.MIMEHeader
@@ -144,7 +145,7 @@ func (msg *Message) ReferencesMessageIDs() []string {
 	}
 	var ids []string
 	for _, id := range strings.Split(string(msg.References), ",") {
-		if id = strings.TrimSpace(id); id != "" {
+		if id = strutil.TrimSpace(id); id != "" {
 			ids = append(ids, id)
 		}
 	}
@@ -448,7 +449,7 @@ func (msg *Message) BuildRawMessage() (raw []byte, err error) {
 			root.Header.Add(key, val)
 		}
 	}
-	root.Header.Set("Subject", strings.TrimSpace(msg.Subject))
+	root.Header.Set("Subject", strutil.TrimSpace(msg.Subject))
 
 	var buf bytes.Buffer
 	err = root.Encode(&buf)
