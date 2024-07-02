@@ -3,14 +3,14 @@ module github.com/domonda/go-types
 go 1.22
 
 require (
-	github.com/domonda/go-errs v0.0.0-20240301142737-8fde935c9bd4
+	github.com/domonda/go-errs v0.0.0-20240702051036-0e696c849b5f
 	github.com/domonda/go-pretty v0.0.0-20240110134850-17385799142f
 	github.com/jaytaylor/html2text v0.0.0-20230321000545-74c2419ad056
 	github.com/jhillyerd/enmime v1.2.0
 	github.com/jinzhu/now v1.1.5
 	github.com/stretchr/testify v1.9.0
 	github.com/teamwork/tnef v0.0.0-20200108124832-7deabccfdb32
-	github.com/ungerik/go-fs v0.0.0-20240517093852-5c045d7130d7
+	github.com/ungerik/go-fs v0.0.0-20240702073052-d3679a79ea2e
 	github.com/ungerik/go-reflection v0.0.0-20240110134735-61cada706fec
 	golang.org/x/net v0.26.0
 	golang.org/x/text v0.16.0

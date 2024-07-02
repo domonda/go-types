@@ -4,8 +4,8 @@ github.com/cention-sany/utf7 v0.0.0-20170124080048-26cad61bd60a/go.mod h1:2GxOXO
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
-github.com/domonda/go-errs v0.0.0-20240301142737-8fde935c9bd4 h1:qidwzgjM8qrKy326iXVNHNN/qB89o1lfiAi7pMuNbQU=
-github.com/domonda/go-errs v0.0.0-20240301142737-8fde935c9bd4/go.mod h1:NnvsIo+bzAany1nQLMViGDgJ8kx3k5N/D1+UJz3hEXc=
+github.com/domonda/go-errs v0.0.0-20240702051036-0e696c849b5f h1:9CZgqCVP/7eixUjU+A+ozHo+oxRKJSkFgRtakoB5byc=
+github.com/domonda/go-errs v0.0.0-20240702051036-0e696c849b5f/go.mod h1:qLWt1z3aIg12+Dbxu9bMydFOHEi92vWE7vAHcHLd8n8=
 github.com/domonda/go-pretty v0.0.0-20240110134850-17385799142f h1:5eA74m451PqlqCXyJzWXp95Quj4PZ6Lm/ndKBuiNhe4=
 github.com/domonda/go-pretty v0.0.0-20240110134850-17385799142f/go.mod h1:3QkM8UJdyJMeKZiIo7hYzSkQBpRS3k0gOHw4ysyEIB4=
 github.com/fsnotify/fsnotify v1.7.0 h1:8JEhPFa5W2WU7YfeZzPNqzMP6Lwt7L2715Ggo0nosvA=
@@ -44,8 +44,8 @@ github.com/teamwork/tnef v0.0.0-20200108124832-7deabccfdb32 h1:j15wq0XPAY/HR/0+d
 github.com/teamwork/tnef v0.0.0-20200108124832-7deabccfdb32/go.mod h1:v7dFaQrF/4+curx7UTH9rqTkHTgXqghfI3thANW150o=
 github.com/teamwork/utils v0.0.0-20220314153103-637fa45fa6cc h1:BidxxRk9kopF5IGEyosTRtanaYVYTUbGJh9eULOhv04=
 github.com/teamwork/utils v0.0.0-20220314153103-637fa45fa6cc/go.mod h1:3Fn0qxFeRNpvsg/9T1+btOOOKkd1qG2nPYKKcOmNpcs=
-github.com/ungerik/go-fs v0.0.0-20240517093852-5c045d7130d7 h1:DsWXHqJTgEjwokWGeilyEkdwARVakmCcjYKYrHEXAmM=
-github.com/ungerik/go-fs v0.0.0-20240517093852-5c045d7130d7/go.mod h1:PcXTbaK1sGCodP/dmg1JLAXCTFu8cZmHLZyVqMmClB8=
+github.com/ungerik/go-fs v0.0.0-20240702073052-d3679a79ea2e h1:8GW4mD6QfsNhdN+K2dCiQDbyfyA8GdrAhK7BCOJD+rw=
+github.com/ungerik/go-fs v0.0.0-20240702073052-d3679a79ea2e/go.mod h1:+8Ezjyw6fCooNzoVofQIhWLXLe6E23nZ/9cfQ79Wzo0=
 github.com/ungerik/go-reflection v0.0.0-20240110134735-61cada706fec h1:QiS/w0cXNtHs0xhs+Pa2Pp71CTeM9z7zVgbxV+CvezM=
 github.com/ungerik/go-reflection v0.0.0-20240110134735-61cada706fec/go.mod h1:6mOx6LfN4Xbb4fyHO6syugCjbx88cgpbxekcx4W1mpM=
 golang.org/x/net v0.26.0 h1:soB7SVo0PWrY4vPW/+ay0jKDNScG2X9wFeYlXIvJsOQ=
