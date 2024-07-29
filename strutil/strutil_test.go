@@ -1,7 +1,6 @@
 package strutil
 
 import (
-	"math"
 	"strings"
 	"testing"
 	"unicode"
@@ -172,15 +171,37 @@ func TestReplaceTransliterationsMaxLen(t *testing.T) {
 		maxLen int
 		want   string
 	}{
-		{"", math.MaxInt, ""},
-		{"Österreich", math.MaxInt, "Oesterreich"},
+		{"", -1, ""},
+		{"Österreich", -1, "Oesterreich"},
 		{"Österreich", 3, "Oes"},
 		{"Öster\uFFFDeich", 100, "Oestereich"},
+		{"Öster\uFFFDeich", -1, "Oestereich"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.str, func(t *testing.T) {
 			if got := TransliterateSpecialCharactersMaxLen(tt.str, tt.maxLen); got != tt.want {
 				t.Errorf("ReplaceTransliterationsMaxLen(%#v) = %#v, want %#v", tt.str, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestTransliterateSpecialCharactersMaxLen(t *testing.T) {
+	type args struct {
+		str    string
+		maxLen int
+	}
+	tests := []struct {
+		name string
+		args args
+		want string
+	}{
+		// TODO: Add test cases.
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := TransliterateSpecialCharactersMaxLen(tt.args.str, tt.args.maxLen); got != tt.want {
+				t.Errorf("TransliterateSpecialCharactersMaxLen() = %v, want %v", got, tt.want)
 			}
 		})
 	}

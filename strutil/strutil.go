@@ -502,7 +502,11 @@ func TransliterateSpecialCharactersMaxLen(str string, maxLen int) string {
 		if r == unicode.ReplacementChar {
 			if b.Len() == 0 {
 				// If unchanged yet, write from start of string up to first change
-				b.Grow(min(len(str), maxLen))
+				if maxLen > 0 {
+					b.Grow(maxLen)
+				} else {
+					b.Grow(len(str))
+				}
 				b.WriteString(str[:i])
 			}
 			continue // Ignore invalid UTF-8 sequences
@@ -510,7 +514,11 @@ func TransliterateSpecialCharactersMaxLen(str string, maxLen int) string {
 		if repl, ok := transliterations[r]; ok {
 			if b.Len() == 0 {
 				// If unchanged yet, write from start of string up to first change
-				b.Grow(min(len(str), maxLen))
+				if maxLen > 0 {
+					b.Grow(maxLen)
+				} else {
+					b.Grow(len(str))
+				}
 				b.WriteString(str[:i])
 			}
 			b.WriteString(repl)
