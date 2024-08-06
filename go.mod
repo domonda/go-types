@@ -30,6 +30,6 @@ require (
 	github.com/ssor/bom v0.0.0-20170718123548-6386211fdfcf // indirect
 	github.com/teamwork/test v0.0.0-20200108114543-02621bae84ad // indirect
 	github.com/teamwork/utils v0.0.0-20220314153103-637fa45fa6cc // indirect
-	golang.org/x/sys v0.22.0 // indirect
+	golang.org/x/sys v0.23.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
