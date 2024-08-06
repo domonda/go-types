@@ -46,17 +46,19 @@ var (
 )
 
 func sanitizeAddr(s string) string {
-	return strings.Map(
-		func(r rune) rune {
-			if strutil.IsSpace(r) {
-				return ' '
-			}
-			if !unicode.IsGraphic(r) || r == unicode.ReplacementChar {
-				return -1
-			}
-			return r
-		},
-		s,
+	return strutil.TrimSpace(
+		strings.Map(
+			func(r rune) rune {
+				if strutil.IsSpace(r) {
+					return ' '
+				}
+				if !unicode.IsGraphic(r) || r == unicode.ReplacementChar {
+					return -1
+				}
+				return r
+			},
+			s,
+		),
 	)
 }
 
@@ -65,7 +67,7 @@ func sanitizeAddr(s string) string {
 // The addresses are not normalized and returned
 // in the order they were found in the text.
 func FindAllAddresses(text string) []Address {
-	text = strutil.TrimSpace(sanitizeAddr(text))
+	text = sanitizeAddr(text)
 	found := AddressRegexp.FindAllString(text, -1)
 	return *(*[]Address)(unsafe.Pointer(&found)) //#nosec G103 -- unsafe OK
 }
@@ -108,7 +110,7 @@ func UniqueNormalizedAddressSlice(addrs []Address) []Address {
 // If the name part is identical with the address part
 // then it will not be returned as name.
 func ParseAddress(addr string) (mailAddress *mail.Address, err error) {
-	addr = strutil.TrimSpace(sanitizeAddr(addr))
+	addr = sanitizeAddr(addr)
 
 	if addr == "" {
 		return nil, errors.New("empty email address")
@@ -191,7 +193,7 @@ func parseAddress(addr string) (mailAddress *mail.Address, unparsed string, err 
 // ParseAddressList returns an error if list does not contain
 // at least one address.
 func ParseAddressList(list string) (addrs []*mail.Address, err error) {
-	list = strutil.TrimSpace(sanitizeAddr(list))
+	list = strings.TrimRight(sanitizeAddr(list), ", ")
 
 	switch ll := strings.ToLower(list); {
 	case ll == "",

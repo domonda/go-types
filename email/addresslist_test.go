@@ -2,6 +2,7 @@ package email
 
 import (
 	"net/mail"
+	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -27,6 +28,30 @@ func TestStandardComparison(t *testing.T) {
 			assert.NoError(t, err, "valid email address")
 			assert.Len(t, results, 1, "list of one address")
 			assert.Equal(t, expected, results[0], "expected: %s", expected)
+		})
+	}
+}
+
+func TestAddressList_Split(t *testing.T) {
+	tests := []struct {
+		l       AddressList
+		want    []Address
+		wantErr bool
+	}{
+		{l: ``, want: nil},
+		{l: `<hello@example.com>,`, want: []Address{`hello@example.com`}},
+		{l: `<Hello@example.com>, World@example.com`, want: []Address{`hello@example.com`, `world@example.com`}},
+	}
+	for _, tt := range tests {
+		t.Run(string(tt.l), func(t *testing.T) {
+			got, err := tt.l.Split()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("AddressList(%#v).Split() error = %v, wantErr %v", string(tt.l), err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("AddressList(%#v).Split() = %v, want %v", string(tt.l), got, tt.want)
+			}
 		})
 	}
 }

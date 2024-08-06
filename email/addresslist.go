@@ -21,6 +21,9 @@ func NormalizeAddressList(list string) (normalized []string, err error) {
 	if err != nil {
 		return nil, err
 	}
+	if len(addrs) == 0 {
+		return nil, nil
+	}
 	appended := make(map[string]bool, len(addrs))
 	normalized = make([]string, 0, len(addrs))
 	for _, a := range addrs {
@@ -92,6 +95,9 @@ func (l AddressList) Split() ([]Address, error) {
 	if err != nil {
 		return nil, err
 	}
+	if len(parsed) == 0 {
+		return nil, nil
+	}
 	a := make([]Address, len(parsed))
 	for i, p := range parsed {
 		a[i] = AddressFrom(p)
@@ -103,6 +109,9 @@ func (l AddressList) UniqueAddressParts() (AddressSet, error) {
 	parsed, err := l.Parse()
 	if err != nil {
 		return nil, err
+	}
+	if len(parsed) == 0 {
+		return nil, nil
 	}
 	set := make(AddressSet, len(parsed))
 	for _, addr := range parsed {

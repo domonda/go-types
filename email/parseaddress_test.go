@@ -102,6 +102,18 @@ var (
 		`unger erik@domonda.com`: {},
 		// `If need of a ''Declaration of Compliance'' please contact us@example.com`: {},
 	}
+
+	invalidEmailAddressLists = map[string]struct{}{
+		`@`:                      {},
+		`@domonda.com`:           {},
+		`Hello World!`:           {},
+		`erik@`:                  {},
+		`.erik@domonda.com`:      {},
+		`,erik@domonda.com`:      {},
+		`, erik@domonda.com`:     {},
+		` , erik@domonda.com`:    {},
+		`unger erik@domonda.com`: {},
+	}
 )
 
 func TestParseAddress(t *testing.T) {
@@ -213,6 +225,7 @@ func TestParseAddressList(t *testing.T) {
 
 	// Test specifics list we had problems with before
 	problemLists := map[string]int{
+		`<hello@example.com>,`: 1,
 		`"\"Example\" <ar1@example.com>" <ar@example.com>, test@example.com`: 2,
 
 		// The problem with this list is that `"\"Example\" <ar1@example.com>` gets parsed as: "Example" <ar1@example.com>
@@ -328,14 +341,11 @@ func TestParseAddressList(t *testing.T) {
 
 	// Invalid addresses are also invalid lists
 	// except for empty trimmed strings wich are an empty list
-	for addr := range invalidEmailAddresses {
-		if strutil.TrimSpace(addr) == "" {
-			continue
-		}
-		t.Run(addr, func(t *testing.T) {
-			result, err := ParseAddressList(addr)
+	for l := range invalidEmailAddressLists {
+		t.Run(l, func(t *testing.T) {
+			result, err := ParseAddressList(l)
 			if err == nil {
-				t.Errorf("should not be able to be parsed as email address %s, but got: %s\nRegex: %s", addr, result, nameAddressRegex)
+				t.Errorf("should not be able to be parsed as email address list: %s, but got: %s\nRegex: %s", l, result, nameAddressRegex)
 			}
 		})
 	}
