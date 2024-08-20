@@ -1,6 +1,6 @@
 module github.com/domonda/go-types
 
-go 1.22
+go 1.23
 
 require (
 	github.com/domonda/go-errs v0.0.0-20240702051036-0e696c849b5f
@@ -12,8 +12,8 @@ require (
 	github.com/teamwork/tnef v0.0.0-20200108124832-7deabccfdb32
 	github.com/ungerik/go-fs v0.0.0-20240702143946-3ecb6733945d
 	github.com/ungerik/go-reflection v0.0.0-20240110134735-61cada706fec
-	golang.org/x/net v0.27.0
-	golang.org/x/text v0.16.0
+	golang.org/x/net v0.28.0
+	golang.org/x/text v0.17.0
 	mvdan.cc/xurls/v2 v2.5.0
 )
 
@@ -30,6 +30,6 @@ require (
 	github.com/ssor/bom v0.0.0-20170718123548-6386211fdfcf // indirect
 	github.com/teamwork/test v0.0.0-20200108114543-02621bae84ad // indirect
 	github.com/teamwork/utils v0.0.0-20220314153103-637fa45fa6cc // indirect
-	golang.org/x/sys v0.23.0 // indirect
+	golang.org/x/sys v0.24.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
