@@ -8,13 +8,11 @@ import (
 	"github.com/domonda/go-types/country"
 )
 
-// ValidateBIC returns str as valid BIC or an error.
-func ValidateBIC(str string) (BIC, error) {
-	err := BIC(str).Validate()
-	if err != nil {
-		return "", err
-	}
-	return BIC(str), nil
+// NormalizeBIC returns the passed string as BIC normalized to a length of 11 characters
+// by removing spaces and appending "XXX" in case of a valid length of 8 charaters.
+// Returns the string unchanged as BIC in case of an error.
+func NormalizeBIC(str string) (BIC, error) {
+	return BIC(str).Normalized()
 }
 
 func StringIsBIC(str string) bool {
