@@ -3,6 +3,7 @@ package bank
 import (
 	"database/sql/driver"
 	"fmt"
+	"strings"
 
 	"github.com/domonda/go-types/country"
 )
@@ -47,15 +48,10 @@ func (bic BIC) Valid() bool {
 	return bic.Validate() == nil
 }
 
-// Nullable returns the BIC as NullableBIC
-func (bic BIC) Nullable() NullableBIC {
-	return NullableBIC(bic)
-}
-
 // Validate returns an error if this is not a valid SWIFT Business Identifier Code
 func (bic BIC) Validate() error {
 	length := len(bic)
-	if !(length == BICMinLength || length == BICMaxLength) {
+	if length != BICMinLength && length != BICMaxLength {
 		return fmt.Errorf("invalid BIC %q length: %d", string(bic), length)
 	}
 	subMatches := bicExactRegex.FindStringSubmatch(string(bic))
@@ -72,6 +68,39 @@ func (bic BIC) Validate() error {
 		return fmt.Errorf("BIC %q is in list of invalid BICs", string(bic))
 	}
 	return nil
+}
+
+// Normalized returns the BIC normalized to a length of 11 characters
+// by removing spaces and appending "XXX" in case of a valid length of 8 charaters.
+// Returns the BIC unchanged in case of an error.
+func (bic BIC) Normalized() (BIC, error) {
+	norm := BIC(strings.ReplaceAll(string(bic), " ", ""))
+	if err := norm.Validate(); err != nil {
+		return bic, err
+	}
+	if len(norm) == 8 {
+		norm += "XXX"
+	}
+	return norm, nil
+}
+
+// NormalizedShort returns the BIC normalized to a length of 8 or 11 characters
+// by removing spaces trimming the "XXX" suffix in case of a valid length of 8 charaters.
+// Returns the BIC unchanged in case of an error.
+func (bic BIC) NormalizedShort() (BIC, error) {
+	norm := BIC(strings.ReplaceAll(string(bic), " ", ""))
+	if err := norm.Validate(); err != nil {
+		return bic, err
+	}
+	if len(norm) == 11 && strings.HasSuffix(string(norm), "XXX") {
+		norm = norm[:8]
+	}
+	return norm, nil
+}
+
+// Nullable returns the BIC as NullableBIC
+func (bic BIC) Nullable() NullableBIC {
+	return NullableBIC(bic)
 }
 
 func (bic BIC) Parse() (bankCode string, countryCode country.Code, branchCode string, isValid bool) {

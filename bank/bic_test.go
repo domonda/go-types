@@ -1,6 +1,11 @@
 package bank
 
-import "testing"
+import (
+	"strings"
+	"testing"
+
+	"github.com/stretchr/testify/require"
+)
 
 var validBICs = []BIC{
 	"BKAUATWW",
@@ -21,6 +26,13 @@ var validBICs = []BIC{
 	"GENODE61MA2",
 	"DEUTDEDBMAN",
 	"SOLADES1HDB",
+}
+
+var validBICsWithSpaces = []BIC{
+	"BKAU AT WW",
+	"GIBAATWW XXX",
+	" BELADEBEXXX ",
+	"RBOSGGSX   ",
 }
 
 var invalidBICs = []BIC{
@@ -83,5 +95,23 @@ func Test_bicFinder(t *testing.T) {
 				t.Fatalf("Invalid BIC: %s", string(bic))
 			}
 		}
+	}
+}
+
+func TestBIC_Normalized(t *testing.T) {
+	for _, bic := range append(validBICs, validBICsWithSpaces...) {
+		normalized, err := bic.Normalized()
+		if err != nil {
+			t.Errorf("Error normalizing BIC: %s", err)
+		}
+		expected := BIC(strings.ReplaceAll(string(bic), " ", ""))
+		if len(expected) == 8 {
+			expected += "XXX"
+		}
+		require.Equalf(t, expected, normalized, "Normalized BIC %q", bic)
+	}
+	for _, bic := range invalidBICs {
+		_, err := bic.Normalized()
+		require.Error(t, err, "Normalized invalid BIC")
 	}
 }
