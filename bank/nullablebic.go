@@ -52,6 +52,25 @@ func (bic NullableBIC) Validate() error {
 	return BIC(bic).Validate()
 }
 
+func (bic NullableBIC) Normalized() (NullableBIC, error) {
+	if bic.IsNull() {
+		return bic, nil
+	}
+	normalized, err := BIC(bic).Normalized()
+	if err != nil {
+		return bic, err
+	}
+	return NullableBIC(normalized), nil
+}
+
+func (bic NullableBIC) NormalizedOrNull() NullableBIC {
+	normalized, err := bic.Normalized()
+	if err != nil {
+		return BICNull
+	}
+	return normalized
+}
+
 // Scan implements the database/sql.Scanner interface.
 func (bic *NullableBIC) Scan(value any) error {
 	switch x := value.(type) {
