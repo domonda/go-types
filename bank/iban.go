@@ -85,37 +85,30 @@ func (iban IBAN) CountryCode() country.Code {
 
 // Normalized returns the iban in normalized form,
 // or an error if the format can't be detected.
+// Returns the IBAN unchanged in case of an error.
 func (iban IBAN) Normalized() (IBAN, error) {
 	switch {
 	case iban.Nullable().IsNull():
-		return "", errors.New("empty IBAN")
+		return iban, errors.New("empty IBAN")
 	case len(iban) < IBANMinLength:
-		return "", errors.New("IBAN too short")
+		return iban, errors.New("IBAN too short")
 	}
 	countryLength, found := countryIBANLength[country.Code(iban[:2])]
 	if !found {
-		return "", errors.New("invalid IBAN country code")
+		return iban, errors.New("invalid IBAN country code")
 	}
 	normalized := IBAN(strutil.RemoveRunesString(string(iban), strutil.IsSpace))
 	if len(normalized) != countryLength {
 		// fmt.Println(normalized, len(normalized), countryLength)
-		return "", errors.New("wrong IBAN length")
+		return iban, errors.New("wrong IBAN length")
 	}
 	if !ibanRegex.MatchString(string(normalized)) {
-		return "", errors.New("invalid IBAN characters")
+		return iban, errors.New("invalid IBAN characters")
 	}
 	if !normalized.isCheckSumValid() {
-		return "", errors.New("invalid IBAN check sum")
+		return iban, errors.New("invalid IBAN check sum")
 	}
 	return normalized, nil
-}
-
-func (iban IBAN) NormalizedOrUnchanged() IBAN {
-	normalized, err := iban.Normalized()
-	if err != nil {
-		return iban
-	}
-	return normalized
 }
 
 func (iban IBAN) NormalizedOrNull() NullableIBAN {

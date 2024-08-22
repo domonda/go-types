@@ -96,6 +96,14 @@ func (bic BIC) NormalizedShort() (BIC, error) {
 	return norm, nil
 }
 
+func (bic BIC) NormalizedOrNull() NullableBIC {
+	normalized, err := bic.Normalized()
+	if err != nil {
+		return BICNull
+	}
+	return NullableBIC(normalized)
+}
+
 // Nullable returns the BIC as NullableBIC
 func (bic BIC) Nullable() NullableBIC {
 	return NullableBIC(bic)

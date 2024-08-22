@@ -111,7 +111,8 @@ func TestBIC_Normalized(t *testing.T) {
 		require.Equalf(t, expected, normalized, "Normalized BIC %q", bic)
 	}
 	for _, bic := range invalidBICs {
-		_, err := bic.Normalized()
-		require.Error(t, err, "Normalized invalid BIC")
+		norm, err := bic.Normalized()
+		require.Error(t, err, "Normalized invalid BIC error expected")
+		require.Equal(t, bic, norm, "Normalized invalid BIC returned unchanged")
 	}
 }

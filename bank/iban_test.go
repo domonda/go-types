@@ -1,6 +1,10 @@
 package bank
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/stretchr/testify/require"
+)
 
 var toNormalizeIBANs = map[string]IBAN{
 	// // 2 parts
@@ -105,6 +109,7 @@ func Test_NormalizeIBAN(t *testing.T) {
 		normalized, err := NormalizeIBAN(invalidIBAN)
 		if err == nil {
 			t.Errorf("Should NOT be valid NormalizeIBAN(%s): %s", string(invalidIBAN), string(normalized))
+			require.Equal(t, invalidIBAN, normalized, "Normalized invalid IBAN returned unchanged")
 		}
 	}
 
