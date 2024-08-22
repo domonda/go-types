@@ -121,10 +121,11 @@ func (iban IBAN) NormalizedOrNull() NullableIBAN {
 
 // NormalizedWithSpaces returns the iban in normalized form with spaces every 4 characters,
 // or an error if the format can't be detected.
+// Returns the IBAN unchanged in case of an error.
 func (iban IBAN) NormalizedWithSpaces() (IBAN, error) {
 	norm, err := iban.Normalized()
 	if err != nil {
-		return "", err
+		return iban, err
 	}
 	var b strings.Builder
 	normLen := len(norm)

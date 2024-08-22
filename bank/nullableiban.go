@@ -71,36 +71,36 @@ func (iban NullableIBAN) CountryCode() country.Code {
 
 // Normalized returns the iban in normalized form,
 // or an error if the format can't be detected.
+// Returns the NullableIBAN unchanged in case of an error.
 func (iban NullableIBAN) Normalized() (NullableIBAN, error) {
 	if iban.IsNull() {
-		return "", nil
+		return iban, nil
 	}
 	normalized, err := IBAN(iban).Normalized()
 	if err != nil {
-		return "", err
+		return iban, err
 	}
 	return NullableIBAN(normalized), nil
 }
 
-// NormalizedOrUnchanged returns the iban in normalized form,
-// or unchanged if the format has an error.
-func (iban NullableIBAN) NormalizedOrUnchanged() NullableIBAN {
+func (iban NullableIBAN) NormalizedOrNull() NullableIBAN {
 	normalized, err := iban.Normalized()
 	if err != nil {
-		return iban
+		return IBANNull
 	}
 	return normalized
 }
 
 // NormalizedWithSpaces returns the iban in normalized form with spaces every 4 characters,
 // or an error if the format can't be detected.
+// Returns the NullableIBAN unchanged in case of an error.
 func (iban NullableIBAN) NormalizedWithSpaces() (NullableIBAN, error) {
 	if iban.IsNull() {
-		return "", nil
+		return iban, nil
 	}
 	normalized, err := IBAN(iban).NormalizedWithSpaces()
 	if err != nil {
-		return "", err
+		return iban, err
 	}
 	return NullableIBAN(normalized), nil
 }
