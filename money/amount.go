@@ -75,7 +75,7 @@ func (a Amount) RoundToInt() Amount {
 	return Amount(math.Round(float64(a)))
 }
 
-// RoundToCents returns the amount rounded to cents
+// RoundToCents returns the amount rounded to cents (2 decimal places)
 func (a Amount) RoundToCents() Amount {
 	return Amount(math.Round(float64(a)*100) / 100)
 }
@@ -128,7 +128,13 @@ func (a Amount) String() string {
 // GoString returns the amount as string
 // in full float64 precision for debugging
 func (a Amount) GoString() string {
-	return strings.TrimRight(strings.TrimRight(fmt.Sprintf("%.200f", float64(a)), "0"), ".")
+	return strings.TrimRight(
+		strings.TrimRight(
+			fmt.Sprintf("%.200f", float64(a)),
+			"0", // remove trailing zeros
+		),
+		".", // remove trailing dot
+	)
 }
 
 // StringOr returns ptr.String() or defaultVal if ptr is nil.
