@@ -5,7 +5,7 @@ import (
 	"testing"
 	"unicode"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func Test_IsWordSeparator(t *testing.T) {
@@ -140,7 +140,7 @@ func TestToSnakeCase(t *testing.T) {
 	for str, expected := range testCases {
 		t.Run(str, func(t *testing.T) {
 			actual := ToSnakeCase(str)
-			assert.Equal(t, expected, actual, "snake case")
+			require.Equal(t, expected, actual, "snake case")
 		})
 	}
 }
