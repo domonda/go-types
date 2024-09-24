@@ -9,6 +9,9 @@ import (
 	"time"
 )
 
+// IDvDefault is the default UUID version function used by NewID.
+var IDvDefault = IDv7
+
 // UUID layout variants.
 const (
 	IDVariantNCS = iota

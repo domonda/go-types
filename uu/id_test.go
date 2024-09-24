@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/domonda/go-pretty"
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // And returns result of binary AND of two UUIDs.
@@ -148,16 +149,16 @@ func TestIDFromBytes(t *testing.T) {
 	}
 
 	u3, err := IDFromBytes(u.StringBytes())
-	assert.NoError(t, err)
-	assert.Equal(t, u, u3)
+	require.NoError(t, err)
+	require.Equal(t, u, u3)
 
 	u4, err := IDFromBytes([]byte("6ba7b810-9dad-11d1-80b4-00c04fd430c8"))
-	assert.NoError(t, err)
-	assert.Equal(t, u, u4)
+	require.NoError(t, err)
+	require.Equal(t, u, u4)
 
 	u5, err := IDFromBytes([]byte("6ba7b8109dad11d180b400c04fd430c8"))
-	assert.NoError(t, err)
-	assert.Equal(t, u, u5)
+	require.NoError(t, err)
+	require.Equal(t, u, u5)
 }
 
 func TestMarshalBinary(t *testing.T) {
@@ -618,6 +619,32 @@ func TestIDv5(t *testing.T) {
 	}
 }
 
+func TestIDv7(t *testing.T) {
+	id := IDMust("019222e8-1ec3-7e4f-97e2-919670df6d6b")
+	require.NoError(t, id.Validate(), "validating UUID")
+	require.Equal(t, uint(7), id.Version(), "detecting version 7")
+
+	id = IDv7()
+	require.NoError(t, id.Validate(), "validating UUID")
+	require.Equal(t, uint(7), id.Version(), "detecting version 7")
+
+	time.Sleep(time.Millisecond)
+	id2 := IDv7()
+	require.NotEqual(t, id, id2, "different timestamps should produce different UUIDs")
+}
+
+func TestIDv7DeterministicFunc(t *testing.T) {
+	require.Equal(t, IDv7Deterministic(666), IDv7Deterministic(666), "deterministic function is stable")
+
+	id := IDv7Deterministic(0)
+	require.NoError(t, id.Validate(), "validating UUID")
+	require.Equal(t, uint(7), id.Version(), "detecting version 7")
+
+	id = IDv7Deterministic(time.Now().UnixMilli())
+	require.NoError(t, id.Validate(), "validating UUID")
+	require.Equal(t, uint(7), id.Version(), "detecting version 7")
+}
+
 func TestID_GoString(t *testing.T) {
 	tests := []struct {
 		name string
@@ -649,10 +676,10 @@ func TestID_Base64(t *testing.T) {
 		id := IDv4()
 		t.Run(id.String(), func(t *testing.T) {
 			b := id.Base64()
-			assert.Len(t, b, 22, "always 22 characters")
+			require.Len(t, b, 22, "always 22 characters")
 			parsed, err := IDFromString(b)
-			assert.NoError(t, err, "can parse")
-			assert.Equal(t, id, parsed, "parsed base64 UUID equal to original")
+			require.NoError(t, err, "can parse")
+			require.Equal(t, id, parsed, "parsed base64 UUID equal to original")
 		})
 	}
 }

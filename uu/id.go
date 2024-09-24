@@ -12,6 +12,7 @@ import (
 	"hash"
 	"io"
 	"strings"
+	"sync"
 	"time"
 	"unsafe"
 )
@@ -24,7 +25,7 @@ var IDNil ID
 // described in RFC 4122.
 type ID [16]byte
 
-// IDv1 returns an ID based on current timestamp and MAC address.
+// IDv1 returns a version 1 ID based on current timestamp and MAC address.
 func IDv1() (id ID) {
 	timeNow, clockSeq, hardwareAddr := getStorage()
 
@@ -41,7 +42,7 @@ func IDv1() (id ID) {
 	return id
 }
 
-// IDv2 returns DCE Security UUID based on POSIX UID/GID.
+// IDv2 returns a version 2 DCE Security UUID based on POSIX UID/GID.
 func IDv2(domain byte) (id ID) {
 	timeNow, clockSeq, hardwareAddr := getStorage()
 
@@ -65,7 +66,7 @@ func IDv2(domain byte) (id ID) {
 	return id
 }
 
-// IDv3 returns an ID based on MD5 hash of namespace UUID and name.
+// IDv3 returns a version 3 ID based on MD5 hash of namespace UUID and name.
 func IDv3(ns ID, name string) ID {
 	//#nosec G401 -- Needed for standard conformity
 	id := idFromHash(md5.New(), ns, name)
@@ -74,7 +75,7 @@ func IDv3(ns ID, name string) ID {
 	return id
 }
 
-// IDv4 returns a random generated UUID.
+// IDv4 returns a version 4 random generated UUID.
 func IDv4() (id ID) {
 	safeRandom(id[:])
 	id.SetVersion(4)
@@ -82,7 +83,7 @@ func IDv4() (id ID) {
 	return id
 }
 
-// IDv5 returns an ID based on SHA-1 hash of namespace UUID and name.
+// IDv5 returns a version 5 ID based on SHA-1 hash of namespace UUID and name.
 func IDv5(ns ID, name string) ID {
 	//#nosec G401 -- Needed for standard conformity
 	id := idFromHash(sha1.New(), ns, name)
@@ -91,14 +92,55 @@ func IDv5(ns ID, name string) ID {
 	return id
 }
 
-// IDv7 returns an ID with the first 48 bits
+// IDv7 returns a version 7 ID with the first 48 bits
 // containing a sortable timestamp and random
 // data after the version and variant information.
-func IDv7() (id ID) {
+func IDv7() ID {
+	var id ID
 	*(*int64)(unsafe.Pointer(&id[0])) = time.Now().UnixMilli() //#nosec G103 -- unsafe OK
 	safeRandom(id[6:])
 	id.SetVersion(7)
 	id.SetVariant()
+	return id
+}
+
+// IDv7Deterministic returns a version 7 ID with
+// the first 48 bits containing passed unixMilli timestamp
+// and no random data.
+//
+// Intended for generating deterministic UUIDs for testing,
+// see also IDv7DeterministicFunc.
+func IDv7Deterministic(unixMilli int64) ID {
+	var id ID
+	*(*int64)(unsafe.Pointer(&id[0])) = unixMilli //#nosec G103 -- unsafe OK
+	id.SetVersion(7)
+	id.SetVariant()
+	return id
+}
+
+// IDv7DeterministicFunc returns a function that generates
+// deterministic version 7 UUIDs starting at the passed Unix Epoch
+// in milliseconds and counting up from there for every
+// call of the returned function.
+//
+// The returned function is safe for concurrent use.
+func IDv7DeterministicFunc(startAtUnixMilli int64) func() ID {
+	series := &v7Series{next: startAtUnixMilli}
+	return func() ID {
+		return series.nextID()
+	}
+}
+
+type v7Series struct {
+	next  int64
+	mutex sync.Mutex
+}
+
+func (d *v7Series) nextID() ID {
+	d.mutex.Lock()
+	id := IDv7Deterministic(d.next)
+	d.next++
+	d.mutex.Unlock()
 	return id
 }
 
