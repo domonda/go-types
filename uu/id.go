@@ -350,7 +350,7 @@ func (id ID) Variant() uint {
 // A Nil UUID is not valid.
 func (id ID) Valid() bool {
 	v := id.Version()
-	return v >= 1 && v <= 5 && id.Variant() != IDVariantInvalid
+	return v >= 1 && v <= 8 && id.Variant() != IDVariantInvalid
 }
 
 // Validate returns an error if the Variant and Version of this UUID are not supported.
@@ -359,7 +359,7 @@ func (id ID) Validate() error {
 	if id.IsNil() {
 		return ErrNilID
 	}
-	if v := id.Version(); v < 1 || v > 7 {
+	if v := id.Version(); v < 1 || v > 8 {
 		return ErrInvalidVersion(v)
 	}
 	if id.Variant() == IDVariantInvalid {

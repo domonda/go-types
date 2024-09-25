@@ -622,10 +622,12 @@ func TestIDv5(t *testing.T) {
 func TestIDv7(t *testing.T) {
 	id := IDMust("019222e8-1ec3-7e4f-97e2-919670df6d6b")
 	require.NoError(t, id.Validate(), "validating UUID")
+	require.True(t, id.Valid(), "valid UUID")
 	require.Equal(t, uint(7), id.Version(), "detecting version 7")
 
 	id = IDv7()
 	require.NoError(t, id.Validate(), "validating UUID")
+	require.True(t, id.Valid(), "valid UUID")
 	require.Equal(t, uint(7), id.Version(), "detecting version 7")
 
 	time.Sleep(time.Millisecond)

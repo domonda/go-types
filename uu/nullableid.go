@@ -148,13 +148,7 @@ func (n NullableID) Validate() error {
 	if n == IDNull {
 		return nil
 	}
-	if v := n.Version(); v < 1 || v > 5 {
-		return ErrInvalidVersion(v)
-	}
-	if n.Variant() == IDVariantInvalid {
-		return ErrInvalidVariant
-	}
-	return nil
+	return ID(n).Validate()
 }
 
 // Set sets an ID for this NullableID
