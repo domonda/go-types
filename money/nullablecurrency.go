@@ -64,9 +64,18 @@ func (n NullableCurrency) StringOr(defaultString string) string {
 	return string(n)
 }
 
-// Valid returns true if c is an empty string, or a valid 3 character ISO 4217 alphabetic code.
+// Valid returns true if n is an empty string, or can be normalized to a valid currency.
 func (n NullableCurrency) Valid() bool {
 	return n == CurrencyNull || Currency(n).Valid()
+}
+
+// Validate returns an error if n is not an empty string and
+// can not be normalized to a valid currency.
+func (n NullableCurrency) Validate() error {
+	if n == CurrencyNull {
+		return nil
+	}
+	return Currency(n).Validate()
 }
 
 // ValidAndNotNull returns if the currency is valid and not Null.

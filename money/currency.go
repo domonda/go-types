@@ -64,25 +64,30 @@ func (c Currency) NullableCurrency() NullableCurrency {
 	return NullableCurrency(c)
 }
 
-// Valid returns true if c is a valid 3 character ISO 4217 alphabetic code.
+// Valid indicates if c can be normalized to a valid currency.
 func (c Currency) Valid() bool {
-	_, valid := currencyCodeToName[c]
-	return valid
+	return c.Validate() == nil
 }
 
-// ValidPtr returns if c is not nil and references a valid currency.
+// Validate returns an error if c can not be normalized to a valid currency.
+func (c Currency) Validate() error {
+	_, err := c.Normalized()
+	return err
+}
+
+// ValidPtr returns if c is not nil and can be normalized to a valid currency.
 // Safe to call on a nil pointer.
 func (c *Currency) ValidPtr() bool {
-	if c == nil {
-		return false
-	}
-	_, valid := currencyCodeToName[*c]
-	return valid
+	return c != nil && c.Valid()
 }
 
 // Normalized normalizes a currency string
 func (c Currency) Normalized() (Currency, error) {
 	str := strutil.TrimSpace(string(c))
+
+	if str == "" {
+		return "", errors.New("empty currency code")
+	}
 
 	result, found := currencySymbolToCode[str]
 	if found {
@@ -105,7 +110,7 @@ func (c Currency) Normalized() (Currency, error) {
 	}
 
 	if _, ok := currencyCodeToName[Currency(str)]; !ok {
-		return "", errors.New("invalid currency")
+		return "", fmt.Errorf("invalid currency code %q", str)
 	}
 
 	return Currency(str), nil
