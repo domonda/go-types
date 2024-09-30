@@ -9,6 +9,7 @@ import (
 	"github.com/domonda/go-types/nullable"
 )
 
+// Account identifies a bank account by its IBAN and optionally BIC.
 type Account struct {
 	IBAN     IBAN
 	BIC      NullableBIC
@@ -31,6 +32,8 @@ func (a *Account) Validate() error {
 	)
 }
 
+// String returns a string representation of the Account
+// usabled for debugging.
 func (a *Account) String() string {
 	var b strings.Builder
 	b.WriteString("bank.Account{")
