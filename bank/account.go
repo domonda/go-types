@@ -1,6 +1,8 @@
 package bank
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -11,10 +13,10 @@ import (
 
 // Account identifies a bank account by its IBAN and optionally BIC.
 type Account struct {
-	IBAN     IBAN
-	BIC      NullableBIC
-	Currency money.NullableCurrency
-	Holder   nullable.TrimmedString
+	IBAN     IBAN                   `json:"iban"`
+	BIC      NullableBIC            `json:"bic,omitempty"`
+	Currency money.NullableCurrency `json:"currency,omitempty"`
+	Holder   nullable.TrimmedString `json:"holder,omitempty"`
 }
 
 func (a *Account) Valid() bool {
@@ -49,4 +51,37 @@ func (a *Account) String() string {
 	}
 	b.WriteByte('}')
 	return b.String()
+}
+
+// Scan implements the database/sql.Scanner interface.
+func (a *Account) Scan(value any) (err error) {
+	switch x := value.(type) {
+	case []byte:
+		return a.UnmarshalText(x)
+	case string:
+		return a.UnmarshalText([]byte(x))
+	}
+	return fmt.Errorf("can't scan value '%#v' of type %T as data.NullableDate", value, value)
+}
+
+// UnmarshalText implements the encoding.TextUnmarshaler interface.
+// The account can be unmarshalled from a JSON object or a IBAN string.
+func (a *Account) UnmarshalText(text []byte) error {
+	text = bytes.TrimSpace(text)
+	if len(text) > 0 && text[0] == '{' {
+		err := json.Unmarshal(text, a)
+		if err != nil {
+			return fmt.Errorf("can't unmarshal %q as JSON for bank.Account: %w", text, err)
+		}
+		return nil
+	}
+	iban, err := IBAN(text).Normalized()
+	if err != nil {
+		return fmt.Errorf("can't parse %q as IBAN for bank.Account: %w", text, err)
+	}
+	a.IBAN = iban
+	// a.BIC.SetNull()
+	// a.Currency.SetNull()
+	// a.Holder.SetNull()
+	return nil
 }
