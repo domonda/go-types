@@ -13,7 +13,7 @@ import (
 	"github.com/domonda/go-errs"
 )
 
-var numberRegex = regexp.MustCompile(`^[0-9A-Za-z_]+$`)
+var numberRegex = regexp.MustCompile(`^[0-9A-Za-z][0-9A-Za-z_\-\/:.;,]*$`)
 
 const (
 	ErrInvalidNumber      errs.Sentinel = "invalid account number"
@@ -49,14 +49,14 @@ func NumberFromUint(u uint64) Number {
 }
 
 // Valid returns true if the Number matches
-// the regular expression `^[0-9A-Za-z_]+$`
+// the regular expression `^[0-9A-Za-z][0-9A-Za-z_\-\/:.;,]*$`
 func (n Number) Valid() bool {
 	return numberRegex.MatchString(string(n))
 }
 
 // Validate returns a wrapped ErrInvalidNumber
 // error if the Number does not match
-// the regular expression `^[0-9A-Za-z_]+$`
+// the regular expression `^[0-9A-Za-z][0-9A-Za-z_\-\/:.;,]*$`
 func (n Number) Validate() error {
 	if !n.Valid() {
 		return fmt.Errorf("%w: %q", ErrInvalidNumber, n)

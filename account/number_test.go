@@ -1,6 +1,10 @@
 package account
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/stretchr/testify/require"
+)
 
 func TestNumber_TrimLeadingZeros(t *testing.T) {
 	tests := []struct {
@@ -24,6 +28,36 @@ func TestNumber_TrimLeadingZeros(t *testing.T) {
 			if got := tt.no.TrimLeadingZeros(); got != tt.want {
 				t.Errorf("AccountNo.TrimLeadingZeros() = %#v, want %#v", got, tt.want)
 			}
+		})
+	}
+}
+
+func TestNumber_Valid(t *testing.T) {
+	valid := []Number{
+		"0",
+		"0/",
+		"0/0",
+		"Hello_World",
+		"a.b",
+		"a:b",
+		"a,b",
+		"a;b",
+		"a.b.",
+		"a:b:",
+		"a,b,",
+		"a;b;",
+	}
+	for _, n := range valid {
+		t.Run(string(n), func(t *testing.T) {
+			require.Truef(t, n.Valid(), "Number(%#v).Valid()", n)
+		})
+	}
+	invalid := []Number{
+		"",
+	}
+	for _, n := range invalid {
+		t.Run(string(n), func(t *testing.T) {
+			require.Falsef(t, n.Valid(), "Number(%#v).Valid()", n)
 		})
 	}
 }
