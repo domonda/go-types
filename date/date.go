@@ -708,16 +708,18 @@ func normalizeAndCheckDate(str string, langHint language.Code) (Date, bool, erro
 }
 
 func normalizeDate(str string, langHint language.Code) (string, bool, error) {
-	trimmed := strings.ToLower(strings.TrimFunc(str, isDateTrimRune))
-
+	trimmed := strings.TrimSuffix(str, "00:00:00") // Trim zero time part
+	trimmed = strings.TrimFunc(trimmed, isDateTrimRune)
 	if len(trimmed) < MinLength {
 		return "", false, fmt.Errorf("too short for a date: %q", str)
 	}
 
-	if len(trimmed) > 10 && trimmed[10] == 't' {
+	if len(trimmed) > 10 && trimmed[10] == 'T' {
 		// Use date part of this date-time format: "2006-01-02T15:04:05"
 		trimmed = trimmed[:10]
 	}
+
+	trimmed = strings.ToLower(trimmed)
 
 	langHint, _ = langHint.Normalized()
 
