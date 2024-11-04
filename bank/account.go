@@ -57,18 +57,24 @@ func (a *Account) String() string {
 func (a *Account) Scan(value any) (err error) {
 	switch x := value.(type) {
 	case []byte:
-		return a.UnmarshalText(x)
+		return a.UnmarshalJSON(x)
 	case string:
-		return a.UnmarshalText([]byte(x))
+		return a.UnmarshalJSON([]byte(x))
 	}
 	return fmt.Errorf("can't scan value '%#v' of type %T as bank.Account", value, value)
 }
 
-// UnmarshalText implements the encoding.TextUnmarshaler interface.
-// The account can be unmarshalled from a JSON object or a IBAN string.
-func (a *Account) UnmarshalText(text []byte) error {
-	text = bytes.TrimSpace(text)
-	if len(text) > 0 && text[0] == '{' {
+// UnmarshalJSON implements encoding/json.Unmarshaler
+func (a *Account) UnmarshalJSON(j []byte) (err error) {
+	if len(j) < 2 {
+		return fmt.Errorf("too short to unmarshal as bank.Account: `%s`", j)
+	}
+	if bytes.Equal(j, []byte("null")) {
+		return nil // JSON null does not change the Account
+	}
+	beg := j[0]
+	end := j[len(j)-1]
+	if beg == '{' && end == '}' {
 		// Unmarshal into a struct that does not
 		// implmented UnmarshalText to avoid recursion
 		var acc struct {
@@ -77,20 +83,38 @@ func (a *Account) UnmarshalText(text []byte) error {
 			Currency money.NullableCurrency
 			Holder   nullable.TrimmedString
 		}
-		err := json.Unmarshal(text, &acc)
+		err = json.Unmarshal(j, &acc)
 		if err != nil {
-			return fmt.Errorf("can't unmarshal `%s` as JSON for bank.Account: %w", text, err)
+			return fmt.Errorf("can't unmarshal `%s` for bank.Account: %w", j, err)
 		}
 		*a = Account(acc)
 		return nil
 	}
-	iban, err := IBAN(text).Normalized()
+	// Unmarshal j as an IBAN string
+	var iban IBAN
+	if beg == '"' && end == '"' {
+		// JSON string
+		err := json.Unmarshal(j, &iban)
+		if err != nil {
+			return fmt.Errorf("can't unmarshal `%s` for bank.Account: %w", j, err)
+		}
+	} else {
+		// Non-JSON text from UnmarshalText
+		iban = IBAN(j)
+	}
+	iban, err = iban.Normalized()
 	if err != nil {
-		return fmt.Errorf("can't parse `%s` as IBAN for bank.Account: %w", text, err)
+		return fmt.Errorf("can't parse `%s` as IBAN for bank.Account: %w", j, err)
 	}
 	a.IBAN = iban
-	// a.BIC.SetNull()
-	// a.Currency.SetNull()
-	// a.Holder.SetNull()
+	a.BIC.SetNull()
+	a.Currency.SetNull()
+	a.Holder.SetNull()
 	return nil
+}
+
+// UnmarshalText implements the [encoding.TextUnmarshaler] interface.
+// The account can be unmarshalled from a JSON object or a IBAN string.
+func (a *Account) UnmarshalText(text []byte) error {
+	return a.UnmarshalJSON(bytes.TrimSpace(text))
 }
