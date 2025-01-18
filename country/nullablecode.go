@@ -37,7 +37,7 @@ func (n NullableCode) Normalized() (NullableCode, error) {
 		return Null, nil
 	}
 	if _, ok := countryMap[Code(norm)]; !ok {
-		return Null, fmt.Errorf("invalid country.NullableCode: %q", string(n))
+		return n, fmt.Errorf("invalid country.NullableCode: %q", string(n))
 	}
 	return NullableCode(norm), nil
 }

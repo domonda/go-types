@@ -32,7 +32,7 @@ func (c Code) Validate() error {
 func (c Code) Normalized() (Code, error) {
 	norm := c.normalized()
 	if _, ok := countryMap[norm]; !ok {
-		return "", fmt.Errorf("invalid country.Code: %q", string(c))
+		return c, fmt.Errorf("invalid country.Code: %q", string(c))
 	}
 	return norm, nil
 }

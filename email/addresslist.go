@@ -128,7 +128,7 @@ func (l AddressList) Validate() error {
 func (l AddressList) Normalized() (AddressList, error) {
 	parsed, err := l.Parse()
 	if err != nil {
-		return "", err
+		return l, err
 	}
 	b := strings.Builder{}
 	b.Grow(len(l))

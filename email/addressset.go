@@ -182,7 +182,7 @@ func (set AddressSet) Normalized() (AddressSet, error) {
 	for addr := range set {
 		norm, err := addr.Normalized()
 		if err != nil {
-			return nil, err
+			return set, err
 		}
 		normalized.Add(norm)
 	}

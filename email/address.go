@@ -36,7 +36,7 @@ func NormalizedAddress(addr string) (normalized Address, err error) {
 func (a Address) Normalized() (Address, error) {
 	parsed, err := a.Parse()
 	if err != nil {
-		return "", err
+		return a, err
 	}
 	return AddressFrom(parsed), nil
 }

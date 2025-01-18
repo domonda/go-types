@@ -57,31 +57,31 @@ func (id ID) Normalized() (ID, error) {
 
 	// Check length
 	if len(normalized) < IDMinLength {
-		return "", fmt.Errorf("VAT ID %q is too short", string(id))
+		return id, fmt.Errorf("VAT ID %q is too short", string(id))
 	}
 	if len(normalized) > IDMaxLength {
-		return "", fmt.Errorf("VAT ID %q is too long", string(id))
+		return id, fmt.Errorf("VAT ID %q is too long", string(id))
 	}
 
 	// Check country code
 	countryCode := country.Code(normalized[:2])
 	if countryCode != MOSSSchemaVATCountryCode && !countryCode.Valid() {
-		return "", fmt.Errorf("VAT ID %q has an invalid country code: %q", string(id), string(countryCode))
+		return id, fmt.Errorf("VAT ID %q has an invalid country code: %q", string(id), string(countryCode))
 	}
 
 	// Check format with country specific regex
 	regex, ok := idRegex[countryCode]
 	if !ok {
-		return "", fmt.Errorf("VAT ID %q has an unsupported country code: %q", string(id), string(countryCode))
+		return id, fmt.Errorf("VAT ID %q has an unsupported country code: %q", string(id), string(countryCode))
 	}
 	if !regex.MatchString(string(normalized)) {
-		return "", fmt.Errorf("VAT ID %q has an invalid format", string(id))
+		return id, fmt.Errorf("VAT ID %q has an invalid format", string(id))
 	}
 
 	// Test checkFunc-sum if a function is available for the country
 	checkFunc, ok := checkSumFuncs[countryCode]
 	if ok && !checkFunc(id, normalized) {
-		return "", fmt.Errorf("VAT ID %q has an invalid check-sum", string(id))
+		return id, fmt.Errorf("VAT ID %q has an invalid check-sum", string(id))
 	}
 
 	return normalized, nil

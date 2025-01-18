@@ -22,7 +22,7 @@ func (c Code) Normalized() (Code, error) {
 	// http://www.unicode.org/reports/tr35/#Unicode_locale_identifier.
 	normalized := Code(strings.ToLower(string(c)))
 	if _, ok := codeNames[normalized]; !ok {
-		return "", fmt.Errorf("invalid language.Code: %q", string(c))
+		return c, fmt.Errorf("invalid language.Code: %q", string(c))
 	}
 	return normalized, nil
 }

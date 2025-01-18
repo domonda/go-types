@@ -110,7 +110,7 @@ func (c Currency) Normalized() (Currency, error) {
 	}
 
 	if _, ok := currencyCodeToName[Currency(str)]; !ok {
-		return "", fmt.Errorf("invalid currency code %q", str)
+		return c, fmt.Errorf("invalid currency code %q", str)
 	}
 
 	return Currency(str), nil

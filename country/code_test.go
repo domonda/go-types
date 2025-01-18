@@ -13,8 +13,8 @@ func TestCode_NormalizedWithAltCodes(t *testing.T) {
 		{c: "d", want: DE},
 		{c: "Deu", want: DE},
 		// Errors
-		{c: "", wantErr: true},
-		{c: "xxx", wantErr: true},
+		{c: "", want: "", wantErr: true},
+		{c: "xxx", want: "xxx", wantErr: true},
 	}
 	for _, tt := range tests {
 		t.Run(string(tt.c), func(t *testing.T) {
