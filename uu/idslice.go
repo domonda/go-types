@@ -7,6 +7,7 @@ import (
 	"io"
 	"sort"
 	"strings"
+	"unsafe"
 
 	"github.com/domonda/go-types/strutil"
 )
@@ -85,6 +86,13 @@ func (s IDSlice) AsSet() IDSet {
 // AsSlice returns s unchanged to implement the IDs interface.
 func (s IDSlice) AsSlice() IDSlice {
 	return s
+}
+
+// Raw returns the underlying slice of [16]byte IDs.
+// The returned slice is not a copy but a pointer to the original slice.
+// The returned slice is not thread safe and should not be modified.
+func (s IDSlice) Raw() [][16]byte {
+	return *(*[][16]byte)(unsafe.Pointer(&s)) //#nosec G103 -- unsafe OK
 }
 
 // ForEach calls the passed function for each ID.
