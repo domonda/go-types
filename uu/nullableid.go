@@ -195,12 +195,12 @@ func (n NullableID) PrettyPrint(w io.Writer) {
 
 // GoString returns a pseudo Go literal for the ID in the format:
 //
-//	uu.NullableIDMust(`xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`)
+//	uu.NullableID(`xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`)
 func (n NullableID) GoString() string {
 	if n.IsNull() {
-		return "uu.NullableIDMust(nil)"
+		return "uu.IDNull"
 	}
-	return "uu.NullableIDMust(`" + n.String() + "`)"
+	return "uu.NullableID(`" + ID(n).String() + "`)"
 }
 
 // Hex returns the hex representation without dashes of the UUID
