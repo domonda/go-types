@@ -10,11 +10,11 @@ require (
 	github.com/jinzhu/now v1.1.5
 	github.com/stretchr/testify v1.10.0
 	github.com/teamwork/tnef v0.0.0-20200108124832-7deabccfdb32
-	github.com/ungerik/go-fs v0.0.0-20241213130555-c93eabeaac28
+	github.com/ungerik/go-fs v0.0.0-20250123134246-3ac71b34b8e3
 	github.com/ungerik/go-reflection v0.0.0-20240905081803-708928fe0862
-	golang.org/x/net v0.33.0
-	golang.org/x/text v0.21.0
-	mvdan.cc/xurls/v2 v2.5.0
+	golang.org/x/net v0.34.0
+	golang.org/x/text v0.22.0
+	mvdan.cc/xurls/v2 v2.6.0
 )
 
 require (
@@ -30,6 +30,6 @@ require (
 	github.com/ssor/bom v0.0.0-20170718123548-6386211fdfcf // indirect
 	github.com/teamwork/test v0.0.0-20200108114543-02621bae84ad // indirect
 	github.com/teamwork/utils v0.0.0-20220314153103-637fa45fa6cc // indirect
-	golang.org/x/sys v0.28.0 // indirect
+	golang.org/x/sys v0.30.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

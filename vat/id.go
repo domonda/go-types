@@ -2,11 +2,11 @@ package vat
 
 import (
 	"database/sql/driver"
-	"errors"
 	"fmt"
 	"strings"
 	"unicode"
 
+	"github.com/domonda/go-errs"
 	"github.com/domonda/go-types/country"
 	"github.com/domonda/go-types/strutil"
 )
@@ -16,6 +16,8 @@ import (
 // https://europa.eu/youreurope/business/taxation/vat/vat-digital-services-moss-scheme/index_en.htm
 const MOSSSchemaVATCountryCode = "EU"
 
+const ErrInvalidID errs.Sentinel = "invalid VAT ID"
+
 // ID is a european VAT ID.
 // ID implements the database/sql.Scanner and database/sql/driver.Valuer interfaces,
 // returning errors when the ID is not valid and can't be normalized.
@@ -23,6 +25,8 @@ const MOSSSchemaVATCountryCode = "EU"
 type ID string
 
 // NormalizeVATID returns str as normalized VAT ID or an error.
+//
+// Returns a wrapped ErrInvalidID error if the VAT ID is not valid.
 func NormalizeVATID(str string) (ID, error) {
 	return ID(str).Normalized()
 }
@@ -51,37 +55,37 @@ func isVATIDTrimRune(r rune) bool {
 // }
 
 // Normalized returns the id in normalized form,
-// or an error if the VAT ID is not valid.
+// or a wrapped ErrInvalidID error if the VAT ID is not valid.
 func (id ID) Normalized() (ID, error) {
 	normalized := ID(strings.ToUpper(strutil.RemoveRunesString(string(id), strutil.IsSpace, unicode.IsPunct)))
 
 	// Check length
 	if len(normalized) < IDMinLength {
-		return id, fmt.Errorf("VAT ID %q is too short", string(id))
+		return id, fmt.Errorf("%w: %q is too short", ErrInvalidID, string(id))
 	}
 	if len(normalized) > IDMaxLength {
-		return id, fmt.Errorf("VAT ID %q is too long", string(id))
+		return id, fmt.Errorf("%w: %q is too long", ErrInvalidID, string(id))
 	}
 
 	// Check country code
 	countryCode := country.Code(normalized[:2])
 	if countryCode != MOSSSchemaVATCountryCode && !countryCode.Valid() {
-		return id, fmt.Errorf("VAT ID %q has an invalid country code: %q", string(id), string(countryCode))
+		return id, fmt.Errorf("%w: %q has an invalid country code: %q", ErrInvalidID, string(id), string(countryCode))
 	}
 
 	// Check format with country specific regex
 	regex, ok := idRegex[countryCode]
 	if !ok {
-		return id, fmt.Errorf("VAT ID %q has an unsupported country code: %q", string(id), string(countryCode))
+		return id, fmt.Errorf("%w: %q has an unsupported country code: %q", ErrInvalidID, string(id), string(countryCode))
 	}
 	if !regex.MatchString(string(normalized)) {
-		return id, fmt.Errorf("VAT ID %q has an invalid format", string(id))
+		return id, fmt.Errorf("%w: %q has an invalid format", ErrInvalidID, string(id))
 	}
 
 	// Test checkFunc-sum if a function is available for the country
 	checkFunc, ok := checkSumFuncs[countryCode]
 	if ok && !checkFunc(id, normalized) {
-		return id, fmt.Errorf("VAT ID %q has an invalid check-sum", string(id))
+		return id, fmt.Errorf("%w: %q has an invalid check-sum", ErrInvalidID, string(id))
 	}
 
 	return normalized, nil
@@ -112,12 +116,17 @@ func (id ID) ValidAndNormalized() bool {
 
 // Validate returns an error if id is not a valid VAT ID,
 // ignoring normalization.
+//
+// Returns a wrapped ErrInvalidID error if the VAT ID is not valid.
 func (id ID) Validate() error {
 	_, err := id.Normalized()
 	return err
 }
 
 // ValidateIsNormalized returns an error if id is not a valid and normalized VAT ID.
+//
+// Will return ErrInvalidID if the id is not valid,
+// but another error if the id is valid but not normalized.
 func (id ID) ValidateIsNormalized() error {
 	norm, err := id.Normalized()
 	if err != nil {
@@ -213,9 +222,9 @@ func (id *ID) Scan(value any) error {
 	case []byte:
 		*id = ID(x)
 	case nil:
-		return errors.New("can't scan SQL NULL as vat.ID")
+		return fmt.Errorf("%w: can't scan SQL NULL as vat.ID", ErrInvalidID)
 	default:
-		return fmt.Errorf("can't scan SQL value of type %T as vat.ID", value)
+		return fmt.Errorf("%w: can't scan SQL value of type %T as vat.ID", ErrInvalidID, value)
 	}
 	return nil
 }
