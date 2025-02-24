@@ -34,6 +34,24 @@ func (a *Account) Validate() error {
 	)
 }
 
+func (a *Account) Normalize() error {
+	if a == nil {
+		return errors.New("nil bank.Account")
+	}
+	var e, err error
+
+	a.IBAN, e = a.IBAN.Normalized()
+	err = errors.Join(err, e)
+
+	a.BIC, e = a.BIC.Normalized()
+	err = errors.Join(err, e)
+
+	a.Currency, e = a.Currency.Normalized()
+	err = errors.Join(err, e)
+
+	return err
+}
+
 // String returns a string representation of the Account
 // usabled for debugging.
 func (a *Account) String() string {
