@@ -11,13 +11,16 @@ import (
 const Null NullableCode = ""
 
 // NullableCode for a country according ISO 3166-1 alpha 2.
+//
 // NullableCode implements the database/sql.Scanner and database/sql/driver.Valuer interfaces,
 // and will treat an empty NullableCode string as SQL NULL.
+//
 // Null.Valid() or NullableCode("").Valid() will return true.
 type NullableCode string
 
 func (n NullableCode) Valid() bool {
-	return n == Null || Code(n).Valid()
+	_, err := n.Normalized()
+	return err == nil
 }
 
 func (n NullableCode) ValidAndNotNull() bool {
@@ -25,21 +28,34 @@ func (n NullableCode) ValidAndNotNull() bool {
 }
 
 func (n NullableCode) Validate() error {
-	if n.Valid() {
-		return nil
-	}
-	return fmt.Errorf("invalid country.NullableCode: %q", string(n))
+	_, err := n.Normalized()
+	return err
 }
 
+// Normalized uses the whitespace-trimmed uppercase
+// string of the code to look up and return the
+// standard ISO 3166-1 alpha 2 code
+// or return Null and no error in case of
+// an empty string representing a null value.
+//
+// If not found then AltCodes is used to look
+// up alternative code and name mappings using
+// the whitespace-trimmed uppercase code.
+//
+// If no mapping exists then the original Code
+// is returned unchanged together with an error.
 func (n NullableCode) Normalized() (NullableCode, error) {
-	norm := Code(n).normalized()
+	norm := strings.ToUpper(strutil.TrimSpace(string(n)))
 	if norm == "" {
 		return Null, nil
 	}
-	if _, ok := countryMap[Code(norm)]; !ok {
-		return n, fmt.Errorf("invalid country.NullableCode: %q", string(n))
+	if _, ok := countryMap[Code(norm)]; ok {
+		return NullableCode(norm), nil
 	}
-	return NullableCode(norm), nil
+	if norm, ok := AltCodes[string(norm)]; ok {
+		return NullableCode(norm), nil
+	}
+	return n, fmt.Errorf("invalid country.NullableCode: '%s'", string(n))
 }
 
 // NormalizedWithAltCodes uses AltCodes to map
@@ -53,8 +69,11 @@ func (n NullableCode) NormalizedWithAltCodes() (NullableCode, error) {
 }
 
 func (n NullableCode) NormalizedOrNull() NullableCode {
-	normalized, _ := n.Normalized()
-	return normalized
+	norm, err := n.Normalized()
+	if err != nil {
+		return Null
+	}
+	return norm
 }
 
 // IsEU indicates if a country is member of the European Union
@@ -79,7 +98,7 @@ func (n NullableCode) IsNotNull() bool {
 
 // Set sets an ID for this NullableCode
 func (n *NullableCode) Set(code Code) {
-	*n = NullableCode(code.normalized())
+	*n = NullableCode(code)
 }
 
 // SetNull sets the NullableCode to null
@@ -176,7 +195,7 @@ func (n *NullableCode) ScanString(source string, validate bool) error {
 		n.SetNull()
 		return nil
 	}
-	code, err := NullableCode(source).NormalizedWithAltCodes()
+	code, err := NullableCode(source).Normalized()
 	if err != nil {
 		if validate {
 			return err

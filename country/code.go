@@ -12,53 +12,66 @@ import (
 const Invalid Code = ""
 
 // Code for a country according ISO 3166-1 alpha 2.
+//
 // Code implements the database/sql.Scanner and database/sql/driver.Valuer interfaces,
 // and will treat an empty Code string as SQL NULL.
-// See NullableCode
+//
+// See NullableCode for a nullable version of this type.
 type Code string
 
+// Valid returns true if the normalized Code is valid.
+//
+// See Normalized for the normalization process.
 func (c Code) Valid() bool {
-	_, ok := countryMap[c.normalized()]
-	return ok
+	_, err := c.Normalized()
+	return err == nil
 }
 
+// Validate returns an error if the normalized Code is not valid.
+//
+// See Normalized for the normalization process.
 func (c Code) Validate() error {
-	if c.Valid() {
-		return nil
-	}
-	return fmt.Errorf("invalid country.Code: %q", string(c))
+	_, err := c.Normalized()
+	return err
 }
 
+// Normalized uses the whitespace-trimmed uppercase
+// string of the code to look up and return the
+// standard ISO 3166-1 alpha 2 code.
+//
+// If not found then AltCodes is used to look
+// up alternative code and name mappings using
+// the whitespace-trimmed uppercase code.
+//
+// If no mapping exists then the original Code
+// is returned unchanged together with an error.
 func (c Code) Normalized() (Code, error) {
-	norm := c.normalized()
-	if _, ok := countryMap[norm]; !ok {
-		return c, fmt.Errorf("invalid country.Code: %q", string(c))
-	}
-	return norm, nil
-}
-
-func (c Code) normalized() Code {
-	return Code(strings.ToUpper(strutil.TrimSpace(string(c))))
-}
-
-// NormalizedWithAltCodes uses AltCodes to map
-// to ISO 3166-1 alpha 2 codes or return the
-// result of Normalized() if no mapping exists.
-func (c Code) NormalizedWithAltCodes() (Code, error) {
-	if norm, ok := AltCodes[strings.ToUpper(strutil.TrimSpace(string(c)))]; ok {
+	norm := Code(strings.ToUpper(strutil.TrimSpace(string(c))))
+	if _, ok := countryMap[norm]; ok {
 		return norm, nil
 	}
-	return c.Normalized()
+	if norm, ok := AltCodes[string(norm)]; ok {
+		return norm, nil
+	}
+	return c, fmt.Errorf("invalid country.Code: '%s'", string(c))
 }
 
 // IsEU indicates if a country is member of the European Union
 func (c Code) IsEU() bool {
-	_, ok := euCountries[c.normalized()]
+	norm, err := c.Normalized()
+	if err != nil {
+		return false
+	}
+	_, ok := euCountries[norm]
 	return ok
 }
 
 func (c Code) EnglishName() string {
-	return countryMap[c.normalized()]
+	norm, err := c.Normalized()
+	if err != nil {
+		return ""
+	}
+	return countryMap[norm]
 }
 
 // Scan implements the database/sql.Scanner interface.
@@ -81,12 +94,14 @@ func (c Code) Value() (driver.Value, error) {
 	if c == Invalid {
 		return nil, nil
 	}
-	return string(c.normalized()), nil
+	norm, _ := c.Normalized()
+	return string(norm), nil
 }
 
 // MarshalJSON implements encoding/json.Marshaler
 func (c Code) MarshalJSON() ([]byte, error) {
-	return json.Marshal(string(c.normalized()))
+	norm, _ := c.Normalized()
+	return json.Marshal(string(norm))
 }
 
 // ScanString tries to parse and assign the passed
@@ -99,7 +114,7 @@ func (c Code) MarshalJSON() ([]byte, error) {
 // can still be assigned in some non-normalized way
 // it will be assigned without returning an error.
 func (c *Code) ScanString(source string, validate bool) error {
-	code, err := Code(source).NormalizedWithAltCodes()
+	code, err := Code(source).Normalized()
 	if err != nil {
 		if validate {
 			return err
@@ -112,9 +127,11 @@ func (c *Code) ScanString(source string, validate bool) error {
 
 // String returns the normalized code if possible,
 // else it will be returned unchanged as string.
+//
 // String implements the fmt.Stringer interface.
 func (c Code) String() string {
-	return string(c.normalized())
+	norm, _ := c.Normalized()
+	return string(norm)
 }
 
 // Nullable returns the Code as NullableCode.

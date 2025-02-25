@@ -254,25 +254,6 @@ const (
 	XK Code = "XK"
 )
 
-// AltCodes
-var AltCodes = map[string]Code{
-	// Common codes from other standards
-	"A":   AT,
-	"DEU": DE,
-
-	// ITU letter codes
-	"AUT": AT,
-	"B":   BR,
-	"D":   DE,
-	"E":   ES,
-	"F":   FR,
-	"G":   GB,
-	"I":   IT,
-	"J":   JP,
-	"S":   SE,
-	"SUI": CH,
-}
-
 var countryMap = map[Code]string{
 	AF: "Afghanistan",
 	AX: "Åland Islands",
@@ -525,6 +506,79 @@ var countryMap = map[Code]string{
 	ZM: "Zambia",
 	ZW: "Zimbabwe",
 	XK: "Republic of Kosovo", // unofficial, but still can be used
+}
+
+// AltCodes
+var AltCodes = map[string]Code{
+	// Common codes from other standards
+	"A":   AT,
+	"DEU": DE,
+
+	// ITU letter codes
+	"AUT": AT,
+	"B":   BR,
+	"D":   DE,
+	"E":   ES,
+	"F":   FR,
+	"G":   GB,
+	"I":   IT,
+	"J":   JP,
+	"S":   SE,
+	"SUI": CH,
+
+	// German country names
+	"ALBANIEN":               AL,
+	"ANDORRA":                AD,
+	"ARMENIEN":               AM,
+	"ASERBAIDSCHAN":          AZ,
+	"BELGIEN":                BE,
+	"BOSNIEN-HERZEGOWINA":    BA,
+	"BULGARIEN":              BG,
+	"DÄNEMARK":               DK,
+	"DEUTSCHLAND":            DE,
+	"ESTLAND":                EE,
+	"FINNLAND":               FI,
+	"FRANKREICH":             FR,
+	"GEORGIEN":               GE,
+	"GRIECHENLAND":           GR,
+	"IRLAND":                 IE,
+	"ISLAND":                 IS,
+	"ITALIEN":                IT,
+	"KASACHSTAN":             KZ,
+	"KOSOVO":                 XK,
+	"KROATIEN":               HR,
+	"LETTLAND":               LV,
+	"LIECHTENSTEIN":          LI,
+	"LITAUEN":                LT,
+	"LUXEMBURG":              LU,
+	"MALTA":                  MT,
+	"MOLDAWIEN":              MD,
+	"MONACO":                 MC,
+	"MONTENEGRO":             ME,
+	"NIEDERLANDE":            NL,
+	"NORDMAZEDONIEN":         MK,
+	"NORWEGEN":               NO,
+	"ÖSTERREICH":             AT,
+	"OESTERREICH":            AT,
+	"POLEN":                  PL,
+	"PORTUGAL":               PT,
+	"RUMÄNIEN":               RO,
+	"RUSSLAND":               RU,
+	"SAN MARINO":             SM,
+	"SCHWEDEN":               SE,
+	"SCHWEIZ":                CH,
+	"SERBIEN":                RS,
+	"SLOWAKEI":               SK,
+	"SLOWENIEN":              SI,
+	"SPANIEN":                ES,
+	"TSCHECHISCHE REPUBLIK":  CZ,
+	"TÜRKEI":                 TR,
+	"UKRAINE":                UA,
+	"UNGARN":                 HU,
+	"VATIKANSTADT":           VA,
+	"VEREINIGTES KÖNIGREICH": GB,
+	"WEISSRUSSLAND":          BY,
+	"ZYPERN":                 CY,
 }
 
 var euCountries = map[Code]struct{}{
