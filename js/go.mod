@@ -1,6 +1,6 @@
 module github.com/domonda/go-types/js
 
-go 1.23
+go 1.24
 
 // Parent module in same repo
 replace github.com/domonda/go-types => ..
