@@ -328,6 +328,7 @@ var countryIBANLength = map[country.Code]int{
 	country.AE: 23,
 	country.GB: 22,
 	country.VG: 24,
+	country.EG: 29,
 
 	country.IM: 22, // valid BIC but, can use GB or FR in IBAN
 	country.GG: 22, // valid BIC but, can use GB or FR in IBAN

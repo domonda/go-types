@@ -90,6 +90,7 @@ var countryIBANTable = []string{
 	"Tunisia", "TN59 1000 6035 1835 9847 8831",
 	"Turkey", "TR33 0006 1005 1978 6457 8413 26",
 	"UAE", "AE07 0331 2345 6789 0123 456",
+	"Egypt", "EG81 0037 0061 0840 2031 8813 7204 3",
 	// "United Kingdom", "GB29 RBOS 6016 1331 9268 19", // invalid checksum
 }
 
