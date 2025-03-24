@@ -347,6 +347,7 @@ func MakeValidFileName(name string) string {
 
 // SanitizeFileName creates a nice sane filename.
 // It does more than just replacing invalid characters.
+// Never returns an empty string.
 func SanitizeFileName(name string) string {
 	name = TrimSpace(name)
 	if strings.IndexAny(name, "%+") != -1 {
@@ -367,8 +368,12 @@ func SanitizeFileName(name string) string {
 	for i, r := range name {
 		lastWasPlaceholder = writeSafeFileNameRune(&b, i, r, lastWasPlaceholder)
 	}
+	b.WriteString(ext)
 
-	return b.String() + ext
+	if b.Len() == 0 {
+		return "_"
+	}
+	return b.String()
 }
 
 func NormalizeExt(ext string) string {

@@ -75,7 +75,7 @@ func Test_SplitAndTrimIndex(t *testing.T) {
 
 func Test_SanitizeFileName(t *testing.T) {
 	filenameTable := map[string]string{
-		"": "",
+		"": "_",
 
 		"image.JpG": "image.jpeg",
 		"image.Tif": "image.tiff",
