@@ -7,8 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/domonda/go-pretty"
 	"github.com/stretchr/testify/require"
+
+	"github.com/domonda/go-pretty"
 )
 
 // And returns result of binary AND of two UUIDs.
@@ -831,6 +832,27 @@ func TestID_PrettyPrint(t *testing.T) {
 			if got != tt.want {
 				t.Errorf("ID.PrettyPrint() = %q, want %q", got, tt.want)
 			}
+		})
+	}
+}
+
+func TestID_V7Time(t *testing.T) {
+	timestamp := time.UnixMilli(1743076688815)
+	now := time.UnixMilli(time.Now().UnixMilli())
+	tests := []struct {
+		name string
+		id   ID
+		want time.Time
+	}{
+		{name: "nil UUID", id: IDNil, want: time.Time{}},
+		{name: "version 1 UUID", id: IDv1(), want: time.Time{}},
+		{name: "version 4 UUID", id: IDv4(), want: time.Time{}},
+		{name: "version 7 UUID fixed timestamp", id: IDv7WithTime(timestamp), want: timestamp},
+		{name: "version 7 UUID current timestamp", id: IDv7WithTime(now), want: now},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.want, tt.id.V7Time())
 		})
 	}
 }

@@ -96,12 +96,37 @@ func IDv5(ns ID, name string) ID {
 // containing a sortable timestamp and random
 // data after the version and variant information.
 func IDv7() ID {
+	return IDv7WithTime(time.Now())
+}
+
+// IDv7WithTime returns a version 7 ID with the first 48 bits
+// containing a sortable timestamp created from the passed time
+// and random data after the version and variant information.
+//
+// Note that the precision is only milliseconds.
+//
+// See [ID.V7Time] for the reverse operation.
+func IDv7WithTime(t time.Time) ID {
 	var id ID
-	*(*int64)(unsafe.Pointer(&id[0])) = time.Now().UnixMilli() //#nosec G103 -- unsafe OK
+	*(*int64)(unsafe.Pointer(&id[0])) = t.UnixMilli() //#nosec G103 -- unsafe OK
 	safeRandom(id[6:])
 	id.SetVersion(7)
 	id.SetVariant()
 	return id
+}
+
+// V7Time returns the timestamp of a version 7 UUID.
+// If the UUID is not a version 7 UUID, a zero time is returned.
+//
+// Note that the precision is only milliseconds.
+//
+// See [IDv7WithTime] for the reverse operation.
+func (id ID) V7Time() time.Time {
+	if id.Version() != 7 {
+		return time.Time{}
+	}
+	u := *(*uint64)(unsafe.Pointer(&id[0])) //#nosec G103 -- unsafe OK
+	return time.UnixMilli(int64(u & 0x0000ffffffffffff))
 }
 
 // IDv7Deterministic returns a version 7 ID with
