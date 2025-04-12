@@ -43,10 +43,10 @@ func TrimmedStringFrom(str string) TrimmedString {
 }
 
 // JoinTrimmedStrings joins trimmed strings with the passed separator between them
-func JoinTrimmedStrings(separator string, strs ...TrimmedString) TrimmedString {
+func TrimmedStringJoin[S ~string](separator string, strs ...S) TrimmedString {
 	var b strings.Builder
-	for _, s := range strs {
-		if b.Len() > 0 {
+	for i, s := range strs {
+		if i > 0 {
 			b.WriteString(separator)
 		}
 		b.WriteString(strutil.TrimSpace(string(s)))

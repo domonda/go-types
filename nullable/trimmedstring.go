@@ -72,18 +72,19 @@ func TrimmedStringFromError(err error) TrimmedString {
 	return TrimmedString(strutil.TrimSpace(err.Error()))
 }
 
-// JoinTrimmedStrings joins only those strings that are
-// not empty/null with the passed separator between them.
-func JoinTrimmedStrings(separator string, strs ...TrimmedString) TrimmedString {
+// TrimmedStringJoin joins only those strings that are
+// not empty after trimming with the passed separator between them.
+func TrimmedStringJoin[S ~string](separator string, strs ...S) TrimmedString {
 	var b strings.Builder
 	for _, s := range strs {
-		if s.IsNull() {
+		s := strutil.TrimSpace(string(s))
+		if s == "" {
 			continue
 		}
 		if b.Len() > 0 {
 			b.WriteString(separator)
 		}
-		b.WriteString(strutil.TrimSpace(string(s)))
+		b.WriteString(s)
 	}
 	return TrimmedString(b.String())
 }
