@@ -12,7 +12,7 @@ require (
 	github.com/teamwork/tnef v0.0.0-20200108124832-7deabccfdb32
 	github.com/ungerik/go-fs v0.0.0-20250310161700-3b05d22755dd
 	github.com/ungerik/go-reflection v0.0.0-20240905081803-708928fe0862
-	golang.org/x/net v0.37.0
+	golang.org/x/net v0.38.0
 	golang.org/x/text v0.23.0
 	mvdan.cc/xurls/v2 v2.6.0
 )
