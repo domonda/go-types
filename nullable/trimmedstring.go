@@ -13,6 +13,7 @@ import (
 	"unsafe"
 
 	"github.com/domonda/go-types/strutil"
+	"github.com/invopop/jsonschema"
 )
 
 var (
@@ -306,6 +307,17 @@ func (s *TrimmedString) UnmarshalJSON(j []byte) error {
 	}
 	s.Set(str)
 	return nil
+}
+
+func (TrimmedString) JSONSchema() *jsonschema.Schema {
+	return &jsonschema.Schema{
+		Title: "Nullable Trimmed String",
+		AnyOf: []*jsonschema.Schema{
+			{Type: "string"},
+			{Type: "null"},
+		},
+		Default: TrimmedStringNull,
+	}
 }
 
 func (s TrimmedString) MarshalXML(e *xml.Encoder, start xml.StartElement) error {

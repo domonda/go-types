@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/domonda/go-types/strutil"
+	"github.com/invopop/jsonschema"
 )
 
 const Null NullableCode = ""
@@ -178,6 +179,21 @@ func (n NullableCode) MarshalJSON() ([]byte, error) {
 		return []byte(`null`), nil
 	}
 	return Code(n).MarshalJSON()
+}
+
+func (NullableCode) JSONSchema() *jsonschema.Schema {
+	return &jsonschema.Schema{
+		Title: "Nullable Country Code",
+		Type:  "string",
+		AnyOf: []*jsonschema.Schema{
+			{
+				Type:    "string",
+				Pattern: "^[A-Z]{2}$",
+			},
+			{Type: "null"},
+		},
+		Default: Null,
+	}
 }
 
 // ScanString tries to parse and assign the passed

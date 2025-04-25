@@ -6,7 +6,7 @@ import (
 
 	"github.com/domonda/go-types/date"
 	"github.com/domonda/go-types/money"
-	fs "github.com/ungerik/go-fs"
+	"github.com/ungerik/go-fs"
 )
 
 type CAMT53 struct {

@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/domonda/go-types/country"
+	"github.com/invopop/jsonschema"
 )
 
 // Null is an empty string and will be treatet as SQL NULL.
@@ -233,4 +234,21 @@ func (n NullableID) MarshalJSON() ([]byte, error) {
 		return []byte(`null`), nil
 	}
 	return json.Marshal(string(n))
+}
+
+func (NullableID) JSONSchema() *jsonschema.Schema {
+	minLength := uint64(IDMinLength)
+	maxLength := uint64(IDMaxLength)
+	return &jsonschema.Schema{
+		Title: "Nullable Value Added Tax ID",
+		AnyOf: []*jsonschema.Schema{
+			{
+				Type:      "string",
+				MinLength: &minLength,
+				MaxLength: &maxLength,
+			},
+			{Type: "null"},
+		},
+		Default: Null,
+	}
 }

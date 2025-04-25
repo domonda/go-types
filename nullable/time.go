@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/domonda/go-pretty"
+	"github.com/invopop/jsonschema"
 )
 
 // TimeNull is a null Time value.
@@ -247,6 +248,17 @@ func (n Time) MarshalJSON() ([]byte, error) {
 		return []byte("null"), nil
 	}
 	return json.Marshal(n.Time)
+}
+
+func (Time) JSONSchema() *jsonschema.Schema {
+	return &jsonschema.Schema{
+		Title: "Nullable Time",
+		AnyOf: []*jsonschema.Schema{
+			{Type: "string", Format: "date-time"},
+			{Type: "null"},
+		},
+		Default: TimeNull,
+	}
 }
 
 // MarshalText implements the encoding.TextMarshaler interface.

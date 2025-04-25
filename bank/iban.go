@@ -11,14 +11,16 @@ import (
 
 	"github.com/domonda/go-types/country"
 	"github.com/domonda/go-types/strutil"
+	"github.com/invopop/jsonschema"
 )
 
-var ibanRegex = regexp.MustCompile(`^([A-Z]{2})(\d{2})([A-Z\d]{8,30})$`)
-
 const (
+	IBANRegex     = `^([A-Z]{2})(\d{2})([A-Z\d]{8,30})$`
 	IBANMinLength = 15
 	IBANMaxLength = 32
 )
+
+var ibanRegexp = regexp.MustCompile(IBANRegex)
 
 // NormalizeIBAN returns str as normalized IBAN or an error.
 func NormalizeIBAN(str string) (IBAN, error) {
@@ -102,7 +104,7 @@ func (iban IBAN) Normalized() (IBAN, error) {
 		// fmt.Println(normalized, len(normalized), countryLength)
 		return iban, errors.New("wrong IBAN length")
 	}
-	if !ibanRegex.MatchString(string(normalized)) {
+	if !ibanRegexp.MatchString(string(normalized)) {
 		return iban, errors.New("invalid IBAN characters")
 	}
 	if !normalized.isCheckSumValid() {
@@ -217,6 +219,14 @@ func (iban *IBAN) Scan(value any) error {
 // Value implements the driver database/sql/driver.Valuer interface.
 func (iban IBAN) Value() (driver.Value, error) {
 	return string(iban), nil
+}
+
+func (IBAN) JSONSchema() *jsonschema.Schema {
+	return &jsonschema.Schema{
+		Title:   "IBAN",
+		Type:    "string",
+		Pattern: IBANRegex,
+	}
 }
 
 func (iban *IBAN) BankAndAccountNumbers() (bankNo, accountNo string, err error) {

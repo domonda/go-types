@@ -8,6 +8,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/invopop/jsonschema"
 	"github.com/jinzhu/now"
 
 	"github.com/domonda/go-types/language"
@@ -677,6 +678,14 @@ func (date Date) Value() (driver.Value, error) {
 		return nil, err
 	}
 	return string(normalized), nil
+}
+
+func (Date) JSONSchema() *jsonschema.Schema {
+	return &jsonschema.Schema{
+		Title:  "Date",
+		Type:   "string",
+		Format: "date",
+	}
 }
 
 func isDateSeparatorRune(r rune) bool {

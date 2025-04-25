@@ -2,9 +2,11 @@ package uu
 
 import (
 	"encoding/json"
+	"fmt"
 	"testing"
 
 	"github.com/domonda/go-pretty"
+	"github.com/invopop/jsonschema"
 )
 
 func TestNullableIDValueNil(t *testing.T) {
@@ -169,4 +171,27 @@ func TestNullableID_PrettyPrint(t *testing.T) {
 			}
 		})
 	}
+}
+
+func ExampleNullableID_JSONSchema() {
+	reflector := jsonschema.Reflector{DoNotReference: true}
+	schema, _ := json.MarshalIndent(reflector.Reflect(NullableID{}), "", "  ")
+	fmt.Println(string(schema))
+
+	// Output:
+	// {
+	//   "$schema": "https://json-schema.org/draft/2020-12/schema",
+	//   "$id": "https://github.com/domonda/go-types/uu/nullable-id",
+	//   "anyOf": [
+	//     {
+	//       "type": "string",
+	//       "format": "uuid"
+	//     },
+	//     {
+	//       "type": "null"
+	//     }
+	//   ],
+	//   "title": "Nullable UUID",
+	//   "default": null
+	// }
 }

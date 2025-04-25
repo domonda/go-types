@@ -9,6 +9,8 @@ import (
 	"io"
 	"reflect"
 	"strings"
+
+	"github.com/invopop/jsonschema"
 )
 
 var IDNull NullableID
@@ -330,6 +332,20 @@ func (n NullableID) MarshalJSON() ([]byte, error) {
 	b = append(b, n.StringBytes()...)
 	b = append(b, '"')
 	return b, nil
+}
+
+func (NullableID) JSONSchema() *jsonschema.Schema {
+	return &jsonschema.Schema{
+		Title: "Nullable UUID",
+		AnyOf: []*jsonschema.Schema{
+			{
+				Type:   "string",
+				Format: "uuid",
+			},
+			{Type: "null"},
+		},
+		Default: IDNull,
+	}
 }
 
 // MarshalText implements encoding.TextMarshaler.

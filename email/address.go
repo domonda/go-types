@@ -3,6 +3,8 @@ package email
 import (
 	"net/mail"
 	"strings"
+
+	"github.com/invopop/jsonschema"
 )
 
 // Address is a string containing a non-normalized email-address
@@ -101,4 +103,12 @@ func (a Address) DomainPart() string {
 
 func (a Address) AsList() AddressList {
 	return AddressList(a)
+}
+
+func (Address) JSONSchema() *jsonschema.Schema {
+	return &jsonschema.Schema{
+		Title:  "Email Address",
+		Type:   "string",
+		Format: "email",
+	}
 }

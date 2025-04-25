@@ -9,6 +9,7 @@ import (
 	"github.com/domonda/go-errs"
 	"github.com/domonda/go-types/country"
 	"github.com/domonda/go-types/strutil"
+	"github.com/invopop/jsonschema"
 )
 
 // MOSSSchemaVATCountryCode or the VAT Mini One Stop Shop (MOSS) is an optional scheme that allows you
@@ -236,4 +237,15 @@ func (id ID) Value() (driver.Value, error) {
 		return string(id), nil
 	}
 	return string(normalized), nil
+}
+
+func (ID) JSONSchema() *jsonschema.Schema {
+	minLength := uint64(IDMinLength)
+	maxLength := uint64(IDMaxLength)
+	return &jsonschema.Schema{
+		Title:     "Value Added Tax ID",
+		Type:      "string",
+		MinLength: &minLength,
+		MaxLength: &maxLength,
+	}
 }

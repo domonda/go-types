@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/domonda/go-errs"
+	"github.com/invopop/jsonschema"
 )
 
 // Errors
@@ -228,6 +229,14 @@ func (n *Number) UnmarshalJSON(j []byte) error {
 	}
 	*n = no
 	return nil
+}
+
+func (Number) JSONSchema() *jsonschema.Schema {
+	return &jsonschema.Schema{
+		Title:   "Account Number",
+		Type:    "string",
+		Pattern: NumberRegex,
+	}
 }
 
 // func (n Number) MarshalXML(e *xml.Encoder, start xml.StartElement) error {

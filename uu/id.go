@@ -15,6 +15,8 @@ import (
 	"sync"
 	"time"
 	"unsafe"
+
+	"github.com/invopop/jsonschema"
 )
 
 // The nil UUID is special form of UUID that is specified to have all
@@ -563,6 +565,14 @@ func (id *ID) Scan(src any) error {
 	}
 
 	return fmt.Errorf("cannot convert %T to uu.ID", src)
+}
+
+func (ID) JSONSchema() *jsonschema.Schema {
+	return &jsonschema.Schema{
+		Title:  "UUID",
+		Type:   "string",
+		Format: "uuid",
+	}
 }
 
 // Returns UUID v1/v2 storage state.

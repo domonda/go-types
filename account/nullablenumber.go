@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+
+	"github.com/invopop/jsonschema"
 )
 
 var (
@@ -243,6 +245,21 @@ func (n *NullableNumber) UnmarshalJSON(j []byte) error {
 		return nil
 	}
 	return (*Number)(n).UnmarshalJSON(j)
+}
+
+func (NullableNumber) JSONSchema() *jsonschema.Schema {
+	return &jsonschema.Schema{
+		Title: "Nullable Account Number",
+		Type:  "string",
+		AnyOf: []*jsonschema.Schema{
+			{
+				Type:    "string",
+				Pattern: NumberRegex,
+			},
+			{Type: "null"},
+		},
+		Default: NumberNull,
+	}
 }
 
 // func (n NullableNumber) MarshalXML(e *xml.Encoder, start xml.StartElement) error {

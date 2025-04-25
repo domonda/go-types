@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/domonda/go-types/country"
+	"github.com/invopop/jsonschema"
 )
 
 // IBANNull is an empty string and will be treatet as SQL NULL.
@@ -194,4 +195,18 @@ func (iban NullableIBAN) MarshalJSON() ([]byte, error) {
 		return []byte(`null`), nil
 	}
 	return json.Marshal(string(iban))
+}
+
+func (NullableIBAN) JSONSchema() *jsonschema.Schema {
+	return &jsonschema.Schema{
+		Title: "Nullable IBAN",
+		AnyOf: []*jsonschema.Schema{
+			{
+				Type:    "string",
+				Pattern: IBANRegex,
+			},
+			{Type: "null"},
+		},
+		Default: IBANNull,
+	}
 }

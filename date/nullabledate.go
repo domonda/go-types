@@ -9,6 +9,7 @@ import (
 
 	"github.com/domonda/go-types/language"
 	"github.com/domonda/go-types/nullable"
+	"github.com/invopop/jsonschema"
 )
 
 // Null is an empty string and will be treatet as SQL NULL.
@@ -582,4 +583,18 @@ func (n NullableDate) MarshalJSON() ([]byte, error) {
 		return []byte(`null`), nil
 	}
 	return json.Marshal(string(n))
+}
+
+func (NullableDate) JSONSchema() *jsonschema.Schema {
+	return &jsonschema.Schema{
+		Title: "Nullable Date",
+		AnyOf: []*jsonschema.Schema{
+			{
+				Type:   "string",
+				Format: "date",
+			},
+			{Type: "null"},
+		},
+		Default: Null,
+	}
 }

@@ -4,6 +4,8 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
+
+	"github.com/invopop/jsonschema"
 )
 
 // BICNull is an empty string and will be treatet as SQL NULL.
@@ -149,4 +151,18 @@ func (bic NullableBIC) MarshalJSON() ([]byte, error) {
 		return []byte(`null`), nil
 	}
 	return json.Marshal(string(bic))
+}
+
+func (NullableBIC) JSONSchema() *jsonschema.Schema {
+	return &jsonschema.Schema{
+		Title: "Nullable BIC/SWIFT-Code",
+		AnyOf: []*jsonschema.Schema{
+			{
+				Type:    "string",
+				Pattern: BICRegex,
+			},
+			{Type: "null"},
+		},
+		Default: BICNull,
+	}
 }

@@ -9,14 +9,15 @@ import (
 	"github.com/domonda/go-types/strutil"
 )
 
-var (
-	bicFindRegex  = regexp.MustCompile(`[A-Z]{4}([A-Z]{2})[A-Z2-9][A-NP-Z0-9](?:XXX|[A-WY-Z0-9][A-Z0-9]{2})?`)
-	bicExactRegex = regexp.MustCompile(`^([A-Z]{4})([A-Z]{2})([A-Z2-9][A-NP-Z0-9])(XXX|[A-WY-Z0-9][A-Z0-9]{2})?$`)
-)
-
 const (
+	BICRegex     = `^([A-Z]{4})([A-Z]{2})([A-Z2-9][A-NP-Z0-9])(XXX|[A-WY-Z0-9][A-Z0-9]{2})?$`
 	BICMinLength = 8
 	BICMaxLength = 11
+)
+
+var (
+	bicExactRegexp = regexp.MustCompile(BICRegex)
+	bicFindRegexp  = regexp.MustCompile(`[A-Z]{4}([A-Z]{2})[A-Z2-9][A-NP-Z0-9](?:XXX|[A-WY-Z0-9][A-Z0-9]{2})?`)
 )
 
 var BICFinder bicFinder
@@ -25,7 +26,7 @@ type bicFinder struct{}
 
 func (bicFinder) FindAllIndex(str []byte, n int) [][]int {
 	// fmt.Println(string(str))
-	indices := bicFindRegex.FindAllSubmatchIndex(str, n)
+	indices := bicFindRegexp.FindAllSubmatchIndex(str, n)
 	if len(indices) == 0 {
 		return nil
 	}
@@ -44,7 +45,7 @@ func (bicFinder) FindAllIndex(str []byte, n int) [][]int {
 		countryCode := country.Code(str[matchIndices[2]:matchIndices[3]])
 		_, isValidCountry := countryIBANLength[countryCode]
 		_, isFalse := falseBICs[BIC(bic)]
-		if isValidCountry && !isFalse && bicExactRegex.Match(bic) {
+		if isValidCountry && !isFalse && bicExactRegexp.Match(bic) {
 			// BIC must also be surrounded by line bounds,
 			// or a separator rune
 			if matchIndices[0] > 0 {

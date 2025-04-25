@@ -7,12 +7,16 @@ import (
 	"errors"
 	"fmt"
 	"net/mail"
+
+	"github.com/invopop/jsonschema"
 )
 
 // NullableAddress is a string containing a non-normalized email-address
 // with an optional name part before the mandatory address part.
 // An empty string represents the SQL/JSON null value.
 type NullableAddress string
+
+const AddressNull NullableAddress = ""
 
 func NullableAddressFrom(a *mail.Address) NullableAddress {
 	if a == nil {
@@ -187,6 +191,20 @@ func (n NullableAddress) MarshalJSON() ([]byte, error) {
 		return []byte(`null`), nil
 	}
 	return json.Marshal(string(n))
+}
+
+func (NullableAddress) JSONSchema() *jsonschema.Schema {
+	return &jsonschema.Schema{
+		Title: "Email Address",
+		AnyOf: []*jsonschema.Schema{
+			{
+				Type:   "string",
+				Format: "email",
+			},
+			{Type: "null"},
+		},
+		Default: AddressNull,
+	}
 }
 
 func (n NullableAddress) AsList() NullableAddressList {

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/domonda/go-types/strutil"
+	"github.com/invopop/jsonschema"
 )
 
 const Invalid Code = ""
@@ -102,6 +103,14 @@ func (c Code) Value() (driver.Value, error) {
 func (c Code) MarshalJSON() ([]byte, error) {
 	norm, _ := c.Normalized()
 	return json.Marshal(string(norm))
+}
+
+func (Code) JSONSchema() *jsonschema.Schema {
+	return &jsonschema.Schema{
+		Title:   "Country Code",
+		Type:    "string",
+		Pattern: "^[A-Z]{2}$",
+	}
 }
 
 // ScanString tries to parse and assign the passed

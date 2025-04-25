@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/domonda/go-types/country"
+	"github.com/invopop/jsonschema"
 )
 
 // NormalizeBIC returns the passed string as BIC normalized to a length of 11 characters
@@ -52,7 +53,7 @@ func (bic BIC) Validate() error {
 	if length != BICMinLength && length != BICMaxLength {
 		return fmt.Errorf("invalid BIC %q length: %d", string(bic), length)
 	}
-	subMatches := bicExactRegex.FindStringSubmatch(string(bic))
+	subMatches := bicExactRegexp.FindStringSubmatch(string(bic))
 	// fmt.Println(subMatches)
 	if len(subMatches) != 5 {
 		return fmt.Errorf("invalid BIC %q: no regex match", string(bic))
@@ -114,7 +115,7 @@ func (bic BIC) Parse() (bankCode string, countryCode country.Code, branchCode st
 	if !(length == BICMinLength || length == BICMaxLength) {
 		return "", "", "", false
 	}
-	subMatches := bicExactRegex.FindStringSubmatch(string(bic))
+	subMatches := bicExactRegexp.FindStringSubmatch(string(bic))
 	// fmt.Println(subMatches)
 	if len(subMatches) != 5 {
 		return "", "", "", false
@@ -177,6 +178,14 @@ func (bic *BIC) Scan(value any) error {
 // Value implements the driver database/sql/driver.Valuer interface.
 func (bic BIC) Value() (driver.Value, error) {
 	return string(bic), nil
+}
+
+func (BIC) JSONSchema() *jsonschema.Schema {
+	return &jsonschema.Schema{
+		Title:   "BIC/SWIFT-Code",
+		Type:    "string",
+		Pattern: BICRegex,
+	}
 }
 
 var falseBICs = map[BIC]struct{}{

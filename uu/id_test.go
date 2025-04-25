@@ -2,14 +2,15 @@ package uu
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
-
 	"github.com/domonda/go-pretty"
+	"github.com/invopop/jsonschema"
+	"github.com/stretchr/testify/require"
 )
 
 // And returns result of binary AND of two UUIDs.
@@ -855,4 +856,19 @@ func TestID_V7Time(t *testing.T) {
 			require.Equal(t, tt.want, tt.id.V7Time())
 		})
 	}
+}
+
+func ExampleID_JSONSchema() {
+	reflector := jsonschema.Reflector{DoNotReference: true}
+	schema, _ := json.MarshalIndent(reflector.Reflect(ID{}), "", "  ")
+	fmt.Println(string(schema))
+
+	// Output:
+	// {
+	//   "$schema": "https://json-schema.org/draft/2020-12/schema",
+	//   "$id": "https://github.com/domonda/go-types/uu/id",
+	//   "type": "string",
+	//   "format": "uuid",
+	//   "title": "UUID"
+	// }
 }

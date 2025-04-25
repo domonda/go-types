@@ -4,6 +4,8 @@ import (
 	"database/sql/driver"
 	"fmt"
 	"strings"
+
+	"github.com/invopop/jsonschema"
 )
 
 // Code in its normalized form a ISO 639-1 two character language code.
@@ -63,4 +65,12 @@ func (c Code) Value() (driver.Value, error) {
 		return nil, nil
 	}
 	return string(c), nil
+}
+
+func (Code) JSONSchema() *jsonschema.Schema {
+	return &jsonschema.Schema{
+		Title:   "Language Code",
+		Type:    "string",
+		Pattern: `^[a-z]{2}$`,
+	}
 }
