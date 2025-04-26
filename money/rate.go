@@ -8,12 +8,15 @@ import (
 	"strings"
 
 	"github.com/domonda/go-types/float"
+	"github.com/domonda/go-types/nullable"
 	"github.com/domonda/go-types/strutil"
 )
 
 // Rate is a float64 underneath with additional methods
 // useful for money conversion rates and percentages.
 type Rate float64
+
+type NullableRate = nullable.Type[Rate]
 
 // ParseRate parses a rate from str accepting only certain decimal digit counts.
 // If no acceptedDecimals are passed, then any decimal digit count is accepted.

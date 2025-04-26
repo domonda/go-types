@@ -7,10 +7,13 @@ import (
 	"strings"
 
 	"github.com/domonda/go-types/float"
+	"github.com/domonda/go-types/nullable"
 )
 
 // Amount adds money related methods to float64
 type Amount float64
+
+type NullableAmount = nullable.Type[Amount]
 
 // ParseAmount parses an amount from str accepting only certain decimal digit counts.
 // If no acceptedDecimals are passed, then any decimal digit count is accepted.
