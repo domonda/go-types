@@ -112,7 +112,7 @@ func (n *NullableCode) SetNull() {
 // Note: check with IsNull before using Get!
 func (n NullableCode) Get() Code {
 	if n.IsNull() {
-		panic("NULL country.Code")
+		panic(fmt.Sprintf("Get() called on NULL %T", n))
 	}
 	return Code(n)
 }

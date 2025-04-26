@@ -41,7 +41,7 @@ func (n *NullableCurrency) SetNull() {
 // Note: check with IsNull before using Get!
 func (n NullableCurrency) Get() Currency {
 	if n.IsNull() {
-		panic("NULL money.Currency")
+		panic(fmt.Sprintf("Get() called on NULL %T", n))
 	}
 	return Currency(n)
 }

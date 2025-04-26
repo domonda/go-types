@@ -111,7 +111,7 @@ func (bic *NullableBIC) SetNull() {
 // Note: check with IsNull before using Get!
 func (bic NullableBIC) Get() BIC {
 	if bic.IsNull() {
-		panic("NULL bank.BIC")
+		panic(fmt.Sprintf("Get() called on NULL %T", bic))
 	}
 	return BIC(bic)
 }

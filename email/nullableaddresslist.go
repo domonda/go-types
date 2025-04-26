@@ -93,7 +93,7 @@ func (n NullableAddressList) StringOr(nullString string) string {
 // Note: check with IsNull before using Get!
 func (n NullableAddressList) Get() string {
 	if n.IsNull() {
-		panic("NULL email.NullableAddressList")
+		panic(fmt.Sprintf("Get() called on NULL %T", n))
 	}
 	return string(n)
 }

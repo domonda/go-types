@@ -219,7 +219,7 @@ func (s TrimmedString) Split(sep string) []TrimmedString {
 // Note: check with IsNull before using Get!
 func (s TrimmedString) Get() string {
 	if s.IsNull() {
-		panic("NULL nullable.TrimmedString")
+		panic(fmt.Sprintf("Get() called on NULL %T", s))
 	}
 	return s.String()
 }

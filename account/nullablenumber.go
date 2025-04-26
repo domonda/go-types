@@ -109,7 +109,7 @@ func (n *NullableNumber) SetNull() {
 // Note: check with IsNull before using Get!
 func (n NullableNumber) Get() Number {
 	if n.IsNull() {
-		panic("NULL NullableNumber")
+		panic(fmt.Sprintf("Get() called on NULL %T", n))
 	}
 	return Number(n)
 }

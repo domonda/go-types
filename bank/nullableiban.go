@@ -144,7 +144,7 @@ func (iban *NullableIBAN) SetNull() {
 // Note: check with IsNull before using Get!
 func (iban NullableIBAN) Get() IBAN {
 	if iban.IsNull() {
-		panic("NULL bank.IBAN")
+		panic(fmt.Sprintf("Get() called on NULL %T", iban))
 	}
 	return IBAN(iban)
 }

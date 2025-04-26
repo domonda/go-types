@@ -73,7 +73,7 @@ func (n *NullableID) SetNull() {
 // Note: check with IsNull before using Get!
 func (n NullableID) Get() ID {
 	if n.IsNull() {
-		panic("NULL vat.ID")
+		panic(fmt.Sprintf("Get() called on NULL %T", n))
 	}
 	return ID(n)
 }

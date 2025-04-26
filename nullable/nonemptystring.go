@@ -110,7 +110,7 @@ func (n NonEmptyString) StringOr(nullString string) string {
 // Note: check with IsNull before using Get!
 func (n NonEmptyString) Get() string {
 	if n.IsNull() {
-		panic("NULL nullable.NonEmptyString")
+		panic(fmt.Sprintf("Get() called on NULL %T", n))
 	}
 	return string(n)
 }

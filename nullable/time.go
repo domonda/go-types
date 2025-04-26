@@ -183,7 +183,7 @@ func (n Time) AppendFormat(b []byte, layout string) []byte {
 // Note: check with IsNull before using Get!
 func (n Time) Get() time.Time {
 	if n.IsNull() {
-		panic("NULL nullable.Time")
+		panic(fmt.Sprintf("Get() called on NULL %T", n))
 	}
 	return n.Time
 }
