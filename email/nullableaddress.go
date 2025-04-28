@@ -196,7 +196,7 @@ func (n NullableAddress) MarshalJSON() ([]byte, error) {
 func (NullableAddress) JSONSchema() *jsonschema.Schema {
 	return &jsonschema.Schema{
 		Title: "Email Address",
-		AnyOf: []*jsonschema.Schema{
+		OneOf: []*jsonschema.Schema{
 			{
 				Type:   "string",
 				Format: "email",

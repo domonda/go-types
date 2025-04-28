@@ -253,7 +253,7 @@ func (n Time) MarshalJSON() ([]byte, error) {
 func (Time) JSONSchema() *jsonschema.Schema {
 	return &jsonschema.Schema{
 		Title: "Nullable Time",
-		AnyOf: []*jsonschema.Schema{
+		OneOf: []*jsonschema.Schema{
 			{Type: "string", Format: "date-time"},
 			{Type: "null"},
 		},

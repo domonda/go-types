@@ -312,7 +312,7 @@ func (s *TrimmedString) UnmarshalJSON(j []byte) error {
 func (TrimmedString) JSONSchema() *jsonschema.Schema {
 	return &jsonschema.Schema{
 		Title: "Nullable Trimmed String",
-		AnyOf: []*jsonschema.Schema{
+		OneOf: []*jsonschema.Schema{
 			{Type: "string"},
 			{Type: "null"},
 		},

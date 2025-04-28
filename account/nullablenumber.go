@@ -251,7 +251,7 @@ func (NullableNumber) JSONSchema() *jsonschema.Schema {
 	return &jsonschema.Schema{
 		Title: "Nullable Account Number",
 		Type:  "string",
-		AnyOf: []*jsonschema.Schema{
+		OneOf: []*jsonschema.Schema{
 			{
 				Type:    "string",
 				Pattern: NumberRegex,

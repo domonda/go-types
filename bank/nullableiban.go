@@ -200,7 +200,7 @@ func (iban NullableIBAN) MarshalJSON() ([]byte, error) {
 func (NullableIBAN) JSONSchema() *jsonschema.Schema {
 	return &jsonschema.Schema{
 		Title: "Nullable IBAN",
-		AnyOf: []*jsonschema.Schema{
+		OneOf: []*jsonschema.Schema{
 			{
 				Type:    "string",
 				Pattern: IBANRegex,

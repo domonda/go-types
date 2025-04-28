@@ -105,8 +105,24 @@ func (t Type[T]) JSONSchema() *jsonschema.Schema {
 	if schema.Title != "" {
 		schema.Title = "Nullable " + schema.Title
 	}
-	schema.AnyOf = append(schema.AnyOf, &jsonschema.Schema{Type: "null"})
-	return schema
+	var null Type[T]
+	schema.Default = null
+	if len(schema.OneOf) > 0 {
+		schema.OneOf = append(schema.OneOf, &jsonschema.Schema{Type: "null"})
+		return schema
+	}
+	title := schema.Title
+	description := schema.Description
+	schema.Title = ""
+	schema.Description = ""
+	return &jsonschema.Schema{
+		Title:       title,
+		Description: description,
+		OneOf: []*jsonschema.Schema{
+			schema,
+			{Type: "null"},
+		},
+	}
 }
 
 ///////////////////////////////////////////////////////////////////////////////

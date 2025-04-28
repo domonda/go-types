@@ -156,7 +156,7 @@ func (bic NullableBIC) MarshalJSON() ([]byte, error) {
 func (NullableBIC) JSONSchema() *jsonschema.Schema {
 	return &jsonschema.Schema{
 		Title: "Nullable BIC/SWIFT-Code",
-		AnyOf: []*jsonschema.Schema{
+		OneOf: []*jsonschema.Schema{
 			{
 				Type:    "string",
 				Pattern: BICRegex,

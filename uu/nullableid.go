@@ -337,7 +337,7 @@ func (n NullableID) MarshalJSON() ([]byte, error) {
 func (NullableID) JSONSchema() *jsonschema.Schema {
 	return &jsonschema.Schema{
 		Title: "Nullable UUID",
-		AnyOf: []*jsonschema.Schema{
+		OneOf: []*jsonschema.Schema{
 			{
 				Type:   "string",
 				Format: "uuid",

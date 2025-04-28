@@ -241,7 +241,7 @@ func (NullableID) JSONSchema() *jsonschema.Schema {
 	maxLength := uint64(IDMaxLength)
 	return &jsonschema.Schema{
 		Title: "Nullable Value Added Tax ID",
-		AnyOf: []*jsonschema.Schema{
+		OneOf: []*jsonschema.Schema{
 			{
 				Type:      "string",
 				MinLength: &minLength,

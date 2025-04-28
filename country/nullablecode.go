@@ -185,7 +185,7 @@ func (NullableCode) JSONSchema() *jsonschema.Schema {
 	return &jsonschema.Schema{
 		Title: "Nullable Country Code",
 		Type:  "string",
-		AnyOf: []*jsonschema.Schema{
+		OneOf: []*jsonschema.Schema{
 			{
 				Type:    "string",
 				Pattern: "^[A-Z]{2}$",

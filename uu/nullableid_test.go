@@ -174,15 +174,17 @@ func TestNullableID_PrettyPrint(t *testing.T) {
 }
 
 func ExampleNullableID_JSONSchema() {
-	reflector := jsonschema.Reflector{DoNotReference: true}
+	reflector := jsonschema.Reflector{
+		Anonymous:      true,
+		DoNotReference: true,
+	}
 	schema, _ := json.MarshalIndent(reflector.Reflect(NullableID{}), "", "  ")
 	fmt.Println(string(schema))
 
 	// Output:
 	// {
 	//   "$schema": "https://json-schema.org/draft/2020-12/schema",
-	//   "$id": "https://github.com/domonda/go-types/uu/nullable-id",
-	//   "anyOf": [
+	//   "oneOf": [
 	//     {
 	//       "type": "string",
 	//       "format": "uuid"

@@ -588,7 +588,7 @@ func (n NullableDate) MarshalJSON() ([]byte, error) {
 func (NullableDate) JSONSchema() *jsonschema.Schema {
 	return &jsonschema.Schema{
 		Title: "Nullable Date",
-		AnyOf: []*jsonschema.Schema{
+		OneOf: []*jsonschema.Schema{
 			{
 				Type:   "string",
 				Format: "date",
