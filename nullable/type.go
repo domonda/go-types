@@ -89,7 +89,12 @@ func (t *Type[T]) UnmarshalJSON(sourceJSON []byte) error {
 		t.SetNull()
 		return nil
 	}
-	return json.Unmarshal(sourceJSON, &t.value)
+	err := json.Unmarshal(sourceJSON, &t.value)
+	if err != nil {
+		return err
+	}
+	t.valid = true
+	return nil
 }
 
 // MarshalJSON implements encoding/json.Marshaler
