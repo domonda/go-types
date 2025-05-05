@@ -14,35 +14,53 @@ import (
 	"github.com/invopop/jsonschema"
 )
 
+// Implemented interfaces
+var (
+	_ driver.Valuer    = Type[int]{}
+	_ sql.Scanner      = &Type[int]{}
+	_ json.Marshaler   = Type[int]{}
+	_ json.Unmarshaler = &Type[int]{}
+)
+
+// Type wraps a type T to support null values without resorting to pointers.
+//
+// The zero value represents null.
+//
+// Type implements the following interfaces:
+//   - database/sql/driver.Valuer
+//   - database/sql.Scanner
+//   - encoding/json.Marshaler
+//   - encoding/json.Unmarshaler
+//
+// It also provides a JSONSchema method to generate a JSON Schema for the type
+// using the github.com/invopop/jsonschema package.
+//
+// Use TypeFromPtr to create a valid nullable type from a pointer.
+// Use Type.Ptr to get a pointer to the value.
+// Use Type.Get to get a non-null value.
+// Use Type.GetOr to get a non-null value or a default value if the value is null.
+// Use Type.Set to set the value.
+// Use Type.SetNull to set the value to null.
 type Type[T any] struct {
 	value T
 	valid bool
 }
 
-func (t Type[T]) IsNull() bool {
-	return !t.valid
-}
-
-func (t Type[T]) IsNotNull() bool {
-	return t.valid
-}
-
-func (t Type[T]) Get() T {
-	if !t.valid {
-		panic(fmt.Sprintf("Get() called on NULL %T", t.value))
+// TypeFromPtr returns a nullable type from a pointer
+// using nil as the null value.
+//
+// See Type[T].Ptr for the inverse.
+func TypeFromPtr[T any](ptr *T) Type[T] {
+	if ptr == nil {
+		return Type[T]{}
 	}
-	return t.value
-}
-
-func (t Type[T]) GetOr(defaultValue T) T {
-	if !t.valid {
-		return defaultValue
-	}
-	return t.value
+	return Type[T]{value: *ptr, valid: true}
 }
 
 // Ptr returns a pointer to the value
 // or nil if the value is null.
+//
+// See TypeFromPtr[T] for the inverse.
 func (t Type[T]) Ptr() *T {
 	if !t.valid {
 		return nil
@@ -50,11 +68,43 @@ func (t Type[T]) Ptr() *T {
 	return &t.value
 }
 
+// IsNull returns true if the value is null.
+func (t Type[T]) IsNull() bool {
+	return !t.valid
+}
+
+// IsNotNull returns true if the value is not null.
+func (t Type[T]) IsNotNull() bool {
+	return t.valid
+}
+
+// Get returns the non-null value
+// or panics if the value is null.
+//
+// Use IsNotNull first to check if the value is not null.
+func (t Type[T]) Get() T {
+	if !t.valid {
+		panic(fmt.Sprintf("Get() called on NULL %T", t.value))
+	}
+	return t.value
+}
+
+// GetOr returns the non-null value
+// or a default value if the value is null.
+func (t Type[T]) GetOr(defaultValue T) T {
+	if !t.valid {
+		return defaultValue
+	}
+	return t.value
+}
+
+// Set sets a non-null value.
 func (t *Type[T]) Set(value T) {
 	t.value = value
 	t.valid = true
 }
 
+// SetNull sets the value to null.
 func (t *Type[T]) SetNull() {
 	t.value = *new(T)
 	t.valid = false
@@ -105,6 +155,8 @@ func (t Type[T]) MarshalJSON() ([]byte, error) {
 	return json.Marshal(t.value)
 }
 
+// JSONSchema returns a JSON Schema for the type
+// using the github.com/invopop/jsonschema package.
 func (t Type[T]) JSONSchema() *jsonschema.Schema {
 	schema := jsonschema.Reflect(t.value)
 	if schema.Title != "" {
