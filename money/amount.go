@@ -73,6 +73,13 @@ func (a Amount) Cents() int64 {
 	return int64(math.Round(float64(a) * 100))
 }
 
+// WithinOneCent returns true if a and b are equal
+// within a one cent tolerance.
+func (a Amount) WithinOneCent(b Amount) bool {
+	diff := a.Cents() - b.Cents()
+	return diff >= -1 && diff <= 1
+}
+
 // RoundToInt returns the amount rounded to an integer number
 func (a Amount) RoundToInt() Amount {
 	return Amount(math.Round(float64(a)))
