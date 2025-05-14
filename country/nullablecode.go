@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/domonda/go-types/strutil"
 	"github.com/invopop/jsonschema"
+
+	"github.com/domonda/go-types/strutil"
 )
 
 const Null NullableCode = ""
@@ -183,7 +184,7 @@ func (n NullableCode) MarshalJSON() ([]byte, error) {
 
 func (NullableCode) JSONSchema() *jsonschema.Schema {
 	return &jsonschema.Schema{
-		Title: "Nullable Country Code",
+		Title: "Nullable ISO 3166-1 alpha 2 Country Code",
 		Type:  "string",
 		OneOf: []*jsonschema.Schema{
 			{

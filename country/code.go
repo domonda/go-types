@@ -6,8 +6,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/domonda/go-types/strutil"
 	"github.com/invopop/jsonschema"
+
+	"github.com/domonda/go-types/strutil"
 )
 
 const Invalid Code = ""
@@ -107,7 +108,7 @@ func (c Code) MarshalJSON() ([]byte, error) {
 
 func (Code) JSONSchema() *jsonschema.Schema {
 	return &jsonschema.Schema{
-		Title:   "Country Code",
+		Title:   "ISO 3166-1 alpha 2 Country Code",
 		Type:    "string",
 		Pattern: "^[A-Z]{2}$",
 	}
