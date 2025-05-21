@@ -43,12 +43,19 @@ func NewAmount(value float64) *Amount {
 	return a
 }
 
-// AmountFromPtr dereferences ptr or returns defaultVal if it is nil
+// AmountFromPtr dereferences ptr or returns defaultVal if it is nil.
+// See also Amount.Ptr.
 func AmountFromPtr(ptr *Amount, defaultVal Amount) Amount {
 	if ptr == nil {
 		return defaultVal
 	}
 	return *ptr
+}
+
+// Ptr returns a new pointer to a copy of the amount value.
+// See also AmountFromPtr.
+func (a Amount) Ptr() *Amount {
+	return &a
 }
 
 // ScanString tries to parse and assign the passed

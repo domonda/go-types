@@ -59,12 +59,19 @@ func NewRate(value float64) *Rate {
 	return r
 }
 
-// RateFromPtr dereferences ptr or returns defaultVal if it is nil
+// RateFromPtr dereferences ptr or returns defaultVal if it is nil.
+// See also Rate.Ptr.
 func RateFromPtr(ptr *Rate, defaultVal Rate) Rate {
 	if ptr == nil {
 		return defaultVal
 	}
 	return *ptr
+}
+
+// Ptr returns a new pointer to a copy of the rate value.
+// See also RateFromPtr.
+func (r Rate) Ptr() *Rate {
+	return &r
 }
 
 // ScanString tries to parse and assign the passed
