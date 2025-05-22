@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"slices"
 	"strconv"
 	"time"
 
@@ -158,27 +159,44 @@ func (t Type[T]) MarshalJSON() ([]byte, error) {
 // JSONSchema returns a JSON Schema for the type
 // using the github.com/invopop/jsonschema package.
 func (t Type[T]) JSONSchema() *jsonschema.Schema {
-	schema := jsonschema.Reflect(t.value)
-	if schema.Title != "" {
-		schema.Title = "Nullable " + schema.Title
+	baseTypeSchema := jsonschema.Reflect(t.value)
+	if baseTypeSchema.Title != "" {
+		baseTypeSchema.Title = "Nullable " + baseTypeSchema.Title
 	}
-	var null Type[T]
-	schema.Default = null
-	if len(schema.OneOf) > 0 {
-		schema.OneOf = append(schema.OneOf, &jsonschema.Schema{Type: "null"})
-		return schema
+	if len(baseTypeSchema.OneOf) > 0 {
+		// Check if base type already has null as oneOf type option
+		if slices.ContainsFunc(baseTypeSchema.OneOf, func(s *jsonschema.Schema) bool {
+			return s.Type == "null"
+		}) {
+			if baseTypeSchema.Default == nil {
+				baseTypeSchema.Default = Type[T]{} // null
+			}
+			return baseTypeSchema
+		}
+		// Base type already has oneOf type options,
+		// add null as another oneOf type option
+		baseTypeSchema.OneOf = append(baseTypeSchema.OneOf, &jsonschema.Schema{Type: "null"})
+		baseTypeSchema.Default = Type[T]{} // null
+		return baseTypeSchema
 	}
-	title := schema.Title
-	description := schema.Description
-	schema.Title = ""
-	schema.Description = ""
+	// Copy version, title and description for new nullable type schema
+	version := baseTypeSchema.Version
+	title := baseTypeSchema.Title
+	description := baseTypeSchema.Description
+	// Clear version, title and description for base type schema
+	baseTypeSchema.Version = ""
+	baseTypeSchema.Title = ""
+	baseTypeSchema.Description = ""
 	return &jsonschema.Schema{
+		Version:     version,
 		Title:       title,
 		Description: description,
+		// Add null as oneOf type option
 		OneOf: []*jsonschema.Schema{
-			schema,
+			baseTypeSchema,
 			{Type: "null"},
 		},
+		Default: Type[T]{}, // null
 	}
 }
 
