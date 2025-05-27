@@ -52,8 +52,8 @@ github.com/teamwork/tnef v0.0.0-20200108124832-7deabccfdb32 h1:j15wq0XPAY/HR/0+d
 github.com/teamwork/tnef v0.0.0-20200108124832-7deabccfdb32/go.mod h1:v7dFaQrF/4+curx7UTH9rqTkHTgXqghfI3thANW150o=
 github.com/teamwork/utils v0.0.0-20220314153103-637fa45fa6cc h1:BidxxRk9kopF5IGEyosTRtanaYVYTUbGJh9eULOhv04=
 github.com/teamwork/utils v0.0.0-20220314153103-637fa45fa6cc/go.mod h1:3Fn0qxFeRNpvsg/9T1+btOOOKkd1qG2nPYKKcOmNpcs=
-github.com/ungerik/go-fs v0.0.0-20250410112719-c5187364824d h1:BM8RC0XjXgRcCQOx+gVI6gCuBdaiEVoqJMphp2gubtA=
-github.com/ungerik/go-fs v0.0.0-20250410112719-c5187364824d/go.mod h1:l1gaYFOhIK4gUWy7xuaskrq/zP+lK6xGyImqAyt4mSw=
+github.com/ungerik/go-fs v0.0.0-20250527162931-1691110c1708 h1:HBOat14ZVyw9RUouz8+ewH938CVp+TrS4LBs+I4mNJ8=
+github.com/ungerik/go-fs v0.0.0-20250527162931-1691110c1708/go.mod h1:4QQilZ+gupNC1QdygHgHM8tKAj6/l1ohr8b1jYiPlaA=
 github.com/ungerik/go-reflection v0.0.0-20240905081803-708928fe0862 h1:rxp/NtuHYkx0HRYL/Y7xh/07ZwI/Pbk3VPkVoq3IUgQ=
 github.com/ungerik/go-reflection v0.0.0-20240905081803-708928fe0862/go.mod h1:Ic/uip1MCECqTPItawo5lRHmyaOT6vCM0UuKrczg6LY=
 github.com/wk8/go-ordered-map/v2 v2.1.8 h1:5h/BUHu93oj4gIdvHHHGsScSTMijfx5PeYkE/fJgbpc=

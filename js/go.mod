@@ -1,6 +1,6 @@
 module github.com/domonda/go-types/js
 
-go 1.24
+go 1.23
 
 // Parent module in same repo
 replace github.com/domonda/go-types => ..
@@ -13,7 +13,7 @@ require github.com/gopherjs/gopherjs v1.18.0-beta3
 require (
 	github.com/bahlo/generic-list-go v0.2.0 // indirect
 	github.com/buger/jsonparser v1.1.1 // indirect
-	github.com/domonda/go-errs v0.0.0-20240702051036-0e696c849b5f // indirect
+	github.com/domonda/go-errs v0.0.0-20250509130707-0373cd8156d7 // indirect
 	github.com/domonda/go-pretty v0.0.0-20240110134850-17385799142f // indirect
 	github.com/invopop/jsonschema v0.13.0 // indirect
 	github.com/mailru/easyjson v0.9.0 // indirect

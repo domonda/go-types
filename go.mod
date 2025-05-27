@@ -1,6 +1,6 @@
 module github.com/domonda/go-types
 
-go 1.24
+go 1.23
 
 require (
 	github.com/domonda/go-errs v0.0.0-20250509130707-0373cd8156d7
@@ -11,7 +11,7 @@ require (
 	github.com/jinzhu/now v1.1.5
 	github.com/stretchr/testify v1.10.0
 	github.com/teamwork/tnef v0.0.0-20200108124832-7deabccfdb32
-	github.com/ungerik/go-fs v0.0.0-20250410112719-c5187364824d
+	github.com/ungerik/go-fs v0.0.0-20250527162931-1691110c1708
 	github.com/ungerik/go-reflection v0.0.0-20240905081803-708928fe0862
 	golang.org/x/net v0.40.0
 	golang.org/x/text v0.25.0
