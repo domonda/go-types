@@ -46,6 +46,7 @@ func TestNumber_Valid(t *testing.T) {
 		"a:b:",
 		"a,b,",
 		"a;b;",
+		"D-2007019",
 	}
 	for _, n := range valid {
 		t.Run(string(n), func(t *testing.T) {
