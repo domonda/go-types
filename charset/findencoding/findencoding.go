@@ -2,16 +2,16 @@ package findencoding
 
 import (
 	"fmt"
+	"os"
 
-	fs "github.com/ungerik/go-fs"
 	"golang.org/x/text/encoding/charmap"
 
 	"github.com/domonda/go-types/charset"
 	"github.com/domonda/go-types/strutil"
 )
 
-func PrintFileWithAllEncodings(file fs.FileReader, maxBytes int) error {
-	sourceData, err := file.ReadAll()
+func PrintFileWithAllEncodings(filename string, maxBytes int) error {
+	sourceData, err := os.ReadFile(filename)
 	if err != nil {
 		return err
 	}

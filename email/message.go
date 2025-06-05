@@ -2,7 +2,6 @@ package email
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -13,7 +12,6 @@ import (
 	"time"
 
 	"github.com/jhillyerd/enmime"
-	"github.com/ungerik/go-fs"
 
 	"github.com/domonda/go-errs"
 	"github.com/domonda/go-types/nullable"
@@ -152,17 +150,6 @@ func (msg *Message) ReferencesMessageIDs() []string {
 	return ids
 }
 
-func ParseMessageFile(ctx context.Context, file fs.FileReader) (msg *Message, err error) {
-	defer errs.WrapWithFuncParams(&err, ctx, file)
-
-	data, err := file.ReadAllContext(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	return ParseMessage(data)
-}
-
 func ParseMessage(data []byte) (msg *Message, err error) {
 	defer errs.WrapWithFuncParams(&err, data)
 
@@ -252,15 +239,6 @@ func (msg *Message) String() string {
 
 func (msg *Message) AddAttachment(partID, filename string, content []byte) {
 	msg.Attachments = append(msg.Attachments, NewAttachment(partID, filename, content))
-}
-
-func (msg *Message) AddAttachmentReadFile(ctx context.Context, partID string, file fs.FileReader) error {
-	attachment, err := NewAttachmentReadFile(ctx, partID, file)
-	if err != nil {
-		return err
-	}
-	msg.Attachments = append(msg.Attachments, attachment)
-	return nil
 }
 
 type ReplyTemplateData struct {
@@ -401,8 +379,8 @@ func (msg *Message) BuildRawMessage() (raw []byte, err error) {
 		root.AddChild(part)
 		for _, att := range msg.Attachments {
 			part := enmime.NewPart(att.ContentType)
-			part.Content = att.FileData
-			part.FileName = att.FileName
+			part.Content = att.Content
+			part.FileName = att.Filename
 			part.Disposition = "attachment"
 			root.AddChild(part)
 		}

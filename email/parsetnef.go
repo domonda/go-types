@@ -2,12 +2,10 @@ package email
 
 import (
 	"bytes"
-	"context"
 	"fmt"
 
 	"github.com/jaytaylor/html2text"
 	"github.com/teamwork/tnef"
-	"github.com/ungerik/go-fs"
 
 	"github.com/domonda/go-errs"
 	"github.com/domonda/go-types/nullable"
@@ -39,21 +37,12 @@ func ParseTNEFMessageBytes(messageBytes []byte) (msg *Message, err error) {
 	}
 	for i, attachment := range t.Attachments {
 		msg.Attachments = append(msg.Attachments, &Attachment{
-			PartID:  fmt.Sprintf("TNEF%d", i),
-			Inline:  false, // ??
-			MemFile: fs.MemFile{FileName: attachment.Title, FileData: attachment.Data},
+			PartID:   fmt.Sprintf("TNEF%d", i),
+			Inline:   false, // ??
+			Filename: attachment.Title,
+			Content:  attachment.Data,
 		})
 	}
 
 	return msg, nil
-}
-
-func ParseTNEFMessageFile(ctx context.Context, file fs.FileReader) (msg *Message, err error) {
-	defer errs.WrapWithFuncParams(&err, ctx, file)
-
-	msgBytes, err := file.ReadAllContext(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return ParseTNEFMessageBytes(msgBytes)
 }

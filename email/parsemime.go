@@ -6,7 +6,6 @@ import (
 	"io"
 
 	"github.com/jhillyerd/enmime"
-	"github.com/ungerik/go-fs"
 
 	"github.com/domonda/go-errs"
 	"github.com/domonda/go-types/nullable"
@@ -86,10 +85,8 @@ func ParseMIMEMessage(reader io.Reader) (msg *Message, err error) {
 			ContentID:   part.ContentID,
 			ContentType: part.ContentType,
 			Inline:      false,
-			MemFile: fs.MemFile{
-				FileName: part.FileName,
-				FileData: part.Content,
-			},
+			Filename:    part.FileName,
+			Content:     part.Content,
 		})
 	}
 	for _, part := range envelope.Inlines {
@@ -98,10 +95,8 @@ func ParseMIMEMessage(reader io.Reader) (msg *Message, err error) {
 			ContentID:   part.ContentID,
 			ContentType: part.ContentType,
 			Inline:      true,
-			MemFile: fs.MemFile{
-				FileName: part.FileName,
-				FileData: part.Content,
-			},
+			Filename:    part.FileName,
+			Content:     part.Content,
 		})
 	}
 
@@ -112,16 +107,4 @@ func ParseMIMEMessageBytes(msgBytes []byte) (msg *Message, err error) {
 	defer errs.WrapWithFuncParams(&err, msgBytes)
 
 	return ParseMIMEMessage(bytes.NewReader(msgBytes))
-}
-
-func ParseMIMEMessageFile(file fs.FileReader) (msg *Message, err error) {
-	defer errs.WrapWithFuncParams(&err, file)
-
-	reader, err := file.OpenReader()
-	if err != nil {
-		return nil, err
-	}
-	defer reader.Close()
-
-	return ParseMIMEMessage(reader)
 }

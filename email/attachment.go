@@ -1,26 +1,21 @@
 package email
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 
 	"github.com/domonda/go-types/uu"
-	"github.com/ungerik/go-fs"
 )
-
-// Attachment implements fs.FileReader
-var _ fs.FileReader = new(Attachment)
 
 // Attachment of an Email.
 // Attachment implements fs.FileReader
 type Attachment struct {
-	PartID      string `json:"partID,omitempty"`
-	ContentID   string `json:"contentID,omitempty"`
-	ContentType string `json:"contentType,omitempty"`
-	Inline      bool   `json:"inline,omitempty"`
-
-	fs.MemFile
+	PartID      string `json:",omitempty"`
+	ContentID   string `json:",omitempty"`
+	ContentType string `json:",omitempty"`
+	Inline      bool   `json:",omitempty"`
+	Filename    string
+	Content     []byte
 }
 
 func NewAttachment(partID, filename string, content []byte) *Attachment {
@@ -28,21 +23,11 @@ func NewAttachment(partID, filename string, content []byte) *Attachment {
 		PartID:      partID,
 		ContentID:   uu.IDv4().Hex(),
 		ContentType: http.DetectContentType(content),
-		MemFile: fs.MemFile{
-			FileName: filename,
-			FileData: content,
-		},
+		Filename:    filename,
+		Content:     content,
 	}
-}
-
-func NewAttachmentReadFile(ctx context.Context, partID string, file fs.FileReader) (*Attachment, error) {
-	data, err := file.ReadAllContext(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return NewAttachment(partID, file.Name(), data), nil
 }
 
 func (a *Attachment) String() string {
-	return fmt.Sprintf("Attachment{ID: `%s`, File: `%s`, Size: %d}", a.PartID, a.FileName, len(a.FileData))
+	return fmt.Sprintf("Attachment{ID: `%s`, File: `%s`, Size: %d}", a.PartID, a.Filename, len(a.Content))
 }

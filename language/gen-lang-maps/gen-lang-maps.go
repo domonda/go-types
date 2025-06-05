@@ -5,13 +5,12 @@ import (
 	"bytes"
 	"encoding/csv"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
 	"os/exec"
 	"path"
-
-	"github.com/ungerik/go-fs/fsimpl"
 )
 
 // https://iso639-3.sil.org/code_tables/download_tables
@@ -25,11 +24,14 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	defer response.Body.Close()
 
-	buf, err := fsimpl.NewReadonlyFileBufferReadAll(response.Body, nil)
+	data, err := io.ReadAll(response.Body)
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	buf := bytes.NewReader(data)
 
 	zipReader, err := zip.NewReader(buf, buf.Size())
 	if err != nil {

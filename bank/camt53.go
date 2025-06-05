@@ -1,12 +1,10 @@
 package bank
 
 import (
-	"context"
 	"time"
 
 	"github.com/domonda/go-types/date"
 	"github.com/domonda/go-types/money"
-	"github.com/ungerik/go-fs"
 )
 
 type CAMT53 struct {
@@ -55,12 +53,4 @@ type CAMT53Entry struct {
 	DebitorBIC   BIC      `xml:"NtryDtls>TxDtls>RltdAgts>DbtrAgt>FinInstnId>BIC"`
 	CreditorBIC  BIC      `xml:"NtryDtls>TxDtls>RltdAgts>CdtrAgt>FinInstnId>BIC"`
 	Reference    string   `xml:"NtryDtls>TxDtls>RmtInf>Strd>CdtrRefInf>Ref"`
-}
-
-func ParseCAMT53XML(ctx context.Context, file fs.File) (camt *CAMT53, err error) {
-	err = file.ReadXML(ctx, &camt)
-	if err != nil {
-		return nil, err
-	}
-	return camt, nil
 }
