@@ -2,6 +2,9 @@ module github.com/domonda/go-types
 
 go 1.23
 
+// Don't upgrade this to v1, it breaks the build!
+replace github.com/olekukonko/tablewriter => github.com/olekukonko/tablewriter v0.0.5
+
 require (
 	github.com/domonda/go-errs v0.0.0-20250603150208-71d6de0c48ea
 	github.com/domonda/go-pretty v0.0.0-20250602142956-1b467adc6387
@@ -17,9 +20,6 @@ require (
 	mvdan.cc/xurls/v2 v2.6.0
 )
 
-// Don't upgrade this to 1.x, it breaks the build!
-require github.com/olekukonko/tablewriter v0.0.5 // indirect
-
 require (
 	github.com/bahlo/generic-list-go v0.2.0 // indirect
 	github.com/buger/jsonparser v1.1.1 // indirect
@@ -28,6 +28,7 @@ require (
 	github.com/gogs/chardet v0.0.0-20211120154057-b7413eaefb8f // indirect
 	github.com/mailru/easyjson v0.9.0 // indirect
 	github.com/mattn/go-runewidth v0.0.16 // indirect
+	github.com/olekukonko/tablewriter v0.0.5 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
