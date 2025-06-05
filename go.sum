@@ -8,10 +8,10 @@ github.com/cention-sany/utf7 v0.0.0-20170124080048-26cad61bd60a/go.mod h1:2GxOXO
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
-github.com/domonda/go-errs v0.0.0-20250509130707-0373cd8156d7 h1:QLHl18/T8GFUBz06w2jPJevhh/QGa46qYItPual73OE=
-github.com/domonda/go-errs v0.0.0-20250509130707-0373cd8156d7/go.mod h1:d1vM8jnNOby2gJSsbnCYPE/WadNbdxHTCE0sDUTMVSs=
-github.com/domonda/go-pretty v0.0.0-20240110134850-17385799142f h1:5eA74m451PqlqCXyJzWXp95Quj4PZ6Lm/ndKBuiNhe4=
-github.com/domonda/go-pretty v0.0.0-20240110134850-17385799142f/go.mod h1:3QkM8UJdyJMeKZiIo7hYzSkQBpRS3k0gOHw4ysyEIB4=
+github.com/domonda/go-errs v0.0.0-20250603150208-71d6de0c48ea h1:jJkN+JvDKnzxM0yu+ob0sOLCyN95gevMeYF5VBKDg6w=
+github.com/domonda/go-errs v0.0.0-20250603150208-71d6de0c48ea/go.mod h1:d1vM8jnNOby2gJSsbnCYPE/WadNbdxHTCE0sDUTMVSs=
+github.com/domonda/go-pretty v0.0.0-20250602142956-1b467adc6387 h1:ZSMYEHfFwpMlVJ+yzPXOSOfikWBNdzcnC0YxxNQxkDk=
+github.com/domonda/go-pretty v0.0.0-20250602142956-1b467adc6387/go.mod h1:3QkM8UJdyJMeKZiIo7hYzSkQBpRS3k0gOHw4ysyEIB4=
 github.com/fsnotify/fsnotify v1.9.0 h1:2Ml+OJNzbYCTzsxtv8vKSFD9PbJjmhYF14k/jKC7S9k=
 github.com/fsnotify/fsnotify v1.9.0/go.mod h1:8jBTzvmWwFyi3Pb8djgCCO5IBqzKJ/Jwo8TRcHyHii0=
 github.com/go-test/deep v1.1.0 h1:WOcxcdHcvdgThNXjw0t76K42FXTU7HpNQWHpA2HHNlg=
@@ -54,8 +54,8 @@ github.com/teamwork/utils v0.0.0-20220314153103-637fa45fa6cc h1:BidxxRk9kopF5IGE
 github.com/teamwork/utils v0.0.0-20220314153103-637fa45fa6cc/go.mod h1:3Fn0qxFeRNpvsg/9T1+btOOOKkd1qG2nPYKKcOmNpcs=
 github.com/ungerik/go-fs v0.0.0-20250527162931-1691110c1708 h1:HBOat14ZVyw9RUouz8+ewH938CVp+TrS4LBs+I4mNJ8=
 github.com/ungerik/go-fs v0.0.0-20250527162931-1691110c1708/go.mod h1:4QQilZ+gupNC1QdygHgHM8tKAj6/l1ohr8b1jYiPlaA=
-github.com/ungerik/go-reflection v0.0.0-20240905081803-708928fe0862 h1:rxp/NtuHYkx0HRYL/Y7xh/07ZwI/Pbk3VPkVoq3IUgQ=
-github.com/ungerik/go-reflection v0.0.0-20240905081803-708928fe0862/go.mod h1:Ic/uip1MCECqTPItawo5lRHmyaOT6vCM0UuKrczg6LY=
+github.com/ungerik/go-reflection v0.0.0-20250602142243-03da83aecd0d h1:ctOx9QLFjuGij9QUMk3XoJWnbeC/O8kR8SRRNK9TK9U=
+github.com/ungerik/go-reflection v0.0.0-20250602142243-03da83aecd0d/go.mod h1:2HaymCMIvGNYIy+2JDI9RdPytWuP/Q8fJSGcS+2mb20=
 github.com/wk8/go-ordered-map/v2 v2.1.8 h1:5h/BUHu93oj4gIdvHHHGsScSTMijfx5PeYkE/fJgbpc=
 github.com/wk8/go-ordered-map/v2 v2.1.8/go.mod h1:5nJHM5DyteebpVlHnWMV0rPz6Zp7+xBAnxjb1X5vnTw=
 golang.org/x/net v0.40.0 h1:79Xs7wF06Gbdcg4kdCCIQArK11Z1hr5POQ6+fIYHNuY=
