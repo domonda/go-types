@@ -5,8 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/domonda/go-types/country"
 	"github.com/invopop/jsonschema"
+
+	"github.com/domonda/go-types/country"
 )
 
 // IBANNull is an empty string and will be treatet as SQL NULL.

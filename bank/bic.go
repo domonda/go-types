@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/domonda/go-types/country"
 	"github.com/invopop/jsonschema"
+
+	"github.com/domonda/go-types/country"
 )
 
 // NormalizeBIC returns the passed string as BIC normalized to a length of 11 characters
@@ -103,6 +104,17 @@ func (bic BIC) NormalizedOrNull() NullableBIC {
 		return BICNull
 	}
 	return NullableBIC(normalized)
+}
+
+// String returns the normalized BIC string if possible,
+// else it will be returned unchanged as string.
+// String implements the fmt.Stringer interface.
+func (bic BIC) String() string {
+	norm, err := bic.Normalized()
+	if err != nil {
+		return string(bic)
+	}
+	return string(norm)
 }
 
 // Nullable returns the BIC as NullableBIC

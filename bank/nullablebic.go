@@ -125,7 +125,18 @@ func (bic NullableBIC) GetOr(defaultBIC BIC) BIC {
 	return BIC(bic)
 }
 
-// StringOr returns the NullableBIC as string
+// String returns the normalized NullableBIC string if possible,
+// else it will be returned unchanged as string.
+// String implements the fmt.Stringer interface.
+func (bic NullableBIC) String() string {
+	norm, err := bic.Normalized()
+	if err != nil {
+		return string(bic)
+	}
+	return string(norm)
+}
+
+// StringOr returns the result of NullableBIC.String()
 // or the passed defaultString if the NullableBIC is null.
 func (bic NullableBIC) StringOr(defaultString string) string {
 	if bic.IsNull() {
