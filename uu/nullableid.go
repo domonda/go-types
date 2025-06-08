@@ -129,12 +129,12 @@ func NullableIDMust[T IDSource](val T) NullableID {
 }
 
 // Version returns algorithm version used to generate UUID.
-func (n NullableID) Version() uint {
+func (n NullableID) Version() int {
 	return ID(n).Version()
 }
 
 // Variant returns an ID layout variant or IDVariantInvalid if unknown.
-func (n NullableID) Variant() uint {
+func (n NullableID) Variant() int {
 	return ID(n).Variant()
 }
 

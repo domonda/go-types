@@ -68,13 +68,10 @@ func IDv2(domain byte) (id ID) {
 	return id
 }
 
-// IDv3 returns a version 3 ID based on MD5 hash of namespace UUID and name.
-func IDv3(ns ID, name string) ID {
-	//#nosec G401 -- Needed for standard conformity
-	id := idFromHash(md5.New(), ns, name)
-	id.SetVersion(3)
-	id.SetVariant()
-	return id
+// IDv3 returns a version 3 UUID based on MD5 hash of the namespace UUID and name.
+func IDv3(namespace ID, data []byte) ID {
+	//#nosec G401 -- MD5 is needed for standard conformity
+	return IDHash(md5.New(), namespace, data, 3)
 }
 
 // IDv4 returns a version 4 random generated UUID.
@@ -85,11 +82,19 @@ func IDv4() (id ID) {
 	return id
 }
 
-// IDv5 returns a version 5 ID based on SHA-1 hash of namespace UUID and name.
-func IDv5(ns ID, name string) ID {
-	//#nosec G401 -- Needed for standard conformity
-	id := idFromHash(sha1.New(), ns, name)
-	id.SetVersion(5)
+// IDv5 returns a version 5 UUID based on SHA-1 hash of the namespace UUID and data.
+func IDv5(namespace ID, data []byte) ID {
+	//#nosec G401 -- SHA1 is needed for standard conformity
+	return IDHash(sha1.New(), namespace, data, 5)
+}
+
+// IDHash returns a UUID based on hashing of namespace UUID and data within that namespace.
+func IDHash(h hash.Hash, namespace ID, data []byte, version int) (id ID) {
+	h.Reset()
+	h.Write(namespace[:])
+	h.Write(data)
+	copy(id[:], h.Sum(nil))
+	id.SetVersion(version)
 	id.SetVariant()
 	return id
 }
@@ -356,12 +361,12 @@ func IDMust[T IDSource](val T) ID {
 }
 
 // Version returns algorithm version used to generate UUID.
-func (id ID) Version() uint {
-	return uint(id[6] >> 4)
+func (id ID) Version() int {
+	return int(id[6] >> 4)
 }
 
 // Variant returns an ID layout variant or IDVariantInvalid if unknown.
-func (id ID) Variant() uint {
+func (id ID) Variant() int {
 	switch {
 	case (id[8] & 0x80) == 0x00:
 		return IDVariantNCS
@@ -493,8 +498,8 @@ func (id ID) Base64() string {
 }
 
 // SetVersion sets version bits.
-func (id *ID) SetVersion(v byte) {
-	id[6] = (id[6] & 0x0f) | (v << 4)
+func (id *ID) SetVersion(v int) {
+	id[6] = (id[6] & 0x0f) | byte(v<<4)
 }
 
 // SetVariant sets variant bits as described in RFC 4122.
@@ -592,14 +597,6 @@ func getStorage() (uint64, uint16, []byte) {
 	lastTime = timeNow
 
 	return timeNow, clockSequence, hardwareAddr[:]
-}
-
-// Returns UUID based on hashing of namespace UUID and name.
-func idFromHash(h hash.Hash, ns ID, name string) (id ID) {
-	h.Write(ns[:])
-	h.Write([]byte(name))
-	copy(id[:], h.Sum(nil))
-	return id
 }
 
 // Less returns true if the 128 bit unsigned integer value

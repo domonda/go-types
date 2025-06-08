@@ -8,9 +8,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/domonda/go-pretty"
 	"github.com/invopop/jsonschema"
 	"github.com/stretchr/testify/require"
+
+	"github.com/domonda/go-pretty"
 )
 
 // And returns result of binary AND of two UUIDs.
@@ -538,7 +539,7 @@ func TestIDv2(t *testing.T) {
 }
 
 func TestIDv3(t *testing.T) {
-	u := IDv3(NamespaceDNS, "www.example.com")
+	u := IDv3(NamespaceDNS, []byte("www.example.com"))
 
 	if u.Version() != 3 {
 		t.Errorf("UUIDv3 generated with incorrect version: %d", u.Version())
@@ -552,24 +553,24 @@ func TestIDv3(t *testing.T) {
 		t.Errorf("UUIDv3 generated incorrectly: %s", u.String())
 	}
 
-	u = IDv3(NamespaceDNS, "python.org")
+	u = IDv3(NamespaceDNS, []byte("python.org"))
 
 	if u.String() != "6fa459ea-ee8a-3ca4-894e-db77e160355e" {
 		t.Errorf("UUIDv3 generated incorrectly: %s", u.String())
 	}
 
-	u1 := IDv3(NamespaceDNS, "golang.org")
-	u2 := IDv3(NamespaceDNS, "golang.org")
+	u1 := IDv3(NamespaceDNS, []byte("golang.org"))
+	u2 := IDv3(NamespaceDNS, []byte("golang.org"))
 	if u1 != u2 {
 		t.Errorf("UUIDv3 generated different UUIDs for same namespace and name: %s and %s", u1, u2)
 	}
 
-	u3 := IDv3(NamespaceDNS, "example.com")
+	u3 := IDv3(NamespaceDNS, []byte("example.com"))
 	if u1 == u3 {
 		t.Errorf("UUIDv3 generated same UUIDs for different names in same namespace: %s and %s", u1, u2)
 	}
 
-	u4 := IDv3(NamespaceURL, "golang.org")
+	u4 := IDv3(NamespaceURL, []byte("golang.org"))
 	if u1 == u4 {
 		t.Errorf("UUIDv3 generated same UUIDs for sane names in different namespaces: %s and %s", u1, u4)
 	}
@@ -588,7 +589,7 @@ func TestIDv4(t *testing.T) {
 }
 
 func TestIDv5(t *testing.T) {
-	u := IDv5(NamespaceDNS, "www.example.com")
+	u := IDv5(NamespaceDNS, []byte("www.example.com"))
 
 	if u.Version() != 5 {
 		t.Errorf("UUIDv5 generated with incorrect version: %d", u.Version())
@@ -598,24 +599,24 @@ func TestIDv5(t *testing.T) {
 		t.Errorf("UUIDv5 generated with incorrect variant: %d", u.Variant())
 	}
 
-	u = IDv5(NamespaceDNS, "python.org")
+	u = IDv5(NamespaceDNS, []byte("python.org"))
 
 	if u.String() != "886313e1-3b8a-5372-9b90-0c9aee199e5d" {
 		t.Errorf("UUIDv5 generated incorrectly: %s", u.String())
 	}
 
-	u1 := IDv5(NamespaceDNS, "golang.org")
-	u2 := IDv5(NamespaceDNS, "golang.org")
+	u1 := IDv5(NamespaceDNS, []byte("golang.org"))
+	u2 := IDv5(NamespaceDNS, []byte("golang.org"))
 	if u1 != u2 {
 		t.Errorf("UUIDv5 generated different UUIDs for same namespace and name: %s and %s", u1, u2)
 	}
 
-	u3 := IDv5(NamespaceDNS, "example.com")
+	u3 := IDv5(NamespaceDNS, []byte("example.com"))
 	if u1 == u3 {
 		t.Errorf("UUIDv5 generated same UUIDs for different names in same namespace: %s and %s", u1, u2)
 	}
 
-	u4 := IDv5(NamespaceURL, "golang.org")
+	u4 := IDv5(NamespaceURL, []byte("golang.org"))
 	if u1 == u4 {
 		t.Errorf("UUIDv3 generated same UUIDs for sane names in different namespaces: %s and %s", u1, u4)
 	}
@@ -625,12 +626,12 @@ func TestIDv7(t *testing.T) {
 	id := IDMust("019222e8-1ec3-7e4f-97e2-919670df6d6b")
 	require.NoError(t, id.Validate(), "validating UUID")
 	require.True(t, id.Valid(), "valid UUID")
-	require.Equal(t, uint(7), id.Version(), "detecting version 7")
+	require.Equal(t, 7, id.Version(), "detecting version 7")
 
 	id = IDv7()
 	require.NoError(t, id.Validate(), "validating UUID")
 	require.True(t, id.Valid(), "valid UUID")
-	require.Equal(t, uint(7), id.Version(), "detecting version 7")
+	require.Equal(t, 7, id.Version(), "detecting version 7")
 
 	time.Sleep(time.Millisecond)
 	id2 := IDv7()
@@ -642,11 +643,11 @@ func TestIDv7DeterministicFunc(t *testing.T) {
 
 	id := IDv7Deterministic(0)
 	require.NoError(t, id.Validate(), "validating UUID")
-	require.Equal(t, uint(7), id.Version(), "detecting version 7")
+	require.Equal(t, 7, id.Version(), "detecting version 7")
 
 	id = IDv7Deterministic(time.Now().UnixMilli())
 	require.NoError(t, id.Validate(), "validating UUID")
-	require.Equal(t, uint(7), id.Version(), "detecting version 7")
+	require.Equal(t, 7, id.Version(), "detecting version 7")
 }
 
 func TestID_GoString(t *testing.T) {
