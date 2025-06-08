@@ -32,6 +32,9 @@ type IDs interface {
 	// AsSlice returns the contained IDs as IDSlice.
 	AsSlice() IDSlice
 
+	// Strings returns a slice with all IDs converted to strings
+	Strings() []string
+
 	// ForEach calls the passed function for each ID.
 	// Any error from the callback function is returned
 	// by ForEach immediatly.

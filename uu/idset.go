@@ -5,6 +5,7 @@ import (
 	"database/sql/driver"
 	"io"
 	"maps"
+	"sort"
 	"strings"
 
 	"github.com/domonda/go-types/strutil"
@@ -80,6 +81,21 @@ func IDSetMust[T IDSource](vals ...T) IDSet {
 // String implements the fmt.Stringer interface.
 func (s IDSet) String() string {
 	return "set" + s.AsSortedSlice().String()
+}
+
+// Strings returns a slice with all IDs converted to strings
+func (s IDSet) Strings() []string {
+	if len(s) == 0 {
+		return nil
+	}
+	ss := make([]string, len(s))
+	i := 0
+	for id := range s {
+		ss[i] = id.String()
+		i++
+	}
+	sort.Strings(ss)
+	return ss
 }
 
 // PrettyPrint using s.AsSortedSlice().PrettyPrint(w).
