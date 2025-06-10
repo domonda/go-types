@@ -185,7 +185,6 @@ func (n NullableCode) MarshalJSON() ([]byte, error) {
 func (NullableCode) JSONSchema() *jsonschema.Schema {
 	return &jsonschema.Schema{
 		Title: "Nullable ISO 3166-1 alpha 2 Country Code",
-		Type:  "string",
 		OneOf: []*jsonschema.Schema{
 			{
 				Type:    "string",

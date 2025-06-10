@@ -250,7 +250,6 @@ func (n *NullableNumber) UnmarshalJSON(j []byte) error {
 func (NullableNumber) JSONSchema() *jsonschema.Schema {
 	return &jsonschema.Schema{
 		Title: "Nullable Account Number",
-		Type:  "string",
 		OneOf: []*jsonschema.Schema{
 			{
 				Type:    "string",
