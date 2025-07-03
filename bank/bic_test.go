@@ -1,6 +1,8 @@
 package bank
 
 import (
+	"github.com/domonda/go-types/country"
+	"github.com/stretchr/testify/assert"
 	"strings"
 	"testing"
 
@@ -114,5 +116,64 @@ func TestBIC_Normalized(t *testing.T) {
 		norm, err := bic.Normalized()
 		require.Error(t, err, "Normalized invalid BIC error expected")
 		require.Equal(t, bic, norm, "Normalized invalid BIC returned unchanged")
+	}
+}
+
+func TestBIC_Parse(t *testing.T) {
+	tests := []struct {
+		name            string
+		input           BIC
+		wantIsValid     bool
+		wantBankCode    string
+		wantCountryCode country.Code
+		wantBranchCode  string
+	}{
+		{
+			name:        "Invalid length",
+			input:       "ABCDE",
+			wantIsValid: false,
+		},
+		{
+			name:        "Regexp no match",
+			input:       "12345678",
+			wantIsValid: false,
+		},
+		{
+			name:        "Country code invalid",
+			input:       "DEUTZZFF",
+			wantIsValid: false,
+		},
+		{
+			name:        "In falseBICs",
+			input:       "FAKEBIC12",
+			wantIsValid: false,
+		},
+		{
+			name:            "Valid BIC 11 chars",
+			input:           "DEUTDEFF500",
+			wantIsValid:     true,
+			wantBankCode:    "DEUT",
+			wantCountryCode: "DE",
+			wantBranchCode:  "500",
+		},
+		{
+			name:            "Valid BIC 8 chars",
+			input:           "DEUTDEFF",
+			wantIsValid:     true,
+			wantBankCode:    "DEUT",
+			wantCountryCode: "DE",
+			wantBranchCode:  "",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			bankCode, countryCode, branchCode, isValid := tc.input.Parse()
+			require.Equal(t, tc.wantIsValid, isValid)
+
+			assert.Equal(t, tc.wantBankCode, bankCode)
+			assert.Equal(t, tc.wantCountryCode, countryCode)
+			assert.Equal(t, tc.wantBranchCode, branchCode)
+		})
 	}
 }

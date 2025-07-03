@@ -4,7 +4,6 @@ import (
 	"database/sql/driver"
 	"errors"
 	"fmt"
-	"math/big"
 	"regexp"
 	"strconv"
 	"strings"
@@ -170,35 +169,44 @@ func writeIBANRuneToCheckSumBuf(r rune, b *strings.Builder) {
 }
 
 func (iban IBAN) isCheckSumValid() bool {
-	// fmt.Println("IsCheckSumValid", iban)
+	const (
+		ibanCheckSumModulo = 97
+	)
+
 	if len(iban) < IBANMinLength {
 		return false
 	}
-	var b strings.Builder
-	for _, r := range iban[4:] {
-		writeIBANRuneToCheckSumBuf(r, &b)
+
+	var (
+		isInRange = func(b byte, start, end byte) bool { return b >= start && b <= end }
+		isUpperAZ = func(b byte) bool { return isInRange(b, 'A', 'Z') }
+		isNum     = func(b byte) bool { return isInRange(b, '0', '9') }
+	)
+
+	rearranged := []byte(iban[4:] + iban[:4])
+
+	var remainder int
+	for _, r := range rearranged {
+		if !(isNum(r) || isUpperAZ(r)) {
+			return false
+		}
+
+		if isNum(r) {
+			remainder = (remainder*10 + int(r-'0')) % ibanCheckSumModulo
+			continue
+		}
+
+		n := int(r - 'A' + 10)
+
+		if n < 10 || n >= 100 {
+			return false
+		}
+
+		remainder = (remainder*10 + n/10) % ibanCheckSumModulo
+		remainder = (remainder*10 + n%10) % ibanCheckSumModulo
 	}
-	for _, r := range iban[:4] {
-		writeIBANRuneToCheckSumBuf(r, &b)
-	}
-	str := b.String()
-	sum64, err := strconv.ParseUint(str, 10, 64)
-	if err == nil {
-		// If the checksum string fits into a uint64,
-		// use it as fasted way to calculate
-		valid := sum64%97 == 1
-		// fmt.Println("Valid IBAN:", iban)
-		return valid
-	}
-	// Checksum string is to big to be parsed as uin64,
-	// so parse it as big.Int
-	sumBig, ok := big.NewInt(0).SetString(str, 10)
-	if !ok {
-		return false
-	}
-	valid := sumBig.Mod(sumBig, big.NewInt(97)).Int64() == 1
-	// fmt.Println("Valid IBAN:", iban)
-	return valid
+
+	return remainder == 1
 }
 
 // Scan implements the database/sql.Scanner interface.

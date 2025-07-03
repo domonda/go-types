@@ -54,12 +54,11 @@ func (bic BIC) Validate() error {
 	if length != BICMinLength && length != BICMaxLength {
 		return fmt.Errorf("invalid BIC %q length: %d", string(bic), length)
 	}
-	subMatches := bicExactRegexp.FindStringSubmatch(string(bic))
-	// fmt.Println(subMatches)
-	if len(subMatches) != 5 {
-		return fmt.Errorf("invalid BIC %q: no regex match", string(bic))
+
+	_, countryCode, _, isValid := bic.Parse()
+	if !isValid {
+		return fmt.Errorf("invalid BIC %q", string(bic))
 	}
-	countryCode := country.Code(subMatches[2])
 	_, isValidCountry := countryIBANLength[countryCode]
 	if !isValidCountry {
 		return fmt.Errorf("invalid BIC %q country code: %q", string(bic), countryCode)
@@ -123,26 +122,69 @@ func (bic BIC) Nullable() NullableBIC {
 }
 
 func (bic BIC) Parse() (bankCode string, countryCode country.Code, branchCode string, isValid bool) {
+	if _, isFalse := falseBICs[bic]; isFalse {
+		return "", "", "", false
+	}
+
 	length := len(bic)
 	if !(length == BICMinLength || length == BICMaxLength) {
 		return "", "", "", false
 	}
-	subMatches := bicExactRegexp.FindStringSubmatch(string(bic))
-	// fmt.Println(subMatches)
-	if len(subMatches) != 5 {
-		return "", "", "", false
+
+	var (
+		isInRange     = func(b byte, start, end byte) bool { return b >= start && b <= end }
+		isUpperAZ     = func(b byte) bool { return isInRange(b, 'A', 'Z') }
+		isNum         = func(b byte) bool { return isInRange(b, '0', '9') }
+		isUpperAZ0to9 = func(b byte) bool { return isUpperAZ(b) || isNum(b) }
+	)
+
+	strBIC := string(bic)
+
+	// bankCode
+	for i := 0; i < 4; i++ {
+		if !isUpperAZ(strBIC[i]) {
+			return "", "", "", false
+		}
 	}
-	countryCode = country.Code(subMatches[2])
+	bankCode = strBIC[0:4]
+
+	// countryCode
+	for i := 4; i < 6; i++ {
+		if !isUpperAZ(strBIC[i]) {
+			return "", "", "", false
+		}
+	}
+	countryCode = country.Code(strBIC[4:6])
+
 	_, isValidCountry := countryIBANLength[countryCode]
 	if !isValidCountry {
 		return "", "", "", false
 	}
-	_, isFalse := falseBICs[bic]
-	if isFalse {
+
+	// location
+	if !(isUpperAZ(strBIC[6]) || isInRange(strBIC[6], '2', '9')) {
 		return "", "", "", false
 	}
-	bankCode = subMatches[1]
-	branchCode = subMatches[4]
+
+	if !(isInRange(strBIC[7], 'A', 'N') || isInRange(strBIC[7], 'P', 'Z') || isNum(strBIC[7])) {
+		return "", "", "", false
+	}
+
+	// branchCode
+	if length == BICMaxLength {
+		branchCode = strBIC[8:]
+
+		if branchCode != "XXX" {
+			if !(isInRange(branchCode[0], 'A', 'W') || isInRange(branchCode[0], 'Y', 'Z') || isNum(branchCode[0])) {
+				return "", "", "", false
+			}
+
+			if !isUpperAZ0to9(branchCode[1]) || !isUpperAZ0to9(branchCode[2]) {
+				return "", "", "", false
+			}
+		}
+	}
+
 	return bankCode, countryCode, branchCode, true
 }
 
