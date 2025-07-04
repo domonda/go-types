@@ -10,7 +10,7 @@ import (
 	"github.com/domonda/go-types/strutil"
 )
 
-func PrintFileWithAllEncodings(filename string, maxBytes int) error {
+func PrintFileWithAllEncodings(filename string, maxBytes int) error { //#nosec G304 -- file inclusion OK
 	sourceData, err := os.ReadFile(filename)
 	if err != nil {
 		return err

@@ -12,7 +12,7 @@ const (
 	ErrInvalidVariant errs.Sentinel = "invalid UUID variant"
 )
 
-type ErrInvalidVersion uint
+type ErrInvalidVersion int
 
 func (e ErrInvalidVersion) Error() string {
 	return fmt.Sprintf("invalid UUID version: %d", e)

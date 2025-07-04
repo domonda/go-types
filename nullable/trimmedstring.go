@@ -12,8 +12,9 @@ import (
 	"strings"
 	"unsafe"
 
-	"github.com/domonda/go-types/strutil"
 	"github.com/invopop/jsonschema"
+
+	"github.com/domonda/go-types/strutil"
 )
 
 var (
@@ -211,7 +212,7 @@ func (s TrimmedString) Split(sep string) []TrimmedString {
 	for i, substring := range substrings {
 		substrings[i] = strutil.TrimSpace(substring)
 	}
-	return *(*[]TrimmedString)(unsafe.Pointer(&substrings))
+	return *(*[]TrimmedString)(unsafe.Pointer(&substrings)) //#nosec G103 -- unsafe OK
 }
 
 // Get returns the non nullable string value

@@ -350,7 +350,7 @@ func MakeValidFileName(name string) string {
 // Never returns an empty string.
 func SanitizeFileName(name string) string {
 	name = TrimSpace(name)
-	if strings.IndexAny(name, "%+") != -1 {
+	if strings.ContainsAny(name, "%+") {
 		n, err := url.QueryUnescape(name)
 		if err == nil && n != "" {
 			name = n

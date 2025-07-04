@@ -119,5 +119,5 @@ func CompareStringsShorterFirst[T ~string](a, b T) int {
 // It does this by reinterpreting the slice's underlying
 // memory using unsafe.Pointer.
 func ConvertSlice[T, S ~string](s []S) []T {
-	return *(*[]T)(unsafe.Pointer(&s))
+	return *(*[]T)(unsafe.Pointer(&s)) //#nosec G103 -- unsafe OK
 }

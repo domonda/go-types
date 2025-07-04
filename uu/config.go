@@ -103,5 +103,5 @@ func safeRandom(dest []byte) {
 // UUID epoch (October 15, 1582) and current time.
 // This is default epoch calculation function.
 func unixTimeFunc() uint64 {
-	return epochStart + uint64(time.Now().UnixNano()/100)
+	return epochStart + uint64(time.Now().UnixNano()/100) //#nosec G115 -- integer conversion OK
 }

@@ -152,7 +152,7 @@ func (s TrimmedString) Split(sep string) []TrimmedString {
 	for i, substring := range substrings {
 		substrings[i] = strutil.TrimSpace(substring)
 	}
-	return *(*[]TrimmedString)(unsafe.Pointer(&substrings))
+	return *(*[]TrimmedString)(unsafe.Pointer(&substrings)) //#nosec G103 -- unsafe OK
 }
 
 // Set the passed string as TrimmedString
