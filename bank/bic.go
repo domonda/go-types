@@ -131,13 +131,6 @@ func (bic BIC) Parse() (bankCode string, countryCode country.Code, branchCode st
 		return "", "", "", false
 	}
 
-	var (
-		isInRange     = func(b byte, start, end byte) bool { return b >= start && b <= end }
-		isUpperAZ     = func(b byte) bool { return isInRange(b, 'A', 'Z') }
-		isNum         = func(b byte) bool { return isInRange(b, '0', '9') }
-		isUpperAZ0to9 = func(b byte) bool { return isUpperAZ(b) || isNum(b) }
-	)
-
 	strBIC := string(bic)
 
 	// bankCode

@@ -177,12 +177,6 @@ func (iban IBAN) isCheckSumValid() bool {
 		return false
 	}
 
-	var (
-		isInRange = func(b byte, start, end byte) bool { return b >= start && b <= end }
-		isUpperAZ = func(b byte) bool { return isInRange(b, 'A', 'Z') }
-		isNum     = func(b byte) bool { return isInRange(b, '0', '9') }
-	)
-
 	rearranged := []byte(iban[4:] + iban[:4])
 
 	var remainder int
@@ -197,10 +191,6 @@ func (iban IBAN) isCheckSumValid() bool {
 		}
 
 		n := int(r - 'A' + 10)
-
-		if n < 10 || n >= 100 {
-			return false
-		}
 
 		remainder = (remainder*10 + n/10) % ibanCheckSumModulo
 		remainder = (remainder*10 + n%10) % ibanCheckSumModulo
