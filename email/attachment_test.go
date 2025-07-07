@@ -16,5 +16,5 @@ func TestAttachment_MarshalJSON(t *testing.T) {
 		Content:     []byte("FileData"),
 	})
 	require.NoError(t, err, "json.Marshal")
-	require.Equal(t, `{"partID":"PartID","contentID":"ContentID","contentType":"ContentType","filename":"FileName","data":"RmlsZURhdGE="}`, string(j))
+	require.Equal(t, `{"PartID":"PartID","ContentID":"ContentID","ContentType":"ContentType","Filename":"FileName","Content":"RmlsZURhdGE="}`, string(j))
 }
