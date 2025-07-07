@@ -5,12 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
-	"strconv"
 	"strings"
+
+	"github.com/invopop/jsonschema"
 
 	"github.com/domonda/go-types/country"
 	"github.com/domonda/go-types/strutil"
-	"github.com/invopop/jsonschema"
 )
 
 const (
@@ -157,15 +157,6 @@ func (iban IBAN) String() string {
 // Nullable returns the IBAN as NullableIBAN
 func (iban IBAN) Nullable() NullableIBAN {
 	return NullableIBAN(iban)
-}
-
-func writeIBANRuneToCheckSumBuf(r rune, b *strings.Builder) {
-	if r >= 'A' && r <= 'Z' {
-		i := int(r - 'A' + 10)
-		b.WriteString(strconv.Itoa(i))
-	} else {
-		b.WriteRune(r)
-	}
 }
 
 func (iban IBAN) isCheckSumValid() bool {

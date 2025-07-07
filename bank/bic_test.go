@@ -1,12 +1,13 @@
 package bank
 
 import (
-	"github.com/domonda/go-types/country"
-	"github.com/stretchr/testify/assert"
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/domonda/go-types/country"
 )
 
 var validBICs = []BIC{
