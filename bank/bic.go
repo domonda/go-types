@@ -134,7 +134,7 @@ func (bic BIC) Parse() (bankCode string, countryCode country.Code, branchCode st
 	strBIC := string(bic)
 
 	// bankCode
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		if !isUpperAZ(strBIC[i]) {
 			return "", "", "", false
 		}
