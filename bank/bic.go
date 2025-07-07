@@ -55,13 +55,9 @@ func (bic BIC) Validate() error {
 		return fmt.Errorf("invalid BIC %q length: %d", string(bic), length)
 	}
 
-	_, countryCode, _, isValid := bic.Parse()
+	_, _, _, isValid := bic.Parse()
 	if !isValid {
 		return fmt.Errorf("invalid BIC %q", string(bic))
-	}
-	_, isValidCountry := countryIBANLength[countryCode]
-	if !isValidCountry {
-		return fmt.Errorf("invalid BIC %q country code: %q", string(bic), countryCode)
 	}
 	if _, isFalse := falseBICs[bic]; isFalse {
 		return fmt.Errorf("BIC %q is in list of invalid BICs", string(bic))
@@ -149,8 +145,7 @@ func (bic BIC) Parse() (bankCode string, countryCode country.Code, branchCode st
 	}
 	countryCode = country.Code(strBIC[4:6])
 
-	_, isValidCountry := countryIBANLength[countryCode]
-	if !isValidCountry {
+	if !countryCode.Valid() {
 		return "", "", "", false
 	}
 
