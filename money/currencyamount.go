@@ -13,8 +13,34 @@ type CurrencyAmount struct {
 	Amount   Amount
 }
 
+// NewCurrencyAmount returns a CurrencyAmount with the given currency and amount.
 func NewCurrencyAmount(currency Currency, amount Amount) CurrencyAmount {
 	return CurrencyAmount{Currency: currency, Amount: amount}
+}
+
+// CurrencyAmountUSD returns a CurrencyAmount with the amount in USD (US Dollar).
+func CurrencyAmountUSD(amount Amount) CurrencyAmount {
+	return CurrencyAmount{Currency: USD, Amount: amount}
+}
+
+// CurrencyAmountEUR returns a CurrencyAmount with the amount in EUR (Euro).
+func CurrencyAmountEUR(amount Amount) CurrencyAmount {
+	return CurrencyAmount{Currency: EUR, Amount: amount}
+}
+
+// CurrencyAmountCHF returns a CurrencyAmount with the amount in CHF (Swiss Franc).
+func CurrencyAmountCHF(amount Amount) CurrencyAmount {
+	return CurrencyAmount{Currency: CHF, Amount: amount}
+}
+
+// CurrencyAmountGBP returns a CurrencyAmount with the amount in GBP (British Pound).
+func CurrencyAmountGBP(amount Amount) CurrencyAmount {
+	return CurrencyAmount{Currency: GBP, Amount: amount}
+}
+
+// CurrencyAmountJPY returns a CurrencyAmount with the amount in JPY (Japanese Yen).
+func CurrencyAmountJPY(amount Amount) CurrencyAmount {
+	return CurrencyAmount{Currency: JPY, Amount: amount}
 }
 
 // ParseCurrencyAmount parses a currency and an amount from str with acceptedDecimals.
