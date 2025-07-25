@@ -23,3 +23,15 @@ func YieldErr[K any](err error) iter.Seq2[K, error] {
 		yield(*new(K), err)
 	}
 }
+
+// Seq2NilError converts a sequence of values to a sequence of key-value pairs with
+// the passed sequence values as keys and nil errors as values.
+func Seq2NilError[K any](seq iter.Seq[K]) iter.Seq2[K, error] {
+	return func(yield func(K, error) bool) {
+		for v := range seq {
+			if !yield(v, nil) {
+				return
+			}
+		}
+	}
+}
