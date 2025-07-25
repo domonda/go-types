@@ -15,3 +15,11 @@ func Yield2[K, V any](key K, value V) iter.Seq2[K, V] {
 		yield(key, value)
 	}
 }
+
+// YieldErr returns an iterator that yields a single key-value pair with
+// the default value for the key type K and the passed error as the value.
+func YieldErr[K any](err error) iter.Seq2[K, error] {
+	return func(yield func(K, error) bool) {
+		yield(*new(K), err)
+	}
+}
