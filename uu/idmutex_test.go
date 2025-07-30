@@ -25,12 +25,12 @@ func Test_IDMutex(t *testing.T) {
 			idMutex.Lock(uuid)
 			time.Sleep(time.Nanosecond * time.Duration(rand.Intn(100)))
 			idMutex.Unlock(uuid)
-			time.Sleep(1)
+			time.Sleep(1 * time.Nanosecond) // Minimal sleep
 		}
 		wg.Done()
 	}
 
-	for i := 0; i < numParallel; i++ {
+	for range numParallel {
 		go testFunc()
 	}
 	wg.Wait()
