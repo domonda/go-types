@@ -42,9 +42,7 @@ func NewIDMutexWithCallbacks(onLock, onUnlock func(ID)) *IDMutex {
 
 // Lock the mutex for a given ID.
 func (m *IDMutex) Lock(id ID) {
-	if m.onLock != nil {
-		m.onLock(id)
-	}
+	m.onLockCallback(id)
 
 	m.global.Lock()
 	lock := m.locks[id]
@@ -60,9 +58,7 @@ func (m *IDMutex) Lock(id ID) {
 
 // Unlock the mutex for a given ID.
 func (m *IDMutex) Unlock(id ID) {
-	if m.onUnlock != nil {
-		m.onUnlock(id)
-	}
+	m.onUnlockCallback(id)
 
 	m.global.Lock()
 	defer m.global.Unlock()
@@ -76,6 +72,22 @@ func (m *IDMutex) Unlock(id ID) {
 		delete(m.locks, id)
 	}
 	lock.Unlock()
+}
+
+func (m *IDMutex) onLockCallback(id ID) {
+	if m.onLock == nil {
+		return
+	}
+	defer recover()
+	m.onLock(id)
+}
+
+func (m *IDMutex) onUnlockCallback(id ID) {
+	if m.onUnlock == nil {
+		return
+	}
+	defer recover()
+	m.onUnlock(id)
 }
 
 // IsLocked tells wether an ID is locked.
