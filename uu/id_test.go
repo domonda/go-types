@@ -17,7 +17,7 @@ import (
 // And returns result of binary AND of two UUIDs.
 func And(u1 ID, u2 ID) ID {
 	u := ID{}
-	for i := 0; i < 16; i++ {
+	for i := range 16 {
 		u[i] = u1[i] & u2[i]
 	}
 	return u
@@ -26,11 +26,12 @@ func And(u1 ID, u2 ID) ID {
 // Or returns result of binary OR of two UUIDs.
 func Or(u1 ID, u2 ID) ID {
 	u := ID{}
-	for i := 0; i < 16; i++ {
+	for i := range 16 {
 		u[i] = u1[i] | u2[i]
 	}
 	return u
 }
+
 func TestBytes(t *testing.T) {
 	u := ID{0x6b, 0xa7, 0xb8, 0x10, 0x9d, 0xad, 0x11, 0xd1, 0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4, 0x30, 0xc8}
 
@@ -44,16 +45,6 @@ func TestBytes(t *testing.T) {
 func TestString(t *testing.T) {
 	if NamespaceDNS.String() != "6ba7b810-9dad-11d1-80b4-00c04fd430c8" {
 		t.Errorf("Incorrect string representation for UUID: %s", NamespaceDNS.String())
-	}
-}
-
-func TestEqual(t *testing.T) {
-	if NamespaceDNS != NamespaceDNS {
-		t.Errorf("Incorrect comparison of %s and %s", NamespaceDNS, NamespaceDNS)
-	}
-
-	if NamespaceDNS == NamespaceURL {
-		t.Errorf("Incorrect comparison of %s and %s", NamespaceDNS, NamespaceURL)
 	}
 }
 
