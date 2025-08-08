@@ -35,3 +35,17 @@ func IDFuncFromContext(ctx context.Context) func() ID {
 	}
 	return nil
 }
+
+// IDFromContext returns the ID that was added to the context
+// with the passed key, or the result of IDvDefault() if no ID was added.
+//
+// This function enables writing tests with predefined IDs
+// that are passed through from the test via the context,
+// and falling back to the default ID generation
+// for non-testing environments.
+func IDFromContext(ctx context.Context, key any) ID {
+	if id, ok := ctx.Value(key).(ID); ok {
+		return id
+	}
+	return IDvDefault()
+}
