@@ -304,7 +304,7 @@ func (date Date) WithinIncl(from, until Date) bool {
 	t := date.MidnightUTC()
 	tFrom := from.MidnightUTC()
 	tUntil := until.MidnightUTC()
-	return (t == tFrom || t.After(tFrom)) && (t == tUntil || t.Before(tUntil))
+	return (t.Equal(tFrom) || t.After(tFrom)) && (t.Equal(tUntil) || t.Before(tUntil))
 }
 
 // BetweenExcl returns if date is between and exlusive after and until.

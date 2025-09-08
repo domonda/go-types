@@ -36,18 +36,29 @@ func IndexInStrings(str string, slice []string) int {
 	return -1
 }
 
-func Truncate(s string, i int) string {
-	runes := []rune(s)
-	if len(runes) > i {
-		return string(runes[:i])
+func Truncate[S ~string](s S, maxLen int) S {
+	numRunes := 0
+	for byteIndex := range s {
+		numRunes++
+		if numRunes > maxLen {
+			return s[:byteIndex]
+		}
 	}
 	return s
 }
 
-func TruncateWithEllipsis(s string, i int) string {
-	runes := []rune(s)
-	if len(runes) > i {
-		return string(runes[:i-1]) + "…"
+func TruncateWithEllipsis[S ~string](s S, maxLenInclEllipsis int) S {
+	if maxLenInclEllipsis <= 0 {
+		return ""
+	}
+	numRunes := 0
+	lastByteIndex := 0
+	for byteIndex := range s {
+		numRunes++
+		if numRunes > maxLenInclEllipsis {
+			return s[:lastByteIndex] + "…"
+		}
+		lastByteIndex = byteIndex
 	}
 	return s
 }
