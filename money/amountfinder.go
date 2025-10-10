@@ -31,20 +31,20 @@ var (
 			`|` +
 			pointCommasAmountR)
 
-	intAmountRegex         = regexp.MustCompile(intAmountR)
-	pointAmountRegex       = regexp.MustCompile(pointAmountR)
-	pointCommasAmountRegex = regexp.MustCompile(pointCommasAmountR)
-	commaAmountRegex       = regexp.MustCompile(commaAmountR)
-	commaPointsAmountRegex = regexp.MustCompile(commaPointsAmountR)
+	intAmountRegex = regexp.MustCompile(intAmountR)
+	// pointAmountRegex       = regexp.MustCompile(pointAmountR)
+	// pointCommasAmountRegex = regexp.MustCompile(pointCommasAmountR)
+	// commaAmountRegex       = regexp.MustCompile(commaAmountR)
+	// commaPointsAmountRegex = regexp.MustCompile(commaPointsAmountR)
 )
 
-const (
-	intNumberR         = `^\-?\d+$`
-	commaNumberR       = `^\-?\d+,\d+$`
-	commaPointsNumberR = `^\-?\d{1,3}(?:\.\d{3})*(?:,\d+)?$`
-	pointNumberR       = `^\-?\d+\.\d+$`
-	pointCommasNumberR = `^\-?\d{1,3}(?:,\d{3})*(?:\.\d+)?$`
-)
+// const (
+// 	intNumberR         = `^\-?\d+$`
+// 	commaNumberR       = `^\-?\d+,\d+$`
+// 	commaPointsNumberR = `^\-?\d{1,3}(?:\.\d{3})*(?:,\d+)?$`
+// 	pointNumberR       = `^\-?\d+\.\d+$`
+// 	pointCommasNumberR = `^\-?\d{1,3}(?:,\d{3})*(?:\.\d+)?$`
+// )
 
 // var (
 // 	numberRegex = regexp.MustCompile(
