@@ -62,6 +62,12 @@ func (n NullableAddressList) Validate() error {
 	return AddressList(n).Validate()
 }
 
+// ValidAndNormalized returns true if the NullableAddressList is valid and already normalized.
+func (n NullableAddressList) ValidAndNormalized() bool {
+	norm, err := n.Normalized()
+	return err == nil && n == norm
+}
+
 func (n NullableAddressList) Normalized() (NullableAddressList, error) {
 	if n.IsNull() {
 		return n, nil

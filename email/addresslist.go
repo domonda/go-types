@@ -132,6 +132,12 @@ func (l AddressList) Validate() error {
 	return err
 }
 
+// ValidAndNormalized returns true if the AddressList is valid and already normalized.
+func (l AddressList) ValidAndNormalized() bool {
+	norm, err := l.Normalized()
+	return err == nil && l == norm
+}
+
 func (l AddressList) Normalized() (AddressList, error) {
 	parsed, err := l.Parse()
 	if err != nil {

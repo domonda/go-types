@@ -54,6 +54,12 @@ func (bic BIC) Valid() bool {
 	return bic.Validate() == nil
 }
 
+// ValidAndNormalized returns true if the BIC is valid and already normalized.
+func (bic BIC) ValidAndNormalized() bool {
+	norm, err := bic.Normalized()
+	return err == nil && bic == norm
+}
+
 // Validate returns an error if this is not a valid SWIFT Business Identifier Code.
 // Checks length, format, and validates against a list of known invalid BICs.
 func (bic BIC) Validate() error {
@@ -213,7 +219,7 @@ func (bic BIC) IsPassiveSWIFT() bool {
 }
 
 // ReceiverPaysFees returns true if the receiver pays fees (7th character is '2').
-func (bic BIC) ReceiverPaisFees() bool {
+func (bic BIC) ReceiverPaysFees() bool {
 	return bic.Valid() && bic[7] == '2'
 }
 

@@ -47,6 +47,12 @@ func (n NullableAddress) Validate() error {
 	return Address(n).Validate()
 }
 
+// ValidAndNormalized returns true if the NullableAddress is valid and already normalized.
+func (n NullableAddress) ValidAndNormalized() bool {
+	norm, err := n.Normalized()
+	return err == nil && n == norm
+}
+
 // Normalized parses an email address less strict
 // than the standard net/mail.ParseAddress function
 // fixing malformed addresses and lower cases the address part.

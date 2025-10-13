@@ -69,6 +69,12 @@ func (c Currency) Valid() bool {
 	return c.Validate() == nil
 }
 
+// ValidAndNormalized returns true if the Currency is valid and already normalized.
+func (c Currency) ValidAndNormalized() bool {
+	norm, err := c.Normalized()
+	return err == nil && c == norm
+}
+
 // Validate returns an error if c can not be normalized to a valid currency.
 func (c Currency) Validate() error {
 	_, err := c.Normalized()

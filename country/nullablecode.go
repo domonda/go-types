@@ -47,6 +47,12 @@ func (n NullableCode) Validate() error {
 	return err
 }
 
+// ValidAndNormalized returns true if the NullableCode is valid and already normalized.
+func (n NullableCode) ValidAndNormalized() bool {
+	norm, err := n.Normalized()
+	return err == nil && n == norm
+}
+
 // Normalized uses the whitespace-trimmed uppercase string of the code to look up
 // and return the standard ISO 3166-1 alpha-2 code, or return Null and no error
 // in case of an empty string representing a null value.

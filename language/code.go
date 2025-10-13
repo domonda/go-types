@@ -28,6 +28,12 @@ func (c Code) Valid() bool {
 	return ok
 }
 
+// ValidAndNormalized returns true if the Code is valid and already normalized.
+func (c Code) ValidAndNormalized() bool {
+	norm, err := c.Normalized()
+	return err == nil && c == norm
+}
+
 // Normalized returns the normalized language code or an error if invalid.
 // TODO: normalize 3 letter codes https://en.wikipedia.org/wiki/List_of_ISO_639-1_codes
 // TODO: normalize BCP-47 language codes, such as "en-US" or "sr-Latn"

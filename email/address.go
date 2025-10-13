@@ -71,6 +71,12 @@ func (a Address) Validate() error {
 	return err
 }
 
+// ValidAndNormalized returns true if the Address is valid and already normalized.
+func (a Address) ValidAndNormalized() bool {
+	norm, err := a.Normalized()
+	return err == nil && a == norm
+}
+
 // Nullable converts the Address to a NullableAddress type.
 func (a Address) Nullable() NullableAddress {
 	return NullableAddress(a)

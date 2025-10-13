@@ -54,6 +54,12 @@ func (bic NullableBIC) Validate() error {
 	return BIC(bic).Validate()
 }
 
+// ValidAndNormalized returns true if the BIC is valid and already normalized.
+func (bic NullableBIC) ValidAndNormalized() bool {
+	norm, err := bic.Normalized()
+	return err == nil && bic == norm
+}
+
 func (bic NullableBIC) Normalized() (NullableBIC, error) {
 	if bic.IsNull() {
 		return bic, nil

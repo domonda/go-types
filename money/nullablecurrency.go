@@ -83,6 +83,12 @@ func (n NullableCurrency) ValidAndNotNull() bool {
 	return Currency(n).Valid()
 }
 
+// ValidAndNormalized returns true if the NullableCurrency is valid and already normalized.
+func (n NullableCurrency) ValidAndNormalized() bool {
+	norm, err := n.Normalized()
+	return err == nil && n == norm
+}
+
 // Valid returns true if c is nil, an empty string, or a valid 3 character ISO 4217 alphabetic code.
 // Safe to call on a nil pointer.
 func (n *NullableCurrency) ValidPtr() bool {
