@@ -9,12 +9,17 @@ import (
 	"net/mail"
 
 	"github.com/invopop/jsonschema"
+
+	"github.com/domonda/go-types/nullable"
 )
 
 // NullableAddress is a string containing a non-normalized email-address
 // with an optional name part before the mandatory address part.
 // An empty string represents the SQL/JSON null value.
 type NullableAddress string
+
+// Compile-time check that NullableAddress implements nullable.NullSetable[Address]
+var _ nullable.NullSetable[Address] = (*NullableAddress)(nil)
 
 const AddressNull NullableAddress = ""
 

@@ -19,9 +19,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/invopop/jsonschema"
+
 	"github.com/domonda/go-types/language"
 	"github.com/domonda/go-types/nullable"
-	"github.com/invopop/jsonschema"
 )
 
 // Null is an empty string and will be treated as SQL NULL.
@@ -36,6 +37,9 @@ var Null NullableDate
 // Date("").Valid() == false
 // NullableDate("").Valid() == true
 type NullableDate string
+
+// Compile-time check that NullableDate implements nullable.NullSetable[Date]
+var _ nullable.NullSetable[Date] = (*NullableDate)(nil)
 
 // NormalizeNullable returns str as normalized NullableDate or an error.
 // The first given lang argument is used as language hint for parsing.

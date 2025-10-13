@@ -17,11 +17,15 @@ import (
 
 	"github.com/invopop/jsonschema"
 
+	"github.com/domonda/go-types/nullable"
 	"github.com/domonda/go-types/strutil"
 )
 
 // Null represents a null country code.
 const Null NullableCode = ""
+
+// Compile-time check that NullableCode implements nullable.NullSetable[Code]
+var _ nullable.NullSetable[Code] = (*NullableCode)(nil)
 
 // NullableCode represents a country code according to ISO 3166-1 alpha-2 standard
 // where an empty string represents NULL.

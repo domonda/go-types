@@ -18,6 +18,9 @@ import (
 // an empty list and maps to SQL NULL and JSON null.
 type NullableAddressList string
 
+// Compile-time check that NullableAddressList implements nullable.NullSetable[string]
+var _ nullable.NullSetable[string] = (*NullableAddressList)(nil)
+
 func NullableAddressListJoin(addrs ...Address) NullableAddressList {
 	return NullableAddressList(AddressListJoin(addrs...))
 }
@@ -100,6 +103,15 @@ func (n NullableAddressList) StringOr(nullString string) string {
 func (n NullableAddressList) Get() string {
 	if n.IsNull() {
 		panic(fmt.Sprintf("Get() called on NULL %T", n))
+	}
+	return string(n)
+}
+
+// GetOr returns the non nullable string value
+// or the passed defaultValue if the NullableAddressList is null.
+func (n NullableAddressList) GetOr(defaultValue string) string {
+	if n.IsNull() {
+		return defaultValue
 	}
 	return string(n)
 }

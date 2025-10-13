@@ -4,6 +4,8 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
+
+	"github.com/domonda/go-types/nullable"
 )
 
 // NullableCurrency holds a 3 character ISO 4217 alphabetic code,
@@ -14,6 +16,9 @@ import (
 // Currency("").Valid() == false
 // NullableCurrency("").Valid() == true
 type NullableCurrency string
+
+// Compile-time check that NullableCurrency implements nullable.NullSetable[Currency]
+var _ nullable.NullSetable[Currency] = (*NullableCurrency)(nil)
 
 // IsNull returns true if the NullableCurrency is null.
 // IsNull implements the nullable.Nullable interface.

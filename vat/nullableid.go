@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/domonda/go-types/country"
 	"github.com/invopop/jsonschema"
+
+	"github.com/domonda/go-types/country"
+	"github.com/domonda/go-types/nullable"
 )
 
 // Null is an empty string and will be treatet as SQL NULL.
@@ -15,6 +17,9 @@ var Null NullableID
 // NullableID is identical to ID, except that the Null value (empty string)
 // is considered valid by the Valid() and Validate() methods.
 type NullableID string
+
+// Compile-time check that NullableID implements nullable.NullSetable[ID]
+var _ nullable.NullSetable[ID] = (*NullableID)(nil)
 
 // NormalizedUnchecked returns a generic normalized version of ID without performing any format checks.
 // func (n NullableID) NormalizedUnchecked() NullableID {

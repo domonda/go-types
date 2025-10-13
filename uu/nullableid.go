@@ -11,13 +11,19 @@ import (
 	"strings"
 
 	"github.com/invopop/jsonschema"
+
+	"github.com/domonda/go-types/nullable"
 )
 
+// IDNull is a zero UUID and will be treatet as SQL NULL.
 var IDNull NullableID
 
 // NullableID is a UUID where the Nil UUID "00000000-0000-0000-0000-000000000000"
 // is interpreted as the null values for SQL and JSON.
 type NullableID [16]byte
+
+// Compile-time check that NullableID implements nullable.NullSetable[ID]
+var _ nullable.NullSetable[ID] = (*NullableID)(nil)
 
 // NullableIDFromString parses a string as NullableID.
 // The Nil UUID "00000000-0000-0000-0000-000000000000"

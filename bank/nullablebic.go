@@ -6,6 +6,8 @@ import (
 	"fmt"
 
 	"github.com/invopop/jsonschema"
+
+	"github.com/domonda/go-types/nullable"
 )
 
 // BICNull is an empty string and will be treatet as SQL NULL.
@@ -13,6 +15,9 @@ const BICNull NullableBIC = ""
 
 // NullableBIC is a BIC value which can hold an emtpy string ("") as the null value.
 type NullableBIC string
+
+// Compile-time check that NullableBIC implements nullable.NullSetable[BIC]
+var _ nullable.NullSetable[BIC] = (*NullableBIC)(nil)
 
 // ScanString tries to parse and assign the passed
 // source string as value of the implementing type.

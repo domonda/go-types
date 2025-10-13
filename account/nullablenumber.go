@@ -11,16 +11,18 @@ import (
 	"strings"
 
 	"github.com/invopop/jsonschema"
+
+	"github.com/domonda/go-types/nullable"
 )
 
 var (
-	_ fmt.Stringer     = NullableNumber("")
-	_ driver.Valuer    = NullableNumber("")
-	_ sql.Scanner      = new(NullableNumber)
-	_ json.Marshaler   = NullableNumber("")
-	_ json.Unmarshaler = new(NullableNumber)
-	// _ xml.Marshaler    = NullableNumber("")
-	_ xml.Unmarshaler = new(NullableNumber)
+	_ fmt.Stringer                 = NullableNumber("")
+	_ driver.Valuer                = NullableNumber("")
+	_ sql.Scanner                  = new(NullableNumber)
+	_ json.Marshaler               = NullableNumber("")
+	_ json.Unmarshaler             = new(NullableNumber)
+	_ xml.Unmarshaler              = new(NullableNumber)
+	_ nullable.NullSetable[Number] = (*NullableNumber)(nil)
 )
 
 const NumberNull NullableNumber = ""
@@ -104,12 +106,26 @@ func (n *NullableNumber) SetNull() {
 	*n = NumberNull
 }
 
+// Set sets a Number for this NullableNumber
+func (n *NullableNumber) Set(num Number) {
+	*n = NullableNumber(num)
+}
+
 // Get returns the non nullable Number
 // or panics if the NullableNumber is null.
 // Note: check with IsNull before using Get!
 func (n NullableNumber) Get() Number {
 	if n.IsNull() {
 		panic(fmt.Sprintf("Get() called on NULL %T", n))
+	}
+	return Number(n)
+}
+
+// GetOr returns the non nullable Number value
+// or the passed defaultNumber if the NullableNumber is null.
+func (n NullableNumber) GetOr(defaultNumber Number) Number {
+	if n.IsNull() {
+		return defaultNumber
 	}
 	return Number(n)
 }

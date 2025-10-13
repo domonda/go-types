@@ -8,6 +8,7 @@ import (
 	"github.com/invopop/jsonschema"
 
 	"github.com/domonda/go-types/country"
+	"github.com/domonda/go-types/nullable"
 )
 
 // IBANNull is an empty string and will be treatet as SQL NULL.
@@ -15,6 +16,9 @@ const IBANNull NullableIBAN = ""
 
 // NullableIBAN is a IBAN value which can hold an emtpy string ("") as the null value.
 type NullableIBAN string
+
+// Compile-time check that NullableIBAN implements nullable.NullSetable[IBAN]
+var _ nullable.NullSetable[IBAN] = (*NullableIBAN)(nil)
 
 // ScanString tries to parse and assign the passed
 // source string as value of the implementing type.
