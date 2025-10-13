@@ -10,12 +10,14 @@ import (
 )
 
 // Validator can be implemented by types that can validate their data.
+// The Valid method should return true if the data is valid, false otherwise.
 type Validator interface {
 	// Valid returns if the data of the implementation is valid.
 	Valid() bool
 }
 
 // ValidatorFunc implements the Validator interface with a function.
+// This allows you to use a function as a validator.
 type ValidatorFunc func() bool
 
 // Valid returns if the data of the implementation is valid.
@@ -23,7 +25,8 @@ func (f ValidatorFunc) Valid() bool {
 	return f()
 }
 
-// StaticValidator implements the Validator interface a bool validity value.
+// StaticValidator implements the Validator interface with a bool validity value.
+// This is useful when you have a pre-computed validation result.
 type StaticValidator bool
 
 // Valid returns if the data of the implementation is valid.
@@ -31,9 +34,12 @@ func (valid StaticValidator) Valid() bool {
 	return bool(valid)
 }
 
+// Validators is a slice of Validator implementations.
+// It implements the Validator interface itself, returning true only if all validators are valid.
 type Validators []Validator
 
 // Valid returns if the data of the implementation is valid.
+// Returns false if any validator in the slice returns false.
 func (v Validators) Valid() bool {
 	for _, validator := range v {
 		if !validator.Valid() {
@@ -46,17 +52,20 @@ func (v Validators) Valid() bool {
 // CombinedValidator creates a Validator whose Valid method
 // returns false if any of the passed validators Valid methods
 // returned false, else it returns true.
+// This is equivalent to creating a Validators slice.
 func CombinedValidator(validators ...Validator) Validator {
 	return Validators(validators)
 }
 
-// ValidatErr can be implemented by types that can validate their data.
+// ValidatErr can be implemented by types that can validate their data and return detailed error information.
+// This is more informative than the Validator interface as it provides specific error details.
 type ValidatErr interface {
 	// Validate returns an error if the data of the implementation is not valid.
 	Validate() error
 }
 
 // ValidatErrFunc implements the ValidatErr interface with a function.
+// This allows you to use a function as a validator that returns detailed errors.
 type ValidatErrFunc func() error
 
 // Validate returns an error if the data of the implementation is not valid.
@@ -65,6 +74,7 @@ func (f ValidatErrFunc) Validate() error {
 }
 
 // StaticValidatErr implements the ValidatErr interface for a validation error value.
+// This is useful when you have a pre-computed validation error.
 type StaticValidatErr struct {
 	Err error
 }
@@ -74,9 +84,12 @@ func (v StaticValidatErr) Validate() error {
 	return v.Err
 }
 
+// ValidatErrs is a slice of ValidatErr implementations.
+// It implements the ValidatErr interface itself, returning the first error encountered.
 type ValidatErrs []ValidatErr
 
 // Validate returns an error if the data of the implementation is not valid.
+// Returns the first error from any validator in the slice, or nil if all are valid.
 func (v ValidatErrs) Validate() error {
 	for _, validatErr := range v {
 		if err := validatErr.Validate(); err != nil {
@@ -89,16 +102,19 @@ func (v ValidatErrs) Validate() error {
 // CombinedValidatErr creates a ValidatErr whose Validate method
 // returns the first error from the passed validatErrs Validate methods
 // or nil if none returned an error.
+// This is equivalent to creating a ValidatErrs slice.
 func CombinedValidatErr(validatErrs ...ValidatErr) ValidatErr {
 	return ValidatErrs(validatErrs)
 }
 
 // ValidatorAsValidatErr wraps a Validator as a ValidatErr,
 // returning ErrInvalidValue when Validator.Valid() returns false.
+// This allows you to use a simple boolean validator in contexts that require detailed error information.
 type ValidatorAsValidatErr struct {
 	Validator
 }
 
+// Validate returns an error if the wrapped validator is not valid.
 func (v ValidatorAsValidatErr) Validate() error {
 	if v.Valid() {
 		return nil
@@ -135,6 +151,7 @@ func Validate(v any) error {
 // and ErrInvalidValue is returned if Validator.Valid() is false.
 // If v does not implement ValidatErr or Validator then nil and false
 // will be returned.
+// The boolean return value indicates whether the value was validatable.
 func TryValidate(v any) (err error, isValidatable bool) {
 	switch x := v.(type) {
 	case ValidatErr:
@@ -152,10 +169,13 @@ func TryValidate(v any) (err error, isValidatable bool) {
 
 // DeepValidate validates all fields of a struct, all elements of a slice or array,
 // and all values of a map by recursively calling Validate or Valid methods.
+// It provides detailed error information including the path to invalid values.
 func DeepValidate(v any) error {
 	return deepValidate(reflect.ValueOf(v))
 }
 
+// deepValidate is the internal implementation of DeepValidate.
+// It recursively validates nested structures and provides path information for errors.
 func deepValidate(v reflect.Value, path ...string) error {
 	err := Validate(v.Interface())
 	if err != nil && len(path) > 0 {
@@ -193,6 +213,7 @@ func deepValidate(v reflect.Value, path ...string) error {
 // The function panics if the types of a and b
 // are not idential or not orderable.
 // Orderable types are variantes of integers, floats, and strings.
+// This is used for sorting map keys in DeepValidate.
 func ReflectCompare(a, b reflect.Value) int {
 	if a.Type() != b.Type() {
 		panic("values are not of the same type")

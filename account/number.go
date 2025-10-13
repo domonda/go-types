@@ -1,3 +1,13 @@
+// Package account provides account number handling with validation,
+// parsing, and database integration for Go applications.
+//
+// The package includes:
+// - Account number validation with regex patterns
+// - Support for alphanumeric account numbers
+// - Numeric conversion utilities
+// - Database integration (Scanner/Valuer interfaces)
+// - JSON and XML marshalling/unmarshalling
+// - Nullable account number support
 package account
 
 import (
@@ -10,16 +20,20 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/domonda/go-errs"
 	"github.com/invopop/jsonschema"
+
+	"github.com/domonda/go-errs"
 )
 
-// Errors
+// Error constants for account number validation
 const (
 	ErrInvalidNumber      errs.Sentinel = "invalid account number"
 	ErrAlphanumericNumber errs.Sentinel = "account number is alphanumeric"
 )
 
+// NumberRegex defines the regular expression pattern for valid account numbers.
+// Allows alphanumeric characters, underscores, hyphens, forward slashes, colons,
+// periods, semicolons, and commas. Must start with alphanumeric character.
 const NumberRegex = `^[0-9A-Za-z][0-9A-Za-z_\-\/:.;,]*$`
 
 var numberRegexp = regexp.MustCompile(NumberRegex)
@@ -35,12 +49,14 @@ var (
 	_ xml.Unmarshaler = new(Number)
 )
 
-// Number represents an account number with the option for alphanumerical characters.
+// Number represents an account number that can contain alphanumeric characters
+// and special characters like underscores, hyphens, forward slashes, colons,
+// periods, semicolons, and commas. Must start with an alphanumeric character.
 type Number string
 
-// NumberFrom returns an Number for the passed string
-// or an error if the string is not a valid account number.
-// It trims leading and trailing whitespace from the passed string.
+// NumberFrom creates a Number from a string with validation.
+// Trims leading and trailing whitespace and validates the format.
+// Returns an error if the string is not a valid account number.
 func NumberFrom(str string) (Number, error) {
 	str = strings.TrimSpace(str)
 	if err := Number(str).Validate(); err != nil {
@@ -49,19 +65,20 @@ func NumberFrom(str string) (Number, error) {
 	return Number(str), nil
 }
 
+// NumberFromUint creates a Number from a uint64 value.
 func NumberFromUint(u uint64) Number {
 	return Number(strconv.FormatUint(u, 10))
 }
 
-// Valid returns true if the Number matches
-// the regular expression `^[0-9A-Za-z][0-9A-Za-z_\-\/:.;,]*$`
+// Valid returns true if the Number matches the regular expression pattern.
+// The pattern allows alphanumeric characters and special characters like
+// underscores, hyphens, forward slashes, colons, periods, semicolons, and commas.
 func (n Number) Valid() bool {
 	return numberRegexp.MatchString(string(n))
 }
 
-// Validate returns a wrapped ErrInvalidNumber
-// error if the Number does not match
-// the regular expression `^[0-9A-Za-z][0-9A-Za-z_\-\/:.;,]*$`
+// Validate returns an error if the Number does not match the regular expression pattern.
+// Returns ErrInvalidNumber wrapped with the invalid number if validation fails.
 func (n Number) Validate() error {
 	if !n.Valid() {
 		return fmt.Errorf("%w: %q", ErrInvalidNumber, n)
@@ -69,15 +86,18 @@ func (n Number) Validate() error {
 	return nil
 }
 
+// HasPrefix checks if the Number starts with the specified prefix.
 func (n Number) HasPrefix(prefix string) bool {
 	return strings.HasPrefix(string(n), prefix)
 }
 
+// HasSuffix checks if the Number ends with the specified suffix.
 func (n Number) HasSuffix(suffix string) bool {
 	return strings.HasSuffix(string(n), suffix)
 }
 
-// IsNumeric indicates if the Number only contains digits.
+// IsNumeric returns true if the Number contains only digits (0-9).
+// Returns false for empty strings.
 func (n Number) IsNumeric() bool {
 	if n == "" {
 		return false
@@ -90,8 +110,8 @@ func (n Number) IsNumeric() bool {
 	return true
 }
 
-// ValidateNumeric returns a wrapped ErrAlphanumericNumber
-// error if the Number is not numeric.
+// ValidateNumeric returns an error if the Number is not purely numeric.
+// Returns ErrAlphanumericNumber wrapped with the invalid number if validation fails.
 func (n Number) ValidateNumeric() error {
 	if !n.IsNumeric() {
 		return fmt.Errorf("%w: %q", ErrAlphanumericNumber, n)
@@ -99,6 +119,9 @@ func (n Number) ValidateNumeric() error {
 	return nil
 }
 
+// Uint converts the Number to a uint64.
+// Returns an error if the Number is not purely numeric.
+// Prevents parsing of non-digit strings like hex numbers.
 func (n Number) Uint() (uint64, error) {
 	// Check upfront to prevent non digit strings like hex numbers
 	// to be parsed by strconv.ParseUint
@@ -108,6 +131,8 @@ func (n Number) Uint() (uint64, error) {
 	return strconv.ParseUint(string(n), 10, 64)
 }
 
+// UintPtr converts the Number to a *uint64.
+// Returns nil if conversion fails.
 func (n Number) UintPtr() (*uint64, error) {
 	u, err := n.Uint()
 	if err != nil {
@@ -116,6 +141,9 @@ func (n Number) UintPtr() (*uint64, error) {
 	return &u, nil
 }
 
+// Int converts the Number to an int64.
+// Returns an error if the Number is not purely numeric.
+// Prevents parsing of non-digit strings like hex numbers.
 func (n Number) Int() (int64, error) {
 	// Check upfront to prevent non digit strings like hex numbers
 	// to be parsed by strconv.ParseInt
@@ -125,11 +153,16 @@ func (n Number) Int() (int64, error) {
 	return strconv.ParseInt(string(n), 10, 64)
 }
 
+// Cut splits the Number at the first occurrence of sep.
+// Returns the text before and after the separator, and a boolean indicating
+// whether the separator was found.
 func (n Number) Cut(sep string) (before, after Number, found bool) {
 	left, right, found := strings.Cut(string(n), sep)
 	return Number(left), Number(right), found
 }
 
+// TrimLeadingZeros removes leading zero characters from the Number.
+// Returns an empty string if the Number consists only of zeros.
 func (n Number) TrimLeadingZeros() Number {
 	for i, r := range n {
 		if r != '0' {
@@ -139,16 +172,18 @@ func (n Number) TrimLeadingZeros() Number {
 	return ""
 }
 
+// Nullable converts the Number to a NullableNumber type.
 func (n Number) Nullable() NullableNumber {
 	return NullableNumber(n)
 }
 
+// String returns the string representation of the Number.
 func (n Number) String() string {
 	return string(n)
 }
 
 // UnmarshalText implements the encoding.TextUnmarshaler interface.
-// It trims leading and trailing whitespace from the text.
+// Trims leading and trailing whitespace from the text before validation.
 func (n *Number) UnmarshalText(text []byte) error {
 	no, err := NumberFrom(string(text))
 	if err != nil {

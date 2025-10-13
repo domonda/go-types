@@ -7,10 +7,10 @@ import (
 	"fmt"
 )
 
-// LenString holds a string together with a minimum and maximum length.
-// Validate returns an error if the string length does not fit the minium-maxium length.
+// LenString holds a string together with a minimum and maximum length constraints.
+// It implements validation to ensure the string length falls within the specified bounds.
 // LenString implements the encoding.UnmarshalText, json.Unmarshaler,
-// and strfmt.StringAssignable interfaces that will do length validation.
+// and strfmt.StringAssignable interfaces that will perform length validation.
 type LenString struct {
 	str string
 	min int
@@ -18,6 +18,7 @@ type LenString struct {
 }
 
 // NewLenString returns a new LenString without validating it.
+// Use this when you want to create a LenString and validate it separately.
 func NewLenString(str string, min, max int) *LenString {
 	return &LenString{
 		str: str,
@@ -27,6 +28,7 @@ func NewLenString(str string, min, max int) *LenString {
 }
 
 // MustLenString returns a LenString or panics on errors from Validate.
+// Use this when you're certain the string meets the length constraints.
 func MustLenString(str string, min, max int) LenString {
 	s := LenString{
 		str: str,
@@ -40,7 +42,9 @@ func MustLenString(str string, min, max int) LenString {
 	return s
 }
 
-// Validate implements the ValidatErr interface
+// Validate implements the ValidatErr interface.
+// It checks that the minimum and maximum lengths are valid and that the string
+// length falls within the specified bounds.
 func (s *LenString) Validate() error {
 	if s == nil {
 		return errors.New("nil LenString")
@@ -57,6 +61,7 @@ func (s *LenString) Validate() error {
 	return s.validateLen(s.str)
 }
 
+// validateLen checks if the string length is within the min/max bounds.
 func (s *LenString) validateLen(str string) error {
 	l := len(str)
 	if l < s.min {
@@ -77,6 +82,8 @@ func (s *LenString) String() string {
 	return s.str
 }
 
+// SetString sets the string value after validating it against the length constraints.
+// Returns an error if the string doesn't meet the length requirements.
 func (s *LenString) SetString(str string) error {
 	if err := s.validateLen(str); err != nil {
 		return err
@@ -85,15 +92,17 @@ func (s *LenString) SetString(str string) error {
 	return nil
 }
 
+// MinLen returns the minimum allowed length for the string.
 func (s *LenString) MinLen() int {
 	return s.min
 }
 
+// MaxLen returns the maximum allowed length for the string.
 func (s *LenString) MaxLen() int {
 	return s.max
 }
 
-// MarshalText implements the encoding.TextMarshaler interface
+// MarshalText implements the encoding.TextMarshaler interface.
 func (s *LenString) MarshalText() (text []byte, err error) {
 	if s == nil {
 		return nil, nil
@@ -101,12 +110,13 @@ func (s *LenString) MarshalText() (text []byte, err error) {
 	return []byte(s.str), nil
 }
 
-// UnmarshalText implements the encoding.TextUnmarshaler interface
+// UnmarshalText implements the encoding.TextUnmarshaler interface.
+// It validates the text length before setting the string value.
 func (s *LenString) UnmarshalText(text []byte) error {
 	return s.SetString(string(text))
 }
 
-// MarshalText implements the json.Marshaler interface
+// MarshalJSON implements the json.Marshaler interface.
 func (s *LenString) MarshalJSON() (text []byte, err error) {
 	if s == nil {
 		return []byte("null"), nil
@@ -114,7 +124,8 @@ func (s *LenString) MarshalJSON() (text []byte, err error) {
 	return json.Marshal(s.str)
 }
 
-// UnmarshalJSON implements the json.Unmarshaler interface
+// UnmarshalJSON implements the json.Unmarshaler interface.
+// It validates the string length after unmarshaling from JSON.
 func (s *LenString) UnmarshalJSON(text []byte) error {
 	if bytes.Equal(text, []byte("null")) {
 		return nil // no-op

@@ -9,13 +9,10 @@ import (
 	"github.com/domonda/go-types/nullable"
 )
 
-// NormalizeAddressList parses an email address list less strict
-// than the standard net/mail.ParseAddressList function
-// fixing malformed addresses and lower cases the address part.
-// Duplicates with the same normalized address part
-// will be removed from the result.
-// NormalizeAddressList returns an error if list does not contain
-// at least one address.
+// NormalizeAddressList parses a comma-separated email address list using lenient validation
+// that fixes common malformations and normalizes address parts to lowercase.
+// Duplicate addresses (based on normalized address parts) are automatically removed.
+// Returns an error if the list does not contain at least one valid address.
 func NormalizeAddressList(list string) (normalized []string, err error) {
 	addrs, err := ParseAddressList(list)
 	if err != nil {
@@ -36,13 +33,13 @@ func NormalizeAddressList(list string) (normalized []string, err error) {
 	return normalized, nil
 }
 
-// AddressList is a comma separated list
-// of at least one email address.
-//
-// Use NullableAddressList for a list
-// that can contain zero addresses.
+// AddressList represents a comma-separated list of email addresses.
+// The list must contain at least one valid email address.
+// Use NullableAddressList for lists that can be empty.
 type AddressList string
 
+// AddressListJoin creates an AddressList by joining multiple Address values
+// with comma separators. Empty addresses are skipped.
 func AddressListJoin(addrs ...Address) AddressList {
 	var b strings.Builder
 	for _, addr := range addrs {
@@ -57,6 +54,8 @@ func AddressListJoin(addrs ...Address) AddressList {
 	return AddressList(b.String())
 }
 
+// AddressListJoinStrings creates an AddressList by joining multiple string values
+// with comma separators. Empty strings are skipped.
 func AddressListJoinStrings(addrs ...string) AddressList {
 	var b strings.Builder
 	for _, addr := range addrs {
@@ -71,6 +70,8 @@ func AddressListJoinStrings(addrs ...string) AddressList {
 	return AddressList(b.String())
 }
 
+// Append adds additional addresses to the AddressList.
+// Empty addresses are skipped.
 func (l AddressList) Append(addrs ...Address) AddressList {
 	var b strings.Builder
 	b.WriteString(string(l))
@@ -86,10 +87,13 @@ func (l AddressList) Append(addrs ...Address) AddressList {
 	return AddressList(b.String())
 }
 
+// Parse converts the AddressList to a slice of *mail.Address using lenient validation.
 func (l AddressList) Parse() ([]*mail.Address, error) {
 	return ParseAddressList(string(l))
 }
 
+// Split converts the AddressList to a slice of Address values.
+// Returns nil if the list is empty or invalid.
 func (l AddressList) Split() ([]Address, error) {
 	parsed, err := l.Parse()
 	if err != nil {
@@ -105,6 +109,9 @@ func (l AddressList) Split() ([]Address, error) {
 	return a, nil
 }
 
+// UniqueAddressParts returns an AddressSet containing the unique normalized
+// address parts from the AddressList. This removes duplicates based on
+// the actual email addresses (ignoring display names).
 func (l AddressList) UniqueAddressParts() (AddressSet, error) {
 	parsed, err := l.Parse()
 	if err != nil {

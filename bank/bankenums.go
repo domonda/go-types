@@ -1,3 +1,13 @@
+// Package bank provides comprehensive banking data types and utilities for Go applications.
+//
+// The package includes:
+// - IBAN (International Bank Account Number) validation and parsing
+// - BIC (Bank Identifier Code) validation and parsing
+// - Bank account management with validation
+// - CAMT53 bank statement parsing
+// - Database integration (Scanner/Valuer interfaces)
+// - JSON marshalling/unmarshalling
+// - Nullable banking types support
 package bank
 
 import (
@@ -8,18 +18,19 @@ import (
 ///////////////////////////////////////////////////////////////////////////////
 // AccountType
 
-// AccountType holds the type of a bank account.
+// AccountType represents the type of a bank account.
 // AccountType implements the database/sql.Scanner and database/sql/driver.Valuer interfaces,
-// and will treat an empty string AccountType as SQL NULL value.
+// and treats an empty string AccountType as SQL NULL value.
 type AccountType string
 
 var (
-	// AccountTypeCurrent is a checking account type
+	// AccountTypeCurrent represents a checking/current account type
 	AccountTypeCurrent AccountType = "CURRENT"
-	// AccountTypeSavings is a savings account type
+	// AccountTypeSavings represents a savings account type
 	AccountTypeSavings AccountType = "SAVINGS"
 )
 
+// Valid returns true if the AccountType is a valid account type.
 func (t AccountType) Valid() bool {
 	return t == AccountTypeCurrent || t == AccountTypeSavings
 }
@@ -40,6 +51,7 @@ func (t *AccountType) Scan(value any) error {
 }
 
 // Value implements the driver database/sql/driver.Valuer interface.
+// Returns nil for SQL NULL if the AccountType is empty.
 func (t AccountType) Value() (driver.Value, error) {
 	if t == "" {
 		return nil, nil
@@ -50,20 +62,27 @@ func (t AccountType) Value() (driver.Value, error) {
 ///////////////////////////////////////////////////////////////////////////////
 // TransactionType
 
+// TransactionType represents the direction of a bank transaction.
 type TransactionType string
 
 const (
+	// TransactionTypeIncoming represents an incoming transaction (credit)
 	TransactionTypeIncoming TransactionType = "INCOMING"
+	// TransactionTypeOutgoing represents an outgoing transaction (debit)
 	TransactionTypeOutgoing TransactionType = "OUTGOING"
 )
 
 ///////////////////////////////////////////////////////////////////////////////
 // PaymentStatus
 
+// PaymentStatus represents the status of a payment transaction.
 type PaymentStatus string
 
 const (
-	PaymentStatusCreated  PaymentStatus = "CREATED"
+	// PaymentStatusCreated represents a payment that has been created
+	PaymentStatusCreated PaymentStatus = "CREATED"
+	// PaymentStatusFinished represents a payment that has been completed
 	PaymentStatusFinished PaymentStatus = "FINISHED"
-	PaymentStatusFailed   PaymentStatus = "FAILED"
+	// PaymentStatusFailed represents a payment that has failed
+	PaymentStatusFailed PaymentStatus = "FAILED"
 )

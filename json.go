@@ -12,7 +12,10 @@ var (
 	emptyInterfaceTye = reflect.TypeOf((*interface{})(nil)).Elem()
 )
 
-// CanMarshalJSON returns if a type can be marshalled as JSON
+// CanMarshalJSON returns true if a type can be marshalled as JSON.
+// It checks if the type implements json.Marshaler or encoding.TextMarshaler,
+// or if it's a struct, map, or slice that can be marshalled by the standard
+// JSON package.
 func CanMarshalJSON(t reflect.Type) bool {
 	if t == emptyInterfaceTye {
 		return true

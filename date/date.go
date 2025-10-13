@@ -1,3 +1,15 @@
+// Package date provides comprehensive date handling and validation utilities
+// for Go applications with support for multiple date formats and internationalization.
+//
+// The package includes:
+// - Date type with ISO 8601 format (YYYY-MM-DD) support
+// - Flexible date parsing with language hints
+// - Date arithmetic and comparison operations
+// - Period range calculations (year, quarter, month, week)
+// - Database integration (Scanner/Valuer interfaces)
+// - JSON marshalling/unmarshalling
+// - Nullable date support
+// - Time zone handling
 package date
 
 import (
@@ -16,13 +28,13 @@ import (
 )
 
 // Normalize returns str as normalized Date or an error.
-// The first given lang argument is used as language hint.
+// The first given lang argument is used as language hint for parsing.
 func Normalize(str string, lang ...language.Code) (Date, error) {
 	return Date(str).Normalized(lang...)
 }
 
 // StringIsDate returns if a string can be parsed as Date.
-// The first given lang argument is used as language hint.
+// The first given lang argument is used as language hint for parsing.
 func StringIsDate(str string, lang ...language.Code) bool {
 	_, err := Normalize(str, lang...)
 	return err == nil
@@ -45,9 +57,9 @@ const (
 	Invalid Date = ""
 )
 
-// Date represents a the day of calender date
+// Date represents a calendar date in ISO 8601 format (YYYY-MM-DD).
 // Date implements the database/sql.Scanner and database/sql/driver.Valuer interfaces,
-// and will treat an empty string or the zero dates "0000-00-00" and "0001-01-01" (see IsZero) as SQL NULL.
+// and treats empty string or zero dates ("0000-00-00" and "0001-01-01") as SQL NULL.
 type Date string
 
 // Must returns str as normalized Date or panics if str is not a valid Date.
@@ -60,17 +72,14 @@ func Must(str string) Date {
 }
 
 // Of returns a normalized Date for the given year, month, and day.
-// The month, day values may be outside
-// their usual ranges and will be normalized during the conversion.
-// For example, October 32 converts to November 1.
+// The month, day values may be outside their usual ranges and will be normalized
+// during the conversion. For example, October 32 converts to November 1.
 func Of(year int, month time.Month, day int) Date {
 	return OfTime(time.Date(year, month, day, 0, 0, 0, 0, time.Local))
 }
 
-// OfTime returns the date part of the passed time.Time
-// or an empty string if t.IsZero().
-// To get the date in a certain time zone,
-// pass the time.Time with a location set to the time zone.
+// OfTime returns the date part of the passed time.Time or an empty string if t.IsZero().
+// To get the date in a certain time zone, pass the time.Time with a location set to the time zone.
 func OfTime(t time.Time) Date {
 	if t.IsZero() {
 		return ""
@@ -78,8 +87,8 @@ func OfTime(t time.Time) Date {
 	return Date(t.Format(Layout))
 }
 
-// OfTimePtr returns the date part of the passed time.Time
-// or Null (an empty string) if t is nil or t.IsZero().
+// OfTimePtr returns the date part of the passed time.Time or Null (an empty string)
+// if t is nil or t.IsZero().
 func OfTimePtr(t *time.Time) NullableDate {
 	if t == nil || t.IsZero() {
 		return Null
@@ -97,7 +106,7 @@ func OfNowInUTC() Date {
 	return OfTime(time.Now().UTC())
 }
 
-// OfTodayUTC returns the date of today in the timezone of the passed location.
+// OfTodayIn returns the date of today in the timezone of the passed location.
 func OfTodayIn(loc *time.Location) Date {
 	return OfTime(time.Now().In(loc))
 }
@@ -112,7 +121,7 @@ func OfTomorrow() Date {
 	return OfTime(time.Now().Add(24 * time.Hour))
 }
 
-// Parse returns the date part from time.Parse(layout, value)
+// Parse returns the date part from time.Parse(layout, value).
 func Parse(layout, value string) (Date, error) {
 	t, err := time.Parse(layout, value)
 	if t.IsZero() || err != nil {
@@ -121,21 +130,22 @@ func Parse(layout, value string) (Date, error) {
 	return OfTime(t), nil
 }
 
-// PeriodRange returns the dates [from, until] for a period
-// defined in one the following formats:
-// period of a ISO 8601 week of a year: YYYY-Wnn
-// period of a month of a year: YYYY-MM,
-// period of a quarter of a year: YYYY-Qn,
-// period of a half year: YYYY-Hn,
-// period of full year: YYYY.
+// PeriodRange returns the dates [from, until] for a period defined in one of the following formats:
+// - period of a ISO 8601 week of a year: YYYY-Wnn
+// - period of a month of a year: YYYY-MM
+// - period of a quarter of a year: YYYY-Qn
+// - period of a half year: YYYY-Hn
+// - period of full year: YYYY
+//
 // The returned from Date is the first day of the month of the period,
 // the returned until Date is the last day of the month of the period.
-// Exmaples:
-// Period of June 2018: PeriodRange("2018-06") == Date("2018-06-01"), Date("2018-06-30"), nil
-// Period of Q3 2018: PeriodRange("2018-Q3") == Date("2018-07-01"), Date("2018-09-30"), nil
-// Period of second half of 2018: PeriodRange("2018-H2") == Date("2018-07-01"), Date("2018-12-31"), nil
-// Period of year 2018: PeriodRange("2018") == Date("2018-07-01"), Date("2018-12-31"), nil
-// Period of week 1 2019: PeriodRange("2019-W01") == Date("2018-12-31"), Date("2019-01-06"), nil
+//
+// Examples:
+// - Period of June 2018: PeriodRange("2018-06") == Date("2018-06-01"), Date("2018-06-30"), nil
+// - Period of Q3 2018: PeriodRange("2018-Q3") == Date("2018-07-01"), Date("2018-09-30"), nil
+// - Period of second half of 2018: PeriodRange("2018-H2") == Date("2018-07-01"), Date("2018-12-31"), nil
+// - Period of year 2018: PeriodRange("2018") == Date("2018-01-01"), Date("2018-12-31"), nil
+// - Period of week 1 2019: PeriodRange("2019-W01") == Date("2018-12-31"), Date("2019-01-06"), nil
 func PeriodRange(period string) (from, until Date, err error) {
 	if len(period) != 4 && len(period) != 7 && len(period) != 8 {
 		return "", "", fmt.Errorf("invalid period format length: %q", period)

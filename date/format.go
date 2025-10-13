@@ -1,3 +1,15 @@
+// Package date provides comprehensive date handling and validation utilities
+// for Go applications with support for multiple date formats and internationalization.
+//
+// The package includes:
+// - Date type with ISO 8601 format (YYYY-MM-DD) support
+// - Flexible date parsing with language hints
+// - Date arithmetic and comparison operations
+// - Period range calculations (year, quarter, month, week)
+// - Database integration (Scanner/Valuer interfaces)
+// - JSON marshalling/unmarshalling
+// - Nullable date support
+// - Time zone handling
 package date
 
 import (
@@ -12,17 +24,19 @@ import (
 	"github.com/domonda/go-types/strutil"
 )
 
+// Format provides date formatting and parsing capabilities with customizable layouts.
 type Format struct {
-	Layout     string `json:"layout"`
-	NilString  string `json:"nilString"`
-	ZeroString string `json:"zeroString"`
+	Layout     string `json:"layout"`     // The time layout string for formatting
+	NilString  string `json:"nilString"`  // String to use for nil values
+	ZeroString string `json:"zeroString"` // String to use for zero values
 }
 
+// Format formats a Date using the configured layout.
 func (f *Format) Format(date Date) string {
 	return date.Format(f.Layout)
 }
 
-// Parse implements the strfmt.Parser interface
+// Parse implements the strfmt.Parser interface for date parsing.
 func (f *Format) Parse(str string, langHints ...language.Code) (normalized string, err error) {
 	date, err := Normalize(str, langHints...)
 	if err != nil {
@@ -31,6 +45,7 @@ func (f *Format) Parse(str string, langHints ...language.Code) (normalized strin
 	return f.Format(date), nil
 }
 
+// AssignString assigns a string value to various date-related types using reflection.
 func (f *Format) AssignString(dest reflect.Value, source string /*, loc *time.Location*/) error {
 	source = strutil.TrimSpace(source)
 
@@ -95,6 +110,7 @@ func (f *Format) AssignString(dest reflect.Value, source string /*, loc *time.Lo
 	return fmt.Errorf("AssignString destination type not supported: %s", dest.Type())
 }
 
+// FormatString formats a value as a date string using the configured layout.
 func (f *Format) FormatString(val reflect.Value) (string, error) {
 	v := reflection.DerefValue(val)
 	if reflection.IsNil(v) {

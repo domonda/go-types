@@ -1,3 +1,13 @@
+// Package bank provides comprehensive banking data types and utilities for Go applications.
+//
+// The package includes:
+// - IBAN (International Bank Account Number) validation and parsing
+// - BIC (Bank Identifier Code) validation and parsing
+// - Bank account management with validation
+// - CAMT53 bank statement parsing
+// - Database integration (Scanner/Valuer interfaces)
+// - JSON marshalling/unmarshalling
+// - Nullable banking types support
 package bank
 
 import (
@@ -11,7 +21,8 @@ import (
 	"github.com/domonda/go-types/nullable"
 )
 
-// Account identifies a bank account by its IBAN and optionally BIC.
+// Account represents a bank account identified by its IBAN and optionally BIC.
+// It includes additional metadata like currency and account holder information.
 type Account struct {
 	IBAN     IBAN                   `json:"iban"`
 	BIC      NullableBIC            `json:"bic,omitempty"`
@@ -19,10 +30,14 @@ type Account struct {
 	Holder   nullable.TrimmedString `json:"holder,omitempty"`
 }
 
+// Valid returns true if the Account is valid.
+// An account is valid if it's not nil and all its components (IBAN, BIC, Currency) are valid.
 func (a *Account) Valid() bool {
 	return a != nil && a.IBAN.Valid() && a.BIC.Valid() && a.Currency.Valid()
 }
 
+// Validate returns an error if the Account is invalid.
+// Returns nil if the account is valid, otherwise returns joined validation errors.
 func (a *Account) Validate() error {
 	if a == nil {
 		return errors.New("nil bank.Account")
@@ -34,6 +49,8 @@ func (a *Account) Validate() error {
 	)
 }
 
+// Normalize normalizes all components of the Account.
+// Returns an error if any component fails to normalize.
 func (a *Account) Normalize() error {
 	if a == nil {
 		return errors.New("nil bank.Account")
@@ -52,8 +69,8 @@ func (a *Account) Normalize() error {
 	return err
 }
 
-// String returns a string representation of the Account
-// usabled for debugging.
+// String returns a string representation of the Account suitable for debugging.
+// Includes IBAN, BIC (if present), currency (if present), and holder (if present).
 func (a *Account) String() string {
 	var b strings.Builder
 	b.WriteString("bank.Account{")
@@ -72,6 +89,7 @@ func (a *Account) String() string {
 }
 
 // Scan implements the database/sql.Scanner interface.
+// Supports scanning from JSON bytes or strings.
 func (a *Account) Scan(value any) (err error) {
 	switch x := value.(type) {
 	case []byte:
@@ -82,7 +100,10 @@ func (a *Account) Scan(value any) (err error) {
 	return fmt.Errorf("can't scan value '%#v' of type %T as bank.Account", value, value)
 }
 
-// UnmarshalJSON implements encoding/json.Unmarshaler
+// UnmarshalJSON implements encoding/json.Unmarshaler.
+// Supports unmarshalling from JSON objects or IBAN strings.
+// If the input is a JSON object, it unmarshals into the full Account structure.
+// If the input is an IBAN string, it creates an Account with only the IBAN set.
 func (a *Account) UnmarshalJSON(j []byte) (err error) {
 	if len(j) < 2 {
 		return fmt.Errorf("too short to unmarshal as bank.Account: `%s`", j)
@@ -131,8 +152,8 @@ func (a *Account) UnmarshalJSON(j []byte) (err error) {
 	return nil
 }
 
-// UnmarshalText implements the [encoding.TextUnmarshaler] interface.
-// The account can be unmarshalled from a JSON object or a IBAN string.
+// UnmarshalText implements the encoding.TextUnmarshaler interface.
+// The account can be unmarshalled from a JSON object or an IBAN string.
 func (a *Account) UnmarshalText(text []byte) error {
 	return a.UnmarshalJSON(bytes.TrimSpace(text))
 }

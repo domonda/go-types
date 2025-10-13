@@ -1,3 +1,13 @@
+// Package bank provides comprehensive banking data types and utilities for Go applications.
+//
+// The package includes:
+// - IBAN (International Bank Account Number) validation and parsing
+// - BIC (Bank Identifier Code) validation and parsing
+// - Bank account management with validation
+// - CAMT53 bank statement parsing
+// - Database integration (Scanner/Valuer interfaces)
+// - JSON marshalling/unmarshalling
+// - Nullable banking types support
 package bank
 
 import (
@@ -11,29 +21,25 @@ import (
 )
 
 // NormalizeBIC returns the passed string as BIC normalized to a length of 11 characters
-// by removing spaces and appending "XXX" in case of a valid length of 8 charaters.
+// by removing spaces and appending "XXX" in case of a valid length of 8 characters.
 // Returns the string unchanged as BIC in case of an error.
 func NormalizeBIC(str string) (BIC, error) {
 	return BIC(str).Normalized()
 }
 
+// StringIsBIC returns true if the string can be parsed as a valid BIC.
 func StringIsBIC(str string) bool {
 	return BIC(str).Valid()
 }
 
-// BIC is a SWIFT Business Identifier Code (also know as SWIFT-Code).
+// BIC represents a SWIFT Business Identifier Code (also known as SWIFT-Code).
 // BIC implements the database/sql.Scanner and database/sql/driver.Valuer interfaces
-// and will treat an empty BIC string as SQL NULL value.
+// and treats an empty BIC string as SQL NULL value.
 type BIC string
 
-// ScanString tries to parse and assign the passed
-// source string as value of the implementing type.
-//
-// If validate is true, the source string is checked
-// for validity before it is assigned to the type.
-//
-// If validate is false and the source string
-// can still be assigned in some non-normalized way
+// ScanString tries to parse and assign the passed source string as value of the implementing type.
+// If validate is true, the source string is checked for validity before assignment.
+// If validate is false and the source string can still be assigned in some non-normalized way,
 // it will be assigned without returning an error.
 func (bic *BIC) ScanString(source string, validate bool) error {
 	if validate && BIC(source).Validate() != nil {
@@ -43,12 +49,13 @@ func (bic *BIC) ScanString(source string, validate bool) error {
 	return nil
 }
 
-// Valid returns if this is a valid SWIFT Business Identifier Code
+// Valid returns true if this is a valid SWIFT Business Identifier Code.
 func (bic BIC) Valid() bool {
 	return bic.Validate() == nil
 }
 
-// Validate returns an error if this is not a valid SWIFT Business Identifier Code
+// Validate returns an error if this is not a valid SWIFT Business Identifier Code.
+// Checks length, format, and validates against a list of known invalid BICs.
 func (bic BIC) Validate() error {
 	length := len(bic)
 	if length != BICMinLength && length != BICMaxLength {
@@ -66,7 +73,7 @@ func (bic BIC) Validate() error {
 }
 
 // Normalized returns the BIC normalized to a length of 11 characters
-// by removing spaces and appending "XXX" in case of a valid length of 8 charaters.
+// by removing spaces and appending "XXX" in case of a valid length of 8 characters.
 // Returns the BIC unchanged in case of an error.
 func (bic BIC) Normalized() (BIC, error) {
 	norm := BIC(strings.ReplaceAll(string(bic), " ", ""))
@@ -80,7 +87,7 @@ func (bic BIC) Normalized() (BIC, error) {
 }
 
 // NormalizedShort returns the BIC normalized to a length of 8 or 11 characters
-// by removing spaces trimming the "XXX" suffix in case of a valid length of 8 charaters.
+// by removing spaces and trimming the "XXX" suffix in case of a valid length of 8 characters.
 // Returns the BIC unchanged in case of an error.
 func (bic BIC) NormalizedShort() (BIC, error) {
 	norm := BIC(strings.ReplaceAll(string(bic), " ", ""))
@@ -93,6 +100,8 @@ func (bic BIC) NormalizedShort() (BIC, error) {
 	return norm, nil
 }
 
+// NormalizedOrNull returns the BIC as NullableBIC, normalized if possible.
+// Returns BICNull if normalization fails.
 func (bic BIC) NormalizedOrNull() NullableBIC {
 	normalized, err := bic.Normalized()
 	if err != nil {
@@ -112,11 +121,13 @@ func (bic BIC) String() string {
 	return string(norm)
 }
 
-// Nullable returns the BIC as NullableBIC
+// Nullable returns the BIC as NullableBIC.
 func (bic BIC) Nullable() NullableBIC {
 	return NullableBIC(bic)
 }
 
+// Parse parses the BIC into its components: bank code, country code, branch code.
+// Returns isValid as false if the BIC is invalid or in the list of false BICs.
 func (bic BIC) Parse() (bankCode string, countryCode country.Code, branchCode string, isValid bool) {
 	if _, isFalse := falseBICs[bic]; isFalse {
 		return "", "", "", false
@@ -176,13 +187,14 @@ func (bic BIC) Parse() (bankCode string, countryCode country.Code, branchCode st
 	return bankCode, countryCode, branchCode, true
 }
 
-// CountryCode of the BIC.
+// CountryCode returns the country code of the BIC.
 // May be invalid if the BIC is invalid.
 func (bic BIC) CountryCode() country.Code {
 	_, cc, _, _ := bic.Parse()
 	return cc
 }
 
+// TrimBranchCode returns the BIC with the branch code removed (first 8 characters).
 func (bic BIC) TrimBranchCode() BIC {
 	if len(bic) <= 8 {
 		return bic
@@ -190,14 +202,17 @@ func (bic BIC) TrimBranchCode() BIC {
 	return bic[:8]
 }
 
+// IsTestBIC returns true if this is a test BIC (7th character is '0').
 func (bic BIC) IsTestBIC() bool {
 	return bic.Valid() && bic[7] == '0'
 }
 
+// IsPassiveSWIFT returns true if this is a passive SWIFT BIC (7th character is '1').
 func (bic BIC) IsPassiveSWIFT() bool {
 	return bic.Valid() && bic[7] == '1'
 }
 
+// ReceiverPaysFees returns true if the receiver pays fees (7th character is '2').
 func (bic BIC) ReceiverPaisFees() bool {
 	return bic.Valid() && bic[7] == '2'
 }
@@ -222,6 +237,7 @@ func (bic BIC) Value() (driver.Value, error) {
 	return string(bic), nil
 }
 
+// JSONSchema returns the JSON schema definition for the BIC type.
 func (BIC) JSONSchema() *jsonschema.Schema {
 	return &jsonschema.Schema{
 		Title:   "BIC/SWIFT-Code",
@@ -230,6 +246,7 @@ func (BIC) JSONSchema() *jsonschema.Schema {
 	}
 }
 
+// falseBICs contains a list of known invalid BIC codes.
 var falseBICs = map[BIC]struct{}{
 	"AMTSGERICHT": {},
 	"AUTOBANK":    {},

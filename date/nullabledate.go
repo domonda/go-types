@@ -1,3 +1,15 @@
+// Package date provides comprehensive date handling and validation utilities
+// for Go applications with support for multiple date formats and internationalization.
+//
+// The package includes:
+// - Date type with ISO 8601 format (YYYY-MM-DD) support
+// - Flexible date parsing with language hints
+// - Date arithmetic and comparison operations
+// - Period range calculations (year, quarter, month, week)
+// - Database integration (Scanner/Valuer interfaces)
+// - JSON marshalling/unmarshalling
+// - Nullable date support
+// - Time zone handling
 package date
 
 import (
@@ -12,26 +24,27 @@ import (
 	"github.com/invopop/jsonschema"
 )
 
-// Null is an empty string and will be treatet as SQL NULL.
+// Null is an empty string and will be treated as SQL NULL.
 // date.Null.IsZero() == true
 var Null NullableDate
 
 // NullableDate is identical to Date, except that IsZero() is considered valid
 // by the Valid() and Validate() methods.
 // NullableDate implements the database/sql.Scanner and database/sql/driver.Valuer interfaces,
-// and will treat an empty/zero Date string as SQL NULL value.
+// and treats an empty/zero Date string as SQL NULL value.
 // The main difference between Date and NullableDate is:
 // Date("").Valid() == false
 // NullableDate("").Valid() == true
 type NullableDate string
 
 // NormalizeNullable returns str as normalized NullableDate or an error.
-// The first given lang argument is used as language hint.
+// The first given lang argument is used as language hint for parsing.
 func NormalizeNullable(str string, lang ...language.Code) (NullableDate, error) {
 	return NullableDate(str).Normalized(lang...)
 }
 
-// MustNullable returns str as normalized NullableDate or panics if str is not neither a valid Date nor Null ("").
+// MustNullable returns str as normalized NullableDate or panics if str is not
+// neither a valid Date nor Null ("").
 func MustNullable(str string) NullableDate {
 	d, err := NullableDate(str).Normalized()
 	if err != nil {
@@ -72,18 +85,17 @@ func (n NullableDate) IsNotNull() bool {
 	return !n.IsNull()
 }
 
-// Set sets an Date for this NullableDate
+// Set sets a Date for this NullableDate.
 func (n *NullableDate) Set(d Date) {
 	*n = NullableDate(d)
 }
 
-// SetNull sets the NullableDate to null
+// SetNull sets the NullableDate to null.
 func (n *NullableDate) SetNull() {
 	*n = Null
 }
 
-// Get returns the non nullable Date value
-// or panics if the NullableDate is null.
+// Get returns the non-nullable Date value or panics if the NullableDate is null.
 // Note: check with IsNull before using Get!
 func (n NullableDate) Get() Date {
 	if n.IsNull() {
@@ -92,8 +104,7 @@ func (n NullableDate) Get() Date {
 	return Date(n)
 }
 
-// GetOr returns the non nullable Date value
-// or the passed defaultDate if the NullableDate is null.
+// GetOr returns the non-nullable Date value or the passed defaultDate if the NullableDate is null.
 func (n NullableDate) GetOr(defaultDate Date) Date {
 	if n.IsNull() {
 		return defaultDate
@@ -101,8 +112,8 @@ func (n NullableDate) GetOr(defaultDate Date) Date {
 	return Date(n)
 }
 
-// Valid returns if the format of the date is correct, see Format
-// n.IsZero() is valid
+// Valid returns if the format of the date is correct, see Format.
+// n.IsZero() is valid.
 func (n NullableDate) Valid() bool {
 	return n.Validate() == nil
 }
@@ -112,13 +123,14 @@ func (n NullableDate) ValidAndNotNull() bool {
 	return Date(n).Valid()
 }
 
+// ValidAndNormalized returns if the date is valid and already normalized.
 func (n NullableDate) ValidAndNormalized() bool {
 	norm, err := n.Normalized()
 	return err == nil && norm == n
 }
 
 // Validate returns an error if the date is not in a valid, normalizeable format.
-// n.IsZero() is valid
+// n.IsZero() is valid.
 func (n NullableDate) Validate() error {
 	if n.IsZero() {
 		return nil
@@ -126,14 +138,9 @@ func (n NullableDate) Validate() error {
 	return Date(n).Validate()
 }
 
-// ScanString tries to parse and assign the passed
-// source string as value of the implementing type.
-//
-// If validate is true, the source string is checked
-// for validity before it is assigned to the type.
-//
-// If validate is false and the source string
-// can still be assigned in some non-normalized way
+// ScanString tries to parse and assign the passed source string as value of the implementing type.
+// If validate is true, the source string is checked for validity before assignment.
+// If validate is false and the source string can still be assigned in some non-normalized way,
 // it will be assigned without returning an error.
 func (n *NullableDate) ScanString(source string, validate bool) error {
 	switch source {
