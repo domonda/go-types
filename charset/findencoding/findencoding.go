@@ -1,3 +1,18 @@
+// Package findencoding provides utilities for detecting and testing character encodings
+// in text files, particularly useful for debugging encoding issues and finding the correct
+// encoding for unknown text data.
+//
+// The package includes:
+// - File encoding detection and testing
+// - Byte Order Mark (BOM) detection and handling
+// - Multiple encoding format support (UTF-8, Windows-1252, ISO-8859-1, etc.)
+// - Debugging utilities for encoding analysis
+// - Safe file reading with size limits
+//
+// This package is particularly useful for:
+// - Debugging encoding issues in text files
+// - Finding the correct encoding for legacy files
+// - Testing how text appears in different character encodings
 package findencoding
 
 import (
@@ -10,6 +25,10 @@ import (
 	"github.com/domonda/go-types/strutil"
 )
 
+// PrintFileWithAllEncodings reads a file and prints its content using all available
+// character encodings, making it easy to identify the correct encoding for unknown text.
+// The function handles BOM detection and provides formatted output for each encoding.
+// maxBytes limits the number of bytes to read (0 defaults to 1MB).
 func PrintFileWithAllEncodings(filename string, maxBytes int) error { //#nosec G304 -- file inclusion OK
 	sourceData, err := os.ReadFile(filename)
 	if err != nil {
