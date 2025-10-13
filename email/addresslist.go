@@ -6,8 +6,12 @@ import (
 	"net/mail"
 	"strings"
 
+	"github.com/domonda/go-types"
 	"github.com/domonda/go-types/nullable"
 )
+
+// Compile-time check that AddressList implements types.NormalizableValidator[AddressList]
+var _ types.NormalizableValidator[AddressList] = AddressList("")
 
 // NormalizeAddressList parses a comma-separated email address list using lenient validation
 // that fixes common malformations and normalizes address parts to lowercase.
@@ -130,6 +134,11 @@ func (l AddressList) UniqueAddressParts() (AddressSet, error) {
 func (l AddressList) Validate() error {
 	_, err := l.Parse()
 	return err
+}
+
+// Valid returns true if the AddressList is a valid list of email addresses.
+func (l AddressList) Valid() bool {
+	return l.Validate() == nil
 }
 
 // ValidAndNormalized returns true if the AddressList is valid and already normalized.

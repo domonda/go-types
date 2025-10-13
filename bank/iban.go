@@ -9,6 +9,7 @@ import (
 
 	"github.com/invopop/jsonschema"
 
+	"github.com/domonda/go-types"
 	"github.com/domonda/go-types/country"
 	"github.com/domonda/go-types/strutil"
 )
@@ -20,6 +21,9 @@ const (
 )
 
 var ibanRegexp = regexp.MustCompile(IBANRegex)
+
+// Compile-time check that IBAN implements types.NormalizableValidator[IBAN]
+var _ types.NormalizableValidator[IBAN] = IBAN("")
 
 // NormalizeIBAN returns str as normalized IBAN or an error.
 func NormalizeIBAN(str string) (IBAN, error) {

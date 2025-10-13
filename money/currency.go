@@ -6,8 +6,12 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/domonda/go-types"
 	"github.com/domonda/go-types/strutil"
 )
+
+// Compile-time check that Currency implements types.NormalizableValidator[Currency]
+var _ types.NormalizableValidator[Currency] = Currency("")
 
 // StringIsCurrency returns if a string can be parsed as Currency.
 func StringIsCurrency(str string) bool {

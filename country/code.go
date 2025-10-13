@@ -18,11 +18,15 @@ import (
 
 	"github.com/invopop/jsonschema"
 
+	"github.com/domonda/go-types"
 	"github.com/domonda/go-types/strutil"
 )
 
 // Invalid represents an invalid country code.
 const Invalid Code = ""
+
+// Compile-time check that Code implements types.NormalizableValidator[Code]
+var _ types.NormalizableValidator[Code] = Code("")
 
 // Code represents a country code according to ISO 3166-1 alpha-2 standard.
 // Code implements the database/sql.Scanner and database/sql/driver.Valuer interfaces,

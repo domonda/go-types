@@ -15,7 +15,12 @@ import (
 	"strings"
 
 	"github.com/invopop/jsonschema"
+
+	"github.com/domonda/go-types"
 )
+
+// Compile-time check that Address implements types.NormalizableValidator[Address]
+var _ types.NormalizableValidator[Address] = Address("")
 
 // Address represents a non-normalized email address string that may contain
 // an optional display name part before the mandatory email address part.
@@ -69,6 +74,11 @@ func (a Address) Parse() (*mail.Address, error) {
 func (a Address) Validate() error {
 	_, err := a.Parse()
 	return err
+}
+
+// Valid returns true if the Address is a valid email address format.
+func (a Address) Valid() bool {
+	return a.Validate() == nil
 }
 
 // ValidAndNormalized returns true if the Address is valid and already normalized.

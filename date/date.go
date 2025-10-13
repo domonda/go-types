@@ -27,6 +27,10 @@ import (
 	"github.com/domonda/go-types/strutil"
 )
 
+// Note: Date does not implement types.NormalizableValidator[Date] because
+// its Normalized() method accepts optional language.Code parameters.
+// This is intentional as it provides more functionality than the interface requires.
+
 // Normalize returns str as normalized Date or an error.
 // The first given lang argument is used as language hint for parsing.
 func Normalize(str string, lang ...language.Code) (Date, error) {

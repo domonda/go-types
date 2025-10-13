@@ -17,8 +17,12 @@ import (
 
 	"github.com/invopop/jsonschema"
 
+	"github.com/domonda/go-types"
 	"github.com/domonda/go-types/country"
 )
+
+// Compile-time check that BIC implements types.NormalizableValidator[BIC]
+var _ types.NormalizableValidator[BIC] = BIC("")
 
 // NormalizeBIC returns the passed string as BIC normalized to a length of 11 characters
 // by removing spaces and appending "XXX" in case of a valid length of 8 characters.

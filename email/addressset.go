@@ -16,6 +16,9 @@ import (
 // AddressSet is a set of unique email addresses
 type AddressSet map[Address]struct{}
 
+// Compile-time check that AddressSet implements types.NormalizableValidator[AddressSet]
+var _ types.NormalizableValidator[AddressSet] = AddressSet{}
+
 func MakeAddressSet(addrs ...Address) AddressSet {
 	set := make(AddressSet, len(addrs))
 	for _, addr := range addrs {
@@ -199,6 +202,28 @@ func (set AddressSet) Validate() error {
 		}
 	}
 	return nil
+}
+
+// Valid returns true if all addresses in the set are valid.
+func (set AddressSet) Valid() bool {
+	return set.Validate() == nil
+}
+
+// ValidAndNormalized returns true if all addresses in the set are valid and already normalized.
+func (set AddressSet) ValidAndNormalized() bool {
+	norm, err := set.Normalized()
+	if err != nil {
+		return false
+	}
+	if len(set) != len(norm) {
+		return false
+	}
+	for addr := range set {
+		if !norm.Contains(addr) {
+			return false
+		}
+	}
+	return true
 }
 
 // Scan implements the database/sql.Scanner interface.

@@ -6,11 +6,16 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/invopop/jsonschema"
+
 	"github.com/domonda/go-errs"
+	"github.com/domonda/go-types"
 	"github.com/domonda/go-types/country"
 	"github.com/domonda/go-types/strutil"
-	"github.com/invopop/jsonschema"
 )
+
+// Compile-time check that ID implements types.NormalizableValidator[ID]
+var _ types.NormalizableValidator[ID] = ID("")
 
 // MOSSSchemaVATCountryCode or the VAT Mini One Stop Shop (MOSS) is an optional scheme that allows you
 // to account for VAT - normally due in multiple EU countries – in just one EU country. Check out:

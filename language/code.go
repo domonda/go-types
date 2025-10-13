@@ -15,12 +15,17 @@ import (
 	"strings"
 
 	"github.com/invopop/jsonschema"
+
+	"github.com/domonda/go-types"
 )
 
 // Code represents a language code in its normalized form as an ISO 639-1 two-character language code.
 // Code implements the database/sql.Scanner and database/sql/driver.Valuer interfaces,
 // and treats an empty Code string as SQL NULL value.
 type Code string
+
+// Compile-time check that Code implements types.NormalizableValidator[Code]
+var _ types.NormalizableValidator[Code] = Code("")
 
 // Valid returns true if the Code is a valid ISO 639-1 language code.
 func (c Code) Valid() bool {

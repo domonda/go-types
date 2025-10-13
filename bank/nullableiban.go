@@ -7,6 +7,7 @@ import (
 
 	"github.com/invopop/jsonschema"
 
+	"github.com/domonda/go-types"
 	"github.com/domonda/go-types/country"
 	"github.com/domonda/go-types/nullable"
 )
@@ -19,6 +20,9 @@ type NullableIBAN string
 
 // Compile-time check that NullableIBAN implements nullable.NullSetable[IBAN]
 var _ nullable.NullSetable[IBAN] = (*NullableIBAN)(nil)
+
+// Compile-time check that NullableIBAN implements types.NormalizableValidator[NullableIBAN]
+var _ types.NormalizableValidator[NullableIBAN] = NullableIBAN("")
 
 // ScanString tries to parse and assign the passed
 // source string as value of the implementing type.

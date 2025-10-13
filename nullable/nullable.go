@@ -9,7 +9,11 @@
 // - Reflection utilities for null/zero checking
 package nullable
 
-import "reflect"
+import (
+	"reflect"
+
+	"github.com/domonda/go-types"
+)
 
 // Nullable is an interface with an IsNull method for types that can represent null values.
 type Nullable interface {
@@ -43,6 +47,17 @@ type NullSetable[T any] interface {
 type Zeroable interface {
 	// IsZero returns true if the implementing value is considered zero.
 	IsZero() bool
+}
+
+// NullableValidator is a generic interface that extends Nullable and Validator for types that can be
+// set to null and have their values retrieved with fallback options.
+// This interface is typically implemented by nullable wrapper types that provide
+// safe handling of optional values with null state management.
+type NullableValidator interface {
+	Nullable
+	types.Validator
+
+	ValidAndNotNull() bool
 }
 
 // ReflectIsNull returns if a reflect.Value contains either a nil value

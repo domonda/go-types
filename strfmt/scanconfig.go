@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"time"
 
-	types "github.com/domonda/go-types"
+	"github.com/domonda/go-types"
 	"github.com/domonda/go-types/strutil"
 )
 
