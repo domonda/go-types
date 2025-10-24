@@ -167,46 +167,61 @@ func TryValidate(v any) (err error, isValidatable bool) {
 	}
 }
 
-// DeepValidate validates all fields of a struct, all elements of a slice or array,
+// DeepValidate recursively validates all fields of a struct, all elements of a slice or array,
 // and all values of a map by recursively calling Validate or Valid methods.
-// It provides detailed error information including the path to invalid values.
-func DeepValidate(v any) error {
-	return deepValidate(reflect.ValueOf(v))
+// It returns all validation errors as a slice.
+// Use errors.Join(DeepValidate(v)...) to join the errors into a single error.
+func DeepValidate(v any) []error {
+	var errs []error
+	deepValidate(reflect.ValueOf(v), func(err error) {
+		errs = append(errs, err)
+	})
+	return errs
 }
 
 // deepValidate is the internal implementation of DeepValidate.
 // It recursively validates nested structures and provides path information for errors.
-func deepValidate(v reflect.Value, path ...string) error {
-	err := Validate(v.Interface())
-	if err != nil && len(path) > 0 {
-		err = fmt.Errorf("%s: %w", strings.Join(path, " -> "), err)
+func deepValidate(v reflect.Value, onError func(error), path ...string) {
+	// Handle invalid/zero reflect.Values (e.g., from nil interface{})
+	if !v.IsValid() {
+		return
 	}
-	if v.Kind() == reflect.Ptr {
-		if v.IsNil() {
-			return err
+
+	// Handle nil pointers before calling v.Interface()
+	if v.Kind() == reflect.Pointer && v.IsNil() {
+		return
+	}
+
+	err := Validate(v.Interface())
+	if err != nil {
+		if len(path) > 0 {
+			err = fmt.Errorf("%s: %w", strings.Join(path, " -> "), err)
 		}
+		onError(err)
+	}
+	if v.Kind() == reflect.Pointer {
 		v = v.Elem()
 	}
 	switch v.Kind() {
 	case reflect.Struct:
-		for i := 0; i < v.NumField(); i++ {
-			name := fmt.Sprintf("struct field %s", v.Type().Field(i).Name)
-			err = errors.Join(err, deepValidate(v.Field(i), append(path, name)...))
+		t := v.Type()
+		for i := range v.NumField() {
+			name := fmt.Sprintf("struct field %s", t.Field(i).Name)
+			deepValidate(v.Field(i), onError, append(path, name)...)
 		}
 	case reflect.Map:
 		keys := v.MapKeys()
 		slices.SortFunc(keys, ReflectCompare)
 		for _, key := range keys {
 			name := fmt.Sprintf("map value [%#v]", key.Interface())
-			err = errors.Join(err, deepValidate(v.MapIndex(key), append(path, name)...))
+			deepValidate(v.MapIndex(key), onError, append(path, name)...)
 		}
 	case reflect.Slice, reflect.Array:
 		for i := 0; i < v.Len(); i++ {
 			name := fmt.Sprintf("elememt [%d]", i)
-			err = errors.Join(err, deepValidate(v.Index(i), append(path, name)...))
+			deepValidate(v.Index(i), onError, append(path, name)...)
 		}
 	}
-	return err
 }
 
 // ReflectCompare compares two reflect.Values of the same type.
