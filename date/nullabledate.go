@@ -1,15 +1,3 @@
-// Package date provides comprehensive date handling and validation utilities
-// for Go applications with support for multiple date formats and internationalization.
-//
-// The package includes:
-// - Date type with ISO 8601 format (YYYY-MM-DD) support
-// - Flexible date parsing with language hints
-// - Date arithmetic and comparison operations
-// - Period range calculations (year, quarter, month, week)
-// - Database integration (Scanner/Valuer interfaces)
-// - JSON marshalling/unmarshalling
-// - Nullable date support
-// - Time zone handling
 package date
 
 import (
@@ -133,7 +121,7 @@ func (n NullableDate) ValidAndNormalized() bool {
 	return err == nil && norm == n
 }
 
-// Validate returns an error if the date is not in a valid, normalizeable format.
+// Validate returns an error if the date is not in a valid, normalizable format.
 // n.IsZero() is valid.
 func (n NullableDate) Validate() error {
 	if n.IsZero() {
@@ -163,6 +151,10 @@ func (n *NullableDate) ScanString(source string, validate bool) error {
 	return nil
 }
 
+// ScanStringWithLang parses and assigns the source string as a NullableDate using the given language hint.
+// Returns wasNormalized to indicate if the source was already in normalized form,
+// monthMustBeFirst to indicate if the date format requires month-first ordering,
+// and an error if parsing fails. Empty or zero values are treated as Null.
 func (n *NullableDate) ScanStringWithLang(source string, lang language.Code) (wasNormalized bool, monthMustBeFirst bool, err error) {
 	if NullableDate(source).IsZero() {
 		*n = Null
@@ -208,6 +200,8 @@ func (n NullableDate) Normalized(lang ...language.Code) (NullableDate, error) {
 	return NullableDate(d), err
 }
 
+// NormalizedOrNull returns the normalized date as NullableDate if possible, otherwise returns Null.
+// The first given lang argument is used as language hint for parsing.
 func (n NullableDate) NormalizedOrNull(lang ...language.Code) NullableDate {
 	norm, err := n.Normalized(lang...)
 	if err != nil {
@@ -216,6 +210,8 @@ func (n NullableDate) NormalizedOrNull(lang ...language.Code) NullableDate {
 	return norm
 }
 
+// NormalizedOrUnchanged returns the normalized date if possible, otherwise returns the date unchanged.
+// The first given lang argument is used as language hint for parsing.
 func (n NullableDate) NormalizedOrUnchanged(lang ...language.Code) NullableDate {
 	normalized, err := n.Normalized(lang...)
 	if err != nil {
@@ -244,9 +240,8 @@ func (n NullableDate) Midnight() nullable.Time {
 	return n.MidnightInLocation(time.Local)
 }
 
-// MidnightTime returns the midnight (00:00) nullable.Time of the date
-// in the given location,
-// or a null nullable.Time value if the date is not valid.
+// MidnightInLocation returns the midnight (00:00) nullable.Time of the date in the given location.
+// Returns a null nullable.Time if the date is not valid or null.
 func (n NullableDate) MidnightInLocation(loc *time.Location) nullable.Time {
 	if n.IsZero() {
 		return nullable.TimeNull
@@ -258,17 +253,15 @@ func (n NullableDate) MidnightInLocation(loc *time.Location) nullable.Time {
 	return t
 }
 
-// NormalizedEqual returns if two dates are equal in normalized form.
+// NormalizedEqual returns true if two dates are equal after normalization.
 func (n NullableDate) NormalizedEqual(other NullableDate) bool {
 	a, _ := n.Normalized()
 	b, _ := other.Normalized()
 	return a == b
 }
 
-// Compare compares n with the passed other NullableDate.
-// If n is before the other, it returns -1;
-// if n is after the other, it returns +1;
-// if they're the same, it returns 0.
+// Compare compares the date with another NullableDate.
+// Returns -1 if n is before other, +1 if after, 0 if equal.
 // A null date is always before a non-null date.
 func (n NullableDate) Compare(other NullableDate) int {
 	a, _ := n.Normalized()
@@ -276,8 +269,8 @@ func (n NullableDate) Compare(other NullableDate) int {
 	return strings.Compare(string(a), string(b))
 }
 
-// After returns if the date is after the passed other one.
-// Returns false if any of the dates is null.
+// After returns true if the date is after the other date.
+// Returns false if either date is null.
 func (n NullableDate) After(other NullableDate) bool {
 	if n.IsNull() || other.IsNull() {
 		return false
@@ -285,13 +278,13 @@ func (n NullableDate) After(other NullableDate) bool {
 	return n.MidnightUTC().Get().After(other.MidnightUTC().Get())
 }
 
-// EqualOrAfter returns if the date is equal or after the passed other one.
+// EqualOrAfter returns true if the date is equal to or after the other date.
 func (n NullableDate) EqualOrAfter(other NullableDate) bool {
 	return n.NormalizedEqual(other) || n.After(other)
 }
 
-// Before returns if the date is before the passed other one.
-// A null date is always before any other date.
+// Before returns true if the date is before the other date.
+// A null date is always before any non-null date.
 func (n NullableDate) Before(other NullableDate) bool {
 	if other.IsNull() {
 		return false
@@ -302,13 +295,12 @@ func (n NullableDate) Before(other NullableDate) bool {
 	return Date(n).Before(Date(other))
 }
 
-// EqualOrBefore returns if the date is equal or before the passed other one.
+// EqualOrBefore returns true if the date is equal to or before the other date.
 func (n NullableDate) EqualOrBefore(other NullableDate) bool {
 	return n.NormalizedEqual(other) || n.Before(other)
 }
 
-// AfterTime returns if midnight of the date in location of the passed
-// time is after the time.
+// AfterTime returns true if midnight of the date (in the location of the passed time) is after the time.
 // Returns false if the date is null.
 func (n NullableDate) AfterTime(other time.Time) bool {
 	if n.IsNull() {
@@ -320,8 +312,7 @@ func (n NullableDate) AfterTime(other time.Time) bool {
 	return n.MidnightInLocation(other.Location()).After(other)
 }
 
-// BeforeTime returns if midnight of the date in location of the passed
-// time is before the time.
+// BeforeTime returns true if midnight of the date (in the location of the passed time) is before the time.
 // Returns true if the date is null.
 func (n NullableDate) BeforeTime(other time.Time) bool {
 	if n.IsNull() {
@@ -330,6 +321,8 @@ func (n NullableDate) BeforeTime(other time.Time) bool {
 	return n.MidnightInLocation(other.Location()).Before(other)
 }
 
+// AddDate returns a new date with the specified years, months, and days added.
+// Returns Null if the date is null.
 func (n NullableDate) AddDate(years int, months int, days int) NullableDate {
 	if n.IsNull() {
 		return Null
@@ -337,6 +330,8 @@ func (n NullableDate) AddDate(years int, months int, days int) NullableDate {
 	return Date(n).AddDate(years, months, days).Nullable()
 }
 
+// AddYears returns a new date with the specified number of years added.
+// Returns Null if the date is null.
 func (n NullableDate) AddYears(years int) NullableDate {
 	if n.IsNull() {
 		return Null
@@ -344,6 +339,8 @@ func (n NullableDate) AddYears(years int) NullableDate {
 	return Date(n).AddYears(years).Nullable()
 }
 
+// AddMonths returns a new date with the specified number of months added.
+// Returns Null if the date is null.
 func (n NullableDate) AddMonths(months int) NullableDate {
 	if n.IsNull() {
 		return Null
@@ -351,6 +348,8 @@ func (n NullableDate) AddMonths(months int) NullableDate {
 	return Date(n).AddMonths(months).Nullable()
 }
 
+// AddDays returns a new date with the specified number of days added.
+// Returns Null if the date is null.
 func (n NullableDate) AddDays(days int) NullableDate {
 	if n.IsNull() {
 		return Null
@@ -358,6 +357,8 @@ func (n NullableDate) AddDays(days int) NullableDate {
 	return Date(n).AddDays(days).Nullable()
 }
 
+// Add returns a new date with the specified duration added.
+// Returns Null if the date is null.
 func (n NullableDate) Add(d time.Duration) NullableDate {
 	if n.IsNull() {
 		return Null
@@ -365,6 +366,8 @@ func (n NullableDate) Add(d time.Duration) NullableDate {
 	return Date(n).Add(d).Nullable()
 }
 
+// Sub returns the duration between the date and the other date (n - other).
+// Returns 0 if either date is null or both dates are equal.
 func (n NullableDate) Sub(other NullableDate) time.Duration {
 	if n.IsNull() || other.IsNull() || other == n {
 		return 0
@@ -372,6 +375,8 @@ func (n NullableDate) Sub(other NullableDate) time.Duration {
 	return Date(n).Sub(Date(other))
 }
 
+// BeginningOfWeek returns the date of the first day (Monday) of the week containing this date.
+// Returns Null if the date is null.
 func (n NullableDate) BeginningOfWeek() NullableDate {
 	if n.IsNull() {
 		return Null
@@ -379,6 +384,8 @@ func (n NullableDate) BeginningOfWeek() NullableDate {
 	return Date(n).BeginningOfWeek().Nullable()
 }
 
+// BeginningOfMonth returns the date of the first day of the month containing this date.
+// Returns Null if the date is null.
 func (n NullableDate) BeginningOfMonth() NullableDate {
 	if n.IsNull() {
 		return Null
@@ -386,6 +393,8 @@ func (n NullableDate) BeginningOfMonth() NullableDate {
 	return Date(n).BeginningOfMonth().Nullable()
 }
 
+// BeginningOfQuarter returns the date of the first day of the quarter containing this date.
+// Returns Null if the date is null.
 func (n NullableDate) BeginningOfQuarter() NullableDate {
 	if n.IsNull() {
 		return Null
@@ -393,6 +402,8 @@ func (n NullableDate) BeginningOfQuarter() NullableDate {
 	return Date(n).BeginningOfQuarter().Nullable()
 }
 
+// BeginningOfYear returns the date of the first day of the year containing this date.
+// Returns Null if the date is null.
 func (n NullableDate) BeginningOfYear() NullableDate {
 	if n.IsNull() {
 		return Null
@@ -400,6 +411,8 @@ func (n NullableDate) BeginningOfYear() NullableDate {
 	return Date(n).BeginningOfYear().Nullable()
 }
 
+// EndOfWeek returns the date of the last day (Sunday) of the week containing this date.
+// Returns Null if the date is null.
 func (n NullableDate) EndOfWeek() NullableDate {
 	if n.IsNull() {
 		return Null
@@ -407,6 +420,8 @@ func (n NullableDate) EndOfWeek() NullableDate {
 	return Date(n).EndOfWeek().Nullable()
 }
 
+// EndOfMonth returns the date of the last day of the month containing this date.
+// Returns Null if the date is null.
 func (n NullableDate) EndOfMonth() NullableDate {
 	if n.IsNull() {
 		return Null
@@ -414,6 +429,8 @@ func (n NullableDate) EndOfMonth() NullableDate {
 	return Date(n).EndOfMonth().Nullable()
 }
 
+// EndOfQuarter returns the date of the last day of the quarter containing this date.
+// Returns Null if the date is null.
 func (n NullableDate) EndOfQuarter() NullableDate {
 	if n.IsNull() {
 		return Null
@@ -421,6 +438,8 @@ func (n NullableDate) EndOfQuarter() NullableDate {
 	return Date(n).EndOfQuarter().Nullable()
 }
 
+// EndOfYear returns the date of the last day of the year containing this date.
+// Returns Null if the date is null.
 func (n NullableDate) EndOfYear() NullableDate {
 	if n.IsNull() {
 		return Null
@@ -428,6 +447,8 @@ func (n NullableDate) EndOfYear() NullableDate {
 	return Date(n).EndOfYear().Nullable()
 }
 
+// LastMonday returns the date of the Monday on or before this date.
+// Returns Null if the date is null.
 func (n NullableDate) LastMonday() NullableDate {
 	if n.IsNull() {
 		return Null
@@ -435,6 +456,8 @@ func (n NullableDate) LastMonday() NullableDate {
 	return Date(n).LastMonday().Nullable()
 }
 
+// NextSunday returns the date of the Sunday on or after this date.
+// Returns Null if the date is null.
 func (n NullableDate) NextSunday() NullableDate {
 	if n.IsNull() {
 		return Null
@@ -442,8 +465,8 @@ func (n NullableDate) NextSunday() NullableDate {
 	return Date(n).NextSunday().Nullable()
 }
 
-// YearMonthDay returns the year, month, day components of the Date.
-// Zero values will be returned when the date is not valid or null.
+// YearMonthDay returns the year, month, and day components of the date.
+// Returns zero values if the date is not valid or null.
 func (n NullableDate) YearMonthDay() (year int, month time.Month, day int) {
 	if n.IsNull() {
 		return 0, 0, 0
@@ -451,29 +474,29 @@ func (n NullableDate) YearMonthDay() (year int, month time.Month, day int) {
 	return Date(n).YearMonthDay()
 }
 
-// Year of the date
-// or zero if the date is null.
+// Year returns the year component of the date.
+// Returns 0 if the date is null.
 func (n NullableDate) Year() int {
 	year, _, _ := n.YearMonthDay()
 	return year
 }
 
-// Month of the date
-// or zero if the date is null.
+// Month returns the month component of the date.
+// Returns 0 if the date is null.
 func (n NullableDate) Month() time.Month {
 	_, month, _ := n.YearMonthDay()
 	return month
 }
 
-// Day within the month of the date
-// or zero if the date is null.
+// Day returns the day of the month component of the date.
+// Returns 0 if the date is null.
 func (n NullableDate) Day() int {
 	_, _, day := n.YearMonthDay()
 	return day
 }
 
-// Weekday returns the date's day of the week
-// or zero if the date is null.
+// Weekday returns the day of the week for this date.
+// Returns 0 (Sunday) if the date is null.
 func (n NullableDate) Weekday() time.Weekday {
 	if n.IsNull() {
 		return 0
@@ -493,6 +516,8 @@ func (n NullableDate) ISOWeek() (year, week int) {
 	return Date(n).ISOWeek()
 }
 
+// IsToday returns true if the date is today in local time.
+// Returns false if the date is null.
 func (n NullableDate) IsToday() bool {
 	if n.IsNull() {
 		return false
@@ -500,6 +525,8 @@ func (n NullableDate) IsToday() bool {
 	return Date(n).IsToday()
 }
 
+// IsTodayInUTC returns true if the date is today in UTC time.
+// Returns false if the date is null.
 func (n NullableDate) IsTodayInUTC() bool {
 	if n.IsNull() {
 		return false
@@ -507,6 +534,8 @@ func (n NullableDate) IsTodayInUTC() bool {
 	return Date(n).IsTodayInUTC()
 }
 
+// AfterToday returns true if the date is after today in local time.
+// Returns false if the date is null.
 func (n NullableDate) AfterToday() bool {
 	if n.IsNull() {
 		return false
@@ -514,6 +543,8 @@ func (n NullableDate) AfterToday() bool {
 	return Date(n).AfterToday()
 }
 
+// AfterTodayInUTC returns true if the date is after today in UTC time.
+// Returns false if the date is null.
 func (n NullableDate) AfterTodayInUTC() bool {
 	if n.IsNull() {
 		return false
@@ -521,7 +552,8 @@ func (n NullableDate) AfterTodayInUTC() bool {
 	return Date(n).AfterTodayInUTC()
 }
 
-// Null is always before today.
+// BeforeToday returns true if the date is before today in local time.
+// A null date is always before today.
 func (n NullableDate) BeforeToday() bool {
 	if n.IsNull() {
 		return true
@@ -529,7 +561,8 @@ func (n NullableDate) BeforeToday() bool {
 	return Date(n).BeforeToday()
 }
 
-// Null is always before today.
+// BeforeTodayInUTC returns true if the date is before today in UTC time.
+// A null date is always before today.
 func (n NullableDate) BeforeTodayInUTC() bool {
 	if n.IsNull() {
 		return true
@@ -550,6 +583,8 @@ func (n NullableDate) Format(layout string) string {
 }
 
 // Scan implements the database/sql.Scanner interface.
+// Accepts string, time.Time, or nil values.
+// Empty strings and zero dates ("0000-00-00", "0001-01-01") are treated as Null.
 func (n *NullableDate) Scan(value any) (err error) {
 	switch x := value.(type) {
 	case string:
@@ -572,10 +607,11 @@ func (n *NullableDate) Scan(value any) (err error) {
 		return nil
 	}
 
-	return fmt.Errorf("can't scan value '%#v' of type %T as data.NullableDate", value, value)
+	return fmt.Errorf("can't scan value '%#v' of type %T as date.NullableDate", value, value)
 }
 
-// Value implements the driver database/sql/driver.Valuer interface.
+// Value implements the database/sql/driver.Valuer interface.
+// Returns nil for zero/null dates, otherwise returns the normalized date string.
 func (n NullableDate) Value() (driver.Value, error) {
 	if n.IsZero() {
 		return nil, nil
@@ -587,8 +623,8 @@ func (n NullableDate) Value() (driver.Value, error) {
 	return string(normalized), nil
 }
 
-// MarshalJSON implements encoding/json.Marshaler
-// by returning the JSON null value for an empty (null) string.
+// MarshalJSON implements encoding/json.Marshaler.
+// Returns the JSON null value for empty/null dates, otherwise returns the date as a JSON string.
 func (n NullableDate) MarshalJSON() ([]byte, error) {
 	if n.IsNull() {
 		return []byte(`null`), nil
@@ -596,6 +632,8 @@ func (n NullableDate) MarshalJSON() ([]byte, error) {
 	return json.Marshal(string(n))
 }
 
+// JSONSchema returns the JSON schema definition for the NullableDate type.
+// Implements the jsonschema.JSONSchemaProvider interface.
 func (NullableDate) JSONSchema() *jsonschema.Schema {
 	return &jsonschema.Schema{
 		Title: "Nullable Date",

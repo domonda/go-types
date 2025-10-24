@@ -10,6 +10,15 @@
 // - JSON marshalling/unmarshalling
 // - Nullable date support
 // - Time zone handling
+//
+// # Week Calculations
+//
+// This package uses github.com/jinzhu/now for week-related period boundary
+// calculations (BeginningOfWeek, EndOfWeek, LastMonday, NextSunday).
+// The package is statically configured with now.WeekStartDay = time.Monday
+// in the init() function to ensure Monday is treated as the first day of the week.
+//
+// TODO: remove dependency on github.com/jinzhu/now and add weekstart argument to the functions that need it
 package date
 
 import (
@@ -26,6 +35,11 @@ import (
 	"github.com/domonda/go-types/language"
 	"github.com/domonda/go-types/strutil"
 )
+
+func init() {
+	// Configure the now package for week-related operations
+	now.WeekStartDay = time.Monday
+}
 
 // Note: Date does not implement types.NormalizableValidator[Date] because
 // its Normalized() method accepts optional language.Code parameters.
@@ -716,7 +730,7 @@ func (date *Date) Scan(value any) (err error) {
 		return nil
 	}
 
-	return fmt.Errorf("can't scan value '%#v' of type %T as data.Date", value, value)
+	return fmt.Errorf("can't scan value '%#v' of type %T as date.Date", value, value)
 }
 
 // Value implements the database/sql/driver.Valuer interface.
