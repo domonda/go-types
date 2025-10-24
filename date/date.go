@@ -272,15 +272,13 @@ func FromUntilFromYearAndMonths(year, months string) (fromDate, untilDate Date, 
 	return fromDate, untilDate, nil
 }
 
-// ScanString tries to parse and assign the passed
-// source string as value of the implementing type.
+// ScanString tries to parse and assign the passed source string as value of the Date.
 //
-// If validate is true, the source string is checked
-// for validity before it is assigned to the type.
-//
-// If validate is false and the source string
-// can still be assigned in some non-normalized way
+// If validate is true, the source string is checked for validity before it is assigned.
+// If validate is false and the source string can still be assigned in some non-normalized way,
 // it will be assigned without returning an error.
+//
+// This method is part of the types.StringScanner interface.
 func (date *Date) ScanString(source string, validate bool) error {
 	newDate, err := Date(source).Normalized()
 	if err != nil {
@@ -293,6 +291,10 @@ func (date *Date) ScanString(source string, validate bool) error {
 	return nil
 }
 
+// ScanStringWithLang parses and assigns the source string as a Date using the given language hint.
+// Returns wasNormalized to indicate if the source was already in normalized form,
+// monthMustBeFirst to indicate if the date format requires month-first ordering,
+// and an error if parsing fails.
 func (date *Date) ScanStringWithLang(source string, lang language.Code) (wasNormalized bool, monthMustBeFirst bool, err error) {
 	newDate, monthMustBeFirst, err := normalizeAndCheckDate(source, lang)
 	if err != nil {
@@ -302,8 +304,7 @@ func (date *Date) ScanStringWithLang(source string, lang language.Code) (wasNorm
 	return newDate == Date(source), monthMustBeFirst, nil
 }
 
-// String returns the normalized date if possible,
-// else it will be returned unchanged as string.
+// String returns the normalized date if possible, otherwise returns the unchanged string.
 // String implements the fmt.Stringer interface.
 func (date Date) String() string {
 	norm, err := date.Normalized()
@@ -313,7 +314,7 @@ func (date Date) String() string {
 	return string(norm)
 }
 
-// WithinIncl returns if date is within and inclusive from and until.
+// WithinIncl returns true if the date is within the inclusive range [from, until].
 func (date Date) WithinIncl(from, until Date) bool {
 	t := date.MidnightUTC()
 	tFrom := from.MidnightUTC()
@@ -321,13 +322,14 @@ func (date Date) WithinIncl(from, until Date) bool {
 	return (t.Equal(tFrom) || t.After(tFrom)) && (t.Equal(tUntil) || t.Before(tUntil))
 }
 
-// BetweenExcl returns if date is between and exlusive after and until.
+// BetweenExcl returns true if the date is strictly between (exclusive) after and before.
 func (date Date) BetweenExcl(after, before Date) bool {
 	t := date.MidnightUTC()
 	return t.After(after.MidnightUTC()) && t.Before(before.MidnightUTC())
 }
 
-// Nullable returns the date as NullableDate
+// Nullable returns the date as a NullableDate.
+// Returns Null if the date is zero, otherwise returns the date as NullableDate.
 func (date Date) Nullable() NullableDate {
 	if date.IsZero() {
 		return Null
@@ -335,29 +337,32 @@ func (date Date) Nullable() NullableDate {
 	return NullableDate(date)
 }
 
-// IsZero returns true when the date is any of ["", "0000-00-00", "0001-01-01"]
+// IsZero returns true when the date is any of ["", "0000-00-00", "0001-01-01"].
 // "0001-01-01" is treated as zero because it's the zero value of time.Time.
 // "0000-00-00" may be the zero value of other date implementations.
 func (date Date) IsZero() bool {
 	return date == "" || date == "0001-01-01" || date == "0000-00-00"
 }
 
-// Validate returns an error if the date is not in a valid, normalizeable format.
+// Validate returns an error if the date is not in a valid, normalizable format.
 func (date Date) Validate() error {
 	_, err := date.Normalized()
 	return err
 }
 
-// Valid returns if the format of the date is correct, see Format
+// Valid returns true if the date is in a valid, normalizable format.
 func (date Date) Valid() bool {
 	return date.Validate() == nil
 }
 
+// ValidAndNormalized returns true if the date is both valid and already in normalized form (YYYY-MM-DD).
 func (date Date) ValidAndNormalized() bool {
 	_, err := time.Parse(Layout, string(date))
 	return err == nil
 }
 
+// Time returns a time.Time for the date at the specified hour, minute, and second in the given location.
+// Returns a zero time.Time if the date is zero or invalid.
 func (date Date) Time(hour, minute, second int, location *time.Location) time.Time {
 	if date.IsZero() {
 		return time.Time{}
@@ -366,10 +371,14 @@ func (date Date) Time(hour, minute, second int, location *time.Location) time.Ti
 	return time.Date(year, month, day, hour, minute, second, 0, location)
 }
 
+// TimeLocal returns a time.Time for the date at the specified hour, minute, and second in local time.
+// Returns a zero time.Time if the date is zero or invalid.
 func (date Date) TimeLocal(hour, minute, second int) time.Time {
 	return date.Time(hour, minute, second, time.Local)
 }
 
+// TimeUTC returns a time.Time for the date at the specified hour, minute, and second in UTC.
+// Returns a zero time.Time if the date is zero or invalid.
 func (date Date) TimeUTC(hour, minute, second int) time.Time {
 	return date.Time(hour, minute, second, time.UTC)
 }
@@ -387,16 +396,14 @@ func (date Date) MidnightUTC() time.Time {
 	return t
 }
 
-// Midnight returns the midnight (00:00) time.Time of the date
-// in the local time zone,
-// or a zero time.Time value if the date is not valid.
+// Midnight returns the midnight (00:00) time.Time of the date in the local time zone.
+// Returns a zero time.Time if the date is not valid.
 func (date Date) Midnight() time.Time {
 	return date.MidnightInLocation(time.Local)
 }
 
-// MidnightInLocation returns the midnight (00:00) time.Time of the date
-// in the given location,
-// or a zero time.Time value if the date is not valid.
+// MidnightInLocation returns the midnight (00:00) time.Time of the date in the given location.
+// Returns a zero time.Time if the date is not valid.
 func (date Date) MidnightInLocation(loc *time.Location) time.Time {
 	if date.IsZero() {
 		return time.Time{}
@@ -408,8 +415,9 @@ func (date Date) MidnightInLocation(loc *time.Location) time.Time {
 	return t
 }
 
-// Format returns date.MidnightUTC().Format(layout),
-// or an empty string if date or layout are an empty string.
+// Format formats the date using the given layout string (see time.Time.Format).
+// Returns an empty string if date or layout are empty.
+// If layout equals Layout constant, returns the date as-is for efficiency.
 func (date Date) Format(layout string) string {
 	if date == "" || layout == "" {
 		return ""
@@ -420,6 +428,8 @@ func (date Date) Format(layout string) string {
 	return date.MidnightUTC().Format(layout)
 }
 
+// NormalizedOrUnchanged returns the normalized date if possible, otherwise returns the date unchanged.
+// The first given lang argument is used as language hint for parsing.
 func (date Date) NormalizedOrUnchanged(lang ...language.Code) Date {
 	normalized, err := date.Normalized(lang...)
 	if err != nil {
@@ -436,6 +446,8 @@ func (date Date) NormalizedOrUnchanged(lang ...language.Code) Date {
 // 	return normalized
 // }
 
+// NormalizedOrNull returns the normalized date as NullableDate if possible, otherwise returns Null.
+// The first given lang argument is used as language hint for parsing.
 func (date Date) NormalizedOrNull(lang ...language.Code) NullableDate {
 	normalized, err := date.Normalized(lang...)
 	if err != nil {
@@ -444,131 +456,144 @@ func (date Date) NormalizedOrNull(lang ...language.Code) NullableDate {
 	return NullableDate(normalized)
 }
 
-// NormalizedEqual returns if two dates are equal in normalized form.
+// NormalizedEqual returns true if two dates are equal after normalization.
 func (date Date) NormalizedEqual(other Date) bool {
 	a, _ := date.Normalized()
 	b, _ := other.Normalized()
 	return a == b
 }
 
-// Compare compares the date with the passed other Date.
-// If the date is before the other, it returns -1;
-// if the date is after the other, it returns +1;
-// if they're the same, it returns 0.
+// Compare compares the date with another Date.
+// Returns -1 if date is before other, +1 if after, 0 if equal.
 func (date Date) Compare(other Date) int {
 	a, _ := date.Normalized()
 	b, _ := other.Normalized()
 	return strings.Compare(string(a), string(b))
 }
 
-// After returns if the date is after the passed other one.
+// After returns true if the date is after the other date.
 func (date Date) After(other Date) bool {
 	return date.MidnightUTC().After(other.MidnightUTC())
 }
 
-// EqualOrAfter returns if the date is equal or after the passed other one.
+// EqualOrAfter returns true if the date is equal to or after the other date.
 func (date Date) EqualOrAfter(other Date) bool {
 	return date.NormalizedEqual(other) || date.After(other)
 }
 
-// Before returns if the date is before the passed other one.
+// Before returns true if the date is before the other date.
 func (date Date) Before(other Date) bool {
 	return date.MidnightUTC().Before(other.MidnightUTC())
 }
 
-// EqualOrBefore returns if the date is equal or before the passed other one.
+// EqualOrBefore returns true if the date is equal to or before the other date.
 func (date Date) EqualOrBefore(other Date) bool {
 	return date.NormalizedEqual(other) || date.Before(other)
 }
 
-// AfterTime returns if midnight of the date in location of the passed
-// time is after the time.
+// AfterTime returns true if midnight of the date (in the location of the passed time) is after the time.
 func (date Date) AfterTime(other time.Time) bool {
 	return date.MidnightInLocation(other.Location()).After(other)
 }
 
-// BeforeTime returns if midnight of the date in location of the passed
-// time is before the time.
+// BeforeTime returns true if midnight of the date (in the location of the passed time) is before the time.
 func (date Date) BeforeTime(other time.Time) bool {
 	return date.MidnightInLocation(other.Location()).Before(other)
 }
 
+// AddDate returns a new date with the specified years, months, and days added.
+// The month and day values may be outside their usual ranges and will be normalized.
 func (date Date) AddDate(years int, months int, days int) Date {
 	return OfTime(date.MidnightUTC().AddDate(years, months, days))
 }
 
+// AddYears returns a new date with the specified number of years added.
 func (date Date) AddYears(years int) Date {
 	return OfTime(date.Midnight().AddDate(years, 0, 0))
 }
 
+// AddMonths returns a new date with the specified number of months added.
 func (date Date) AddMonths(months int) Date {
 	return OfTime(date.Midnight().AddDate(0, months, 0))
 }
 
+// AddDays returns a new date with the specified number of days added.
 func (date Date) AddDays(days int) Date {
 	return OfTime(date.Midnight().AddDate(0, 0, days))
 }
 
+// Add returns a new date with the specified duration added.
 func (date Date) Add(d time.Duration) Date {
 	return OfTime(date.MidnightUTC().Add(d))
 }
 
+// Sub returns the duration between the date and the other date (date - other).
 func (date Date) Sub(other Date) time.Duration {
 	return date.MidnightUTC().Sub(other.MidnightUTC())
 }
 
+// BeginningOfWeek returns the date of the first day (Monday) of the week containing this date.
 func (date Date) BeginningOfWeek() Date {
 	n := (now.Now{Time: date.MidnightUTC()})
 	return OfTime(n.BeginningOfWeek())
 }
 
+// BeginningOfMonth returns the date of the first day of the month containing this date.
 func (date Date) BeginningOfMonth() Date {
 	n := (now.Now{Time: date.MidnightUTC()})
 	return OfTime(n.BeginningOfMonth())
 }
 
+// BeginningOfQuarter returns the date of the first day of the quarter containing this date.
 func (date Date) BeginningOfQuarter() Date {
 	n := (now.Now{Time: date.MidnightUTC()})
 	return OfTime(n.BeginningOfQuarter())
 }
 
+// BeginningOfYear returns the date of the first day of the year containing this date.
 func (date Date) BeginningOfYear() Date {
 	n := (now.Now{Time: date.MidnightUTC()})
 	return OfTime(n.BeginningOfYear())
 }
 
+// EndOfWeek returns the date of the last day (Sunday) of the week containing this date.
 func (date Date) EndOfWeek() Date {
 	n := (now.Now{Time: date.MidnightUTC()})
 	return OfTime(n.EndOfWeek())
 }
 
+// EndOfMonth returns the date of the last day of the month containing this date.
 func (date Date) EndOfMonth() Date {
 	n := (now.Now{Time: date.MidnightUTC()})
 	return OfTime(n.EndOfMonth())
 }
 
+// EndOfQuarter returns the date of the last day of the quarter containing this date.
 func (date Date) EndOfQuarter() Date {
 	n := (now.Now{Time: date.MidnightUTC()})
 	return OfTime(n.EndOfQuarter())
 }
 
+// EndOfYear returns the date of the last day of the year containing this date.
 func (date Date) EndOfYear() Date {
 	n := (now.Now{Time: date.MidnightUTC()})
 	return OfTime(n.EndOfYear())
 }
 
+// LastMonday returns the date of the Monday on or before this date.
 func (date Date) LastMonday() Date {
 	n := (now.Now{Time: date.MidnightUTC()})
 	return OfTime(n.Monday())
 }
 
+// NextSunday returns the date of the Sunday on or after this date.
 func (date Date) NextSunday() Date {
 	n := (now.Now{Time: date.MidnightUTC()})
 	return OfTime(n.Sunday())
 }
 
-// YearMonthDay returns the year, month, day components of the Date.
-// Zero values will be returned when the date is not valid.
+// YearMonthDay returns the year, month, and day components of the date.
+// Returns zero values if the date is not valid.
 func (date Date) YearMonthDay() (year int, month time.Month, day int) {
 	norm, err := date.Normalized()
 	if err != nil {
@@ -580,7 +605,8 @@ func (date Date) YearMonthDay() (year int, month time.Month, day int) {
 	return year, time.Month(monthInt), day
 }
 
-// Year of the date
+// Year returns the year component of the date.
+// Returns 0 if the date is not valid.
 func (date Date) Year() int {
 	norm, err := date.Normalized()
 	if err != nil {
@@ -590,7 +616,8 @@ func (date Date) Year() int {
 	return year
 }
 
-// Month of the date
+// Month returns the month component of the date.
+// Returns 0 if the date is not valid.
 func (date Date) Month() time.Month {
 	norm, err := date.Normalized()
 	if err != nil {
@@ -600,7 +627,8 @@ func (date Date) Month() time.Month {
 	return time.Month(monthInt)
 }
 
-// Day within the month of the date
+// Day returns the day of the month component of the date.
+// Returns 0 if the date is not valid.
 func (date Date) Day() int {
 	norm, err := date.Normalized()
 	if err != nil {
@@ -610,7 +638,8 @@ func (date Date) Day() int {
 	return day
 }
 
-// Weekday returns the date's day of the week.
+// Weekday returns the day of the week for this date.
+// Returns 0 (Sunday) if the date is not valid.
 func (date Date) Weekday() time.Weekday {
 	t := date.Midnight()
 	if t.IsZero() {
@@ -632,31 +661,39 @@ func (date Date) ISOWeek() (year, week int) {
 	return t.ISOWeek()
 }
 
+// IsToday returns true if the date is today in local time.
 func (date Date) IsToday() bool {
 	return date == OfToday()
 }
 
+// IsTodayInUTC returns true if the date is today in UTC time.
 func (date Date) IsTodayInUTC() bool {
 	return date == OfNowInUTC()
 }
 
+// AfterToday returns true if the date is after today in local time.
 func (date Date) AfterToday() bool {
 	return date.After(OfToday())
 }
 
+// AfterTodayInUTC returns true if the date is after today in UTC time.
 func (date Date) AfterTodayInUTC() bool {
 	return date.After(OfNowInUTC())
 }
 
+// BeforeToday returns true if the date is before today in local time.
 func (date Date) BeforeToday() bool {
 	return date.Before(OfToday())
 }
 
+// BeforeTodayInUTC returns true if the date is before today in UTC time.
 func (date Date) BeforeTodayInUTC() bool {
 	return date.Before(OfNowInUTC())
 }
 
 // Scan implements the database/sql.Scanner interface.
+// Accepts string, time.Time, or nil values.
+// Empty strings and zero dates ("0000-00-00", "0001-01-01") are treated as empty Date.
 func (date *Date) Scan(value any) (err error) {
 	switch x := value.(type) {
 	case string:
@@ -682,7 +719,8 @@ func (date *Date) Scan(value any) (err error) {
 	return fmt.Errorf("can't scan value '%#v' of type %T as data.Date", value, value)
 }
 
-// Value implements the driver database/sql/driver.Valuer interface.
+// Value implements the database/sql/driver.Valuer interface.
+// Returns nil for zero dates, otherwise returns the normalized date string.
 func (date Date) Value() (driver.Value, error) {
 	if date.IsZero() {
 		return nil, nil
@@ -694,6 +732,8 @@ func (date Date) Value() (driver.Value, error) {
 	return string(normalized), nil
 }
 
+// JSONSchema returns the JSON schema definition for the Date type.
+// Implements the jsonschema.JSONSchemaProvider interface.
 func (Date) JSONSchema() *jsonschema.Schema {
 	return &jsonschema.Schema{
 		Title:  "Date",
