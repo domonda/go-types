@@ -322,7 +322,7 @@ func (n NullableDate) BeforeTime(other time.Time) bool {
 }
 
 // AddDate returns a new date with the specified years, months, and days added.
-// Returns Null if the date is null.
+// Returns Null if the NullableDate is null.
 func (n NullableDate) AddDate(years int, months int, days int) NullableDate {
 	if n.IsNull() {
 		return Null
@@ -331,7 +331,7 @@ func (n NullableDate) AddDate(years int, months int, days int) NullableDate {
 }
 
 // AddYears returns a new date with the specified number of years added.
-// Returns Null if the date is null.
+// Returns Null if the NullableDate is null.
 func (n NullableDate) AddYears(years int) NullableDate {
 	if n.IsNull() {
 		return Null
@@ -340,7 +340,7 @@ func (n NullableDate) AddYears(years int) NullableDate {
 }
 
 // AddMonths returns a new date with the specified number of months added.
-// Returns Null if the date is null.
+// Returns Null if the NullableDate is null.
 func (n NullableDate) AddMonths(months int) NullableDate {
 	if n.IsNull() {
 		return Null
@@ -349,7 +349,7 @@ func (n NullableDate) AddMonths(months int) NullableDate {
 }
 
 // AddDays returns a new date with the specified number of days added.
-// Returns Null if the date is null.
+// Returns Null if the NullableDate is null.
 func (n NullableDate) AddDays(days int) NullableDate {
 	if n.IsNull() {
 		return Null
@@ -358,7 +358,7 @@ func (n NullableDate) AddDays(days int) NullableDate {
 }
 
 // Add returns a new date with the specified duration added.
-// Returns Null if the date is null.
+// Returns Null if the NullableDate is null.
 func (n NullableDate) Add(d time.Duration) NullableDate {
 	if n.IsNull() {
 		return Null
@@ -375,17 +375,18 @@ func (n NullableDate) Sub(other NullableDate) time.Duration {
 	return Date(n).Sub(Date(other))
 }
 
-// BeginningOfWeek returns the date of the first day (Monday) of the week containing this date.
-// Returns Null if the date is null.
-func (n NullableDate) BeginningOfWeek() NullableDate {
+// BeginningOfWeek returns the date of the first day of the week containing this date.
+// The startDay parameter specifies which day is considered the start of the week.
+// Returns Null if the NullableDate is null.
+func (n NullableDate) BeginningOfWeek(startDay time.Weekday) NullableDate {
 	if n.IsNull() {
 		return Null
 	}
-	return Date(n).BeginningOfWeek().Nullable()
+	return Date(n).BeginningOfWeek(startDay).Nullable()
 }
 
 // BeginningOfMonth returns the date of the first day of the month containing this date.
-// Returns Null if the date is null.
+// Returns Null if the NullableDate is null.
 func (n NullableDate) BeginningOfMonth() NullableDate {
 	if n.IsNull() {
 		return Null
@@ -394,7 +395,7 @@ func (n NullableDate) BeginningOfMonth() NullableDate {
 }
 
 // BeginningOfQuarter returns the date of the first day of the quarter containing this date.
-// Returns Null if the date is null.
+// Returns Null if the NullableDate is null.
 func (n NullableDate) BeginningOfQuarter() NullableDate {
 	if n.IsNull() {
 		return Null
@@ -403,7 +404,7 @@ func (n NullableDate) BeginningOfQuarter() NullableDate {
 }
 
 // BeginningOfYear returns the date of the first day of the year containing this date.
-// Returns Null if the date is null.
+// Returns Null if the NullableDate is null.
 func (n NullableDate) BeginningOfYear() NullableDate {
 	if n.IsNull() {
 		return Null
@@ -411,17 +412,18 @@ func (n NullableDate) BeginningOfYear() NullableDate {
 	return Date(n).BeginningOfYear().Nullable()
 }
 
-// EndOfWeek returns the date of the last day (Sunday) of the week containing this date.
-// Returns Null if the date is null.
-func (n NullableDate) EndOfWeek() NullableDate {
+// EndOfWeek returns the date of the last day of the week containing this date.
+// The weekday parameter specifies which day is considered the start of the week.
+// Returns Null if the NullableDate is null.
+func (n NullableDate) EndOfWeek(weekday time.Weekday) NullableDate {
 	if n.IsNull() {
 		return Null
 	}
-	return Date(n).EndOfWeek().Nullable()
+	return Date(n).EndOfWeek(weekday).Nullable()
 }
 
 // EndOfMonth returns the date of the last day of the month containing this date.
-// Returns Null if the date is null.
+// Returns Null if the NullableDate is null.
 func (n NullableDate) EndOfMonth() NullableDate {
 	if n.IsNull() {
 		return Null
@@ -430,7 +432,7 @@ func (n NullableDate) EndOfMonth() NullableDate {
 }
 
 // EndOfQuarter returns the date of the last day of the quarter containing this date.
-// Returns Null if the date is null.
+// Returns Null if the NullableDate is null.
 func (n NullableDate) EndOfQuarter() NullableDate {
 	if n.IsNull() {
 		return Null
@@ -439,7 +441,7 @@ func (n NullableDate) EndOfQuarter() NullableDate {
 }
 
 // EndOfYear returns the date of the last day of the year containing this date.
-// Returns Null if the date is null.
+// Returns Null if the NullableDate is null.
 func (n NullableDate) EndOfYear() NullableDate {
 	if n.IsNull() {
 		return Null
@@ -448,7 +450,7 @@ func (n NullableDate) EndOfYear() NullableDate {
 }
 
 // LastMonday returns the date of the Monday on or before this date.
-// Returns Null if the date is null.
+// Returns Null if the NullableDate is null.
 func (n NullableDate) LastMonday() NullableDate {
 	if n.IsNull() {
 		return Null
@@ -457,7 +459,7 @@ func (n NullableDate) LastMonday() NullableDate {
 }
 
 // NextSunday returns the date of the Sunday on or after this date.
-// Returns Null if the date is null.
+// Returns Null if the NullableDate is null.
 func (n NullableDate) NextSunday() NullableDate {
 	if n.IsNull() {
 		return Null

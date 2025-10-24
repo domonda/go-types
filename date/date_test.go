@@ -1054,12 +1054,19 @@ func TestDate_Add(t *testing.T) {
 
 // Period boundary tests
 func TestDate_BeginningOfWeek(t *testing.T) {
-	t.Skip("Skipping due to github.com/jinzhu/now configuration issue - requires Config to be set")
-	// TODO: This requires github.com/jinzhu/now configuration
 	d := Date("2023-12-27") // Wednesday
-	beginning := d.BeginningOfWeek()
+
+	// Test with Monday as week start (ISO 8601)
+	beginning := d.BeginningOfWeek(time.Monday)
 	assert.True(t, beginning.Valid())
-	assert.True(t, beginning.Weekday() == time.Monday || beginning.Weekday() == time.Sunday)
+	assert.Equal(t, time.Monday, beginning.Weekday())
+	assert.Equal(t, Date("2023-12-25"), beginning) // Monday before Wednesday
+
+	// Test with Sunday as week start (US style)
+	beginningSunday := d.BeginningOfWeek(time.Sunday)
+	assert.True(t, beginningSunday.Valid())
+	assert.Equal(t, time.Sunday, beginningSunday.Weekday())
+	assert.Equal(t, Date("2023-12-24"), beginningSunday) // Sunday before Wednesday
 }
 
 func TestDate_BeginningOfMonth(t *testing.T) {
@@ -1078,12 +1085,19 @@ func TestDate_BeginningOfYear(t *testing.T) {
 }
 
 func TestDate_EndOfWeek(t *testing.T) {
-	t.Skip("Skipping due to github.com/jinzhu/now configuration issue - requires Config to be set")
-	// TODO: This requires github.com/jinzhu/now configuration
 	d := Date("2023-12-25") // Monday
-	end := d.EndOfWeek()
+
+	// Test with Monday as week start (ISO 8601) - ends on Sunday
+	end := d.EndOfWeek(time.Monday)
 	assert.True(t, end.Valid())
-	assert.True(t, end.After(d) || end == d)
+	assert.Equal(t, time.Sunday, end.Weekday())
+	assert.Equal(t, Date("2023-12-31"), end) // Sunday after Monday
+
+	// Test with Sunday as week start (US style) - ends on Saturday
+	endSaturday := d.EndOfWeek(time.Sunday)
+	assert.True(t, endSaturday.Valid())
+	assert.Equal(t, time.Saturday, endSaturday.Weekday())
+	assert.Equal(t, Date("2023-12-30"), endSaturday) // Saturday after Monday
 }
 
 func TestDate_EndOfMonth(t *testing.T) {
@@ -1102,20 +1116,20 @@ func TestDate_EndOfYear(t *testing.T) {
 }
 
 func TestDate_LastMonday(t *testing.T) {
-	t.Skip("Skipping due to github.com/jinzhu/now configuration issue - requires Config to be set")
 	d := Date("2023-12-27") // Wednesday
 	monday := d.LastMonday()
 	assert.True(t, monday.Valid())
 	assert.Equal(t, time.Monday, monday.Weekday())
+	assert.Equal(t, Date("2023-12-25"), monday) // Monday before Wednesday
 	assert.True(t, monday.EqualOrBefore(d))
 }
 
 func TestDate_NextSunday(t *testing.T) {
-	t.Skip("Skipping due to github.com/jinzhu/now configuration issue - requires Config to be set")
 	d := Date("2023-12-25") // Monday
 	sunday := d.NextSunday()
 	assert.True(t, sunday.Valid())
 	assert.Equal(t, time.Sunday, sunday.Weekday())
+	assert.Equal(t, Date("2023-12-31"), sunday) // Sunday after Monday
 	assert.True(t, sunday.EqualOrAfter(d))
 }
 

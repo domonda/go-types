@@ -10,15 +10,6 @@
 // - JSON marshalling/unmarshalling
 // - Nullable date support
 // - Time zone handling
-//
-// # Week Calculations
-//
-// This package uses github.com/jinzhu/now for week-related period boundary
-// calculations (BeginningOfWeek, EndOfWeek, LastMonday, NextSunday).
-// The package is statically configured with now.WeekStartDay = time.Monday
-// in the init() function to ensure Monday is treated as the first day of the week.
-//
-// TODO: remove dependency on github.com/jinzhu/now and add weekstart argument to the functions that need it
 package date
 
 import (
@@ -30,16 +21,10 @@ import (
 	"unicode"
 
 	"github.com/invopop/jsonschema"
-	"github.com/jinzhu/now"
 
 	"github.com/domonda/go-types/language"
 	"github.com/domonda/go-types/strutil"
 )
-
-func init() {
-	// Configure the now package for week-related operations
-	now.WeekStartDay = time.Monday
-}
 
 // Note: Date does not implement types.NormalizableValidator[Date] because
 // its Normalized() method accepts optional language.Code parameters.
@@ -403,6 +388,7 @@ func (date Date) MidnightUTC() time.Time {
 	if date.IsZero() {
 		return time.Time{}
 	}
+	// time.Parse uses UTC
 	t, err := time.Parse(Layout, string(date))
 	if err != nil {
 		return time.Time{}
@@ -546,64 +532,81 @@ func (date Date) Sub(other Date) time.Duration {
 	return date.MidnightUTC().Sub(other.MidnightUTC())
 }
 
-// BeginningOfWeek returns the date of the first day (Monday) of the week containing this date.
-func (date Date) BeginningOfWeek() Date {
-	n := (now.Now{Time: date.MidnightUTC()})
-	return OfTime(n.BeginningOfWeek())
+// BeginningOfWeek returns the date of the first day of the week containing this date.
+// The startDay parameter specifies which day is considered the start of the week.
+// For example, time.Monday for ISO 8601 weeks, or time.Sunday for US-style weeks.
+func (date Date) BeginningOfWeek(startDay time.Weekday) Date {
+	t := date.MidnightUTC()
+	// Calculate days to go back to reach the week start day
+	daysBack := int(t.Weekday() - startDay)
+	if daysBack < 0 {
+		daysBack += 7
+	}
+	return OfTime(t.AddDate(0, 0, -daysBack))
 }
 
 // BeginningOfMonth returns the date of the first day of the month containing this date.
 func (date Date) BeginningOfMonth() Date {
-	n := (now.Now{Time: date.MidnightUTC()})
-	return OfTime(n.BeginningOfMonth())
+	y, m, _ := date.YearMonthDay()
+	return Of(y, m, 1)
 }
 
 // BeginningOfQuarter returns the date of the first day of the quarter containing this date.
 func (date Date) BeginningOfQuarter() Date {
-	n := (now.Now{Time: date.MidnightUTC()})
-	return OfTime(n.BeginningOfQuarter())
+	y, m, _ := date.YearMonthDay()
+	// Calculate the first month of the quarter
+	offset := (int(m) - 1) % 3
+	return Of(y, m, 1).AddMonths(-offset)
 }
 
 // BeginningOfYear returns the date of the first day of the year containing this date.
 func (date Date) BeginningOfYear() Date {
-	n := (now.Now{Time: date.MidnightUTC()})
-	return OfTime(n.BeginningOfYear())
+	y, _, _ := date.YearMonthDay()
+	return Of(y, time.January, 1)
 }
 
-// EndOfWeek returns the date of the last day (Sunday) of the week containing this date.
-func (date Date) EndOfWeek() Date {
-	n := (now.Now{Time: date.MidnightUTC()})
-	return OfTime(n.EndOfWeek())
+// EndOfWeek returns the date of the last day of the week containing this date.
+// The weekday parameter specifies which day is considered the start of the week.
+// The end of the week is calculated as 6 days after the beginning.
+// For example, if weekday is time.Monday, the end will be Sunday.
+func (date Date) EndOfWeek(weekday time.Weekday) Date {
+	return date.BeginningOfWeek(weekday).AddDays(6)
 }
 
 // EndOfMonth returns the date of the last day of the month containing this date.
 func (date Date) EndOfMonth() Date {
-	n := (now.Now{Time: date.MidnightUTC()})
-	return OfTime(n.EndOfMonth())
+	return date.BeginningOfMonth().AddMonths(1).AddDays(-1)
 }
 
 // EndOfQuarter returns the date of the last day of the quarter containing this date.
 func (date Date) EndOfQuarter() Date {
-	n := (now.Now{Time: date.MidnightUTC()})
-	return OfTime(n.EndOfQuarter())
+	return date.BeginningOfQuarter().AddMonths(3).AddDays(-1)
 }
 
 // EndOfYear returns the date of the last day of the year containing this date.
 func (date Date) EndOfYear() Date {
-	n := (now.Now{Time: date.MidnightUTC()})
-	return OfTime(n.EndOfYear())
+	y, _, _ := date.YearMonthDay()
+	return Of(y, time.December, 31)
 }
 
 // LastMonday returns the date of the Monday on or before this date.
 func (date Date) LastMonday() Date {
-	n := (now.Now{Time: date.MidnightUTC()})
-	return OfTime(n.Monday())
+	t := date.MidnightUTC()
+	weekday := int(t.Weekday())
+	if weekday == 0 {
+		weekday = 7
+	}
+	return OfTime(t.AddDate(0, 0, -(weekday - 1)))
 }
 
 // NextSunday returns the date of the Sunday on or after this date.
 func (date Date) NextSunday() Date {
-	n := (now.Now{Time: date.MidnightUTC()})
-	return OfTime(n.Sunday())
+	t := date.MidnightUTC()
+	weekday := int(t.Weekday())
+	if weekday == 0 {
+		weekday = 7
+	}
+	return OfTime(t.AddDate(0, 0, 7-weekday))
 }
 
 // YearMonthDay returns the year, month, and day components of the date.
