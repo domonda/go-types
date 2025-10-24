@@ -7,7 +7,7 @@ import (
 	"github.com/domonda/go-types/nullable"
 )
 
-const YearMonthNull = ""
+const YearMonthNull NullableYearMonth = ""
 
 // Compile-time check that NullableYearMonth implements nullable.NullSetable[Date]
 var _ nullable.NullSetable[YearMonth] = (*NullableYearMonth)(nil)

@@ -97,7 +97,8 @@ func (ym YearMonth) Nullable() NullableYearMonth {
 }
 
 // DateRange returns the first and last date of the month.
-// Returns the date range [fromDate, untilDate] representing the entire month.
+// Returns the date range [fromDate, untilDate] representing the entire month
+// where untilDate is the last day of the month.
 func (ym YearMonth) DateRange() (fromDate, untilDate Date) {
 	fromDate = ym.Date(1)
 	untilDate = Date(fromDate.Midnight().

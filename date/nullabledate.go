@@ -15,7 +15,7 @@ import (
 
 // Null is an empty string and will be treated as SQL NULL.
 // date.Null.IsZero() == true
-var Null NullableDate
+const Null NullableDate = ""
 
 // NullableDate is identical to Date, except that IsZero() is considered valid
 // by the Valid() and Validate() methods.
