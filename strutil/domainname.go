@@ -13,6 +13,9 @@ var (
 	emailDomainRegex = regexp.MustCompile(`^[a-z][a-z0-9\.\-_\+]*@([a-z][a-z0-9\-]*\.` + tld + `)$`)
 )
 
+// ParseDomainName extracts and returns a domain name from word.
+// It recognizes domains in HTTP URLs, www prefixed domains, and email addresses.
+// Returns an empty string if no domain is found.
 func ParseDomainName(word string) string {
 	word = strings.ToLower(word)
 
@@ -34,6 +37,10 @@ func ParseDomainName(word string) string {
 	return ""
 }
 
+// ParseDomainNameIndex extracts a domain name from word and returns both the domain
+// and the byte indices [start, end] where the domain was found.
+// It recognizes domains in HTTP URLs, www prefixed domains, and email addresses.
+// Returns empty string and nil indices if no domain is found.
 func ParseDomainNameIndex(word string) (domain string, indices []int) {
 	word = strings.ToLower(word)
 

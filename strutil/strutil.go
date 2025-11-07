@@ -29,7 +29,7 @@ func panicIfNot(assumptions ...bool) {
 // 	return b.String()
 // }
 
-// IsRuneFunc is function pionter for specifying if a rune matches a criteria
+// IsRuneFunc is a function pointer for specifying if a rune matches a criteria.
 type IsRuneFunc func(rune) bool
 
 // SplitAndTrimIndex first splits str into words not containing isSplitRune,
@@ -111,6 +111,8 @@ func SplitAndTrimIndex(str []byte, isSplitRune, isTrimRune IsRuneFunc) (indices 
 	return indices
 }
 
+// IsRune returns an IsRuneFunc that returns true if the tested rune
+// matches any of the provided runes.
 func IsRune(runes ...rune) IsRuneFunc {
 	return func(testR rune) bool {
 		for _, r := range runes {
@@ -122,20 +124,26 @@ func IsRune(runes ...rune) IsRuneFunc {
 	}
 }
 
+// IsWordSeparator returns true if r is a word separator character
+// (space, punctuation, mark, or symbol).
 func IsWordSeparator(r rune) bool {
 	return unicode.IsSpace(r) || unicode.IsPunct(r) || unicode.IsMark(r) || unicode.IsSymbol(r)
 }
 
+// IsNorLetterOrDigit returns true if r is neither a letter nor a digit.
 func IsNorLetterOrDigit(r rune) bool {
 	return !(unicode.IsDigit(r) || unicode.IsLetter(r))
 }
 
+// IsRuneInverse returns an IsRuneFunc that inverts the result of the provided isRune function.
 func IsRuneInverse(isRune IsRuneFunc) IsRuneFunc {
 	return func(r rune) bool {
 		return !isRune(r)
 	}
 }
 
+// IsRuneAll returns an IsRuneFunc that returns true only if all provided
+// isRune functions return true for the tested rune.
 func IsRuneAll(isRune ...IsRuneFunc) IsRuneFunc {
 	return func(r rune) bool {
 		for _, is := range isRune {
@@ -147,6 +155,8 @@ func IsRuneAll(isRune ...IsRuneFunc) IsRuneFunc {
 	}
 }
 
+// IsRuneAny returns an IsRuneFunc that returns true if any of the provided
+// isRune functions return true for the tested rune.
 func IsRuneAny(isRune ...IsRuneFunc) IsRuneFunc {
 	return func(r rune) bool {
 		for _, is := range isRune {
@@ -265,6 +275,8 @@ func KeepRunesString(str string, keepRunes ...IsRuneFunc) string {
 	return b.String()
 }
 
+// MapRuneIsAfterWordSeparator returns a boolean slice indicating for each byte position
+// in str whether that position comes after a word separator character.
 func MapRuneIsAfterWordSeparator(str string) []bool {
 	result := make([]bool, len(str))
 	i0 := -1
@@ -376,6 +388,8 @@ func SanitizeFileName(name string) string {
 	return b.String()
 }
 
+// NormalizeExt normalizes a file extension by converting it to lowercase
+// and applying common extension mappings (e.g., .tif -> .tiff, .jpg -> .jpeg).
 func NormalizeExt(ext string) string {
 	ext = strings.ToLower(ext)
 	if norm, ok := normalizedExt[ext]; ok {
@@ -646,11 +660,9 @@ func StringContainsAny(str string, subStrings []string) bool {
 	return false
 }
 
-// ToSnakeCase converts s to snake case
-// by lower casing everything and inserting '_'
-// before every new upper case character in s.
-// Whitespace, symbol, and punctuation characters
-// will be replace by '_'.
+// ToSnakeCase converts s to snake case by lower casing everything
+// and inserting '_' before every new upper case character in s.
+// Whitespace, symbol, and punctuation characters will be replaced by '_'.
 func ToSnakeCase(s string) string {
 	var b strings.Builder
 	b.Grow(len(s) + 2)

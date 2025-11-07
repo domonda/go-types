@@ -2,6 +2,8 @@ package strutil
 
 import "strings"
 
+// HTMLEscapeSpecialRunes returns str with special Unicode characters
+// replaced by their HTML entity equivalents (e.g., 'ä' becomes '&auml;').
 func HTMLEscapeSpecialRunes(str string) string {
 	var b strings.Builder
 	b.Grow(len(str))

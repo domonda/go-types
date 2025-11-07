@@ -36,33 +36,6 @@ func IndexInStrings(str string, slice []string) int {
 	return -1
 }
 
-func Truncate[S ~string](s S, maxLen int) S {
-	numRunes := 0
-	for byteIndex := range s {
-		numRunes++
-		if numRunes > maxLen {
-			return s[:byteIndex]
-		}
-	}
-	return s
-}
-
-func TruncateWithEllipsis[S ~string](s S, maxLenInclEllipsis int) S {
-	if maxLenInclEllipsis <= 0 {
-		return ""
-	}
-	numRunes := 0
-	lastByteIndex := 0
-	for byteIndex := range s {
-		numRunes++
-		if numRunes > maxLenInclEllipsis {
-			return s[:lastByteIndex] + "…"
-		}
-		lastByteIndex = byteIndex
-	}
-	return s
-}
-
 // DerefPtr returns the string ptr points to
 // or an empty string if ptr is nil.
 func DerefPtr(ptr *string) string {
@@ -94,8 +67,8 @@ func Join[T ~string](elems []T, sep string) string {
 		return string(elems[0])
 	}
 	n := len(sep) * (len(elems) - 1)
-	for i := 0; i < len(elems); i++ {
-		n += len(elems[i])
+	for _, elem := range elems {
+		n += len(elem)
 	}
 
 	var b strings.Builder

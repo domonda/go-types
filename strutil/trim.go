@@ -35,3 +35,41 @@ func CutTrimSpace[S ~string](s, sep S) (before, after S, found bool) {
 	}
 	return s, "", false
 }
+
+// Truncate returns a truncated version of s with at most maxLen runes.
+// If s has more than maxLen runes, it returns the first maxLen runes.
+// The truncation is UTF-8 aware and will not split multi-byte characters.
+func Truncate[S ~string](s S, maxLen int) S {
+	numRunes := 0
+	for byteIndex := range s {
+		numRunes++
+		if numRunes > maxLen {
+			return s[:byteIndex]
+		}
+	}
+	return s
+}
+
+// TruncateTrimSpace truncates s to maxLen runes and trims leading and trailing whitespace.
+func TruncateTrimSpace[S ~string](s S, maxLen int) S {
+	return TrimSpace(Truncate(s, maxLen))
+}
+
+// TruncateWithEllipsis truncates s to maxLenInclEllipsis runes, appending an ellipsis (…) if truncated.
+// The returned string will have at most maxLenInclEllipsis runes including the ellipsis.
+// If maxLenInclEllipsis is 0 or negative, returns an empty string.
+func TruncateWithEllipsis[S ~string](s S, maxLenInclEllipsis int) S {
+	if maxLenInclEllipsis <= 0 {
+		return ""
+	}
+	numRunes := 0
+	lastByteIndex := 0
+	for byteIndex := range s {
+		numRunes++
+		if numRunes > maxLenInclEllipsis {
+			return s[:lastByteIndex] + "…"
+		}
+		lastByteIndex = byteIndex
+	}
+	return s
+}
