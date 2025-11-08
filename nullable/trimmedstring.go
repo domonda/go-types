@@ -7,7 +7,6 @@ import (
 	"encoding"
 	"encoding/json"
 	"encoding/xml"
-	"errors"
 	"fmt"
 	"strings"
 	"unsafe"
@@ -252,23 +251,15 @@ func (s *TrimmedString) Scan(value any) error {
 		return nil
 
 	case string:
-		x = strutil.TrimSpace(x)
-		if len(x) == 0 {
-			return errors.New("can't scan empty trimmed string as nullable.TrimmedString")
-		}
-		*s = TrimmedString(x)
+		*s = TrimmedStringFrom(x)
 		return nil
 
 	case []byte:
-		x = strutil.TrimSpaceBytes(x)
-		if len(x) == 0 {
-			return errors.New("can't scan empty trimmed string as nullable.TrimmedString")
-		}
-		*s = TrimmedString(x)
+		*s = TrimmedStringFrom(string(x))
 		return nil
 
 	default:
-		return fmt.Errorf("can't scan %T as nullable.TrimmedString", value)
+		return fmt.Errorf("can not scan %T as nullable.TrimmedString", value)
 	}
 }
 
@@ -304,7 +295,7 @@ func (s *TrimmedString) UnmarshalJSON(j []byte) error {
 	var str string
 	err := json.Unmarshal(j, &str)
 	if err != nil {
-		return fmt.Errorf("can't unmarshal JSON (%s) as nullable.TrimmedString because: %w", j, err)
+		return fmt.Errorf("can not unmarshal JSON (%s) as nullable.TrimmedString because: %w", j, err)
 	}
 	s.Set(str)
 	return nil
