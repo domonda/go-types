@@ -19,16 +19,16 @@ func Test_StrMutex(t *testing.T) {
 	wg.Add(numParallel)
 
 	testFunc := func() {
-		for i := 0; i < numAccess; i++ {
+		for range numAccess {
 			strMutex.Lock("test")
 			time.Sleep(time.Nanosecond * time.Duration(rand.Intn(100)))
 			strMutex.Unlock("test")
-			time.Sleep(1)
+			time.Sleep(1 * time.Nanosecond) // Minimal sleep
 		}
 		wg.Done()
 	}
 
-	for i := 0; i < numParallel; i++ {
+	for range numParallel {
 		go testFunc()
 	}
 	wg.Wait()
