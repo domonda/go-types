@@ -15,6 +15,18 @@ type Amount float64
 
 type NullableAmount = nullable.Type[Amount]
 
+// NullableAmountFrom returns a not null nullable amount from a value
+// using the value as the non-null value.
+func NullableAmountFrom(value float64) NullableAmount {
+	return NullableAmount(nullable.TypeFrom(Amount(value)))
+}
+
+// NullableAmountFromPtr returns a nullable amount from a pointer
+// using nil as the null value.
+func NullableAmountFromPtr(ptr *Amount) NullableAmount {
+	return NullableAmount(nullable.TypeFromPtr(ptr))
+}
+
 // ParseAmount parses an amount from str accepting only certain decimal digit counts.
 // If no acceptedDecimals are passed, then any decimal digit count is accepted.
 // Infinity and NaN are parsed and returned without error.

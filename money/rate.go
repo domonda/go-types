@@ -18,6 +18,18 @@ type Rate float64
 
 type NullableRate = nullable.Type[Rate]
 
+// NullableRateFrom returns a not null nullable rate from a value
+// using the value as the non-null value.
+func NullableRateFrom(value float64) NullableRate {
+	return NullableRate(nullable.TypeFrom(Rate(value)))
+}
+
+// NullableRateFromPtr returns a nullable rate from a pointer
+// using nil as the null value.
+func NullableRateFromPtr(ptr *Rate) NullableRate {
+	return NullableRate(nullable.TypeFromPtr(ptr))
+}
+
 // ParseRate parses a rate from str accepting only certain decimal digit counts.
 // If no acceptedDecimals are passed, then any decimal digit count is accepted.
 // If a string ends with '%' then the parsed number part will be divided by 100.
