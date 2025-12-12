@@ -47,8 +47,16 @@ type Type[T any] struct {
 	valid bool
 }
 
-// TypeFromPtr returns a nullable type from a pointer
-// using nil as the null value.
+// TypeFrom returns a valid (non-null) nullable type
+// wrapping the given value.
+func TypeFrom[T any](value T) Type[T] {
+	return Type[T]{value: value, valid: true}
+}
+
+// TypeFromPtr returns a nullable type from a pointer.
+// If the pointer is nil, the returned type is null.
+// If the pointer is non-nil, the returned type is valid
+// and contains a copy of the dereferenced pointer value.
 //
 // See Type[T].Ptr for the inverse.
 func TypeFromPtr[T any](ptr *T) Type[T] {
