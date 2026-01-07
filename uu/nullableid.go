@@ -25,9 +25,16 @@ type NullableID [16]byte
 // Compile-time check that NullableID implements nullable.NullSetable[ID]
 var _ nullable.NullSetable[ID] = (*NullableID)(nil)
 
-// NullableIDFromString parses a string as NullableID.
-// The Nil UUID "00000000-0000-0000-0000-000000000000"
-// is interpreted as NULL.
+// NullableIDFromString parses a string as NullableID supporting multiple formats:
+//
+// After removing optional surrounding quotes "" or braces {}:
+//   - 22 characters: Base64 URL encoding without padding (e.g., "abcdefghijklmnopqrstuv")
+//   - 32 characters: Hex encoding without dashes (e.g., "6ba7b8109dad11d180b400c04fd430c8")
+//   - 36 characters: Standard dashed format (e.g., "6ba7b810-9dad-11d1-80b4-00c04fd430c8")
+//   - URN format: "urn:uuid:" prefix followed by 36-character dashed format
+//
+// The Nil UUID "00000000-0000-0000-0000-000000000000" is interpreted as NULL.
+// See IDFromString for more format examples.
 func NullableIDFromString(s string) (NullableID, error) {
 	id, err := IDFromString(s)
 	if err != nil {
@@ -36,10 +43,17 @@ func NullableIDFromString(s string) (NullableID, error) {
 	return NullableID(id), nil
 }
 
-// NullableIDFromStringOrNull parses a string as UUID,
+// NullableIDFromStringOrNull parses a string as UUID supporting multiple formats,
 // or returns IDNull in case of a parsing error.
-// The Nil UUID "00000000-0000-0000-0000-000000000000"
-// is interpreted as NULL.
+//
+// Supports the same formats as NullableIDFromString:
+//   - 22 characters: Base64 URL encoding without padding
+//   - 32 characters: Hex encoding without dashes
+//   - 36 characters: Standard dashed format
+//   - URN format: "urn:uuid:" prefix followed by dashed format
+//   - Optional surrounding quotes "" or braces {}
+//
+// The Nil UUID "00000000-0000-0000-0000-000000000000" is interpreted as NULL.
 func NullableIDFromStringOrNull(s string) NullableID {
 	id, err := IDFromString(s)
 	if err != nil {
@@ -48,9 +62,19 @@ func NullableIDFromStringOrNull(s string) NullableID {
 	return NullableID(id)
 }
 
-// NullableIDFromBytes parses a byte slice as UUID.
-// The Nil UUID "00000000-0000-0000-0000-000000000000"
-// is interpreted as NULL.
+// NullableIDFromBytes parses a byte slice as UUID supporting multiple formats:
+//
+// Binary format (16 bytes):
+//   - Raw 16-byte UUID representation
+//
+// String formats (after removing optional surrounding quotes "" or braces {}):
+//   - 22 bytes: Base64 URL encoding without padding (e.g., "abcdefghijklmnopqrstuv")
+//   - 32 bytes: Hex encoding without dashes (e.g., "6ba7b8109dad11d180b400c04fd430c8")
+//   - 36 bytes: Standard dashed format (e.g., "6ba7b810-9dad-11d1-80b4-00c04fd430c8")
+//   - URN format: "urn:uuid:" prefix followed by 36-byte dashed format
+//
+// The Nil UUID "00000000-0000-0000-0000-000000000000" is interpreted as NULL.
+// See IDFromBytes for more details.
 func NullableIDFromBytes(s []byte) (NullableID, error) {
 	id, err := IDFromBytes(s)
 	if err != nil {
@@ -59,10 +83,11 @@ func NullableIDFromBytes(s []byte) (NullableID, error) {
 	return NullableID(id), nil
 }
 
-// NullableIDFromPtr returns the passed ID as NullableID
-// if the ptr is not nil, or returns IDNull in case of a nil ptr.
-// The Nil UUID "00000000-0000-0000-0000-000000000000"
-// is interpreted as NULL.
+// NullableIDFromPtr returns the dereferenced ID as NullableID
+// if ptr is not nil, or returns IDNull if ptr is nil.
+//
+// Note: A non-nil pointer to the Nil UUID "00000000-0000-0000-0000-000000000000"
+// will be returned as IDNull (null), not as a valid NullableID containing the Nil UUID.
 func NullableIDFromPtr(ptr *ID) NullableID {
 	if ptr == nil {
 		return IDNull
@@ -70,11 +95,24 @@ func NullableIDFromPtr(ptr *ID) NullableID {
 	return NullableID(*ptr)
 }
 
-// NullableIDFromAny converts val to an ID or returns an error
+// NullableIDFromAny converts val to a NullableID or returns an error
 // if the conversion is not possible or the ID is not valid.
-// Returns IDNull and no error when val is nil.
-// The Nil UUID "00000000-0000-0000-0000-000000000000"
-// is interpreted as NULL.
+//
+// Supported types:
+//   - string: parsed using NullableIDFromString (supports all format variations)
+//   - []byte: parsed using NullableIDFromBytes (supports all format variations)
+//   - ID, NullableID, [16]byte: validated and converted
+//   - nil: returns IDNull with no error
+//
+// For string and []byte inputs, supports:
+//   - Binary format (16 bytes for []byte only)
+//   - Base64 URL encoding (22 chars/bytes)
+//   - Hex without dashes (32 chars/bytes)
+//   - Standard dashed format (36 chars/bytes)
+//   - URN format with "urn:uuid:" prefix
+//   - Optional surrounding quotes "" or braces {}
+//
+// The Nil UUID "00000000-0000-0000-0000-000000000000" is interpreted as NULL.
 func NullableIDFromAny(val any) (NullableID, error) {
 	switch x := val.(type) {
 	case string:
@@ -94,12 +132,23 @@ func NullableIDFromAny(val any) (NullableID, error) {
 	}
 }
 
-// NullableIDMust converts val to an ID or panics
-// if that's not possible or the ID is not valid.
-// Supported types are string, []byte, [16]byte,
-// ID, NullableID, and nil.
-// The Nil UUID "00000000-0000-0000-0000-000000000000"
-// is interpreted as NULL.
+// NullableIDMust converts val to a NullableID or panics
+// if the conversion is not possible or the ID is not valid.
+//
+// Supported types (via IDSource constraint):
+//   - string: parsed using NullableIDFromString (supports all format variations)
+//   - []byte: parsed using NullableIDFromBytes (supports all format variations)
+//   - ID, NullableID, [16]byte: validated and converted
+//
+// For string and []byte inputs, supports:
+//   - Binary format (16 bytes for []byte only)
+//   - Base64 URL encoding (22 chars/bytes)
+//   - Hex without dashes (32 chars/bytes)
+//   - Standard dashed format (36 chars/bytes)
+//   - URN format with "urn:uuid:" prefix
+//   - Optional surrounding quotes "" or braces {}
+//
+// The Nil UUID "00000000-0000-0000-0000-000000000000" is interpreted as NULL.
 func NullableIDMust[T IDSource](val T) NullableID {
 	switch x := any(val).(type) {
 	case string:

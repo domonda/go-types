@@ -176,12 +176,21 @@ func (d *v7Series) nextID() ID {
 	return id
 }
 
-// IDFromBytes parses a byte slice as UUID.
-// If the slice has a length of 16, it will be interpred as a binary UUID,
-// if the length is 22, 32, or 36, it will be parsed as string.
+// IDFromBytes parses a byte slice as UUID supporting multiple formats:
+//
+// Binary format (16 bytes):
+//   - Raw 16-byte UUID representation
+//
+// String formats (after removing optional surrounding quotes "" or braces {}):
+//   - 22 bytes: Base64 URL encoding without padding (e.g., "abcdefghijklmnopqrstuv")
+//   - 32 bytes: Hex encoding without dashes (e.g., "6ba7b8109dad11d180b400c04fd430c8")
+//   - 36 bytes: Standard dashed format (e.g., "6ba7b810-9dad-11d1-80b4-00c04fd430c8")
+//   - URN format: "urn:uuid:" prefix followed by 36-byte dashed format
+//
+// The function automatically strips surrounding double quotes or braces before parsing.
 func IDFromBytes(b []byte) (ID, error) {
 	if len(b) < 16 {
-		return IDNil, fmt.Errorf("uu.ID %q is too short", b)
+		return IDNil, fmt.Errorf("invalid UUID length %d: %q", len(b), b)
 	}
 	if len(b) == 16 {
 		var id ID
@@ -192,7 +201,7 @@ func IDFromBytes(b []byte) (ID, error) {
 	if bytes.HasPrefix(b, []byte("urn:uuid:")) {
 		text := b[9:]
 		if len(text) != 36 {
-			return IDNil, fmt.Errorf("uu.ID string has wrong length: %q", b)
+			return IDNil, fmt.Errorf("invalid UUID length %d: %q", len(text), b)
 		}
 		return parseDashedFormat(text, b)
 	}
@@ -210,7 +219,7 @@ func IDFromBytes(b []byte) (ID, error) {
 		var id ID
 		_, err := base64.RawURLEncoding.Decode(id[:], text)
 		if err != nil {
-			return IDNil, fmt.Errorf("uu.ID string %q base64 decoding error: %w", b, err)
+			return IDNil, fmt.Errorf("base64 decoding error of UUID string %q: %w", b, err)
 		}
 		return id, nil
 
@@ -218,7 +227,7 @@ func IDFromBytes(b []byte) (ID, error) {
 		var id ID
 		_, err := hex.Decode(id[:], text)
 		if err != nil {
-			return IDNil, fmt.Errorf("uu.ID string %q hex decoding error: %w", b, err)
+			return IDNil, fmt.Errorf("hex decoding error of UUID string %q: %w", b, err)
 		}
 		return id, nil
 
@@ -226,12 +235,20 @@ func IDFromBytes(b []byte) (ID, error) {
 		return parseDashedFormat(text, b)
 
 	default:
-		return IDNil, fmt.Errorf("uu.IDFromBytes expects 16, 22, 32, or 36 bytes, but got %d: %q", len(b), b)
+		return IDNil, fmt.Errorf("invalid UUID length %d: %q", len(text), b)
 	}
 }
 
-// IDFromBytesOrNil parses a byte slice as UUID.
-// Same behavior as IDFromBytes, but returns a Nil UUID on error.
+// IDFromBytesOrNil parses a byte slice as UUID supporting multiple formats.
+// Same behavior as IDFromBytes, but returns IDNil on error instead of returning an error.
+//
+// Supports all formats documented in IDFromBytes:
+//   - Binary format (16 bytes)
+//   - Base64 URL encoding (22 bytes)
+//   - Hex without dashes (32 bytes)
+//   - Standard dashed format (36 bytes)
+//   - URN format with "urn:uuid:" prefix
+//   - Optional surrounding quotes "" or braces {}
 func IDFromBytesOrNil(s []byte) ID {
 	id, err := IDFromBytes(s)
 	if err != nil {
@@ -240,17 +257,43 @@ func IDFromBytesOrNil(s []byte) ID {
 	return id
 }
 
-// IDFromString parses a string as ID.
-// The string is expected in a form accepted by UnmarshalText.
+// IDFromString parses a string as UUID supporting multiple formats:
+//
+// After removing optional surrounding quotes "" or braces {}:
+//   - 22 characters: Base64 URL encoding without padding (e.g., "abcdefghijklmnopqrstuv")
+//   - 32 characters: Hex encoding without dashes (e.g., "6ba7b8109dad11d180b400c04fd430c8")
+//   - 36 characters: Standard dashed format (e.g., "6ba7b810-9dad-11d1-80b4-00c04fd430c8")
+//   - URN format: "urn:uuid:" prefix followed by 36-character dashed format
+//
+// Examples of valid inputs:
+//   - "6ba7b8109dad11d180b400c04fd430c8" (hex without dashes)
+//   - "6ba7b810-9dad-11d1-80b4-00c04fd430c8" (standard dashed)
+//   - "{6ba7b810-9dad-11d1-80b4-00c04fd430c8}" (braces with dashed)
+//   - "\"6ba7b810-9dad-11d1-80b4-00c04fd430c8\"" (quoted dashed)
+//   - "urn:uuid:6ba7b810-9dad-11d1-80b4-00c04fd430c8" (URN format)
+//   - "a3fW6RxSR_amqRvJxqIi2g" (base64 URL encoding)
+//
+// The function automatically strips surrounding double quotes or braces before parsing.
 func IDFromString(s string) (ID, error) {
+	// Check string length upfront because IDFromBytes parses
+	// 16 bytes as binary representation, which is not valid for strings.
 	if len(s) < 22 {
-		return IDNil, fmt.Errorf("uu.ID string too short: %q", s)
+		return IDNil, fmt.Errorf("invalid UUID length %d: %q", len(s), s)
 	}
+	// A specialized string implementation would not be faster
+	// because the Hex and Base64 parsing functions require []byte anyways
 	return IDFromBytes([]byte(s))
 }
 
-// NullableIDFromStringOrNull parses a string as UUID,
-// or returns the Nil UUID in case of a parsing error.
+// IDFromStringOrNil parses a string as UUID supporting multiple formats,
+// or returns IDNil in case of a parsing error.
+//
+// Supports all formats documented in IDFromString:
+//   - 22 characters: Base64 URL encoding without padding
+//   - 32 characters: Hex encoding without dashes
+//   - 36 characters: Standard dashed format
+//   - URN format: "urn:uuid:" prefix followed by dashed format
+//   - Optional surrounding quotes "" or braces {}
 func IDFromStringOrNil(input string) ID {
 	id, err := IDFromString(input)
 	if err != nil {
@@ -259,8 +302,15 @@ func IDFromStringOrNil(input string) ID {
 	return id
 }
 
-// IDMustFromString parses a string as ID.
+// IDMustFromString parses a string as UUID supporting multiple formats.
 // Panics if there is an error.
+//
+// Supports all formats documented in IDFromString:
+//   - 22 characters: Base64 URL encoding without padding
+//   - 32 characters: Hex encoding without dashes
+//   - 36 characters: Standard dashed format
+//   - URN format: "urn:uuid:" prefix followed by dashed format
+//   - Optional surrounding quotes "" or braces {}
 func IDMustFromString(input string) ID {
 	id, err := IDFromString(input)
 	if err != nil {
@@ -280,7 +330,20 @@ func IDFromPtr(ptr *ID, defaultVal ID) ID {
 
 // IDFromAny converts val to an ID or returns an error
 // if the conversion is not possible or the ID is not valid.
-// Returns IDNil, ErrNilID when val is nil.
+//
+// Supported types:
+//   - string: parsed using IDFromString (supports all format variations)
+//   - []byte: parsed using IDFromBytes (supports all format variations)
+//   - ID, NullableID, [16]byte: validated and converted
+//   - nil: returns IDNil with ErrNilID
+//
+// For string and []byte inputs, supports:
+//   - Binary format (16 bytes for []byte only)
+//   - Base64 URL encoding (22 chars/bytes)
+//   - Hex without dashes (32 chars/bytes)
+//   - Standard dashed format (36 chars/bytes)
+//   - URN format with "urn:uuid:" prefix
+//   - Optional surrounding quotes "" or braces {}
 func IDFromAny(val any) (ID, error) {
 	switch x := val.(type) {
 	case string:
@@ -305,8 +368,21 @@ type IDSource interface {
 }
 
 // IDFrom converts val to an ID or returns IDNil
-// if no conversion is not possible.
+// if the conversion is not possible.
 // The returned ID is not validated.
+//
+// Supported types (via IDSource constraint):
+//   - string: parsed using IDFromStringOrNil (supports all format variations)
+//   - []byte: parsed using IDFromBytesOrNil (supports all format variations)
+//   - ID, NullableID, [16]byte: directly converted
+//
+// For string and []byte inputs, supports:
+//   - Binary format (16 bytes for []byte only)
+//   - Base64 URL encoding (22 chars/bytes)
+//   - Hex without dashes (32 chars/bytes)
+//   - Standard dashed format (36 chars/bytes)
+//   - URN format with "urn:uuid:" prefix
+//   - Optional surrounding quotes "" or braces {}
 func IDFrom[T IDSource](val T) ID {
 	switch x := any(val).(type) {
 	case string:
@@ -326,6 +402,19 @@ func IDFrom[T IDSource](val T) ID {
 
 // IDMust converts val to an ID or panics
 // if the conversion is not possible or the ID is not valid.
+//
+// Supported types (via IDSource constraint):
+//   - string: parsed using IDFromString (supports all format variations)
+//   - []byte: parsed using IDFromBytes (supports all format variations)
+//   - ID, NullableID, [16]byte: validated and converted
+//
+// For string and []byte inputs, supports:
+//   - Binary format (16 bytes for []byte only)
+//   - Base64 URL encoding (22 chars/bytes)
+//   - Hex without dashes (32 chars/bytes)
+//   - Standard dashed format (36 chars/bytes)
+//   - URN format with "urn:uuid:" prefix
+//   - Optional surrounding quotes "" or braces {}
 func IDMust[T IDSource](val T) ID {
 	switch x := any(val).(type) {
 	case string:
@@ -514,17 +603,27 @@ func (id ID) MarshalText() (text []byte, err error) {
 }
 
 // UnmarshalText implements the encoding.TextUnmarshaler interface.
-// Following formats are supported:
-// `6ba7b8109dad11d180b400c04fd430c8`
-// `6ba7b810-9dad-11d1-80b4-00c04fd430c8`
-// `"6ba7b810-9dad-11d1-80b4-00c04fd430c8"`
-// `{6ba7b810-9dad-11d1-80b4-00c04fd430c8}`
-// `urn:uuid:6ba7b810-9dad-11d1-80b4-00c04fd430c`
-// Surrounding double quotes will be removed before parsing.
+// Supports the same formats as IDFromBytes:
+//
+// Binary format (16 bytes):
+//   - Raw 16-byte UUID representation
+//
+// String formats (after removing optional surrounding quotes "" or braces {}):
+//   - 22 bytes: Base64 URL encoding without padding (e.g., "abcdefghijklmnopqrstuv")
+//   - 32 bytes: Hex encoding without dashes (e.g., "6ba7b8109dad11d180b400c04fd430c8")
+//   - 36 bytes: Standard dashed format (e.g., "6ba7b810-9dad-11d1-80b4-00c04fd430c8")
+//   - URN format: "urn:uuid:" prefix followed by 36-byte dashed format
+//
+// Examples of valid inputs:
+//   - `6ba7b8109dad11d180b400c04fd430c8` (hex without dashes)
+//   - `6ba7b810-9dad-11d1-80b4-00c04fd430c8` (standard dashed)
+//   - `{6ba7b810-9dad-11d1-80b4-00c04fd430c8}` (braces with dashed)
+//   - `"6ba7b810-9dad-11d1-80b4-00c04fd430c8"` (quoted dashed)
+//   - `urn:uuid:6ba7b810-9dad-11d1-80b4-00c04fd430c8` (URN format)
+//   - `a3fW6RxSR_amqRvJxqIi2g` (base64 URL encoding)
+//
+// The function automatically strips surrounding double quotes or braces before parsing.
 func (id *ID) UnmarshalText(text []byte) (err error) {
-	if len(text) < 22 {
-		return fmt.Errorf("uu.ID string too short: %q", text)
-	}
 	newID, err := IDFromBytes(text)
 	if err != nil {
 		return err

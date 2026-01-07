@@ -124,35 +124,67 @@ func TestSetVariant(t *testing.T) {
 
 func TestIDFromBytes(t *testing.T) {
 	u := ID{0x6b, 0xa7, 0xb8, 0x10, 0x9d, 0xad, 0x11, 0xd1, 0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4, 0x30, 0xc8}
-	b1 := []byte{0x6b, 0xa7, 0xb8, 0x10, 0x9d, 0xad, 0x11, 0xd1, 0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4, 0x30, 0xc8}
 
-	u1, err := IDFromBytes(b1)
-	if err != nil {
-		t.Errorf("Error parsing UUID from bytes: %s", err)
+	tests := []struct {
+		name  string
+		input []byte
+	}{
+		{
+			name:  "binary format (16 bytes)",
+			input: []byte{0x6b, 0xa7, 0xb8, 0x10, 0x9d, 0xad, 0x11, 0xd1, 0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4, 0x30, 0xc8},
+		},
+		{
+			name:  "standard dashed format (36 bytes)",
+			input: []byte("6ba7b810-9dad-11d1-80b4-00c04fd430c8"),
+		},
+		{
+			name:  "hex without dashes (32 bytes)",
+			input: []byte("6ba7b8109dad11d180b400c04fd430c8"),
+		},
+		{
+			name:  "base64 URL encoding (22 bytes)",
+			input: []byte(u.Base64()),
+		},
+		{
+			name:  "braces with dashed",
+			input: []byte("{6ba7b810-9dad-11d1-80b4-00c04fd430c8}"),
+		},
+		{
+			name:  "quoted dashed",
+			input: []byte(`"6ba7b810-9dad-11d1-80b4-00c04fd430c8"`),
+		},
+		{
+			name:  "URN format",
+			input: []byte("urn:uuid:6ba7b810-9dad-11d1-80b4-00c04fd430c8"),
+		},
+		{
+			name:  "uppercase hex without dashes",
+			input: []byte("6BA7B8109DAD11D180B400C04FD430C8"),
+		},
+		{
+			name:  "uppercase dashed",
+			input: []byte("6BA7B810-9DAD-11D1-80B4-00C04FD430C8"),
+		},
 	}
 
-	if u != u1 {
-		t.Errorf("UUIDs should be equal: %s and %s", u, u1)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			parsed, err := IDFromBytes(tt.input)
+			require.NoError(t, err, "parsing should succeed")
+			require.Equal(t, u, parsed, "parsed UUID should equal expected")
+		})
 	}
 
-	b2 := []byte{}
+	// Test error cases
+	t.Run("empty byte slice", func(t *testing.T) {
+		_, err := IDFromBytes([]byte{})
+		require.Error(t, err, "should return error for empty slice")
+	})
 
-	_, err = IDFromBytes(b2)
-	if err == nil {
-		t.Errorf("Should return error parsing from empty byte slice, got %s", err)
-	}
-
-	u3, err := IDFromBytes(u.StringBytes())
-	require.NoError(t, err)
-	require.Equal(t, u, u3)
-
-	u4, err := IDFromBytes([]byte("6ba7b810-9dad-11d1-80b4-00c04fd430c8"))
-	require.NoError(t, err)
-	require.Equal(t, u, u4)
-
-	u5, err := IDFromBytes([]byte("6ba7b8109dad11d180b400c04fd430c8"))
-	require.NoError(t, err)
-	require.Equal(t, u, u5)
+	t.Run("too short", func(t *testing.T) {
+		_, err := IDFromBytes([]byte("too-short"))
+		require.Error(t, err, "should return error for too short input")
+	})
 }
 
 func TestMarshalBinary(t *testing.T) {
@@ -195,51 +227,65 @@ func TestUnmarshalBinary(t *testing.T) {
 func TestIDFromString(t *testing.T) {
 	u := ID{0x6b, 0xa7, 0xb8, 0x10, 0x9d, 0xad, 0x11, 0xd1, 0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4, 0x30, 0xc8}
 
-	s0 := "6ba7b8109dad11d180b400c04fd430c8"
-	s1 := "6ba7b810-9dad-11d1-80b4-00c04fd430c8"
-	s2 := "{6ba7b810-9dad-11d1-80b4-00c04fd430c8}"
-	s3 := "urn:uuid:6ba7b810-9dad-11d1-80b4-00c04fd430c8"
-
-	_, err := IDFromString("")
-	if err == nil {
-		t.Errorf("Should return error trying to parse empty string, got %s", err)
+	tests := []struct {
+		name  string
+		input string
+	}{
+		{
+			name:  "hex without dashes (32 chars)",
+			input: "6ba7b8109dad11d180b400c04fd430c8",
+		},
+		{
+			name:  "standard dashed format (36 chars)",
+			input: "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+		},
+		{
+			name:  "base64 URL encoding (22 chars)",
+			input: u.Base64(),
+		},
+		{
+			name:  "braces with dashed",
+			input: "{6ba7b810-9dad-11d1-80b4-00c04fd430c8}",
+		},
+		{
+			name:  "quoted dashed",
+			input: `"6ba7b810-9dad-11d1-80b4-00c04fd430c8"`,
+		},
+		{
+			name:  "URN format",
+			input: "urn:uuid:6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+		},
+		{
+			name:  "uppercase hex without dashes",
+			input: "6BA7B8109DAD11D180B400C04FD430C8",
+		},
+		{
+			name:  "uppercase dashed",
+			input: "6BA7B810-9DAD-11D1-80B4-00C04FD430C8",
+		},
+		{
+			name:  "mixed case hex",
+			input: "6Ba7B8109dAd11D180b400C04fD430c8",
+		},
+		{
+			name:  "quoted braces",
+			input: `"{6ba7b810-9dad-11d1-80b4-00c04fd430c8}"`,
+		},
 	}
 
-	u0, err := IDFromString(s0)
-	if err != nil {
-		t.Errorf("Error parsing UUID from string: %s", err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			parsed, err := IDFromString(tt.input)
+			require.NoError(t, err, "parsing should succeed")
+			require.Equal(t, u, parsed, "parsed UUID should equal expected")
+		})
 	}
 
-	if u != u0 {
-		t.Errorf("UUIDs should be equal: %s and %s", u, u0)
-	}
-
-	u1, err := IDFromString(s1)
-	if err != nil {
-		t.Errorf("Error parsing UUID from string: %s", err)
-	}
-
-	if u != u1 {
-		t.Errorf("UUIDs should be equal: %s and %s", u, u1)
-	}
-
-	u2, err := IDFromString(s2)
-	if err != nil {
-		t.Errorf("Error parsing UUID from string: %s", err)
-	}
-
-	if u != u2 {
-		t.Errorf("UUIDs should be equal: %s and %s", u, u2)
-	}
-
-	u3, err := IDFromString(s3)
-	if err != nil {
-		t.Errorf("Error parsing UUID from string: %s", err)
-	}
-
-	if u != u3 {
-		t.Errorf("UUIDs should be equal: %s and %s", u, u3)
-	}
+	// Test error cases
+	t.Run("empty string", func(t *testing.T) {
+		_, err := IDFromString("")
+		require.Error(t, err, "should return error for empty string")
+	})
 }
 
 func TestIDFromStringShort(t *testing.T) {
@@ -253,15 +299,17 @@ func TestIDFromStringShort(t *testing.T) {
 	}
 	for _, str := range strs {
 		for l := len(str) - 1; l >= 0; l-- {
-			if l == 22 {
-				// 22 characters substring of UUID is valid base64
-				// so we won't get a "too short" error
+			// Skip valid format lengths:
+			// - 22 characters: valid base64 format
+			// - 32 characters: valid hex without dashes format
+			// Note: 36 is the full length (tested separately)
+			if l == 22 || l == 32 {
 				continue
 			}
 
 			id, err := IDFromString(str[:l])
 			if err == nil {
-				t.Errorf("Should return error trying to parse too short string, got UUID %s from string %q", id, str[:l])
+				t.Errorf("Should return error trying to parse too short string (length %d), got UUID %s from string %q", l, id, str[:l])
 			}
 		}
 	}
@@ -339,25 +387,64 @@ func TestMarshalText(t *testing.T) {
 
 func TestUnmarshalText(t *testing.T) {
 	u := ID{0x6b, 0xa7, 0xb8, 0x10, 0x9d, 0xad, 0x11, 0xd1, 0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4, 0x30, 0xc8}
-	b1 := []byte("6ba7b810-9dad-11d1-80b4-00c04fd430c8")
 
-	u1 := ID{}
-	err := u1.UnmarshalText(b1)
-	if err != nil {
-		t.Errorf("Error unmarshaling UUID: %s", err)
+	tests := []struct {
+		name  string
+		input []byte
+	}{
+		{
+			name:  "binary format (16 bytes)",
+			input: []byte{0x6b, 0xa7, 0xb8, 0x10, 0x9d, 0xad, 0x11, 0xd1, 0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4, 0x30, 0xc8},
+		},
+		{
+			name:  "standard dashed format (36 bytes)",
+			input: []byte("6ba7b810-9dad-11d1-80b4-00c04fd430c8"),
+		},
+		{
+			name:  "hex without dashes (32 bytes)",
+			input: []byte("6ba7b8109dad11d180b400c04fd430c8"),
+		},
+		{
+			name:  "base64 URL encoding (22 bytes)",
+			input: []byte(u.Base64()),
+		},
+		{
+			name:  "braces with dashed",
+			input: []byte("{6ba7b810-9dad-11d1-80b4-00c04fd430c8}"),
+		},
+		{
+			name:  "quoted dashed",
+			input: []byte(`"6ba7b810-9dad-11d1-80b4-00c04fd430c8"`),
+		},
+		{
+			name:  "URN format",
+			input: []byte("urn:uuid:6ba7b810-9dad-11d1-80b4-00c04fd430c8"),
+		},
+		{
+			name:  "uppercase hex",
+			input: []byte("6BA7B8109DAD11D180B400C04FD430C8"),
+		},
+		{
+			name:  "uppercase dashed",
+			input: []byte("6BA7B810-9DAD-11D1-80B4-00C04FD430C8"),
+		},
 	}
 
-	if u != u1 {
-		t.Errorf("UUIDs should be equal: %s and %s", u, u1)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var parsed ID
+			err := parsed.UnmarshalText(tt.input)
+			require.NoError(t, err, "unmarshaling should succeed")
+			require.Equal(t, u, parsed, "unmarshaled UUID should equal expected")
+		})
 	}
 
-	b2 := []byte("")
-	u2 := ID{}
-
-	err = u2.UnmarshalText(b2)
-	if err == nil {
-		t.Errorf("Should return error trying to unmarshal from empty string")
-	}
+	// Test error case
+	t.Run("empty string", func(t *testing.T) {
+		var id ID
+		err := id.UnmarshalText([]byte(""))
+		require.Error(t, err, "should return error for empty string")
+	})
 }
 
 func TestValue(t *testing.T) {
