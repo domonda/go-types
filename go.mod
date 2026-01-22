@@ -15,6 +15,7 @@ require (
 	github.com/jhillyerd/enmime v1.3.0
 	github.com/stretchr/testify v1.11.1
 	github.com/teamwork/tnef v0.0.0-20200108124832-7deabccfdb32
+	github.com/ungerik/go-fs v0.0.0-20260118110456-0ae82a14cadb
 	github.com/ungerik/go-reflection v0.0.0-20251017081454-aea4ca25282d
 	golang.org/x/net v0.49.0
 	golang.org/x/text v0.33.0
@@ -34,6 +35,7 @@ require (
 	github.com/clipperhouse/uax29/v2 v2.3.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
+	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/gogs/chardet v0.0.0-20211120154057-b7413eaefb8f // indirect
@@ -49,6 +51,7 @@ require (
 	github.com/olekukonko/tablewriter v0.0.5 // indirect
 	github.com/openai/openai-go/v3 v3.15.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
+	github.com/pkg/xattr v0.4.12 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/securego/gosec/v2 v2.22.11 // indirect
 	github.com/ssor/bom v0.0.0-20170718123548-6386211fdfcf // indirect
