@@ -21,10 +21,31 @@ func TestParseMessage(t *testing.T) {
 	msg, err := email.ParseMessage(bytes)
 	require.NoError(t, err)
 
-	equalsExamplemessage(t, msg)
+	equalsExamplemessage(t, msg, false)
 }
 
-func equalsExamplemessage(t *testing.T, actual *email.Message) {
+func TestBuildRawMessage(t *testing.T) {
+	ctx := t.Context()
+
+	// original
+	eml := fs.File("examplemessage_test.eml")
+	bytes, err := eml.ReadAllContext(ctx)
+	require.NoError(t, err)
+	msg, err := email.ParseMessage(bytes)
+	require.NoError(t, err)
+
+	// build raw message from original
+	bytes, err = msg.BuildRawMessage()
+	require.NoError(t, err)
+
+	// parse built raw message
+	msg, err = email.ParseMessage(bytes)
+	require.NoError(t, err)
+
+	equalsExamplemessage(t, msg, true)
+}
+
+func equalsExamplemessage(t *testing.T, actual *email.Message, built bool) {
 	actualAttachments := actual.Attachments
 	actual.Attachments = nil // remove attachments for comparison, we'll only compare the hashes
 
@@ -38,19 +59,8 @@ func equalsExamplemessage(t *testing.T, actual *email.Message) {
 		Subject:     "ok this is a test file check it out",
 		Cc:          email.NullableAddressListJoinStrings(`"Mike Doe" <mike@doe.com>`),
 		Date:        &examplemessageDate,
-		Body: `Lorem ipsum dolor sit amet, consectetur adipiscing elit. Pellentesque egestas eu arcu sit amet luctus. Phasellus ultrices velit et sem rhoncus, nec sollicitudin diam tristique. Pellentesque vehicula nec odio sit amet blandit. Praesent dictum consequat justo ut euismod. Aliquam varius rhoncus sem, ac semper elit eleifend et. Aliquam efficitur imperdiet ipsum, eget vestibulum tortor mollis ut. Nullam eleifend tellus eget massa iaculis, vitae facilisis elit malesuada. Morbi vel volutpat ex, sed ornare enim.
-
-One
-Two
-Three
-Four five
-
-￼
-￼￼
-￼￼
-
-`, // contains unicode object replacement character U+FFFC, vscode might warn but it's correct
-		BodyHTML: nullable.TrimmedStringFrom(`<html aria-label="message body"><head><meta http-equiv="content-type" content="text/html; charset=us-ascii"></head><body style="overflow-wrap: break-word; -webkit-nbsp-mode: space; line-break: after-white-space;"><div><b>Lorem</b> ipsum dolor sit amet, consectetur adipiscing elit. Pellentesque egestas eu arcu sit amet luctus. Phasellus ultrices velit<i> et sem</i> <span style="font-size: 36px;">rhoncus</span>, nec sollicitudin diam tristique. Pellentesque vehicula nec odio sit amet blandit. Praesent dictum consequat<b><i><u> justo ut euismod. Aliquam</u></i></b> <font color="#ffff9a">varius</font> rhoncu<strike>s sem, ac se</strike>mper elit eleifend et. Aliquam efficitur imperdiet ipsum, eget vestibulum tortor mollis ut. Nullam eleifend tellus eget massa iaculis, vitae facilisis elit malesuada. Morbi vel volutpat ex, sed ornare enim.</div><div><br></div><div><ul class="MailOutline"><li>One</li><li>Two</li><ol><li>Three</li><li>Four <b><i>five</i></b></li></ol></ul><div><b><i><br></i></b></div></div><div><b><i></i></b></div></body></html>`),
+		Body:        "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Pellentesque egestas eu arcu sit amet luctus. Phasellus ultrices velit et sem rhoncus, nec sollicitudin diam tristique. Pellentesque vehicula nec odio sit amet blandit. Praesent dictum consequat justo ut euismod. Aliquam varius rhoncus sem, ac semper elit eleifend et. Aliquam efficitur imperdiet ipsum, eget vestibulum tortor mollis ut. Nullam eleifend tellus eget massa iaculis, vitae facilisis elit malesuada. Morbi vel volutpat ex, sed ornare enim.\n\nOne\nTwo\nThree\nFour five\n\n￼\n￼￼\n￼￼\n\n", // contains unicode object replacement character U+FFFC, vscode might warn but it's correct
+		BodyHTML:    nullable.TrimmedStringFrom(`<html aria-label="message body"><head><meta http-equiv="content-type" content="text/html; charset=us-ascii"></head><body style="overflow-wrap: break-word; -webkit-nbsp-mode: space; line-break: after-white-space;"><div><b>Lorem</b> ipsum dolor sit amet, consectetur adipiscing elit. Pellentesque egestas eu arcu sit amet luctus. Phasellus ultrices velit<i> et sem</i> <span style="font-size: 36px;">rhoncus</span>, nec sollicitudin diam tristique. Pellentesque vehicula nec odio sit amet blandit. Praesent dictum consequat<b><i><u> justo ut euismod. Aliquam</u></i></b> <font color="#ffff9a">varius</font> rhoncu<strike>s sem, ac se</strike>mper elit eleifend et. Aliquam efficitur imperdiet ipsum, eget vestibulum tortor mollis ut. Nullam eleifend tellus eget massa iaculis, vitae facilisis elit malesuada. Morbi vel volutpat ex, sed ornare enim.</div><div><br></div><div><ul class="MailOutline"><li>One</li><li>Two</li><ol><li>Three</li><li>Four <b><i>five</i></b></li></ol></ul><div><b><i><br></i></b></div></div><div><b><i></i></b></div></body></html>`),
 		ExtraHeader: email.Header{
 			"Content-Type": []string{"multipart/alternative; boundary=\"Apple-Mail=_766E5EE1-F3AA-4EA6-B1FB-3FE00B9843A2\""},
 			"Delivered-To": []string{"denis+domonda@domonda.com"},
@@ -61,6 +71,19 @@ Four five
 			"X-Received":   []string{"by XXXX:XXXX:XXXX:XXXX with SMTP id ffacd0b85a97d-43569bbec67mr29502326f8f.34.1769095286652; Thu, 22 Jan 2026 07:21:26 -0800 (PST)"},
 		},
 	}
+
+	// when building the message again, some headers are different
+	if built {
+		// content-type has an id that is newly generated
+		expected.ExtraHeader["Content-Type"] = actual.ExtraHeader["Content-Type"]
+
+		// mime-version is added by the builder
+		expected.ExtraHeader["Mime-Version"] = append([]string{"1.0"}, expected.ExtraHeader["Mime-Version"]...)
+
+		// body is carriage-return normalized by the builder
+		expected.Body = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Pellentesque egestas eu arcu sit amet luctus. Phasellus ultrices velit et sem rhoncus, nec sollicitudin diam tristique. Pellentesque vehicula nec odio sit amet blandit. Praesent dictum consequat justo ut euismod. Aliquam varius rhoncus sem, ac semper elit eleifend et. Aliquam efficitur imperdiet ipsum, eget vestibulum tortor mollis ut. Nullam eleifend tellus eget massa iaculis, vitae facilisis elit malesuada. Morbi vel volutpat ex, sed ornare enim.\r\n\r\nOne\r\nTwo\r\nThree\r\nFour five\r\n\r\n￼\r\n￼￼\r\n￼￼\r\n\r\n"
+	}
+
 	require.Equal(t, expected, actual)
 
 	require.Len(t, actualAttachments, 5)
