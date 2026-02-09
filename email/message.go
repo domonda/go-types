@@ -21,16 +21,17 @@ import (
 type Header = textproto.MIMEHeader
 
 var parsedMessageHeaders = map[string]struct{}{
-	"Message-Id":  {},
-	"In-Reply-To": {},
-	"References":  {},
-	"Date":        {},
-	"From":        {},
-	"Reply-To":    {},
-	"To":          {},
-	"Cc":          {},
-	"Bcc":         {},
-	"Subject":     {},
+	"Message-Id":    {},
+	"In-Reply-To":   {},
+	"References":    {},
+	"Date":          {},
+	"From":          {},
+	"Reply-To":      {},
+	"To":            {},
+	"Delivered-To":  {},
+	"Cc":            {},
+	"Bcc":           {},
+	"Subject":       {},
 }
 
 func IsParsedHeader(key string) bool {
@@ -72,7 +73,7 @@ type Message struct {
 	From        Address             `json:"from,omitempty"`
 	ReplyTo     NullableAddress     `json:"replyTo,omitempty"`
 	To          AddressList         `json:"to,omitempty"`
-	DeliveredTo NullableAddress     `json:"deliveredTo,omitempty"`
+	DeliveredTo NullableAddressList `json:"deliveredTo,omitempty"`
 	Cc          NullableAddressList `json:"cc,omitempty"`
 	Bcc         NullableAddressList `json:"bcc,omitempty"`
 
@@ -406,6 +407,13 @@ func (msg *Message) BuildRawMessage() (raw []byte, err error) {
 	}
 	for _, to := range tos {
 		root.Header.Add("To", string(to))
+	}
+	deliveredTos, err := msg.DeliveredTo.Split()
+	if err != nil {
+		return nil, err
+	}
+	for _, deliveredTo := range deliveredTos {
+		root.Header.Add("Delivered-To", string(deliveredTo))
 	}
 	ccs, err := msg.Cc.Split()
 	if err != nil {
