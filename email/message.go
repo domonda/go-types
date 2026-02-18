@@ -11,7 +11,7 @@ import (
 	txttemplate "text/template"
 	"time"
 
-	"github.com/jhillyerd/enmime"
+	"github.com/jhillyerd/enmime/v2"
 
 	"github.com/domonda/go-errs"
 	"github.com/domonda/go-types/nullable"
@@ -21,17 +21,17 @@ import (
 type Header = textproto.MIMEHeader
 
 var parsedMessageHeaders = map[string]struct{}{
-	"Message-Id":    {},
-	"In-Reply-To":   {},
-	"References":    {},
-	"Date":          {},
-	"From":          {},
-	"Reply-To":      {},
-	"To":            {},
-	"Delivered-To":  {},
-	"Cc":            {},
-	"Bcc":           {},
-	"Subject":       {},
+	"Message-Id":   {},
+	"In-Reply-To":  {},
+	"References":   {},
+	"Date":         {},
+	"From":         {},
+	"Reply-To":     {},
+	"To":           {},
+	"Delivered-To": {},
+	"Cc":           {},
+	"Bcc":          {},
+	"Subject":      {},
 }
 
 func IsParsedHeader(key string) bool {

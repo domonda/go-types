@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"fmt"
 
-	"github.com/jaytaylor/html2text"
+	"github.com/inbucket/html2text"
 	"github.com/teamwork/tnef"
 
 	"github.com/domonda/go-errs"

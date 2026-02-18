@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/jhillyerd/enmime"
+	"github.com/jhillyerd/enmime/v2"
 
 	"github.com/domonda/go-errs"
 	"github.com/domonda/go-types/nullable"
