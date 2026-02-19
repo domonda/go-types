@@ -5,8 +5,8 @@ go 1.25.5
 tool github.com/securego/gosec/v2/cmd/gosec
 
 require (
-	github.com/domonda/go-errs v0.0.0-20260112130815-6647b0368604
-	github.com/domonda/go-pretty v0.0.0-20260112082908-96fe37692898
+	github.com/domonda/go-errs v1.0.0
+	github.com/domonda/go-pretty v1.0.0
 	github.com/inbucket/html2text v1.0.0
 	github.com/invopop/jsonschema v0.13.0
 	github.com/jhillyerd/enmime/v2 v2.3.0
@@ -74,10 +74,10 @@ require (
 	go.opentelemetry.io/otel/trace v1.38.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/crypto v0.48.0 // indirect
-	golang.org/x/mod v0.32.0 // indirect
+	golang.org/x/mod v0.33.0 // indirect
 	golang.org/x/sync v0.19.0 // indirect
 	golang.org/x/sys v0.41.0 // indirect
-	golang.org/x/tools v0.41.0 // indirect
+	golang.org/x/tools v0.42.0 // indirect
 	google.golang.org/genai v1.41.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260112192933-99fd39fd28a9 // indirect
 	google.golang.org/grpc v1.78.0 // indirect
