@@ -81,9 +81,11 @@ func ParseMIMEMessage(reader io.Reader) (msg *Message, err error) {
 			for _, value := range values {
 				decodedvalue, err := dec.DecodeHeader(value)
 				if err != nil {
-					return nil, err
+					// ignore decoding issues, just use value
+					msg.ExtraHeader.Add(key, value)
+				} else {
+					msg.ExtraHeader.Add(key, decodedvalue)
 				}
-				msg.ExtraHeader.Add(key, decodedvalue)
 			}
 		}
 	}
