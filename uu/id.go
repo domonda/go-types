@@ -587,7 +587,7 @@ func (id ID) Base64() string {
 
 // SetVersion sets version bits.
 func (id *ID) SetVersion(v int) {
-	id[6] = (id[6] & 0x0f) | byte(v<<4)
+	id[6] = (id[6] & 0x0f) | byte(v<<4) //#nosec G115
 }
 
 // SetVariant sets variant bits as described in RFC 4122.

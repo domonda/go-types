@@ -73,7 +73,7 @@ func ParseDetails(str string) (f float64, thousandsSep, decimalSep rune, decimal
 			default:
 				return 0, 0, 0, 0, fmt.Errorf("minus can only be used as first or last character: %q", str)
 			}
-			floatBuilder.WriteByte(byte(r))
+			floatBuilder.WriteByte(byte(r)) //#nosec G115
 			numMinus = 1
 
 		case r == '+':

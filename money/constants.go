@@ -199,7 +199,7 @@ var currencyCodeToSymbol = map[Currency]string{
 	JPY: "¥",
 }
 
-var currencyCodeToName = map[Currency]string{
+var currencyCodeToName = map[Currency]string{ //#nosec G101
 	AED: "United Arab Emirates Dirham",
 	AFN: "Afghanistan Afghani",
 	ALL: "Albania Lek",
