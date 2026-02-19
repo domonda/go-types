@@ -103,6 +103,11 @@ func Test_parseDate(t *testing.T) {
 			date: "Mon,  3 Jan 2022 11:00:51 GMT",
 			want: time.Date(2022, 1, 3, 11, 0, 51, 0, time.UTC),
 		},
+		{
+			name: "Thu, 19 Feb 2026 06:12:35 +0100 (Mitteleuropaeische Zeit)",
+			date: "Thu, 19 Feb 2026 06:12:35 +0100 (Mitteleuropaeische Zeit)",
+			want: time.Date(2026, 2, 19, 06, 12, 35, 0, cetLocation),
+		},
 		// Invalid:
 		{
 			name:    "empty",

@@ -36,6 +36,20 @@ func parseDate(date string) (*time.Time, error) {
 			return &t, nil
 		}
 	}
+
+	// some emails will have dates with different language timezones in parentheses,
+	// e.g. "Thu, 19 Feb 2026 06:12:35 +0100 (Mitteleuropaeische Zeit)"...
+	// strip the timezone there, we already have the offset in the data which is enough.
+	if idx := strings.Index(date, " ("); idx != -1 {
+		date = date[:idx]
+	}
+	for _, layout := range parseDateLayouts {
+		t, err := time.Parse(layout, date)
+		if err == nil {
+			return &t, nil
+		}
+	}
+
 	return nil, fmt.Errorf("can't parse email Date %q", date)
 }
 
