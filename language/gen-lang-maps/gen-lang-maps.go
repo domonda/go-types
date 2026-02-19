@@ -72,7 +72,7 @@ func main() {
 	fmt.Fprintln(goFileBuf, "}")
 
 	goFilePath := "../iso6393names.go"
-	err = os.WriteFile(goFilePath, goFileBuf.Bytes(), 0640)
+	err = os.WriteFile(goFilePath, goFileBuf.Bytes(), 0640) //#nosec G306
 	if err != nil {
 		log.Fatal(err)
 	}
