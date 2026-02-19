@@ -164,6 +164,15 @@ func parseAddress(addr string) (mailAddress *mail.Address, unparsed string, err 
 	unparsed = addr[i[1]:]
 	unparsed = strings.TrimLeft(unparsed, " ")
 
+	// Handle RFC 2822 comment syntax: address (Name)
+	// Example: mike@doe.com (Mike Doe)
+	if name == "" && strings.HasPrefix(unparsed, "(") {
+		if end := strings.Index(unparsed, ")"); end != -1 {
+			name = strutil.TrimSpace(unparsed[1:end])
+			unparsed = strings.TrimLeft(unparsed[end+1:], " ")
+		}
+	}
+
 	mailAddress = &mail.Address{
 		Name:    name,
 		Address: local + "@" + domain,

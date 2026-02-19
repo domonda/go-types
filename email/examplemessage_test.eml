@@ -12,7 +12,7 @@ Reply-To: Jane Doe <jane@doe.com>
 Mime-Version: 1.0 (Mac OS X Mail 16.0 \(3864.300.41.1.7\))
 Date: Thu, 22 Jan 2026 16:21:11 +0100
 Subject: ok this is a test file check it out
-Cc: Mike Doe <mike@doe.com>
+Cc: mike@doe.com (Mike Doe)
 To: myinternal@invoicing.com
 Message-Id: <94D8B6DE-E571-4F66-AAA7-2733E5A12434@denelop.com>
 Delivered-To: somewhere+domonda@domonda.com

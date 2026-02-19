@@ -76,6 +76,9 @@ var (
 
 		`"Hello, World | example.com" <hw@example.com>`: {Name: `Hello, World | example.com`, Address: "hw@example.com"},
 		`Hello, World | example.com <hw@example.com>`:   {Name: `Hello, World | example.com`, Address: "hw@example.com"},
+
+		// old-style RFC 2822 comment syntax
+		`u.erik@domonda.com (Erik Unger)`: {Name: "Erik Unger", Address: "u.erik@domonda.com"},
 	}
 
 	invalidEmailAddresses = map[string]struct{}{
