@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"database/sql/driver"
 	"fmt"
-	"io"
 	"sort"
 	"strings"
 	"unsafe"
@@ -115,10 +114,10 @@ func (s IDSlice) String() string {
 	return "[" + strings.Join(s.Strings(), ",") + "]"
 }
 
-// PrettyPrint using IDSlice.String().
-// Implements the pretty.Printable interface.
-func (s IDSlice) PrettyPrint(w io.Writer) {
-	w.Write([]byte(s.String())) //#nosec G104 -- go-pretty does not check write errors
+// PrettyString implements the pretty.Stringer interface
+// using IDSlice.String().
+func (s IDSlice) PrettyString() string {
+	return s.String()
 }
 
 // Strings returns a slice with all IDs converted to strings

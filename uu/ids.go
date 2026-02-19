@@ -19,7 +19,7 @@ var (
 // but does not support scanning or unmarshalling.
 type IDs interface {
 	fmt.Stringer
-	pretty.Printable
+	pretty.Stringer
 	driver.Valuer
 	json.Marshaler
 

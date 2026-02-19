@@ -140,8 +140,10 @@ func (j JSON) GoString() string {
 	return fmt.Sprintf("nullable.JSON(`%s`)", j)
 }
 
-func (j JSON) PrettyPrint(w io.Writer) {
-	fmt.Fprintf(w, "`%s`", j)
+// PrettyPrint implements the pretty.PrintableWithResult interface
+// returning the JSON as a Go literal.
+func (j JSON) PrettyPrint(w io.Writer) (int, error) {
+	return fmt.Fprintf(w, "`%s`", j.String())
 }
 
 // Clone returns a copy of j

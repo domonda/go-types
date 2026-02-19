@@ -3,7 +3,6 @@ package uu
 import (
 	"bytes"
 	"database/sql/driver"
-	"io"
 	"maps"
 	"sort"
 	"strings"
@@ -98,10 +97,10 @@ func (s IDSet) Strings() []string {
 	return ss
 }
 
-// PrettyPrint using s.AsSortedSlice().PrettyPrint(w).
-// Implements the pretty.Printable interface.
-func (s IDSet) PrettyPrint(w io.Writer) {
-	s.AsSortedSlice().PrettyPrint(w)
+// PrettyString implements the pretty.Stringer interface
+// using s.AsSortedSlice().PrettyString().
+func (s IDSet) PrettyString() string {
+	return s.AsSortedSlice().PrettyString()
 }
 
 // GetOne returns one ID in undefined order from the set

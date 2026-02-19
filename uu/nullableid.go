@@ -6,7 +6,6 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
-	"io"
 	"reflect"
 	"strings"
 
@@ -244,10 +243,13 @@ func (n NullableID) GetOrNil() ID {
 	return ID(n)
 }
 
-// PrettyPrint the NullableID in the format xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx or as NULL.
-// Implements the pretty.Printable interface.
-func (n NullableID) PrettyPrint(w io.Writer) {
-	w.Write([]byte(n.StringOr("NULL"))) //#nosec G104 -- go-pretty does not check write errors
+// PrettyString implements the pretty.Stringer interface
+// returning the NullableID in the format xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx or as NULL.
+func (n NullableID) PrettyString() string {
+	if n.IsNull() {
+		return "NULL"
+	}
+	return n.String()
 }
 
 // GoString returns a pseudo Go literal for the ID in the format:

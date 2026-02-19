@@ -8,8 +8,9 @@ import (
 	"io"
 	"time"
 
-	"github.com/domonda/go-pretty"
 	"github.com/invopop/jsonschema"
+
+	"github.com/domonda/go-pretty"
 )
 
 // TimeNull is a null Time value.
@@ -282,11 +283,10 @@ func (n *Time) UnmarshalText(text []byte) error {
 	return n.Time.UnmarshalText(text)
 }
 
-// PrettyPrint implements the pretty.Printable interface
-func (n Time) PrettyPrint(w io.Writer) {
+// PrettyPrint implements the pretty.PrintableWithResult interface
+func (n Time) PrettyPrint(w io.Writer) (int, error) {
 	if n.IsNull() {
-		w.Write([]byte("null")) //#nosec G104 -- go-pretty does not check write errors
-	} else {
-		pretty.Fprint(w, n.Time)
+		return io.WriteString(w, "NULL")
 	}
+	return pretty.Fprint(w, n.Time)
 }
