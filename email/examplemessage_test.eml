@@ -5,6 +5,7 @@ Return-Path: <john@doe.com>
 X-Received: by XXXX:XXXX:XXXX:XXXX with SMTP id ffacd0b85a97d-43569bbec67mr29502326f8f.34.1769095286652;
         Thu, 22 Jan 2026 07:21:26 -0800 (PST)
 From: John Doe <john@doe.com>
+X-Original-From: =?UTF-8?B?TkVCSUxZIHwgSGVsZW5hIFTDtnLDtiA8aC50b2Vyb2VAbmViaWx5LmNvbT4=?=
 Content-Type: multipart/alternative;
 	boundary="Apple-Mail=_766E5EE1-F3AA-4EA6-B1FB-3FE00B9843A2"
 Reply-To: Jane Doe <jane@doe.com>

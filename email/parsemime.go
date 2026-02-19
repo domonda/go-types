@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"mime"
 
 	"github.com/jhillyerd/enmime/v2"
 
@@ -74,10 +75,15 @@ func ParseMIMEMessage(reader io.Reader) (msg *Message, err error) {
 		msg.Bcc = msg.Bcc.Append(addrs...)
 	}
 
+	dec := new(mime.WordDecoder)
 	for key, values := range envelope.Root.Header {
 		if IsExtraHeader(key) {
 			for _, value := range values {
-				msg.ExtraHeader.Add(key, value)
+				decodedvalue, err := dec.DecodeHeader(value)
+				if err != nil {
+					return nil, err
+				}
+				msg.ExtraHeader.Add(key, decodedvalue)
 			}
 		}
 	}
