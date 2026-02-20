@@ -24,7 +24,7 @@ func (df *Finder) FindAllIndex(str []byte, n int) (indices [][]int) {
 
 	// Find all spaces, also treat string bounds as spaces
 	spacePos := make([]int, 1, 16)
-	spacePos[0] = -1
+	spacePos[0] = -1 //#nosec G602 -- index 0 is valid, slice created with length 1 above
 	for i, r := range s {
 		if unicode.IsSpace(r) {
 			spacePos = append(spacePos, i)
