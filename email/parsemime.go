@@ -44,7 +44,9 @@ func ParseMIMEMessage(reader io.Reader) (msg *Message, err error) {
 	}
 	msg.ReplyTo, err = NormalizedNullableAddress(envelope.GetHeader("Reply-To"))
 	if err != nil {
-		return nil, fmt.Errorf("can't parse email header 'Reply-To': %w", err)
+		// intentionally ignoring parsing issues with Reply-To, unset the value.
+		// this can happen, we've seen Reply-To headers look like this: `"John Doe" <john@doe...>`
+		msg.ReplyTo = NullableAddress("")
 	}
 	for _, to := range envelope.GetHeaderValues("To") {
 		addrs, err := AddressList(to).Split()
