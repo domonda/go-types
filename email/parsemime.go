@@ -45,7 +45,7 @@ func ParseMIMEMessage(reader io.Reader) (msg *Message, err error) {
 	msg.ReplyTo, err = NormalizedNullableAddress(envelope.GetHeader("Reply-To"))
 	if err != nil {
 		// intentionally ignoring parsing issues with Reply-To, unset the value.
-		// this can happen, we've seen Reply-To headers look like this: `"John Doe" <john@doe...>`
+		// we've seen weird and unparsable values
 		msg.ReplyTo = NullableAddress("")
 	}
 	for _, to := range envelope.GetHeaderValues("To") {
@@ -58,21 +58,27 @@ func ParseMIMEMessage(reader io.Reader) (msg *Message, err error) {
 	for _, deliveredTo := range envelope.GetHeaderValues("Delivered-To") {
 		addrs, err := AddressList(deliveredTo).Split()
 		if err != nil {
-			return nil, fmt.Errorf("can't parse email header 'Delivered-To': %w", err)
+			// intentionally ignoring parsing issues with nullable lists
+			// we've seen weird and unparsable values
+			continue
 		}
 		msg.DeliveredTo = msg.DeliveredTo.Append(addrs...)
 	}
 	for _, cc := range envelope.GetHeaderValues("Cc") {
 		addrs, err := AddressList(cc).Split()
 		if err != nil {
-			return nil, fmt.Errorf("can't parse email header 'Cc': %w", err)
+			// intentionally ignoring parsing issues with nullable lists
+			// we've seen weird and unparsable values
+			continue
 		}
 		msg.Cc = msg.Cc.Append(addrs...)
 	}
 	for _, bcc := range envelope.GetHeaderValues("Bcc") {
 		addrs, err := AddressList(bcc).Split()
 		if err != nil {
-			return nil, fmt.Errorf("can't parse email header 'Bcc': %w", err)
+			// intentionally ignoring parsing issues with nullable lists
+			// we've seen weird and unparsable values
+			continue
 		}
 		msg.Bcc = msg.Bcc.Append(addrs...)
 	}

@@ -207,7 +207,9 @@ func ParseAddressList(list string) (addrs []*mail.Address, err error) {
 	switch ll := strings.ToLower(list); {
 	case ll == "",
 		strings.HasPrefix(ll, "undisclosed-recipients"),
-		strings.HasPrefix(ll, "undisclosed recipients"):
+		strings.HasPrefix(ll, "undisclosed recipients"),
+		strings.HasPrefix(ll, "withheld-recipients"),
+		strings.HasPrefix(ll, "withheld recipients"):
 		return nil, nil
 	}
 
