@@ -14,6 +14,7 @@ type Attachment struct {
 	ContentID   string `json:",omitempty"`
 	ContentType string `json:",omitempty"`
 	Inline      bool   `json:",omitempty"`
+	OtherPart   bool   `json:",omitempty"`
 	Filename    string
 	Content     []byte
 }

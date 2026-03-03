@@ -103,7 +103,6 @@ func ParseMIMEMessage(reader io.Reader) (msg *Message, err error) {
 			PartID:      part.PartID,
 			ContentID:   part.ContentID,
 			ContentType: part.ContentType,
-			Inline:      false,
 			Filename:    part.FileName,
 			Content:     part.Content,
 		})
@@ -114,6 +113,16 @@ func ParseMIMEMessage(reader io.Reader) (msg *Message, err error) {
 			ContentID:   part.ContentID,
 			ContentType: part.ContentType,
 			Inline:      true,
+			Filename:    part.FileName,
+			Content:     part.Content,
+		})
+	}
+	for _, part := range envelope.OtherParts {
+		msg.Attachments = append(msg.Attachments, &Attachment{
+			PartID:      part.PartID,
+			ContentID:   part.ContentID,
+			ContentType: part.ContentType,
+			OtherPart:   true,
 			Filename:    part.FileName,
 			Content:     part.Content,
 		})
