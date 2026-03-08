@@ -2,6 +2,7 @@ package strutil
 
 import (
 	"maps"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -81,12 +82,7 @@ func (set StringSet) Contains(str string) bool {
 
 // ContainsAny returns true if any of the provided strings are in the set.
 func (set StringSet) ContainsAny(strs ...string) bool {
-	for _, str := range strs {
-		if set.Contains(str) {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(strs, set.Contains)
 }
 
 // StringContainsAnyOfSet returns true if the passed string

@@ -3,6 +3,7 @@ package strfmt
 import (
 	"fmt"
 	"reflect"
+	"slices"
 	"time"
 
 	"github.com/domonda/go-types"
@@ -46,8 +47,8 @@ func NewScanConfig() *ScanConfig {
 
 func (c *ScanConfig) initTypeScanners() {
 	c.TypeScanners = map[reflect.Type]Scanner{
-		reflect.TypeOf((*time.Time)(nil)).Elem():     ScannerFunc(scanTimeString),
-		reflect.TypeOf((*time.Duration)(nil)).Elem(): ScannerFunc(scanDurationString),
+		reflect.TypeFor[time.Time]():     ScannerFunc(scanTimeString),
+		reflect.TypeFor[time.Duration](): ScannerFunc(scanDurationString),
 	}
 }
 
@@ -56,30 +57,15 @@ func (c *ScanConfig) SetTypeScanner(t reflect.Type, s Scanner) {
 }
 
 func (c *ScanConfig) IsTrue(str string) bool {
-	for _, val := range c.TrueStrings {
-		if str == val {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(c.TrueStrings, str)
 }
 
 func (c *ScanConfig) IsFalse(str string) bool {
-	for _, val := range c.FalseStrings {
-		if str == val {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(c.FalseStrings, str)
 }
 
 func (c *ScanConfig) IsNil(str string) bool {
-	for _, val := range c.NilStrings {
-		if str == val {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(c.NilStrings, str)
 }
 
 func (c *ScanConfig) ParseTime(str string) (t time.Time, ok bool) {

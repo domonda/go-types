@@ -48,7 +48,7 @@ func (e utf16Encoding) BOM() BOM {
 func decodeUTF16Runes(b []byte, byteOrder binary.ByteOrder) []rune {
 	numRunes := len(b) / 2
 	u16s := make([]uint16, numRunes)
-	for i := 0; i < numRunes; i++ {
+	for i := range numRunes {
 		u16s[i] = byteOrder.Uint16(b[i*2:])
 	}
 	return utf16.Decode(u16s)

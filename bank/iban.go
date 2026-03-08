@@ -138,10 +138,7 @@ func (iban IBAN) NormalizedWithSpaces() (IBAN, error) {
 		if i > 0 {
 			b.WriteByte(' ')
 		}
-		end := i + 4
-		if end > normLen {
-			end = normLen
-		}
+		end := min(i+4, normLen)
 		b.WriteString(string(norm)[i:end])
 	}
 	return IBAN(b.String()), nil

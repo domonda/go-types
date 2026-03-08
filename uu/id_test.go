@@ -755,7 +755,7 @@ func TestID_GoString(t *testing.T) {
 }
 
 func TestID_Base64(t *testing.T) {
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		id := IDv4()
 		t.Run(id.String(), func(t *testing.T) {
 			b := id.Base64()

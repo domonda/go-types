@@ -830,8 +830,8 @@ func normalizeDate(str string, langHint language.Code) (string, bool, error) {
 		} else if parts[i] == "3rd" {
 			parts[i] = "03"
 			dayHint = i
-		} else if strings.HasSuffix(parts[i], "th") {
-			parts[i] = strings.TrimSuffix(parts[i], "th")
+		} else if before, ok := strings.CutSuffix(parts[i], "th"); ok {
+			parts[i] = before
 			if len(parts[i]) == 1 {
 				parts[i] = "0" + parts[i]
 			}

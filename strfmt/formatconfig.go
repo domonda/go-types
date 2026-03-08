@@ -33,13 +33,13 @@ func NewFormatConfig() *FormatConfig {
 		True:        "true",
 		False:       "false",
 		TypeFormatters: map[reflect.Type]Formatter{
-			reflect.TypeOf(date.Date("")):          FormatterFunc(formatDateString),
-			reflect.TypeOf(date.NullableDate("")):  FormatterFunc(formatNullableDateString),
-			reflect.TypeOf(time.Time{}):            FormatterFunc(formatTimeString),
-			reflect.TypeOf(nullable.Time{}):        FormatterFunc(formatNullableTimeString),
-			reflect.TypeOf(time.Duration(0)):       FormatterFunc(formatDurationString),
-			reflect.TypeOf(money.Amount(0)):        FormatterFunc(formatMoneyAmountString),
-			reflect.TypeOf(money.CurrencyAmount{}): FormatterFunc(formatMoneyCurrencyAmountString),
+			reflect.TypeFor[date.Date]():            FormatterFunc(formatDateString),
+			reflect.TypeFor[date.NullableDate]():    FormatterFunc(formatNullableDateString),
+			reflect.TypeFor[time.Time]():            FormatterFunc(formatTimeString),
+			reflect.TypeFor[nullable.Time]():        FormatterFunc(formatNullableTimeString),
+			reflect.TypeFor[time.Duration]():        FormatterFunc(formatDurationString),
+			reflect.TypeFor[money.Amount]():         FormatterFunc(formatMoneyAmountString),
+			reflect.TypeFor[money.CurrencyAmount](): FormatterFunc(formatMoneyCurrencyAmountString),
 		},
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"html/template"
 	"net/mail"
 	"net/textproto"
+	"slices"
 	"strings"
 	txttemplate "text/template"
 	"time"
@@ -109,12 +110,7 @@ func NewMessage(from Address, to AddressList, subject, body string, bodyHTML nul
 func (msg *Message) Recipients() []string {
 	var recipients []string
 	exists := func(a *mail.Address) bool {
-		for _, r := range recipients {
-			if r == a.Address {
-				return true
-			}
-		}
-		return false
+		return slices.Contains(recipients, a.Address)
 	}
 	to, _ := msg.To.Parse()
 	for _, a := range to {
@@ -143,7 +139,7 @@ func (msg *Message) ReferencesMessageIDs() []string {
 		return nil
 	}
 	var ids []string
-	for _, id := range strings.Split(string(msg.References), ",") {
+	for id := range strings.SplitSeq(string(msg.References), ",") {
 		if id = strutil.TrimSpace(id); id != "" {
 			ids = append(ids, id)
 		}

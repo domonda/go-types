@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"database/sql/driver"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"unsafe"
@@ -169,20 +170,13 @@ func (s IDSlice) IndexOf(id ID) int {
 }
 
 func (s IDSlice) Contains(id ID) bool {
-	for _, curr := range s {
-		if curr == id {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(s, id)
 }
 
 func (s IDSlice) ContainsAny(other IDSlice) bool {
 	for _, curr := range s {
-		for _, id := range other {
-			if curr == id {
-				return true
-			}
+		if slices.Contains(other, curr) {
+			return true
 		}
 	}
 	return false
@@ -201,12 +195,7 @@ func (s IDSlice) Equal(other IDSlice) bool {
 }
 
 func (s IDSlice) ContainsAnyFromSet(set IDSet) bool {
-	for _, id := range s {
-		if set.Contains(id) {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(s, set.Contains)
 }
 
 // RemoveFirst removes the first occurrence of id from the slice
@@ -297,8 +286,8 @@ func (s *IDSlice) scanBytes(src []byte) (err error) {
 	ids := make(IDSlice, 0)
 
 	if len(src) > 2 {
-		elements := bytes.Split(src[1:len(src)-1], []byte{','})
-		for _, elem := range elements {
+		elements := bytes.SplitSeq(src[1:len(src)-1], []byte{','})
+		for elem := range elements {
 			id, err := IDFromBytes(bytes.Trim(elem, `'"`))
 			if err != nil {
 				return err

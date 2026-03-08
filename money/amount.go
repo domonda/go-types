@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"slices"
 	"strings"
 
 	"github.com/domonda/go-types/float"
@@ -39,10 +40,8 @@ func ParseAmount(str string, acceptedDecimals ...int) (Amount, error) {
 	if len(acceptedDecimals) == 0 || math.IsNaN(f) || math.IsInf(f, 0) {
 		return Amount(f), nil
 	}
-	for _, accepted := range acceptedDecimals {
-		if decimals == accepted {
-			return Amount(f), nil
-		}
+	if slices.Contains(acceptedDecimals, decimals) {
+		return Amount(f), nil
 	}
 	return 0, fmt.Errorf("parsing %q returned %d decimals wich is not in accepted list of %v", str, decimals, acceptedDecimals)
 }

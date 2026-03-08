@@ -608,7 +608,7 @@ func encodeBytea(serverVersion int, v []byte) (result []byte) {
 			if b == '\\' {
 				result = append(result, '\\', '\\')
 			} else if b < 0x20 || b > 0x7e {
-				result = append(result, []byte(fmt.Sprintf("\\%03o", b))...)
+				result = append(result, fmt.Appendf(nil, "\\%03o", b)...)
 			} else {
 				result = append(result, b)
 			}

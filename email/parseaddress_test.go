@@ -297,7 +297,7 @@ func TestParseAddressList(t *testing.T) {
 		}
 	}
 
-	for x := 0; x < numRandomCombinations; x++ {
+	for range numRandomCombinations {
 		// Every range over the validEmailAddresses map
 		// will produce a new random order
 		var randomAddrs []string

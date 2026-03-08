@@ -59,7 +59,7 @@ func Format[T ~float32 | ~float64](f T, thousandsSep, decimalSep rune, precision
 		b.Grow(len(str) + numGroupSeps)
 
 		b.WriteString(str[:firstGroupLen])
-		for i := 0; i < numGroupSeps; i++ {
+		for i := range numGroupSeps {
 			b.WriteRune(thousandsSep)
 			start := firstGroupLen + i*3
 			b.WriteString(str[start : start+3])
@@ -76,7 +76,7 @@ func Format[T ~float32 | ~float64](f T, thousandsSep, decimalSep rune, precision
 			}
 		} else if padPrecision && precision > 0 {
 			b.WriteRune(decimalSep)
-			for i := 0; i < precision; i++ {
+			for range precision {
 				b.WriteByte('0')
 			}
 		}
@@ -106,7 +106,7 @@ func Format[T ~float32 | ~float64](f T, thousandsSep, decimalSep rune, precision
 			b.Grow(len(str) + 1 + precision)
 			b.WriteString(str)
 			b.WriteByte('.')
-			for i := 0; i < precision; i++ {
+			for range precision {
 				b.WriteByte('0')
 			}
 			return b.String()
@@ -117,7 +117,7 @@ func Format[T ~float32 | ~float64](f T, thousandsSep, decimalSep rune, precision
 			var b strings.Builder
 			b.Grow(len(str) + numMissingZeros)
 			b.WriteString(str)
-			for i := 0; i < numMissingZeros; i++ {
+			for range numMissingZeros {
 				b.WriteByte('0')
 			}
 			return b.String()

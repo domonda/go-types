@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/url"
 	"path"
+	"slices"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -115,12 +116,7 @@ func SplitAndTrimIndex(str []byte, isSplitRune, isTrimRune IsRuneFunc) (indices 
 // matches any of the provided runes.
 func IsRune(runes ...rune) IsRuneFunc {
 	return func(testR rune) bool {
-		for _, r := range runes {
-			if testR == r {
-				return true
-			}
-		}
-		return false
+		return slices.Contains(runes, testR)
 	}
 }
 

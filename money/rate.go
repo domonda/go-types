@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -55,10 +56,8 @@ func ParseRate(str string, acceptedDecimals ...int) (Rate, error) {
 	if len(acceptedDecimals) == 0 || math.IsNaN(f) || math.IsInf(f, 0) {
 		return Rate(f), nil
 	}
-	for _, accepted := range acceptedDecimals {
-		if decimals == accepted {
-			return Rate(f), nil
-		}
+	if slices.Contains(acceptedDecimals, decimals) {
+		return Rate(f), nil
 	}
 	return 0, fmt.Errorf("parsing %q returned %d decimals wich is not in accepted list of %v", s, decimals, acceptedDecimals)
 }

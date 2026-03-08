@@ -6,7 +6,7 @@ import (
 	"mime"
 	"net/mail"
 	"regexp"
-	"sort"
+	"slices"
 	"strings"
 	"unicode"
 	"unsafe"
@@ -100,7 +100,7 @@ func UniqueNormalizedAddressSlice(addrs []Address) []Address {
 		addrs[i] = addr
 		i++
 	}
-	sort.Slice(addrs, func(i, j int) bool { return addrs[i] < addrs[j] })
+	slices.Sort(addrs)
 	return addrs
 }
 
