@@ -26,8 +26,19 @@ var parseDateLayouts = []string{
 	"2 Jan 2006 15:04:05 -0700",
 	"Mon, 2 Jan 2006 15:04:05 -0700",
 	"Mon, 2 Jan 2006 15:04:05 -0700 (MST)",
+	"02 Jan 2006 15:04:05 MST",
+	"2 Jan 2006 15:04:05 MST",
 	"Mon,  2 Jan 2006 15:04:05 MST",
 	"Mon, 2 Jan 2006 15:04 -0700",
+	// 2-digit year formats (RFC 850 style)
+	"02 Jan 06 15:04:05 MST",
+	"02 Jan 06 15:04:05 -0700",
+	"2 Jan 06 15:04:05 MST",
+	"2 Jan 06 15:04:05 -0700",
+	"Mon, 02 Jan 06 15:04:05 MST",
+	"Mon, 02 Jan 06 15:04:05 -0700",
+	"Mon, 2 Jan 06 15:04:05 MST",
+	"Mon, 2 Jan 06 15:04:05 -0700",
 }
 
 func parseDate(date string) (*time.Time, error) {
@@ -38,20 +49,29 @@ func parseDate(date string) (*time.Time, error) {
 		}
 	}
 
-	// some emails will have dates with different language timezones in parentheses,
-	// e.g. "Thu, 19 Feb 2026 06:12:35 +0100 (Mitteleuropaeische Zeit)"...
-	// strip the timezone there, we already have the offset in the data which is enough.
-	if idx := strings.Index(date, " ("); idx != -1 {
-		date = date[:idx]
+	// Normalize timezone abbreviations not recognized by Go's time.Parse
+	normalized := date
+	if strings.HasSuffix(normalized, " UT") {
+		normalized = normalized[:len(normalized)-2] + "UTC"
 	}
-	for _, layout := range parseDateLayouts {
-		t, err := time.Parse(layout, date)
-		if err == nil {
-			return &t, nil
+
+	// Strip timezone names in parentheses,
+	// e.g. "Thu, 19 Feb 2026 06:12:35 +0100 (Mitteleuropaeische Zeit)"...
+	// we already have the offset in the data which is enough.
+	if idx := strings.Index(normalized, " ("); idx != -1 {
+		normalized = normalized[:idx]
+	}
+
+	if normalized != date {
+		for _, layout := range parseDateLayouts {
+			t, err := time.Parse(layout, normalized)
+			if err == nil {
+				return &t, nil
+			}
 		}
 	}
 
-	return nil, fmt.Errorf("can't parse email Date %q", date)
+	return nil, fmt.Errorf("unable to parse email Date %q", date)
 }
 
 func formatDate(t *time.Time) string {

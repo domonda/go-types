@@ -113,6 +113,41 @@ func Test_parseDate(t *testing.T) {
 			date: "Mon, 23 Feb 2026 11:42 +0100",
 			want: time.Date(2026, 2, 23, 11, 42, 0, 0, cetLocation),
 		},
+		{
+			name: "24 Feb 26 18:52:49 GMT",
+			date: "24 Feb 26 18:52:49 GMT",
+			want: time.Date(2026, 2, 24, 18, 52, 49, 0, time.UTC),
+		},
+		{
+			name: "27 Feb 2026 13:46:10 UT",
+			date: "27 Feb 2026 13:46:10 UT",
+			want: time.Date(2026, 2, 27, 13, 46, 10, 0, time.UTC),
+		},
+		{
+			name: "01 Mar 2026 13:29:40 UT",
+			date: "01 Mar 2026 13:29:40 UT",
+			want: time.Date(2026, 3, 1, 13, 29, 40, 0, time.UTC),
+		},
+		{
+			name: "1 Mar 2026 13:29:40 UT",
+			date: "1 Mar 2026 13:29:40 UT",
+			want: time.Date(2026, 3, 1, 13, 29, 40, 0, time.UTC),
+		},
+		{
+			name: "Mon, 01 Mar 2026 13:29:40 UT",
+			date: "Mon, 01 Mar 2026 13:29:40 UT",
+			want: time.Date(2026, 3, 1, 13, 29, 40, 0, time.UTC),
+		},
+		{
+			name: "Mon, 1 Mar 2026 13:29:40 UT",
+			date: "Mon, 1 Mar 2026 13:29:40 UT",
+			want: time.Date(2026, 3, 1, 13, 29, 40, 0, time.UTC),
+		},
+		{
+			name: "24 Feb 26 18:52:49 UT",
+			date: "24 Feb 26 18:52:49 UT",
+			want: time.Date(2026, 2, 24, 18, 52, 49, 0, time.UTC),
+		},
 		// Invalid:
 		{
 			name:    "empty",
