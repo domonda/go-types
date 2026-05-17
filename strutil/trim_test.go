@@ -8,18 +8,35 @@ import (
 )
 
 func TestTrimSpace(t *testing.T) {
-	type args struct {
-	}
 	tests := []struct {
 		s    string
 		want string
 	}{
+		{s: "", want: ""},
+		{s: "   ", want: ""},
+		{s: "hello", want: "hello"},
+		{s: "  hello  ", want: "hello"},
 		{s: "\u200b\tZERO WIDTH SPACE\r\n", want: "ZERO WIDTH SPACE"},
+		// Non-printable control characters
+		{s: "\x00\x01hello\x7f", want: "hello"},
+		// BOM, zero width joiner / non-joiner, word joiner
+		{s: "\ufeff\u200chello\u200d\u2060", want: "hello"},
+		// Non-breaking space and line/paragraph separators
+		{s: "\u00a0\u2028hello\u2029\u00a0", want: "hello"},
+		// Invalid UTF-8 bytes at both ends
+		{s: "\xff\xfehello\xff\xc0", want: "hello"},
+		// Mixed whitespace, invalid UTF-8 and non-visual runes
+		{s: "\xff \u200b\t hello world\u200b\xff\n", want: "hello world"},
+		// Only trimmable runes
+		{s: "\u200b\u200c\u200d\ufeff\xff", want: ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.s, func(t *testing.T) {
 			if got := TrimSpace(tt.s); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("TrimSpace(%#v) = %#v, want %#v", tt.s, got, tt.want)
+			}
+			if got := string(TrimSpaceBytes([]byte(tt.s))); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("TrimSpaceBytes(%#v) = %#v, want %#v", tt.s, got, tt.want)
 			}
 		})
 	}
