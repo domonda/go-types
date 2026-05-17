@@ -66,12 +66,7 @@ func (set Set[T]) Contains(val T) bool {
 
 // ContainsAny returns true if the set contains any of the specified values.
 func (set Set[T]) ContainsAny(vals ...T) bool {
-	for _, val := range vals {
-		if set.Contains(val) {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(vals, set.Contains)
 }
 
 // ContainsAll returns true if the set contains all of the specified values.
