@@ -8,12 +8,12 @@ import "github.com/domonda/go-types/notnull"
 
 ## Array types
 
-| Type             | Element                   |
-|------------------|---------------------------|
-| `StringArray`    | `string`                  |
-| `IntArray`       | `int64`                   |
-| `FloatArray`     | `float64`                 |
-| `NullBoolArray`  | nullable `bool` elements  |
+| Type                                             | Element                                          |
+|--------------------------------------------------|--------------------------------------------------|
+| `StringArray`                                    | `string`                                         |
+| `IntArray`                                       | `int64`                                          |
+| `FloatArray`                                     | `float64`                                        |
+| `NullBoolArray`                                  | nullable `bool` elements                         |
 
 Each implements `sql.Scanner`, `driver.Valuer`, and `json.Marshaler`. Element-nullable arrays let individual entries be SQL NULL even though the array itself is never NULL.
 

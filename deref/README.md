@@ -10,18 +10,18 @@ import "github.com/domonda/go-types/deref"
 
 All functions follow the same shape: `Func(ptr *T, defaultVal T) T`.
 
-| Function    | Pointer type   |
-|-------------|----------------|
-| `Bool`      | `*bool`        |
-| `String`    | `*string`      |
-| `Int`       | `*int`         |
-| `Int32`     | `*int32`       |
-| `Int64`     | `*int64`       |
-| `Uint`      | `*uint`        |
-| `Uint64`    | `*uint64`      |
-| `Float32`   | `*float32`     |
-| `Float64`   | `*float64`     |
-| `Time`      | `*time.Time`   |
+| Function                                         | Pointer type                                     |
+|--------------------------------------------------|--------------------------------------------------|
+| `Bool`                                           | `*bool`                                          |
+| `String`                                         | `*string`                                        |
+| `Int`                                            | `*int`                                           |
+| `Int32`                                          | `*int32`                                         |
+| `Int64`                                          | `*int64`                                         |
+| `Uint`                                           | `*uint`                                          |
+| `Uint64`                                         | `*uint64`                                        |
+| `Float32`                                        | `*float32`                                       |
+| `Float64`                                        | `*float64`                                       |
+| `Time`                                           | `*time.Time`                                     |
 
 ## Example
 

@@ -30,10 +30,10 @@ func New() Queue
 
 Package-level variables set the initial capacities. Adjust at program start, before calling `New`.
 
-| Variable             | Default | Meaning                          |
-|----------------------|---------|----------------------------------|
-| `ChanLen`            | `32`    | Size of the consumer channel.    |
-| `InitialBufferSize`  | `8`     | Initial ring buffer length.      |
+| Variable                                         | Default                                          | Meaning                                          |
+|--------------------------------------------------|--------------------------------------------------|--------------------------------------------------|
+| `ChanLen`                                        | `32`                                             | Size of the consumer channel.                    |
+| `InitialBufferSize`                              | `8`                                              | Initial ring buffer length.                      |
 
 ## Example
 

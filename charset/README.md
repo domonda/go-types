@@ -20,35 +20,35 @@ type Encoding interface {
 
 `Encoding` implementations are safe for concurrent use; the package wraps `golang.org/x/text/encoding` encoders/decoders with internal mutexes.
 
-| Constructor                                       | Returns                                     |
-|---------------------------------------------------|---------------------------------------------|
-| `UTF8Encoding()`                                  | Pass-through `Encoding` for UTF-8.          |
-| `UTF16Encoding(binary.LittleEndian \| BigEndian)` | UTF-16 (LE or BE) `Encoding`.               |
-| `UTF32Encoding(binary.LittleEndian \| BigEndian)` | UTF-32 (LE or BE) `Encoding`.               |
-| `findencoding.FindEncoding(name string)`          | Resolve any IANA / x/text encoding by name. |
+| Constructor                                       | Returns                                          |
+|---------------------------------------------------|--------------------------------------------------|
+| `UTF8Encoding()`                                  | Pass-through `Encoding` for UTF-8.               |
+| `UTF16Encoding(binary.LittleEndian \| BigEndian)` | UTF-16 (LE or BE) `Encoding`.                    |
+| `UTF32Encoding(binary.LittleEndian \| BigEndian)` | UTF-32 (LE or BE) `Encoding`.                    |
+| `findencoding.FindEncoding(name string)`          | Resolve any IANA / x/text encoding by name.      |
 
 ## BOM
 
 `BOM` is a string holding the literal BOM bytes. Predefined values:
 
-| Value          | Bytes                  |
-|----------------|------------------------|
-| `NoBOM`        | empty                  |
-| `BOMUTF8`      | `EF BB BF`             |
-| `BOMUTF16BE`   | `FE FF`                |
-| `BOMUTF16LE`   | `FF FE`                |
-| `BOMUTF32BE`   | `00 00 FE FF`          |
-| `BOMUTF32LE`   | `FF FE 00 00`          |
+| Value                                            | Bytes                                            |
+|--------------------------------------------------|--------------------------------------------------|
+| `NoBOM`                                          | empty                                            |
+| `BOMUTF8`                                        | `EF BB BF`                                       |
+| `BOMUTF16BE`                                     | `FE FF`                                          |
+| `BOMUTF16LE`                                     | `FF FE`                                          |
+| `BOMUTF32BE`                                     | `00 00 FE FF`                                    |
+| `BOMUTF32LE`                                     | `FF FE 00 00`                                    |
 
-| Function / Method                  | Description                                              |
-|------------------------------------|----------------------------------------------------------|
-| `BOMOfBytes(b)` / `BOMOfString(s)` | Detect a leading BOM (`NoBOM` if none).                  |
-| `TrimBOM(b, bom)`                  | Drop the UTF-8 BOM prefix if present.                    |
-| `SplitBOM(b)`                      | Return `(bom, rest)`.                                    |
-| `DecodeWithBOM(b)` / `DecodeStringWithBOM(b)` | Split BOM then decode to UTF-8.               |
-| `bom.Encoding()`                   | The `Encoding` matching a BOM value.                     |
-| `bom.Endian()`                     | `binary.LittleEndian`/`BigEndian` for UTF-16/32 BOMs.    |
-| `bom.Decode(data)` / `bom.DecodeString(data)` | Decode using the BOM's encoding.              |
+| Function / Method                                | Description                                           |
+|--------------------------------------------------|-------------------------------------------------------|
+| `BOMOfBytes(b)` / `BOMOfString(s)`               | Detect a leading BOM (`NoBOM` if none).               |
+| `TrimBOM(b, bom)`                                | Drop the UTF-8 BOM prefix if present.                 |
+| `SplitBOM(b)`                                    | Return `(bom, rest)`.                                 |
+| `DecodeWithBOM(b)` / `DecodeStringWithBOM(b)`    | Split BOM then decode to UTF-8.                       |
+| `bom.Encoding()`                                 | The `Encoding` matching a BOM value.                  |
+| `bom.Endian()`                                   | `binary.LittleEndian`/`BigEndian` for UTF-16/32 BOMs. |
+| `bom.Decode(data)` / `bom.DecodeString(data)`    | Decode using the BOM's encoding.                      |
 
 ## UTF-16 / UTF-32 helpers
 

@@ -18,13 +18,13 @@ const Null Code = ""
 
 ## API
 
-| Method                   | Description                                                |
-|--------------------------|------------------------------------------------------------|
-| `Valid()`                | True if the code is in the ISO 639-1 table.                |
-| `ValidAndNormalized()`   | True if valid AND already lowercase.                       |
-| `Normalized()`           | Lowercase + lookup; returns error if unknown.              |
-| `LanguageName()`         | English name (e.g. `"German"`).                            |
-| `String()`               | Normalized form if valid, raw otherwise.                   |
+| Method                                           | Description                                      |
+|--------------------------------------------------|--------------------------------------------------|
+| `Valid()`                                        | True if the code is in the ISO 639-1 table.      |
+| `ValidAndNormalized()`                           | True if valid AND already lowercase.             |
+| `Normalized()`                                   | Lowercase + lookup; returns error if unknown.    |
+| `LanguageName()`                                 | English name (e.g. `"German"`).                  |
+| `String()`                                       | Normalized form if valid, raw otherwise.         |
 
 ## Constants
 

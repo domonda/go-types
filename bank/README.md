@@ -19,14 +19,14 @@ const (
 type IBAN string
 ```
 
-| Method                  | Description                                                  |
-|-------------------------|--------------------------------------------------------------|
-| `Normalized()`          | Uppercase, strip spaces/punctuation, validate length+regex.  |
-| `Valid()` / `Validate()`| Pass/error variants.                                         |
-| `ValidAndNormalized()`  | Already in canonical form.                                   |
-| `CountryCode()`         | The leading 2-letter `country.Code`.                         |
-| `Nullable()`            | Convert to `NullableIBAN`.                                   |
-| `ScanString(src, valid)`| Assign from string, optional validation.                     |
+| Method                                           | Description                                                 |
+|--------------------------------------------------|-------------------------------------------------------------|
+| `Normalized()`                                   | Uppercase, strip spaces/punctuation, validate length+regex. |
+| `Valid()` / `Validate()`                         | Pass/error variants.                                        |
+| `ValidAndNormalized()`                           | Already in canonical form.                                  |
+| `CountryCode()`                                  | The leading 2-letter `country.Code`.                        |
+| `Nullable()`                                     | Convert to `NullableIBAN`.                                  |
+| `ScanString(src, valid)`                         | Assign from string, optional validation.                    |
 
 Helpers: `NormalizeIBAN(str)`, `StringIsIBAN(str)`, `IBANFinder` (scan text), `IBANParser` (implements `strfmt.Parser`).
 

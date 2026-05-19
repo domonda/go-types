@@ -24,16 +24,16 @@ Empty string, `"0000-00-00"`, and `"0001-01-01"` round-trip as SQL NULL. For a r
 
 ### Constructors
 
-| Function                          | Returns                                  |
-|-----------------------------------|------------------------------------------|
-| `Of(year, month, day)`            | Date normalized through `time.Date`.     |
-| `OfTime(t)`                       | Date part of a `time.Time` (empty if zero). |
-| `OfTimePtr(*t)`                   | `NullableDate`; nil/zero → null.         |
-| `OfToday()` / `OfYesterday()` / `OfTomorrow()` | Local timezone shortcuts.   |
-| `OfNowInUTC()` / `OfTodayIn(loc)` | Timezone-specific now.                   |
-| `Parse(layout, value)`            | `time.Parse` then take date part.        |
-| `Must(str)`                       | Normalized or panic.                     |
-| `Normalize(str, lang...)`         | Lenient parse with language hint.        |
+| Function                                         | Returns                                          |
+|--------------------------------------------------|--------------------------------------------------|
+| `Of(year, month, day)`                           | Date normalized through `time.Date`.             |
+| `OfTime(t)`                                      | Date part of a `time.Time` (empty if zero).      |
+| `OfTimePtr(*t)`                                  | `NullableDate`; nil/zero → null.                 |
+| `OfToday()` / `OfYesterday()` / `OfTomorrow()`   | Local timezone shortcuts.                        |
+| `OfNowInUTC()` / `OfTodayIn(loc)`                | Timezone-specific now.                           |
+| `Parse(layout, value)`                           | `time.Parse` then take date part.                |
+| `Must(str)`                                      | Normalized or panic.                             |
+| `Normalize(str, lang...)`                        | Lenient parse with language hint.                |
 
 `StringIsDate(str, lang...)` is the boolean shortcut.
 
@@ -50,13 +50,13 @@ from, until, err := date.PeriodRange("2024-Q1")
 
 Accepts:
 
-| Format     | Example     | Meaning                              |
-|------------|-------------|--------------------------------------|
-| `YYYY`     | `2024`      | Full year.                           |
-| `YYYY-MM`  | `2024-06`   | Single month.                        |
-| `YYYY-Qn`  | `2024-Q3`   | Quarter.                             |
-| `YYYY-Hn`  | `2024-H2`   | Half year.                           |
-| `YYYY-Wnn` | `2024-W23`  | ISO 8601 week.                       |
+| Format                                           | Example                                          | Meaning                                          |
+|--------------------------------------------------|--------------------------------------------------|--------------------------------------------------|
+| `YYYY`                                           | `2024`                                           | Full year.                                       |
+| `YYYY-MM`                                        | `2024-06`                                        | Single month.                                    |
+| `YYYY-Qn`                                        | `2024-Q3`                                        | Quarter.                                         |
+| `YYYY-Hn`                                        | `2024-H2`                                        | Half year.                                       |
+| `YYYY-Wnn`                                       | `2024-W23`                                       | ISO 8601 week.                                   |
 
 ## YearMonth
 

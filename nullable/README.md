@@ -58,10 +58,10 @@ Implements `driver.Valuer`, `sql.Scanner`, `json.Marshaler`, `json.Unmarshaler`,
 
 ## String wrappers
 
-| Type             | Null sentinel        | Notes                                                              |
-|------------------|----------------------|--------------------------------------------------------------------|
-| `NonEmptyString` | `""`                 | Empty string ↔ null. Can't represent an explicit empty string.     |
-| `TrimmedString`  | `""` (after trimming) | All marshal/unmarshal trims whitespace; whitespace-only ↔ null.    |
+| Type                                             | Null sentinel                                    | Notes                                                           |
+|--------------------------------------------------|--------------------------------------------------|-----------------------------------------------------------------|
+| `NonEmptyString`                                 | `""`                                             | Empty string ↔ null. Can't represent an explicit empty string.  |
+| `TrimmedString`                                  | `""` (after trimming)                            | All marshal/unmarshal trims whitespace; whitespace-only ↔ null. |
 
 Both ship constructors (`...From(str)`, `...FromPtr(*string)`, `...FromError(err)`, `...f("%s", x)`), null introspection (`IsNull`, `IsNotNull`, `Get`, `GetOr`, `Ptr`, `StringOr`), and SQL/JSON/text-marshaling interfaces.
 
@@ -85,15 +85,15 @@ Text marshal: RFC 3339, with `"NULL"` for the null state. JSON: standard `time.T
 
 PostgreSQL array types that round-trip as SQL arrays and JSON arrays. A `nil` slice is SQL NULL / JSON `null`; an empty non-nil slice is `'{}'` / `[]`.
 
-| Type             | Element                  |
-|------------------|--------------------------|
-| `StringArray`    | `string` (aliases `pq.StringArray`) |
-| `IntArray`       | `int64`                  |
-| `FloatArray`     | `float64`                |
-| `BoolArray`      | `bool`                   |
-| `NullIntArray`   | nullable elements        |
-| `NullFloatArray` | nullable elements        |
-| `NullBoolArray`  | nullable elements        |
+| Type                                             | Element                                          |
+|--------------------------------------------------|--------------------------------------------------|
+| `StringArray`                                    | `string` (aliases `pq.StringArray`)              |
+| `IntArray`                                       | `int64`                                          |
+| `FloatArray`                                     | `float64`                                        |
+| `BoolArray`                                      | `bool`                                           |
+| `NullIntArray`                                   | nullable elements                                |
+| `NullFloatArray`                                 | nullable elements                                |
+| `NullBoolArray`                                  | nullable elements                                |
 
 For non-nullable arrays where `nil` should serialize as `'{}'`/`[]`, see the sibling `notnull` package.
 

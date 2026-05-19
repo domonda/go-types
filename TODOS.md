@@ -34,6 +34,4 @@ Open issues and cleanup items before tagging `v1.0.0`. Grouped by what blocks a 
 
 ## Docs & release hygiene
 
-- [ ] **Top-level `README.md`** still narrates the package list; add a TOC linking to the new per-package READMEs.
-- [ ] **Module-level godoc** on the root `types` package is minimal; consider expanding for `pkg.go.dev` landing.
 - [ ] **No `CHANGELOG.md`.** Add one for the v1 cut.

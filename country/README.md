@@ -8,10 +8,10 @@ import "github.com/domonda/go-types/country"
 
 ## Types
 
-| Type           | Purpose                                                  |
-|----------------|----------------------------------------------------------|
-| `Code`         | Non-nullable country code (string underneath).           |
-| `NullableCode` | Same shape; empty string is SQL NULL / JSON null.        |
+| Type                                             | Purpose                                           |
+|--------------------------------------------------|---------------------------------------------------|
+| `Code`                                           | Non-nullable country code (string underneath).    |
+| `NullableCode`                                   | Same shape; empty string is SQL NULL / JSON null. |
 
 Both implement `fmt.Stringer`, `driver.Valuer`, `sql.Scanner`, `json.Marshaler`, `JSONSchema`, and the `ScanString(source, validate)` helper. `Code` implements `types.NormalizableValidator[Code]`.
 
@@ -33,14 +33,14 @@ There's no `From(str)` constructor — assign the literal and call `Normalized()
 
 ## Inspection
 
-| Method                  | Description                                                     |
-|-------------------------|-----------------------------------------------------------------|
-| `Valid()`               | True if normalization succeeds.                                 |
-| `ValidAndNormalized()`  | True if valid AND already in canonical form.                    |
-| `Validate()`            | Returns error if normalization fails.                           |
-| `Normalized()`          | Trim, uppercase, match ISO map or `AltCodes`; returns error.    |
-| `IsEU()`                | True if the country is currently in the European Union.         |
-| `EnglishName()`         | English country name (empty for invalid codes).                 |
+| Method                                           | Description                                                  |
+|--------------------------------------------------|--------------------------------------------------------------|
+| `Valid()`                                        | True if normalization succeeds.                              |
+| `ValidAndNormalized()`                           | True if valid AND already in canonical form.                 |
+| `Validate()`                                     | Returns error if normalization fails.                        |
+| `Normalized()`                                   | Trim, uppercase, match ISO map or `AltCodes`; returns error. |
+| `IsEU()`                                         | True if the country is currently in the European Union.      |
+| `EnglishName()`                                  | English country name (empty for invalid codes).              |
 
 `NullableCode` adds `IsNull`, `IsNotNull`, `Get`, `GetOr`, `Set`, `SetNull`, `StringOr`, `NormalizedOrNull`, and `NormalizedWithAltCodes`.
 

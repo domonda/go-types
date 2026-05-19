@@ -10,12 +10,12 @@ import "github.com/domonda/go-types/float"
 
 All work on both `float32` and `float64` via `T ~float32 | ~float64`:
 
-| Function                     | Description                                                |
-|------------------------------|------------------------------------------------------------|
-| `RoundToDecimals(f, n)`      | Round `f` to `n` decimal places.                           |
-| `DerefOr(ptr, defaultVal)`   | Safe pointer dereference with default.                     |
-| `Valid(f)`                   | True if `f` is not NaN and not Inf.                        |
-| `ValidAndHasSign(f, sign)`   | Valid AND sign matches (`sign==0` matches any).            |
+| Function                                         | Description                                      |
+|--------------------------------------------------|--------------------------------------------------|
+| `RoundToDecimals(f, n)`                          | Round `f` to `n` decimal places.                 |
+| `DerefOr(ptr, defaultVal)`                       | Safe pointer dereference with default.           |
+| `Valid(f)`                                       | True if `f` is not NaN and not Inf.              |
+| `ValidAndHasSign(f, sign)`                       | Valid AND sign matches (`sign==0` matches any).  |
 
 ## Parsing
 
