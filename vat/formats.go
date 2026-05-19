@@ -80,10 +80,33 @@ var idRegex = map[country.Code]*regexp.Regexp{
 // List of check-sum algorithms: https://www.bmf.gv.at/dam/jcr:9f9f8d5f-5496-4886-aa4f-81a4e39ba83e/BMF_UID_Konstruktionsregeln.pdf
 var checkSumFuncs = map[country.Code]func(raw, normalized ID) bool{
 	"AT":                          checkSumAT,
+	"BE":                          checkSumBE,
+	"BG":                          checkSumBG,
+	"CY":                          checkSumCY,
+	"CZ":                          checkSumCZ,
 	"DE":                          checkSumDE,
+	"DK":                          checkSumDK,
+	"EE":                          checkSumEE,
+	"EL":                          checkSumEL,
 	"ES":                          checkSumES,
+	"FI":                          checkSumFI,
+	"FR":                          checkSumFR,
 	"GB":                          checkSumGB,
+	"HR":                          checkSumHR,
+	"HU":                          checkSumHU,
+	"IT":                          checkSumIT,
+	"LT":                          checkSumLT,
+	"LU":                          checkSumLU,
+	"LV":                          checkSumLV,
+	"MT":                          checkSumMT,
+	"NL":                          checkSumNL,
 	"NO":                          checkSumNO,
+	"PL":                          checkSumPL,
+	"PT":                          checkSumPT,
+	"RO":                          checkSumRO,
+	"SE":                          checkSumSE,
+	"SI":                          checkSumSI,
+	"SK":                          checkSumSK,
 	NorthernIrelandVATCountryCode: checkSumGB,
 }
 
@@ -264,6 +287,467 @@ func checkSumES(raw, normalized ID) bool {
 			return false
 		}
 	}
+}
+
+// checkSumBE validates a Belgian VAT ID.
+//
+// After normalization the ID is BE + 10 digits where the first digit is
+// 0 or 1 (enforced by the regex). The last 2 digits are the control:
+// expected = 97 - (first8 mod 97).
+//
+// Reference: https://en.wikipedia.org/wiki/VAT_identification_number
+func checkSumBE(_, normalized ID) bool {
+	body := normalized[2:]
+	n := 0
+	for i := range 8 {
+		n = n*10 + int(body[i]-'0')
+	}
+	check := int(body[8]-'0')*10 + int(body[9]-'0')
+	return 97-n%97 == check
+}
+
+// checkSumBG validates a Bulgarian VAT ID.
+//
+// 9-digit form is the EIK (Unified Identification Code) for legal
+// entities: weighted mod-11 with a fallback weight set when the first
+// remainder is 10. 10-digit form is the EGN (personal civil number):
+// fixed weights [2,4,8,5,10,9,7,3,6] mod 11, with 10 mapped to 0.
+//
+// References:
+//   - https://en.wikipedia.org/wiki/Unique_citizenship_number
+//   - https://nra.bg/wps/portal/nra/elektronni-uslugi
+func checkSumBG(_, normalized ID) bool {
+	body := normalized[2:]
+	if len(body) == 9 {
+		sum := 0
+		for i := range 8 {
+			sum += int(body[i]-'0') * (i + 1)
+		}
+		r := sum % 11
+		if r == 10 {
+			sum = 0
+			for i := range 8 {
+				sum += int(body[i]-'0') * (i + 3)
+			}
+			r = sum % 11
+			if r == 10 {
+				r = 0
+			}
+		}
+		return int(body[8]-'0') == r
+	}
+	weights := [9]int{2, 4, 8, 5, 10, 9, 7, 3, 6}
+	sum := 0
+	for i := range 9 {
+		sum += int(body[i]-'0') * weights[i]
+	}
+	r := sum % 11
+	if r == 10 {
+		r = 0
+	}
+	return int(body[9]-'0') == r
+}
+
+// checkSumCY validates a Cypriot VAT ID. 8 digits + 1 letter, where the
+// letter is computed by mapping odd-position digits (1-indexed) through
+// a fixed table, summing with even-position digits taken at face value,
+// taking the result mod 26, and indexing the alphabet (A=0..Z=25).
+//
+// Reference: https://en.wikipedia.org/wiki/VAT_identification_number
+func checkSumCY(_, normalized ID) bool {
+	body := normalized[2:]
+	oddMap := [10]int{1, 0, 5, 7, 9, 13, 15, 17, 19, 21}
+	sum := 0
+	for i := range 8 {
+		d := int(body[i] - '0')
+		if i%2 == 0 {
+			sum += oddMap[d]
+		} else {
+			sum += d
+		}
+	}
+	return body[8] == byte('A'+sum%26)
+}
+
+// checkSumCZ validates an 8-digit Czech legal-entity VAT ID.
+// 9- and 10-digit personal identifiers (rodné číslo) follow date-based
+// algorithms that are out of scope here — those forms pass shape-only.
+//
+// Reference: https://www.mfcr.cz/cs/legislativa/legislativni-dokumenty
+func checkSumCZ(_, normalized ID) bool {
+	body := normalized[2:]
+	if len(body) != 8 {
+		return true
+	}
+	weights := [7]int{8, 7, 6, 5, 4, 3, 2}
+	sum := 0
+	for i := range 7 {
+		sum += int(body[i]-'0') * weights[i]
+	}
+	r := sum % 11
+	var check int
+	switch r {
+	case 0:
+		check = 1
+	case 1:
+		check = 0
+	default:
+		check = 11 - r
+	}
+	return int(body[7]-'0') == check
+}
+
+// checkSumDK validates a Danish VAT ID — 8 digits, weighted sum
+// [2,7,6,5,4,3,2,1] divisible by 11.
+//
+// Reference: https://en.wikipedia.org/wiki/VAT_identification_number
+func checkSumDK(_, normalized ID) bool {
+	body := normalized[2:]
+	weights := [8]int{2, 7, 6, 5, 4, 3, 2, 1}
+	sum := 0
+	for i := range 8 {
+		sum += int(body[i]-'0') * weights[i]
+	}
+	return sum%11 == 0
+}
+
+// checkSumEE validates an Estonian VAT ID — 9 digits, weighted sum
+// [3,7,1,3,7,1,3,7,1] divisible by 10.
+//
+// Reference: https://en.wikipedia.org/wiki/VAT_identification_number
+func checkSumEE(_, normalized ID) bool {
+	body := normalized[2:]
+	weights := [9]int{3, 7, 1, 3, 7, 1, 3, 7, 1}
+	sum := 0
+	for i := range 9 {
+		sum += int(body[i]-'0') * weights[i]
+	}
+	return sum%10 == 0
+}
+
+// checkSumEL validates a Greek VAT ID — 9 digits, weighted sum
+// [256,128,64,32,16,8,4,2] mod 11 yields the 9th digit (10 → 0).
+//
+// Reference: https://en.wikipedia.org/wiki/VAT_identification_number
+func checkSumEL(_, normalized ID) bool {
+	body := normalized[2:]
+	weights := [8]int{256, 128, 64, 32, 16, 8, 4, 2}
+	sum := 0
+	for i := range 8 {
+		sum += int(body[i]-'0') * weights[i]
+	}
+	r := sum % 11
+	if r == 10 {
+		r = 0
+	}
+	return int(body[8]-'0') == r
+}
+
+// checkSumFI validates a Finnish VAT ID — 8 digits, weighted sum
+// [7,9,10,5,8,4,2] mod 11; check digit = (11 - r) for r > 1, 0 for r == 0,
+// and r == 1 makes the underlying business ID invalid by construction.
+//
+// Reference: https://en.wikipedia.org/wiki/VAT_identification_number
+func checkSumFI(_, normalized ID) bool {
+	body := normalized[2:]
+	weights := [7]int{7, 9, 10, 5, 8, 4, 2}
+	sum := 0
+	for i := range 7 {
+		sum += int(body[i]-'0') * weights[i]
+	}
+	r := sum % 11
+	if r == 1 {
+		return false
+	}
+	check := 0
+	if r != 0 {
+		check = 11 - r
+	}
+	return int(body[7]-'0') == check
+}
+
+// checkSumFR validates a French VAT ID — 2 alphanumeric check chars + 9
+// digit SIREN. When the 2 leading chars are digits the key is
+// (12 + 3 * (SIREN mod 97)) mod 97. The letter-bearing variant uses a
+// different algorithm and is not validated here (shape-only).
+//
+// Reference: https://en.wikipedia.org/wiki/VAT_identification_number
+func checkSumFR(_, normalized ID) bool {
+	body := normalized[2:]
+	if body[0] > '9' || body[1] > '9' {
+		return true
+	}
+	siren := 0
+	for i := 2; i < 11; i++ {
+		siren = siren*10 + int(body[i]-'0')
+	}
+	key := (12 + 3*(siren%97)) % 97
+	actual := int(body[0]-'0')*10 + int(body[1]-'0')
+	return actual == key
+}
+
+// checkSumHR validates a Croatian OIB — 11 digits, ISO 7064 MOD 11-10.
+//
+// Reference: https://en.wikipedia.org/wiki/Personal_identification_number_(Croatia)
+func checkSumHR(_, normalized ID) bool {
+	body := normalized[2:]
+	p := 10
+	for i := range 10 {
+		s := (int(body[i]-'0') + p) % 10
+		if s == 0 {
+			s = 10
+		}
+		p = (2 * s) % 11
+	}
+	return int(body[10]-'0') == (11-p)%10
+}
+
+// checkSumHU validates a Hungarian VAT ID — 8 digits, weighted sum
+// [9,7,3,1,9,7,3] mod 10 yields the check via (10 - r) mod 10.
+//
+// Reference: https://en.wikipedia.org/wiki/VAT_identification_number
+func checkSumHU(_, normalized ID) bool {
+	body := normalized[2:]
+	weights := [7]int{9, 7, 3, 1, 9, 7, 3}
+	sum := 0
+	for i := range 7 {
+		sum += int(body[i]-'0') * weights[i]
+	}
+	return int(body[7]-'0') == (10-sum%10)%10
+}
+
+// checkSumIT validates an Italian VAT ID — 11 digits, plain Luhn
+// (positions 2,4,6,8,10 doubled with digit-sum if > 9).
+//
+// Reference: https://en.wikipedia.org/wiki/VAT_identification_number
+func checkSumIT(_, normalized ID) bool {
+	body := normalized[2:]
+	sum := 0
+	for i := range 11 {
+		d := int(body[i] - '0')
+		if i%2 == 1 {
+			d *= 2
+			if d > 9 {
+				d -= 9
+			}
+		}
+		sum += d
+	}
+	return sum%10 == 0
+}
+
+// checkSumLT validates a Lithuanian VAT ID (9 or 12 digits).
+// Weights start at 1 and cycle 1..9 across the body; if the first pass
+// gives remainder 10, retry with weights shifted by 2.
+//
+// Reference: https://en.wikipedia.org/wiki/VAT_identification_number
+func checkSumLT(_, normalized ID) bool {
+	body := normalized[2:]
+	n := len(body) - 1
+	sum := 0
+	for i := range n {
+		sum += int(body[i]-'0') * (i%9 + 1)
+	}
+	r := sum % 11
+	if r == 10 {
+		sum = 0
+		for i := range n {
+			sum += int(body[i]-'0') * ((i+2)%9 + 1)
+		}
+		r = sum % 11
+		if r == 10 {
+			r = 0
+		}
+	}
+	return int(body[n]-'0') == r
+}
+
+// checkSumLU validates a Luxembourg VAT ID — 8 digits, where the first
+// 6 digits mod 89 equal the last 2.
+//
+// Reference: https://en.wikipedia.org/wiki/VAT_identification_number
+func checkSumLU(_, normalized ID) bool {
+	body := normalized[2:]
+	n := 0
+	for i := range 6 {
+		n = n*10 + int(body[i]-'0')
+	}
+	check := int(body[6]-'0')*10 + int(body[7]-'0')
+	return n%89 == check
+}
+
+// checkSumLV validates a Latvian legal-entity VAT ID — 11 digits with
+// first digit > 3, weighted mod-11 with check = (3 - r) mod 11.
+// Natural-person IDs (first digit ≤ 3) follow a different birthdate-based
+// algorithm and pass shape-only here.
+//
+// Reference: https://en.wikipedia.org/wiki/VAT_identification_number
+func checkSumLV(_, normalized ID) bool {
+	body := normalized[2:]
+	if body[0] <= '3' {
+		return true
+	}
+	weights := [10]int{9, 1, 4, 8, 3, 10, 2, 5, 7, 6}
+	sum := 0
+	for i := range 10 {
+		sum += int(body[i]-'0') * weights[i]
+	}
+	r := sum % 11
+	if r == 4 {
+		return false
+	}
+	check := (3 - r + 11) % 11
+	if check == 10 {
+		return false
+	}
+	return int(body[10]-'0') == check
+}
+
+// checkSumMT validates a Maltese VAT ID — 8 digits, weighted sum
+// [3,4,6,7,8,9] of the first 6 digits; check = 37 - (sum mod 37) must
+// equal the 2-digit tail.
+//
+// Reference: https://en.wikipedia.org/wiki/VAT_identification_number
+func checkSumMT(_, normalized ID) bool {
+	body := normalized[2:]
+	weights := [6]int{3, 4, 6, 7, 8, 9}
+	sum := 0
+	for i := range 6 {
+		sum += int(body[i]-'0') * weights[i]
+	}
+	check := 37 - sum%37
+	return int(body[6]-'0')*10+int(body[7]-'0') == check
+}
+
+// checkSumNL validates a Dutch VAT ID (pre-2020 numeric form).
+// 9 digits + "B" + 2-digit branch suffix; first 9 follow a weighted sum
+// [9,8,7,6,5,4,3,2] over digits 1..8 with the 9th digit equal to mod 11
+// (mod 10 invalid).
+//
+// Reference: https://en.wikipedia.org/wiki/VAT_identification_number
+func checkSumNL(_, normalized ID) bool {
+	body := normalized[2:]
+	weights := [8]int{9, 8, 7, 6, 5, 4, 3, 2}
+	sum := 0
+	for i := range 8 {
+		sum += int(body[i]-'0') * weights[i]
+	}
+	r := sum % 11
+	if r == 10 {
+		return false
+	}
+	return int(body[8]-'0') == r
+}
+
+// checkSumPL validates a Polish NIP — 10 digits, weighted sum
+// [6,5,7,2,3,4,5,6,7] mod 11 yields the check (mod 10 invalid).
+//
+// Reference: https://en.wikipedia.org/wiki/PESEL#Structure
+func checkSumPL(_, normalized ID) bool {
+	body := normalized[2:]
+	weights := [9]int{6, 5, 7, 2, 3, 4, 5, 6, 7}
+	sum := 0
+	for i := range 9 {
+		sum += int(body[i]-'0') * weights[i]
+	}
+	r := sum % 11
+	if r == 10 {
+		return false
+	}
+	return int(body[9]-'0') == r
+}
+
+// checkSumPT validates a Portuguese VAT ID — 9 digits, weighted sum
+// [9,8,7,6,5,4,3,2] mod 11; check = 11 - r, normalized to 0 for r ≤ 1.
+//
+// Reference: https://en.wikipedia.org/wiki/VAT_identification_number
+func checkSumPT(_, normalized ID) bool {
+	body := normalized[2:]
+	weights := [8]int{9, 8, 7, 6, 5, 4, 3, 2}
+	sum := 0
+	for i := range 8 {
+		sum += int(body[i]-'0') * weights[i]
+	}
+	check := 11 - sum%11
+	if check >= 10 {
+		check = 0
+	}
+	return int(body[8]-'0') == check
+}
+
+// checkSumRO validates a Romanian VAT ID — 2..10 digits, left-padded
+// with zeros to 10. Weighted sum [7,5,3,2,1,7,5,3,2] over the first 9
+// digits, then check = (sum * 10) mod 11, mapping 10 → 0.
+//
+// Reference: https://en.wikipedia.org/wiki/VAT_identification_number
+func checkSumRO(_, normalized ID) bool {
+	body := normalized[2:]
+	var padded [10]byte
+	for i := range padded {
+		padded[i] = '0'
+	}
+	copy(padded[10-len(body):], body)
+	weights := [9]int{7, 5, 3, 2, 1, 7, 5, 3, 2}
+	sum := 0
+	for i := range 9 {
+		sum += int(padded[i]-'0') * weights[i]
+	}
+	check := (sum * 10) % 11
+	if check == 10 {
+		check = 0
+	}
+	return int(padded[9]-'0') == check
+}
+
+// checkSumSE validates a Swedish VAT ID. After normalization the ID is
+// SE + 10-digit organisation number + literal "01" (regex-enforced).
+// The 10-digit org number uses standard Luhn (positions 1,3,5,7,9 doubled).
+//
+// Reference: https://www.skatteverket.se/foretagochorganisationer/registrering.4.html
+func checkSumSE(_, normalized ID) bool {
+	body := normalized[2:]
+	sum := 0
+	for i := range 10 {
+		d := int(body[i] - '0')
+		if i%2 == 0 {
+			d *= 2
+			if d > 9 {
+				d -= 9
+			}
+		}
+		sum += d
+	}
+	return sum%10 == 0
+}
+
+// checkSumSI validates a Slovenian VAT ID — 8 digits, weighted sum
+// [8,7,6,5,4,3,2] mod 11; check = 11 - r normalized to 0 for r ≤ 1.
+//
+// Reference: https://en.wikipedia.org/wiki/VAT_identification_number
+func checkSumSI(_, normalized ID) bool {
+	body := normalized[2:]
+	weights := [7]int{8, 7, 6, 5, 4, 3, 2}
+	sum := 0
+	for i := range 7 {
+		sum += int(body[i]-'0') * weights[i]
+	}
+	check := 11 - sum%11
+	if check >= 10 {
+		check = 0
+	}
+	return int(body[7]-'0') == check
+}
+
+// checkSumSK validates a Slovak VAT ID — 10 digits divisible by 11.
+//
+// Reference: https://en.wikipedia.org/wiki/VAT_identification_number
+func checkSumSK(_, normalized ID) bool {
+	body := normalized[2:]
+	var n int64
+	for i := range 10 {
+		n = n*10 + int64(body[i]-'0')
+	}
+	return n%11 == 0
 }
 
 // checkSumNO validates a Norwegian VAT ID.

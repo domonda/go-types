@@ -32,13 +32,55 @@ var validVATIDs = map[string]string{
 	"GB HA599":         "GBHA599",
 	"IE9S99999L":       "IE9S99999L",
 	"IE 9999999LI":     "IE9999999LI",
-	// Belgium — first digit must be 0 or 1.
-	"BE0123456789": "BE0123456789",
-	"BE1234567890": "BE1234567890",
-	// Hungary — exactly 8 digits.
-	"HU12345678": "HU12345678",
-	// Sweden — 10-digit org number followed by literal "01".
-	"SE123456789001": "SE123456789001",
+	// Belgium — first digit 0 or 1, mod-97 control on last 2 digits.
+	"BE0776091951": "BE0776091951",
+	"BE1234567894": "BE1234567894",
+	// Bulgaria — 9-digit EIK and 10-digit EGN both verified.
+	"BG175074752":  "BG175074752",
+	"BG7523169263": "BG7523169263",
+	// Cyprus — 8 digits + control letter.
+	"CY10001049T": "CY10001049T",
+	// Czech Republic — 8-digit legal entity (mod-11).
+	"CZ00177041": "CZ00177041",
+	// Denmark — mod-11 weighted.
+	"DK25313763": "DK25313763",
+	// Estonia — mod-10 weighted.
+	"EE100094916": "EE100094916",
+	// Greece — mod-11 with powers-of-two weights.
+	"EL094019245": "EL094019245",
+	// Finland — mod-11 weighted.
+	"FI09853608": "FI09853608",
+	// France — 2 digit key + 9-digit SIREN, mod-97 derived.
+	"FR40303265045": "FR40303265045",
+	// Croatia — ISO 7064 MOD 11-10.
+	"HR38192148118": "HR38192148118",
+	// Hungary — mod-10 weighted.
+	"HU12892312": "HU12892312",
+	// Italy — Luhn over 11 digits.
+	"IT00488410010": "IT00488410010",
+	// Lithuania — 9-digit and 12-digit forms.
+	"LT119511515":    "LT119511515",
+	"LT290061371314": "LT290061371314",
+	// Luxembourg — mod-89.
+	"LU10000356": "LU10000356",
+	// Latvia — legal entity (first digit > 3), mod-11 weighted.
+	"LV40003521600": "LV40003521600",
+	// Malta — mod-37.
+	"MT15121333": "MT15121333",
+	// Netherlands — mod-11 weighted, then "B" + 2-digit branch.
+	"NL005033019B01": "NL005033019B01",
+	// Poland — mod-11 weighted.
+	"PL5260250274": "PL5260250274",
+	// Portugal — mod-11 weighted.
+	"PT502757191": "PT502757191",
+	// Romania — variable length, left-padded mod-11.
+	"RO18158683": "RO18158683",
+	// Sweden — Luhn on the 10-digit org number; literal "01" branch.
+	"SE556677889901": "SE556677889901",
+	// Slovenia — mod-11 weighted.
+	"SI80267432": "SI80267432",
+	// Slovakia — full number divisible by 11.
+	"SK2020317068": "SK2020317068",
 	// Northern Ireland — same shape and mod-97 checksum as GB.
 	"XI123456782":    "XI123456782",
 	"XI123456782012": "XI123456782012",
@@ -109,12 +151,57 @@ var invalidVATIDs = []ID{
 	"BE2345678901", // starts with 2
 	"BE9999999999", // starts with 9
 	"BE123456789",  // only 9 digits
+	"BE0776091950", // valid format, mod-97 control broken
+	// Bulgaria — 9-digit EIK and 10-digit EGN checksums.
+	"BG175074750",  // EIK: last digit broken
+	"BG7523169260", // EGN: last digit broken
+	// Cyprus — control letter must match.
+	"CY10001049X", // wrong control letter (should be T)
+	// Czech Republic — 8-digit mod-11.
+	"CZ00177040",
+	// Denmark — mod-11.
+	"DK25313764",
+	// Estonia — mod-10.
+	"EE100094917",
+	// Greece — mod-11.
+	"EL094019246",
+	// Finland — mod-11.
+	"FI09853609",
+	// France — mod-97 SIREN key.
+	"FR41303265045",
+	// Croatia — ISO 7064 MOD 11-10.
+	"HR38192148119",
 	// Hungary — exactly 8 digits, not 9.
 	"HU123456789",
-	// Sweden — last two digits must be "01".
-	"SE123456789002", // ends in 02
-	"SE123456789010", // ends in 10
-	"SE12345678901",  // only 11 digits
+	"HU12892313", // valid format, mod-10 control broken
+	// Italy — Luhn.
+	"IT00488410011",
+	// Lithuania — first-pass and fallback both fail.
+	"LT119511516",
+	"LT290061371315",
+	// Luxembourg — mod-89.
+	"LU10000357",
+	// Latvia — legal entity mod-11.
+	"LV40003521601",
+	// Malta — mod-37.
+	"MT15121334",
+	// Netherlands — mod-11 (after stripping B-suffix).
+	"NL005033018B01",
+	// Poland — mod-11.
+	"PL5260250275",
+	// Portugal — mod-11.
+	"PT502757192",
+	// Romania — mod-11 over left-padded body.
+	"RO18158684",
+	// Sweden — last two digits must be "01"; Luhn over the org number.
+	"SE123456789002",  // ends in 02
+	"SE123456789010",  // ends in 10
+	"SE12345678901",   // only 11 digits
+	"SE556677889001",  // valid format, Luhn fails (org digit moved)
+	// Slovenia — mod-11.
+	"SI80267433",
+	// Slovakia — full number divisible by 11.
+	"SK2020317069",
 	// Switzerland — no alternative dotted format after normalization.
 	"CHE12345678",   // 8 digits
 	"CHE1234567890", // 10 digits
