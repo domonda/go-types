@@ -1,6 +1,7 @@
 package strutil
 
 import (
+	"bytes"
 	"strings"
 	"testing"
 	"unicode"
@@ -202,6 +203,116 @@ func TestTransliterateSpecialCharactersMaxLen(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := TransliterateSpecialCharactersMaxLen(tt.args.str, tt.args.maxLen); got != tt.want {
 				t.Errorf("TransliterateSpecialCharactersMaxLen() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// sanitizeLineEndingsReference is the original three-pass implementation,
+// used as a behavioral oracle for the optimized single-pass versions.
+func sanitizeLineEndingsReference(s string) string {
+	s = strings.ReplaceAll(s, "\r\n", "\n")
+	s = strings.ReplaceAll(s, "\n\r", "\n")
+	s = strings.ReplaceAll(s, "\r", "\n")
+	return s
+}
+
+var sanitizeLineEndingsCases = []struct {
+	name string
+	in   string
+	want string
+}{
+	{name: "empty", in: "", want: ""},
+	{name: "no_line_endings", in: "ABC", want: "ABC"},
+	{name: "only_lf", in: "\n", want: "\n"},
+	{name: "only_cr", in: "\r", want: "\n"},
+	{name: "crlf", in: "\r\n", want: "\n"},
+	{name: "lfcr", in: "\n\r", want: "\n"},
+	{name: "crlfcr", in: "\r\n\r", want: "\n"},
+	{name: "crcrlf", in: "\r\r\n", want: "\n\n"},
+	{name: "crlfcrlf", in: "\r\n\r\n", want: "\n\n"},
+	{name: "lfcrlf", in: "\n\r\n", want: "\n\n"},
+	{name: "lfcrcr", in: "\n\r\r", want: "\n\n"},
+	{name: "lfcrlfcr", in: "\n\r\n\r", want: "\n\n"},
+	{name: "lfcrcrlf", in: "\n\r\r\n", want: "\n\n"},
+	{name: "crcrlfcr", in: "\r\r\n\r", want: "\n\n"},
+	{name: "crlfcrcr", in: "\r\n\r\r", want: "\n\n"},
+	{name: "crlflfcr", in: "\r\n\n\r", want: "\n\n"},
+	{name: "crlflfcrlf", in: "\r\n\n\r\n", want: "\n\n\n"},
+	{name: "crlfcrlfcr", in: "\r\n\r\n\r", want: "\n\n"},
+	{name: "lflfcr", in: "\n\n\r", want: "\n\n"},
+	{name: "lfcrlfcr_text", in: "ABC\r\nDEF\rGHI\nJKL\n\r\r\nMNO\r\n\rPQR", want: "ABC\nDEF\nGHI\nJKL\n\nMNO\nPQR"},
+	{name: "only_three_cr", in: "\r\r\r", want: "\n\n\n"},
+	{name: "leading_cr_text", in: "\rABC", want: "\nABC"},
+	{name: "trailing_crlf", in: "ABC\r\n", want: "ABC\n"},
+	{name: "interspersed_cr", in: "\rA\r", want: "\nA\n"},
+	{name: "no_cr_with_lf", in: "ABC\nDEF\n", want: "ABC\nDEF\n"},
+	{name: "long_no_cr", in: strings.Repeat("Hello\n", 10), want: strings.Repeat("Hello\n", 10)},
+	{name: "long_mixed", in: strings.Repeat("Hello\r\nWorld\r", 5), want: strings.Repeat("Hello\nWorld\n", 5)},
+	{name: "utf8_with_cr", in: "Größe\r\nstraße\rÜber", want: "Größe\nstraße\nÜber"},
+}
+
+func TestSanitizeLineEndings(t *testing.T) {
+	for _, tc := range sanitizeLineEndingsCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Sanity check that the expected value matches the original
+			// three-pass semantics — guards against typos in the table.
+			require.Equal(t, tc.want, sanitizeLineEndingsReference(tc.in), "reference oracle mismatch")
+			require.Equal(t, tc.want, SanitizeLineEndings(tc.in))
+		})
+	}
+}
+
+func TestSanitizeLineEndingsBytes(t *testing.T) {
+	for _, tc := range sanitizeLineEndingsCases {
+		t.Run(tc.name, func(t *testing.T) {
+			in := []byte(tc.in)
+			got := SanitizeLineEndingsBytes(in)
+			require.Equal(t, tc.want, string(got))
+			// Ensure the input slice is never mutated.
+			require.Equal(t, tc.in, string(in), "input slice was mutated")
+		})
+	}
+}
+
+func TestSanitizeLineEndingsBytes_NoCRReturnsSameBacking(t *testing.T) {
+	in := []byte("no carriage returns here\n")
+	got := SanitizeLineEndingsBytes(in)
+	// Fast path returns the original slice unchanged.
+	require.True(t, bytes.Equal(in, got))
+	require.Equal(t, &in[0], &got[0], "fast path should return original backing array")
+}
+
+// FuzzSanitizeLineEndings differentially tests the optimized implementation
+// against the original three-pass replacement so that any divergence on any
+// byte sequence is caught.
+func FuzzSanitizeLineEndings(f *testing.F) {
+	for _, tc := range sanitizeLineEndingsCases {
+		f.Add(tc.in)
+	}
+	f.Fuzz(func(t *testing.T, s string) {
+		want := sanitizeLineEndingsReference(s)
+		if got := SanitizeLineEndings(s); got != want {
+			t.Fatalf("SanitizeLineEndings(%q) = %q, want %q", s, got, want)
+		}
+		if got := SanitizeLineEndingsBytes([]byte(s)); string(got) != want {
+			t.Fatalf("SanitizeLineEndingsBytes(%q) = %q, want %q", s, string(got), want)
+		}
+	})
+}
+
+func BenchmarkSanitizeLineEndings(b *testing.B) {
+	inputs := map[string]string{
+		"no_cr":   strings.Repeat("Hello, World!\n", 100),
+		"mixed":   strings.Repeat("Hello\r\nWorld\rFoo\n\r", 100),
+		"all_crlf": strings.Repeat("line\r\n", 200),
+	}
+	for name, in := range inputs {
+		b.Run(name, func(b *testing.B) {
+			b.ReportAllocs()
+			b.SetBytes(int64(len(in)))
+			for i := 0; i < b.N; i++ {
+				_ = SanitizeLineEndings(in)
 			}
 		})
 	}

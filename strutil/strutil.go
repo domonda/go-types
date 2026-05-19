@@ -555,58 +555,118 @@ func TransliterateSpecialCharactersMaxLen(str string, maxLen int) string {
 // 	"”": "&rdquo;",
 // }
 
-// SanitizeLineEndings converts all line endings to just '\n'
+// SanitizeLineEndings normalizes all line endings in text to '\n'
+// in a single pass and returns the result.
+//
+// The following byte sequences are collapsed to a single '\n':
+//   - "\r\n" (Windows / DOS)
+//   - "\n\r" (rare, e.g. Acorn / RISC OS, or as the trailing half of "\r\n\r")
+//   - "\r"   (classic Mac OS)
+//
+// A bare '\n' (Unix) is preserved as-is. If text contains no '\r',
+// it is returned unchanged without allocating.
+//
+// The exact pairings match three successive non-overlapping replacements
+// of "\r\n", then "\n\r", then "\r" — so for example "\r\n\r" collapses
+// to a single "\n", while "\r\n\r\n" yields "\n\n".
 func SanitizeLineEndings(text string) string {
-	// var (
-	// 	needsCopy = false
-	// 	buf bytes.Buffer
-	// 	lastByte byte
-	// )
-
-	// for i, b := range text {
-
-	// TODO optimized version
-
-	// 	lastByte = b
-	// }
-
-	// if needsCopy {
-	// 	return buf.Bytes()
-	// }
-	// return text
-
-	text = strings.Replace(text, "\r\n", "\n", -1)
-	text = strings.Replace(text, "\n\r", "\n", -1)
-	text = strings.Replace(text, "\r", "\n", -1)
-
-	return text
+	first := strings.IndexByte(text, '\r')
+	if first == -1 {
+		return text
+	}
+	var b strings.Builder
+	b.Grow(len(text))
+	b.WriteString(text[:first])
+	i := first
+	// If the byte just before the first '\r' is '\n', that pair is "\n\r"
+	// (step 2) and must collapse to a single '\n' — the leading '\n' was
+	// already written via the prefix copy, so consume this '\r'.
+	if first > 0 && text[first-1] == '\n' {
+		i++
+	}
+	for ; i < len(text); {
+		switch text[i] {
+		case '\r':
+			b.WriteByte('\n')
+			if i+1 < len(text) && text[i+1] == '\n' {
+				// "\r\n" -> "\n"; also consume a trailing '\r'
+				// (the "\n\r" produced after collapsing) so that
+				// "\r\n\r" collapses to a single "\n".
+				i += 2
+				if i < len(text) && text[i] == '\r' {
+					i++
+				}
+			} else {
+				i++
+			}
+		case '\n':
+			b.WriteByte('\n')
+			i++
+			if i < len(text) && text[i] == '\r' {
+				// "\n\r" -> "\n"
+				i++
+			}
+		default:
+			b.WriteByte(text[i])
+			i++
+		}
+	}
+	return b.String()
 }
 
-// SanitizeLineEndingsBytes converts all line endings to just '\n'
+// SanitizeLineEndingsBytes normalizes all line endings in text to '\n'
+// in a single pass and returns the result.
+//
+// The following byte sequences are collapsed to a single '\n':
+//   - "\r\n" (Windows / DOS)
+//   - "\n\r" (rare, e.g. Acorn / RISC OS, or as the trailing half of "\r\n\r")
+//   - "\r"   (classic Mac OS)
+//
+// A bare '\n' (Unix) is preserved as-is. If text contains no '\r',
+// the original slice is returned unchanged without allocating; otherwise
+// a freshly allocated slice is returned and text is not modified.
+//
+// The exact pairings match three successive non-overlapping replacements
+// of "\r\n", then "\n\r", then "\r" — so for example "\r\n\r" collapses
+// to a single "\n", while "\r\n\r\n" yields "\n\n".
 func SanitizeLineEndingsBytes(text []byte) []byte {
-	// var (
-	// 	needsCopy = false
-	// 	buf bytes.Buffer
-	// 	lastByte byte
-	// )
-
-	// for i, b := range text {
-
-	// TODO optimized version
-
-	// 	lastByte = b
-	// }
-
-	// if needsCopy {
-	// 	return buf.Bytes()
-	// }
-	// return text
-
-	text = bytes.Replace(text, []byte{'\r', '\n'}, []byte{'\n'}, -1)
-	text = bytes.Replace(text, []byte{'\n', '\r'}, []byte{'\n'}, -1)
-	text = bytes.Replace(text, []byte{'\r'}, []byte{'\n'}, -1)
-
-	return text
+	first := bytes.IndexByte(text, '\r')
+	if first == -1 {
+		return text
+	}
+	out := make([]byte, first, len(text))
+	copy(out, text[:first])
+	i := first
+	// If the byte just before the first '\r' is '\n', that pair is "\n\r"
+	// (step 2) and must collapse to a single '\n' — the leading '\n' was
+	// already written via the prefix copy, so consume this '\r'.
+	if first > 0 && text[first-1] == '\n' {
+		i++
+	}
+	for ; i < len(text); {
+		switch text[i] {
+		case '\r':
+			out = append(out, '\n')
+			if i+1 < len(text) && text[i+1] == '\n' {
+				i += 2
+				if i < len(text) && text[i] == '\r' {
+					i++
+				}
+			} else {
+				i++
+			}
+		case '\n':
+			out = append(out, '\n')
+			i++
+			if i < len(text) && text[i] == '\r' {
+				i++
+			}
+		default:
+			out = append(out, text[i])
+			i++
+		}
+	}
+	return out
 }
 
 // SubStringIn returns if subString is equal or a substring of any of strs.

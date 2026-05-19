@@ -57,13 +57,11 @@ func TestQueueCloseDrainsChannel(t *testing.T) {
 
 	var seen []any
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		for v := range q.Next() {
 			seen = append(seen, v)
 		}
-	}()
+	})
 
 	q.Add("a", "b", "c")
 	// Give the pump a moment to deliver before closing.

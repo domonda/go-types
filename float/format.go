@@ -85,17 +85,22 @@ func Format[T ~float32 | ~float64](f T, thousandsSep, decimalSep rune, precision
 	}
 
 	if decimalSep != '.' {
-		for i, c := range str {
-			if c == '.' {
-				// TODO optimize
-				fraction := str[i+1:]
-				if padPrecision {
-					for i := len(fraction); i < precision; i++ {
-						fraction += "0"
-					}
-				}
-				return str[:i] + string(decimalSep) + fraction
+		if dot := strings.IndexByte(str, '.'); dot != -1 {
+			fractionLen := len(str) - dot - 1
+			padding := 0
+			if padPrecision && fractionLen < precision {
+				padding = precision - fractionLen
 			}
+			var b strings.Builder
+			b.Grow(len(str) + padding)
+			b.WriteString(str[:dot])
+			// decimalSep is validated to be '.' or ',' above — always ASCII.
+			b.WriteByte(byte(decimalSep))
+			b.WriteString(str[dot+1:])
+			for range padding {
+				b.WriteByte('0')
+			}
+			return b.String()
 		}
 	}
 

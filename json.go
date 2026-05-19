@@ -9,7 +9,7 @@ import (
 var (
 	jsonMarshalerType = reflect.TypeFor[json.Marshaler]()
 	textMarshalerType = reflect.TypeFor[encoding.TextMarshaler]()
-	emptyInterfaceTye = reflect.TypeOf((*any)(nil)).Elem()
+	emptyInterfaceTye = reflect.TypeFor[any]()
 )
 
 // CanMarshalJSON returns true if a type can be marshalled as JSON.

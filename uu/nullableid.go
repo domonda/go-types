@@ -6,7 +6,6 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
-	"reflect"
 	"strings"
 
 	"github.com/invopop/jsonschema"
@@ -341,41 +340,51 @@ func (n *NullableID) Scan(src any) error {
 // It supports string and null input. Blank string input does not produce a null ID.
 // It also supports unmarshalling a sql.NullString.
 func (n *NullableID) UnmarshalJSON(data []byte) error {
-	// TODO optimize
-	var v any
-	err := json.Unmarshal(data, &v)
-	if err != nil {
-		return err
+	// Dispatch on the first non-whitespace byte to avoid a double Unmarshal
+	// via any/map[string]any in the common string and null cases.
+	trimmed := bytes.TrimLeft(data, " \t\r\n")
+	if len(trimmed) == 0 {
+		return fmt.Errorf("cannot UnmarshalJSON empty data as uu.NullableID")
 	}
+	switch trimmed[0] {
+	case 'n':
+		// JSON null
+		if !bytes.Equal(bytes.TrimRight(trimmed, " \t\r\n"), []byte("null")) {
+			return fmt.Errorf("cannot UnmarshalJSON(%s) as uu.NullableID", data)
+		}
+		*n = IDNull
+		return nil
 
-	switch x := v.(type) {
-	case string:
-		id, err := IDFromString(x)
+	case '"':
+		var s string
+		if err := json.Unmarshal(trimmed, &s); err != nil {
+			return err
+		}
+		id, err := IDFromString(s)
 		if err != nil {
 			return err
 		}
 		*n = NullableID(id)
-		return err
+		return nil
 
-	case map[string]any:
+	case '{':
 		var ns sql.NullString
-		err = json.Unmarshal(data, &ns)
-		if err != nil || !ns.Valid {
+		if err := json.Unmarshal(trimmed, &ns); err != nil {
 			return err
+		}
+		if !ns.Valid {
+			*n = IDNull
+			return nil
 		}
 		id, err := IDFromString(ns.String)
 		if err != nil {
 			return err
 		}
 		*n = NullableID(id)
-		return err
-
-	case nil:
-		*n = IDNull
 		return nil
 
 	default:
-		return fmt.Errorf("cannot UnmarshalJSON(%s) as uu.NullableID", reflect.TypeOf(v))
+		return fmt.Errorf("cannot UnmarshalJSON(%s) as uu.NullableID", data)
 	}
 }
 

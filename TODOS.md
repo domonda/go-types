@@ -23,9 +23,9 @@ Audited against the official spec for each member state's VAT identification num
 
 ## Performance TODOs (defer)
 
-- [ ] `strutil/strutil.go:595,622` — "TODO optimized version" on two helpers.
-- [ ] `float/format.go:90` — fast path for non-default decimal separator.
-- [ ] `uu/nullableid.go:344` — JSON unmarshal optimization.
+- [x] `strutil/strutil.go` — `SanitizeLineEndings` / `SanitizeLineEndingsBytes` rewritten as single-pass with no-alloc fast path when no `\r` is present. Differential fuzz against the original three-pass `strings.Replace` chain.
+- [x] `float/format.go` — non-default decimal separator path now uses `strings.IndexByte` + `strings.Builder`, dropping the O(n²) `fraction += "0"` concat loop.
+- [x] `uu/nullableid.go` — `UnmarshalJSON` dispatches on the first non-whitespace byte (`null`, `"…"`, `{…}`) instead of double-`json.Unmarshal` via `any`. `null` path is now 0-alloc.
 
 ## Test coverage
 

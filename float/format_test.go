@@ -136,6 +136,30 @@ func Test_FormatFloat(t *testing.T) {
 	}
 }
 
+func Benchmark_FormatFloat_commaDecimalSep(b *testing.B) {
+	// Hot path for DE/AT-style formatting: no thousands grouping,
+	// comma decimal separator, common precision values.
+	cases := []struct {
+		name string
+		f    float64
+		prec int
+		pad  bool
+	}{
+		{"small_noPad", 12.34, -1, false},
+		{"small_pad2", 12.3, 2, true},
+		{"small_pad5", 12.345, 5, true},
+		{"neg_pad4", -987.6, 4, true},
+	}
+	for _, c := range cases {
+		b.Run(c.name, func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				_ = Format(c.f, 0, ',', c.prec, c.pad)
+			}
+		})
+	}
+}
+
 func Test_FormatFloat_invalid(t *testing.T) {
 	var formatFloatValues = []floatInfo{
 		{0, 0, 0, 0, false},

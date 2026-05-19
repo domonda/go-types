@@ -365,6 +365,73 @@ func TestNullableID_UnmarshalJSON(t *testing.T) {
 	}
 }
 
+func TestNullableID_UnmarshalJSON_Variations(t *testing.T) {
+	ref := ID{0x6b, 0xa7, 0xb8, 0x10, 0x9d, 0xad, 0x11, 0xd1, 0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4, 0x30, 0xc8}
+	refStr := "6ba7b810-9dad-11d1-80b4-00c04fd430c8"
+
+	tests := []struct {
+		name    string
+		input   string
+		want    NullableID
+		wantErr bool
+	}{
+		{name: "null_literal", input: `null`, want: IDNull},
+		{name: "null_with_leading_ws", input: "  \t\nnull", want: IDNull},
+		{name: "null_with_trailing_ws", input: "null  \n", want: IDNull},
+		{name: "string_dashed", input: `"` + refStr + `"`, want: NullableID(ref)},
+		{name: "string_with_ws", input: "  \"" + refStr + "\"", want: NullableID(ref)},
+		{name: "string_braces", input: `"{` + refStr + `}"`, want: NullableID(ref)},
+		{name: "string_urn", input: `"urn:uuid:` + refStr + `"`, want: NullableID(ref)},
+		{name: "string_nil_uuid", input: `"00000000-0000-0000-0000-000000000000"`, want: IDNull},
+		{name: "nullstring_valid", input: `{"String":"` + refStr + `","Valid":true}`, want: NullableID(ref)},
+		{name: "nullstring_invalid", input: `{"String":"","Valid":false}`, want: IDNull},
+		{name: "empty", input: ``, wantErr: true},
+		{name: "ws_only", input: "   \t\n", wantErr: true},
+		{name: "bad_literal", input: `nope`, wantErr: true},
+		{name: "bad_string", input: `"not-a-uuid"`, wantErr: true},
+		{name: "number_unsupported", input: `123`, wantErr: true},
+		{name: "array_unsupported", input: `["x"]`, wantErr: true},
+		{name: "bool_unsupported", input: `true`, wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var n NullableID
+			err := n.UnmarshalJSON([]byte(tt.input))
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("expected error, got n=%v", n)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if n != tt.want {
+				t.Fatalf("got %v, want %v", n, tt.want)
+			}
+		})
+	}
+}
+
+func BenchmarkNullableID_UnmarshalJSON(b *testing.B) {
+	cases := map[string][]byte{
+		"string": []byte(`"6ba7b810-9dad-11d1-80b4-00c04fd430c8"`),
+		"null":   []byte(`null`),
+		"nullstring": []byte(`{"String":"6ba7b810-9dad-11d1-80b4-00c04fd430c8","Valid":true}`),
+	}
+	for name, data := range cases {
+		b.Run(name, func(b *testing.B) {
+			b.ReportAllocs()
+			var n NullableID
+			for i := 0; i < b.N; i++ {
+				if err := n.UnmarshalJSON(data); err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+	}
+}
+
 func TestNullableID_PrettyPrint(t *testing.T) {
 	tests := []struct {
 		id   NullableID
