@@ -1,7 +1,6 @@
 package types
 
 import (
-	"cmp"
 	"errors"
 	"fmt"
 	"reflect"
@@ -167,9 +166,23 @@ func TryValidate(v any) (err error, isValidatable bool) {
 	}
 }
 
-// DeepValidate recursively validates all fields of a struct, all elements of a slice or array,
-// and all values of a map by recursively calling Validate or Valid methods.
-// It returns all validation errors as a slice.
+// DeepValidate recursively validates v and everything reachable from it,
+// returning every validation error encountered.
+//
+// The traversal:
+//   - calls [Validate] on v itself, then on every reachable element,
+//   - follows pointers and interfaces to any depth (nil values stop the descent),
+//   - recurses into exported struct fields, slice and array elements, and map values
+//     (map keys are not validated, but are sorted with [CompareReflectValue]
+//     so error order is deterministic),
+//   - skips unexported struct fields, which cannot be inspected via reflection.
+//
+// Errors are prefixed with a human-readable path to the offending value,
+// e.g. "struct field Users -> element [1] -> struct field Name: invalid value".
+//
+// Cycles via self-referential pointers or maps are not detected and will
+// recurse until the stack overflows; pass acyclic data.
+//
 // Use errors.Join(DeepValidate(v)...) to join the errors into a single error.
 func DeepValidate(v any) []error {
 	var errs []error
@@ -182,67 +195,78 @@ func DeepValidate(v any) []error {
 // deepValidate is the internal implementation of DeepValidate.
 // It recursively validates nested structures and provides path information for errors.
 func deepValidate(v reflect.Value, onError func(error), path ...string) {
-	// Handle invalid/zero reflect.Values (e.g., from nil interface{})
 	if !v.IsValid() {
 		return
 	}
 
-	// Handle nil pointers before calling v.Interface()
-	if v.Kind() == reflect.Pointer && v.IsNil() {
-		return
-	}
-
-	err := Validate(v.Interface())
-	if err != nil {
-		if len(path) > 0 {
-			err = fmt.Errorf("%s: %w", strings.Join(path, " -> "), err)
+	// Try Validate at every level of the pointer/interface chain. The method
+	// set of **T does not include T's value-receiver Validators, so calling
+	// Validate only at the outer level would miss validators reachable only
+	// after one or more dereferences. Stop at the first level that produces
+	// an error to avoid duplicate reports for the same logical value.
+	for {
+		switch v.Kind() {
+		case reflect.Pointer, reflect.Interface:
+			if v.IsNil() {
+				return
+			}
 		}
-		onError(err)
-	}
-	if v.Kind() == reflect.Pointer {
+		if v.CanInterface() && !isTypedNilPointerInInterface(v) {
+			if err := Validate(v.Interface()); err != nil {
+				if len(path) > 0 {
+					err = fmt.Errorf("%s: %w", strings.Join(path, " -> "), err)
+				}
+				onError(err)
+				break
+			}
+		}
+		if k := v.Kind(); k != reflect.Pointer && k != reflect.Interface {
+			break
+		}
 		v = v.Elem()
 	}
+
+	// Fully unwrap so the descent below sees the concrete container kind.
+	for v.Kind() == reflect.Pointer || v.Kind() == reflect.Interface {
+		if v.IsNil() {
+			return
+		}
+		v = v.Elem()
+	}
+
 	switch v.Kind() {
 	case reflect.Struct:
 		t := v.Type()
 		for i := range v.NumField() {
+			if !t.Field(i).IsExported() {
+				continue
+			}
 			name := fmt.Sprintf("struct field %s", t.Field(i).Name)
 			deepValidate(v.Field(i), onError, append(path, name)...)
 		}
 	case reflect.Map:
 		keys := v.MapKeys()
-		slices.SortFunc(keys, ReflectCompare)
+		slices.SortFunc(keys, CompareReflectValue)
 		for _, key := range keys {
 			name := fmt.Sprintf("map value [%#v]", key.Interface())
 			deepValidate(v.MapIndex(key), onError, append(path, name)...)
 		}
 	case reflect.Slice, reflect.Array:
-		for i := 0; i < v.Len(); i++ {
-			name := fmt.Sprintf("elememt [%d]", i)
+		for i := range v.Len() {
+			name := fmt.Sprintf("element [%d]", i)
 			deepValidate(v.Index(i), onError, append(path, name)...)
 		}
 	}
 }
 
-// ReflectCompare compares two reflect.Values of the same type.
-// The function panics if the types of a and b
-// are not idential or not orderable.
-// Orderable types are variantes of integers, floats, and strings.
-// This is used for sorting map keys in DeepValidate.
-func ReflectCompare(a, b reflect.Value) int {
-	if a.Type() != b.Type() {
-		panic("values are not of the same type")
+// isTypedNilPointerInInterface reports whether v is an interface value
+// wrapping a nil pointer. Calling Validate on such a value would route
+// through the wrapped type's Valid/Validate method with a nil receiver
+// and panic, so the caller should skip it.
+func isTypedNilPointerInInterface(v reflect.Value) bool {
+	if v.Kind() != reflect.Interface {
+		return false
 	}
-	switch a.Kind() {
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		return cmp.Compare(a.Int(), b.Int())
-	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
-		return cmp.Compare(a.Uint(), b.Uint())
-	case reflect.Float32, reflect.Float64:
-		return cmp.Compare(a.Float(), b.Float())
-	case reflect.String:
-		return cmp.Compare(a.String(), b.String())
-	default:
-		panic("values are not of an orderable type")
-	}
+	e := v.Elem()
+	return e.Kind() == reflect.Pointer && e.IsNil()
 }

@@ -3,35 +3,9 @@ package types
 import (
 	"errors"
 	"fmt"
-	"reflect"
 	"strings"
 	"testing"
 )
-
-func TestReflectCompare(t *testing.T) {
-	tests := []struct {
-		a    reflect.Value
-		b    reflect.Value
-		want int
-	}{
-		{reflect.ValueOf(0), reflect.ValueOf(1), -1},
-		{reflect.ValueOf(0), reflect.ValueOf(0), 0},
-		{reflect.ValueOf(1), reflect.ValueOf(0), +1},
-		{reflect.ValueOf(0.0), reflect.ValueOf(1.0), -1},
-		{reflect.ValueOf(0.0), reflect.ValueOf(0.0), 0},
-		{reflect.ValueOf(1.0), reflect.ValueOf(0.0), +1},
-		{reflect.ValueOf("0"), reflect.ValueOf("1"), -1},
-		{reflect.ValueOf("0"), reflect.ValueOf("0"), 0},
-		{reflect.ValueOf("1"), reflect.ValueOf("0"), +1},
-	}
-	for _, tt := range tests {
-		t.Run(fmt.Sprintf("%#v_%#v", tt.a.Interface(), tt.b.Interface()), func(t *testing.T) {
-			if got := ReflectCompare(tt.a, tt.b); got != tt.want {
-				t.Errorf("ReflectCompare(%#v, %#v) = %d, want %d", tt.a, tt.b, got, tt.want)
-			}
-		})
-	}
-}
 
 // Test types for DeepValidate tests
 
@@ -256,7 +230,7 @@ func TestDeepValidate(t *testing.T) {
 				{Value: "b"},
 			},
 			wantErrs:  2,
-			wantPaths: []string{"elememt [0]", "elememt [1]"},
+			wantPaths: []string{"element [0]", "element [1]"},
 		},
 		{
 			name: "map of structs",
@@ -499,6 +473,201 @@ func TestDeepValidate_MapKeySorting(t *testing.T) {
 		if errs1[i].Error() != errs2[i].Error() {
 			t.Errorf("Error order differs:\n  Run 1: %v\n  Run 2: %v", errs1[i], errs2[i])
 		}
+	}
+}
+
+// Coverage for the bug-fix cases: unexported fields, multi-level pointers,
+// interface fields, cross-kind unwrapping, and the path/element wording.
+
+func TestDeepValidate_SkipsUnexportedFields(t *testing.T) {
+	type withPrivate struct {
+		Pub     invalidString
+		private invalidString
+	}
+	errs := DeepValidate(withPrivate{Pub: "x", private: "y"})
+	if len(errs) != 1 {
+		t.Fatalf("expected 1 error (only the exported field), got %d: %v", len(errs), errs)
+	}
+	if !strings.Contains(errs[0].Error(), "Pub") {
+		t.Errorf("expected error to reference Pub, got %v", errs[0])
+	}
+}
+
+func TestDeepValidate_OnlyUnexportedFields(t *testing.T) {
+	type allPrivate struct {
+		a invalidString
+		b invalidString
+	}
+	errs := DeepValidate(allPrivate{a: "x", b: "y"})
+	if len(errs) != 0 {
+		t.Errorf("expected 0 errors (all fields unexported), got %d: %v", len(errs), errs)
+	}
+}
+
+func TestDeepValidate_MultiLevelPointers(t *testing.T) {
+	v := invalidString("x")
+	pv := &v
+	ppv := &pv
+	pppv := &ppv
+	errs := DeepValidate(pppv)
+	if len(errs) != 1 {
+		t.Errorf("expected 1 error for ***invalidString, got %d: %v", len(errs), errs)
+	}
+}
+
+func TestDeepValidate_NilPointerChain(t *testing.T) {
+	var ppv **invalidString
+	errs := DeepValidate(ppv)
+	if len(errs) != 0 {
+		t.Errorf("expected 0 errors for nil **invalidString, got %d: %v", len(errs), errs)
+	}
+}
+
+func TestDeepValidate_InterfaceFieldWithValidator(t *testing.T) {
+	type wrap struct {
+		V any
+	}
+	errs := DeepValidate(wrap{V: invalidString("x")})
+	if len(errs) != 1 {
+		t.Fatalf("expected 1 error for any-wrapped validator, got %d: %v", len(errs), errs)
+	}
+	if !strings.Contains(errs[0].Error(), "field V") {
+		t.Errorf("expected path to include field V, got %v", errs[0])
+	}
+}
+
+func TestDeepValidate_InterfaceFieldRecursesIntoStruct(t *testing.T) {
+	type leaf struct {
+		Bad invalidString
+	}
+	type wrap struct {
+		V any
+	}
+	errs := DeepValidate(wrap{V: leaf{Bad: "x"}})
+	if len(errs) != 1 {
+		t.Fatalf("expected 1 error reaching through interface into struct, got %d: %v", len(errs), errs)
+	}
+	msg := errs[0].Error()
+	for _, part := range []string{"field V", "field Bad"} {
+		if !strings.Contains(msg, part) {
+			t.Errorf("expected path to contain %q, got %v", part, msg)
+		}
+	}
+}
+
+func TestDeepValidate_NilInterfaceField(t *testing.T) {
+	type wrap struct {
+		V any
+	}
+	errs := DeepValidate(wrap{V: nil})
+	if len(errs) != 0 {
+		t.Errorf("expected 0 errors for nil interface, got %d: %v", len(errs), errs)
+	}
+}
+
+func TestDeepValidate_InterfaceHoldingNilPointer(t *testing.T) {
+	type wrap struct {
+		V any
+	}
+	var p *invalidString
+	errs := DeepValidate(wrap{V: p})
+	if len(errs) != 0 {
+		t.Errorf("expected 0 errors for interface holding typed-nil pointer, got %d: %v", len(errs), errs)
+	}
+}
+
+func TestDeepValidate_SliceOfInterfaces(t *testing.T) {
+	errs := DeepValidate([]any{
+		invalidString("a"),
+		validString("ok"),
+		invalidString("b"),
+	})
+	if len(errs) != 2 {
+		t.Errorf("expected 2 errors in []any, got %d: %v", len(errs), errs)
+	}
+}
+
+func TestDeepValidate_MapWithInterfaceValues(t *testing.T) {
+	errs := DeepValidate(map[string]any{
+		"a": invalidString("x"),
+		"b": validString("ok"),
+		"c": invalidString("y"),
+	})
+	if len(errs) != 2 {
+		t.Errorf("expected 2 errors in map[string]any, got %d: %v", len(errs), errs)
+	}
+}
+
+func TestDeepValidate_ElementWordingFixed(t *testing.T) {
+	// Regression: error paths spelled "elememt"; should now be "element".
+	errs := DeepValidate([]invalidString{"a"})
+	if len(errs) != 1 {
+		t.Fatalf("expected 1 error, got %d", len(errs))
+	}
+	msg := errs[0].Error()
+	if strings.Contains(msg, "elememt") {
+		t.Errorf("error still contains typo 'elememt': %v", msg)
+	}
+	if !strings.Contains(msg, "element [0]") {
+		t.Errorf("expected 'element [0]' in path, got %v", msg)
+	}
+}
+
+func TestDeepValidate_PointerInsideSlice(t *testing.T) {
+	v1 := invalidString("a")
+	v2 := invalidString("b")
+	errs := DeepValidate([]*invalidString{&v1, nil, &v2})
+	if len(errs) != 2 {
+		t.Errorf("expected 2 errors (nil skipped), got %d: %v", len(errs), errs)
+	}
+}
+
+func TestDeepValidate_PointerToStructWithValidator(t *testing.T) {
+	type s struct {
+		Bad invalidString
+	}
+	val := &s{Bad: "x"}
+	errs := DeepValidate(val)
+	if len(errs) != 1 {
+		t.Errorf("expected 1 error for *struct field, got %d: %v", len(errs), errs)
+	}
+}
+
+func TestDeepValidate_TopLevelValidatErr(t *testing.T) {
+	errs := DeepValidate(nonEmptyString(""))
+	if len(errs) != 1 {
+		t.Fatalf("expected 1 error from ValidatErr, got %d", len(errs))
+	}
+	if !strings.Contains(errs[0].Error(), "empty") {
+		t.Errorf("expected ValidatErr's own message, got %v", errs[0])
+	}
+}
+
+func TestDeepValidate_DeterministicIntKeyOrder(t *testing.T) {
+	input := map[int]invalidString{3: "c", 1: "a", 2: "b"}
+	var paths []string
+	for _, err := range DeepValidate(input) {
+		paths = append(paths, err.Error())
+	}
+	if len(paths) != 3 {
+		t.Fatalf("expected 3 errors, got %d", len(paths))
+	}
+	// Keys sorted ascending: 1, 2, 3
+	if !strings.Contains(paths[0], "[1]") || !strings.Contains(paths[1], "[2]") || !strings.Contains(paths[2], "[3]") {
+		t.Errorf("expected int keys in ascending order, got:\n  %s\n  %s\n  %s", paths[0], paths[1], paths[2])
+	}
+}
+
+func TestDeepValidate_NonNilableLeafTypes(t *testing.T) {
+	// Channels/funcs/etc. are reachable but not validatable; should not crash.
+	type s struct {
+		Ch  chan int
+		Fn  func()
+		Map map[string]int
+	}
+	errs := DeepValidate(s{Ch: make(chan int), Fn: func() {}, Map: map[string]int{"x": 1}})
+	if len(errs) != 0 {
+		t.Errorf("expected 0 errors for non-validatable leaf kinds, got %d: %v", len(errs), errs)
 	}
 }
 

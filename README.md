@@ -55,6 +55,7 @@ The main package provides core utilities and type definitions:
 - **ValidatErr**: Interface for validation with detailed error information
 - **DeepValidate**: Recursive validation of nested structures
 - **CombinedValidator**: Combine multiple validators
+- **CompareReflectValue**: Comparator for `slices.SortFunc` that orders `reflect.Value`s across all orderable kinds (numerics, strings, bool, complex, pointers, channels, arrays, slices including `[]byte`, structs, and interfaces) and returns `0` for non-orderable or mismatched-type values
 
 #### Utility Functions
 - **Pointer Utilities**: Safe pointer dereferencing (`Ptr`, `FromPtr`, `FromPtrOr`)
