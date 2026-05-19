@@ -41,7 +41,13 @@ var validVATIDs = map[string]string{
 	"CHE-123.456.788":  "CHE123456788",
 	"CHE123456788":     "CHE123456788",
 	"EU372008134":      "EU372008134", // MOSS scheme VAT
-	"EST 99600678":     "EST99600678", // Not a real ID, should also be invlaid, see also https://gist.github.com/svschannak/e79892f4fbc56df15bdb5496d0e67b85
+	// Spain — coverage of all four sub-formats.
+	"ES12345678Z":  "ES12345678Z",  // DNI / NIF, mod-23 letter = Z
+	"ESY1234567X":  "ESY1234567X",  // NIE (Y → 1)
+	"ESZ0000000M":  "ESZ0000000M",  // NIE (Z → 2)
+	"ESX1234567L":  "ESX1234567L",  // NIE (X → 0, historic form)
+	"ESA82018474":  "ESA82018474",  // CIF requiring numeric check
+	"ESP0000000J":  "ESP0000000J",  // CIF requiring letter check
 }
 
 var invalidVATIDs = []ID{
@@ -50,6 +56,15 @@ var invalidVATIDs = []ID{
 	" ATU12345678 ",
 	"No. 62-1764389",
 	"No.821764389",
+	// Spain — must reject:
+	"EST99600678",  // T is not a valid CIF entity prefix
+	"ES12345678A",  // wrong DNI check letter (should be Z)
+	"ESX1234567A",  // wrong NIE check letter (should be L)
+	"ESA82018470",  // wrong CIF numeric check (should be 4)
+	"ESP00000000",  // P requires a letter check, not a digit
+	"ESA0000000J",  // A requires a digit check, not a letter
+	// Norway — must reject (mod-11 checksum fails):
+	"NO916634770",  // valid format, last digit broken (3 → 0)
 }
 
 func Test_NormalizeVATID(t *testing.T) {

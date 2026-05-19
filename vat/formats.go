@@ -31,12 +31,17 @@ var idRegex = map[country.Code]*regexp.Regexp{
 	"DK": regexp.MustCompile(`^DK\d{8}$`),
 	"EE": regexp.MustCompile(`^EE\d{9}$`),
 	"EL": regexp.MustCompile(`^EL\d{9}$`), // greece GR
-	// TODO improve ES like https://gist.github.com/svschannak/e79892f4fbc56df15bdb5496d0e67b85
-	// `^(ES)([A-Z]\d{8})$/`                       //** Spain (National juridical entities)
-	// `^(ES)([A-HN-SW]\d{7}[A-J])$/`              //** Spain (Other juridical entities)
-	// `^(ES)([0-9YZ]\d{7}[A-Z])$/`                //** Spain (Personal entities type 1)
-	// `^(ES)([KLMX]\d{7}[A-Z])$/`                 //** Spain (Personal entities type 2)
-	"ES": regexp.MustCompile(`^ES[0-9A-Z]\d{7}[0-9A-Z]$`),
+	// Spain — four distinct sub-formats. checkSumES below disambiguates
+	// and validates the appropriate control digit/letter:
+	//   [ABEH]\d{8}            CIF requiring numeric check (juridical)
+	//   [PQSNWR]\d{7}[A-J]     CIF requiring letter check  (juridical)
+	//   [CDFGJUV]\d{7}[0-9A-J] CIF accepting either form   (juridical)
+	//   \d{8}[A-Z]             DNI / NIF (citizens)
+	//   [YZ]\d{7}[A-Z]         NIE (foreigners, Y/Z form)
+	//   [KLMX]\d{7}[A-Z]       NIE (X) and historical K, L, M
+	// See https://en.wikipedia.org/wiki/VAT_identification_number and
+	// https://en.wikipedia.org/wiki/NIE_number.
+	"ES": regexp.MustCompile(`^ES(?:[ABEH]\d{8}|[PQSNWR]\d{7}[A-J]|[CDFGJUV]\d{7}[0-9A-J]|\d{8}[A-Z]|[YZ]\d{7}[A-Z]|[KLMX]\d{7}[A-Z])$`),
 	"FI": regexp.MustCompile(`^FI\d{8}$`),
 	"FR": regexp.MustCompile(`^FR[0-9A-Z][0-9A-Z]\d{9}$`),
 	"GB": regexp.MustCompile(`^GB(?:\d{9})|(?:\d{12})|(?:GD\d{3})|(?:HA\d{3})$`),
@@ -70,6 +75,7 @@ var idRegex = map[country.Code]*regexp.Regexp{
 var checkSumFuncs = map[country.Code]func(raw, normalized ID) bool{
 	"AT": checkSumAT,
 	"DE": checkSumDE,
+	"ES": checkSumES,
 	"NO": checkSumNO,
 }
 
@@ -118,18 +124,147 @@ func checkSumDE(raw, normalized ID) bool {
 	return false
 }
 
+// dniCheckLetter returns the Spanish DNI/NIE control letter for a
+// non-negative integer using the standard mod-23 table.
+func dniCheckLetter(n int) byte {
+	const table = "TRWAGMYFPDXBNJZSQVHLCKE"
+	return table[n%23]
+}
+
+// cifLuhnControl computes the CIF mod-10 control value from the seven
+// middle digits using the [2,1,2,1,2,1,2] Luhn-style weights.
+func cifLuhnControl(digits string) int {
+	sum := 0
+	for i := range 7 {
+		d := int(digits[i] - '0')
+		if i%2 == 0 { // positions 1,3,5,7 (1-indexed) → 0,2,4,6 here
+			d *= 2
+			if d > 9 {
+				d -= 9
+			}
+		}
+		sum += d
+	}
+	return (10 - sum%10) % 10
+}
+
+// checkSumES validates a Spanish VAT ID. The package-level regex picks
+// one of six sub-formats (CIF numeric / CIF letter / CIF either /
+// DNI / NIE Y-Z / NIE X-K-L-M) and this function applies the matching
+// control-character algorithm.
+//
+// References:
+//   - https://en.wikipedia.org/wiki/VAT_identification_number#Examples
+//   - https://en.wikipedia.org/wiki/NIE_number
+//   - https://www.boe.es/buscar/act.php?id=BOE-A-2007-21421 (RD 1065/2007)
+func checkSumES(raw, normalized ID) bool {
+	_ = raw
+	if len(normalized) != 11 { // "ES" + 9 chars
+		return false
+	}
+	body := string(normalized[2:])
+	first := body[0]
+	last := body[8]
+
+	switch {
+	case first >= '0' && first <= '9':
+		// DNI / NIF: 8 digits + letter.
+		n := 0
+		for i := range 8 {
+			n = n*10 + int(body[i]-'0')
+		}
+		return dniCheckLetter(n) == last
+
+	case first == 'Y' || first == 'Z' || first == 'X':
+		// NIE: replace prefix letter with a digit (X=0, Y=1, Z=2),
+		// form an 8-digit number, apply DNI algorithm.
+		var prefix byte
+		switch first {
+		case 'X':
+			prefix = '0'
+		case 'Y':
+			prefix = '1'
+		case 'Z':
+			prefix = '2'
+		}
+		n := int(prefix - '0')
+		for i := 1; i <= 7; i++ {
+			n = n*10 + int(body[i]-'0')
+		}
+		return dniCheckLetter(n) == last
+
+	case first == 'K' || first == 'L' || first == 'M':
+		// Historical/special NIF starting with K, L, or M: the seven
+		// digits (no prefix substitution) are run through the mod-23
+		// table.
+		n := 0
+		for i := 1; i <= 7; i++ {
+			n = n*10 + int(body[i]-'0')
+		}
+		return dniCheckLetter(n) == last
+
+	default:
+		// CIF: 1 entity-type letter + 7 digits + 1 control char.
+		control := cifLuhnControl(body[1:8])
+		expectedDigit := byte('0' + control)
+		expectedLetter := "JABCDEFGHI"[control]
+
+		onlyLetter := strings.ContainsRune("PQSNWR", rune(first))
+		onlyDigit := strings.ContainsRune("ABEH", rune(first))
+
+		switch {
+		case last >= '0' && last <= '9':
+			return !onlyLetter && last == expectedDigit
+		case last >= 'A' && last <= 'J':
+			return !onlyDigit && last == expectedLetter
+		default:
+			return false
+		}
+	}
+}
+
+// checkSumNO validates a Norwegian VAT ID.
+//
+// After normalization the ID has the form NO + 9-digit organisation
+// number + optional "MVA". The 9-digit organisation number uses a
+// MOD-11 checksum with weights 3, 2, 7, 6, 5, 4, 3, 2 applied to the
+// first 8 digits; the 9th digit is the control digit.
+//
+// References:
+//   - https://en.wikipedia.org/wiki/National_identification_numbers_in_Norway
+//   - https://www.brreg.no/om-oss/oppgavene-vare/alle-registrene-vare/om-enhetsregisteret/organisasjonsnummeret/
+//   - https://vatstack.com/articles/norway-vat-number-validation
 func checkSumNO(raw, normalized ID) bool {
-	// https://vatstack.com/articles/norway-vat-number-validation
-	if len(normalized) < 11 {
-		return false
-	}
-	if d := normalized[2]; d != '8' && d != '9' {
-		return false
-	}
-	// "No." is more often used as prefix for numbers than for Norwegian VAT IDs
+	// "No." is far more commonly an English number abbreviation than a
+	// Norwegian VAT prefix, so reject before any checksum work.
 	if strings.HasPrefix(string(raw), "No.") || strings.HasPrefix(string(raw), "no.") {
 		return false
 	}
-	// TODO full check-sum implementation
-	return true
+	if len(normalized) < 11 {
+		return false
+	}
+	// Defensive — the regex already enforces [89] in this position.
+	if d := normalized[2]; d != '8' && d != '9' {
+		return false
+	}
+	digits := normalized[2:11]
+	weights := [8]int{3, 2, 7, 6, 5, 4, 3, 2}
+	sum := 0
+	for i := range 8 {
+		sum += int(digits[i]-'0') * weights[i]
+	}
+	rem := sum % 11
+	var check int
+	switch rem {
+	case 0:
+		check = 0
+	case 1:
+		// remainder 1 would require a control digit of 10, which is
+		// not representable in a single character, so the underlying
+		// organisation number is invalid by construction.
+		return false
+	default:
+		check = 11 - rem
+	}
+	return int(digits[8]-'0') == check
 }
