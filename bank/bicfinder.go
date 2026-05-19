@@ -1,7 +1,6 @@
 package bank
 
 import (
-	"fmt"
 	"regexp"
 	"unicode/utf8"
 
@@ -32,15 +31,6 @@ func (bicFinder) FindAllIndex(str []byte, n int) [][]int {
 	}
 	result := make([][]int, 0, len(indices))
 	for _, matchIndices := range indices {
-		if len(matchIndices) != 2*2 {
-			panic(fmt.Errorf("Expected 4 match indices but len(matchIndices) = %d", len(matchIndices)))
-		}
-		// for _, i := range matchIndices {
-		// 	if i < 0 || i > len(str) {
-		// 		fmt.Println("bicFinder invalid index", i, len(str))
-		// 		continue
-		// 	}
-		// }
 		bic := str[matchIndices[0]:matchIndices[1]]
 		countryCode := country.Code(str[matchIndices[2]:matchIndices[3]])
 		_, isFalse := falseBICs[BIC(bic)]

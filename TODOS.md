@@ -6,10 +6,6 @@ Open issues and cleanup items before tagging `v1.0.0`. Grouped by what blocks a 
 
 - [ ] **Tag `v1.0.0`.** No git tags exist yet. Pick semver baseline first.
 
-## Defensive panics worth reviewing
-
-- [ ] **`bank/bicfinder.go:36`** — defensive panic on regex submatch count. The regex is fixed; the assertion can be removed.
-
 ## Test coverage
 
 - [ ] Still thin or absent: deeper coverage for `notnull/intarray`, `notnull/nullboolarray`, `notnull/arrays` helpers, and `notnull/json` helpers (only `stringarray`, `floatarray`, `trimmedstring` are smoke-covered today).
