@@ -1,6 +1,7 @@
 package date
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
@@ -54,7 +55,7 @@ func (ym NullableYearMonth) IsNotNull() bool {
 // Note: check with IsNull before using Get!
 func (ym NullableYearMonth) Get() YearMonth {
 	if ym.IsNull() {
-		panic("NullableYearMonth.Get() called on null value")
+		panic(fmt.Sprintf("Get() called on NULL %T", ym))
 	}
 	return YearMonth(ym)
 }
