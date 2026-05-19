@@ -5,16 +5,10 @@ Open issues and cleanup items before tagging `v1.0.0`. Grouped by what blocks a 
 ## Blockers for v1.0 (API or semantic)
 
 - [ ] **Tag `v1.0.0`.** No git tags exist yet. Pick semver baseline first.
-- [ ] **Resolve unversioned direct deps in `go.mod`.** Decide per dep: tag upstream, fork, vendor, or accept pseudo-version pinning into a v1 release.
-  - `github.com/teamwork/tnef` (used by `email`)
-  - `github.com/ungerik/go-fs`
-  - `github.com/ungerik/go-reflection`
 - [ ] **Unify null-sentinel naming across packages.** Picks one convention now; renames after v1 are breaking changes.
   - Currently mixed: `country.Invalid`, `country.Null`, `language.Null`, `vat.Null`, `money.CurrencyNull`, `date.Invalid`, `date.Null`, `nullable.TrimmedStringNull`, `account.NumberNull`, `email.Address` (no sentinel).
   - Proposal: `<Type>Null` for the nullable-variant null, `<Type>Invalid` for the non-nullable invalid sentinel.
-- [ ] **Asymmetric XML in `account`.** `MarshalXML` is commented out; `UnmarshalXML` is live. Either re-enable the marshaler or drop the unmarshaler so XML round-trips work or don't exist consistently.
-  - `account/number.go:277`
-  - `account/nullablenumber.go:280`
+- [x] **Asymmetric XML in `account`.** Re-enabled `MarshalXML` on both `Number` and `NullableNumber` so XML round-trips work end-to-end. (`c07d593`)
 
 ## Functional gaps with explicit TODOs
 
@@ -29,17 +23,9 @@ Open issues and cleanup items before tagging `v1.0.0`. Grouped by what blocks a 
 
 ## Code cleanup (low risk, no behavior change)
 
-- [x] Delete dead commented-out code blocks:
-  - [x] `strfmt/detector.go` — entire file is commented out (`Detector`, `Parser` interface, registration helpers).
-  - [x] `vat/id.go:59` and `vat/nullableid.go:25` — `NormalizedUnchecked`.
-  - [x] `date/date.go:441` — `NormalizedOrInvalid`.
-  - [x] `email/utils.go:102,107` — `HTMLEmbedImages`, `embedAttachments`.
-  - [x] `email/message.go:186` — `DeliveredTo`.
-  - [x] `strutil/strutil.go:23,241` — `toUpperCaseLettersAndDigits`, duplicate `RemoveRunesString`.
-  - [x] `bank/iban_test.go:153` — `Test_IBANFromParts`.
-- [x] Unify panic messages on `Get()` calls on null wrappers. Standard: `panic(fmt.Sprintf("Get() called on NULL %T", x))`. Outliers use hardcoded strings.
-  - `date/nullableyearmonth.go:57`
-  - `date/nullableyearquarter.go:57`
+- [x] Replaced `strfmt/detector.go` (entirely commented out) with `strfmt/parser.go` declaring just the `Parser` interface that nine other packages reference in godoc. (`5803e28`)
+- [x] Deleted dead commented-out code in `vat/id.go`, `vat/nullableid.go`, `date/date.go`, `email/utils.go`, `email/message.go`, `strutil/strutil.go` (two blocks), `bank/iban_test.go`. (`3b60b6e`)
+- [x] Unified `Get()`-on-null panic format across `date.NullableYearMonth` and `date.NullableYearQuarter` to match the repo-wide standard `fmt.Sprintf("Get() called on NULL %T", x)`. (`9dce3a2`)
 
 ## Defensive panics worth reviewing
 
