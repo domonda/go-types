@@ -21,6 +21,7 @@ var (
 	_ sql.Scanner                  = new(NullableNumber)
 	_ json.Marshaler               = NullableNumber("")
 	_ json.Unmarshaler             = new(NullableNumber)
+	_ xml.Marshaler                = NullableNumber("")
 	_ xml.Unmarshaler              = new(NullableNumber)
 	_ nullable.NullSetable[Number] = (*NullableNumber)(nil)
 )
@@ -277,9 +278,9 @@ func (NullableNumber) JSONSchema() *jsonschema.Schema {
 	}
 }
 
-// func (n NullableNumber) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
-// 	return e.EncodeElement(string(n), start)
-// }
+func (n NullableNumber) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
+	return e.EncodeElement(string(n), start)
+}
 
 func (n *NullableNumber) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 	var str string

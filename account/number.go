@@ -45,8 +45,8 @@ var (
 	_ sql.Scanner      = new(Number)
 	_ json.Marshaler   = Number("")
 	_ json.Unmarshaler = new(Number)
-	// _ xml.Marshaler    = Number("")
-	_ xml.Unmarshaler = new(Number)
+	_ xml.Marshaler    = Number("")
+	_ xml.Unmarshaler  = new(Number)
 )
 
 // Number represents an account number that can contain alphanumeric characters
@@ -274,9 +274,9 @@ func (Number) JSONSchema() *jsonschema.Schema {
 	}
 }
 
-// func (n Number) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
-// 	return e.EncodeElement(string(n), start)
-// }
+func (n Number) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
+	return e.EncodeElement(string(n), start)
+}
 
 func (n *Number) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 	var str string
