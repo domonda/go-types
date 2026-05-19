@@ -99,29 +99,6 @@ func ExtractBodyURLs(msg *Message) strutil.StringSet {
 	return urls
 }
 
-// func HTMLEmbedImages(html string, attachments []fs.FileReader) (inlinedHTML string, unusedAttachments []fs.FileReader) {
-
-// 	panic("todo")
-// }
-
-// func embedAttachments(source string, attachments []*nmail.Attachment) string {
-// 	for _, attachment := range attachments {
-// 		for _, lookupTerm := range []string{attachment.ContentID, attachment.FileName} {
-// 			// get base64 encoded image data for embedding
-// 			data := getImageAsBase64(attachment.MimeType, attachment.Content)
-// 			newContent := fmt.Sprintf(`src="%s"`, string(data))
-// 			// since we use the filename in the regex we need quote it
-// 			// special characters in filename should not affect regex query
-// 			idQuoted := regexp.QuoteMeta(lookupTerm)
-// 			regEx := fmt.Sprintf(`src=\"cid:%s.*"`, idQuoted)
-// 			// compile regex and replace content
-// 			r := regexp.MustCompile(regEx)
-// 			source = string(r.ReplaceAll([]byte(source), []byte(newContent)))
-// 		}
-// 	}
-// 	return source
-// }
-
 // HTMLToPlaintext converts HTML to plaintext
 // by concaternating the content of text nodes
 // with the passed delimiter between them.

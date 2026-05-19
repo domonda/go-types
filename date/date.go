@@ -438,14 +438,6 @@ func (date Date) NormalizedOrUnchanged(lang ...language.Code) Date {
 	return normalized
 }
 
-// func (date Date) NormalizedOrInvalid(lang ...language.Code) Date {
-// 	normalized, err := date.Normalized(lang...)
-// 	if err != nil {
-// 		return Invalid
-// 	}
-// 	return normalized
-// }
-
 // NormalizedOrNull returns the normalized date as NullableDate if possible, otherwise returns Null.
 // The first given lang argument is used as language hint for parsing.
 func (date Date) NormalizedOrNull(lang ...language.Code) NullableDate {

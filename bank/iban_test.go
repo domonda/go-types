@@ -143,22 +143,3 @@ func Test_IBAN_BankAndAccountNumbers(t *testing.T) {
 		}
 	}
 }
-
-// var ibanPartsMap = map[string][]string{
-// 	"AT051937071110000044":   []string{"AT05", "1937", "0711", "1000", "0044"},
-// 	"DE36701500000081134298": []string{"DE36", "7015", "0000", "0081", "1342", "98"},
-// 	// "DE19123412341234123412": []string{"DE", "1912", "3412", "3412", "3412", "3412"}, // invalid checksum
-// }
-
-// func Test_IBANFromParts(t *testing.T) {
-// 	for correctIBAN, parts := range ibanPartsMap {
-// 		testIBAN, err := IBANFromParts(parts)
-// 		if err != nil {
-// 			t.Errorf("IBANFromParts(%v): %s", parts, err.Error())
-// 			continue
-// 		}
-// 		if string(testIBAN) != correctIBAN {
-// 			t.Errorf("IBANFromParts(%v): %s != %s", parts, string(testIBAN), string(correctIBAN))
-// 		}
-// 	}
-// }

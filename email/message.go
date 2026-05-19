@@ -181,13 +181,6 @@ func (msg *Message) ReplyToAddress() Address {
 	return msg.ReplyTo.Get()
 }
 
-// // DeliveredTo returns the normalized address part
-// // of the "Delivered-To" header if available.
-// func (msg *Message) DeliveredTo() NullableAddress {
-// 	addr, _ := NullableAddress(msg.ExtraHeader.Get("Delivered-To")).AddressPart()
-// 	return addr
-// }
-
 // Returns if the "Auto-Submitted" header is set
 // and has a different value than "no".
 // See RFC 3834: https://datatracker.ietf.org/doc/html/rfc3834

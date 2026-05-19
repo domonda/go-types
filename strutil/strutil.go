@@ -20,16 +20,6 @@ func panicIfNot(assumptions ...bool) {
 	}
 }
 
-// func toUpperCaseLettersAndDigits(str string) string {
-// 	var b strings.Builder
-// 	for _, r := range str {
-// 		if unicode.IsDigit(r) || unicode.IsLetter(r) {
-// 			b.WriteRune(unicode.ToUpper(r))
-// 		}
-// 	}
-// 	return b.String()
-// }
-
 // IsRuneFunc is a function pointer for specifying if a rune matches a criteria.
 type IsRuneFunc func(rune) bool
 
@@ -237,23 +227,6 @@ func RemoveRunesString(str string, removeRunes ...IsRuneFunc) string {
 	}
 	return str
 }
-
-// func RemoveRunesString(str string, removeRunes ...IsRuneFunc) string {
-// 	var buf bytes.Buffer
-// 	for _, r := range str {
-// 		doRemove := false
-// 		for _, remove := range removeRunes {
-// 			if remove(r) {
-// 				doRemove = true
-// 				break
-// 			}
-// 		}
-// 		if !doRemove {
-// 			buf.WriteRune(r)
-// 		}
-// 	}
-// 	return buf.String()
-// }
 
 // KeepRunesString returns a copy of str where with all runes kept in it
 // where any call to a keepRunes function reeturns true.

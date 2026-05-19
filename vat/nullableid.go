@@ -21,11 +21,6 @@ type NullableID string
 // Compile-time check that NullableID implements nullable.NullSetable[ID]
 var _ nullable.NullSetable[ID] = (*NullableID)(nil)
 
-// NormalizedUnchecked returns a generic normalized version of ID without performing any format checks.
-// func (n NullableID) NormalizedUnchecked() NullableID {
-// 	return NullableID(ID(n).NormalizedUnchecked())
-// }
-
 // Normalized returns the id in normalized form,
 // or an error if the VAT ID is not Null and not valid.
 func (n NullableID) Normalized() (NullableID, error) {
