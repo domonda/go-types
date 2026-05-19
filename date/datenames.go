@@ -1,5 +1,19 @@
 package date
 
+// weekdayNameSet holds lowercase weekday names that may appear as a
+// leading word in human-written dates ("Mon Jan 02 2006",
+// "Wednesday, 28 Feb 2018"). The parser drops them before format
+// dispatch.
+var weekdayNameSet = map[string]struct{}{
+	"mon": {}, "monday": {},
+	"tue": {}, "tues": {}, "tuesday": {},
+	"wed": {}, "wednesday": {},
+	"thu": {}, "thur": {}, "thurs": {}, "thursday": {},
+	"fri": {}, "friday": {},
+	"sat": {}, "saturday": {},
+	"sun": {}, "sunday": {},
+}
+
 var monthNameMap = map[string]int{
 	"jan":     1,
 	"jän":     1,
@@ -8,6 +22,12 @@ var monthNameMap = map[string]int{
 	"january": 1,
 	"jänner":  1,
 	"jaenner": 1,
+	"janv":    1, // French (janvier)
+	"janvier": 1,
+	"gen":     1, // Italian (gennaio)
+	"gennaio": 1,
+	"ene":     1, // Spanish (enero)
+	"enero":   1,
 
 	"ian":     1,
 	"iän":     1,

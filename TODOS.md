@@ -8,11 +8,7 @@ Open issues and cleanup items before tagging `v1.0.0`. Grouped by what blocks a 
 
 ## Functional gaps with explicit TODOs
 
-- [x] **`language.Code.Normalized()` now handles ISO 639-2/B+T, ISO 639-3 (where a 639-1 mapping exists), and BCP-47 tags** by extracting the primary language subtag. Added `language/iso6393.go` with the mapping and table-driven tests in `language/code_test.go`. Languages without a 639-1 assignment still error.
-- [x] **Norwegian VAT checksum (`vat/checkSumNO`)** now implements the official MOD-11 algorithm (weights 3,2,7,6,5,4,3,2 on the first 8 digits of the 9-digit organisation number) instead of the previous `// TODO full check-sum implementation` stub that returned `true` for any 11-char input. The "No."/"no." prefix guard against confusion with the English "number" abbreviation is preserved.
-- [x] **Spanish VAT validation** rewritten in `vat/checkSumES`. The single permissive regex `^ES[0-9A-Z]\d{7}[0-9A-Z]$` was replaced with six precise sub-patterns covering CIF (numeric-only, letter-only, and either-form variants), DNI/NIF, NIE (Y/Z form), and historical NIE (X) plus K/L/M. Each sub-format now runs its specific control-character algorithm (mod-23 table for DNI/NIE, Luhn-style mod-10 for CIF). `vat/id_test.go` covers all sub-formats with positive and negative cases.
-- [ ] **`date` parser doesn't accept many common English date formats.** ~60 commented-out test cases in `date/date_test.go` document the gap (month names, abbreviated months, ordinal suffixes, year-only, CJK, US short forms). Decide per-format: in scope for v1, or explicit non-goal documented in godoc.
-  - `date/date_test.go:50-168, 451`
+- [x] **`date` parser now accepts most of the previously-commented English / US / RFC-ish / CJK formats.** Made comma (`,`), apostrophe (`'`), and the CJK separators `年月日` valid date separators, taught the parser to drop a leading weekday name when there are four parts, generalised the ordinal-suffix stripper to `21st` / `22nd` / `23rd` / `31st` etc., and added French / Italian / Spanish January abbreviations to the month-name map. ~40 commented-out test cases in `date/date_test.go` are now live and passing. Remaining gaps are deliberate non-goals documented in `Normalize`'s godoc: year-only or year-month-only strings (`2014`, `2014-04`, `20140601`), single-digit dd/mm/yy combinations under 5 total digits (`8/8/71`, too ambiguous), and RubyDate / RFC1123 forms with embedded time + timezone.
 
 ## European VAT formats with loose, broken, or missing regex coverage
 

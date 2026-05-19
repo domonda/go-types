@@ -30,8 +30,47 @@ import (
 // its Normalized() method accepts optional language.Code parameters.
 // This is intentional as it provides more functionality than the interface requires.
 
-// Normalize returns str as normalized Date or an error.
-// The first given lang argument is used as language hint for parsing.
+// Normalize returns str as a Date in the canonical YYYY-MM-DD form,
+// or an error if the input cannot be parsed.
+//
+// The first lang argument, if present, is used as a hint to
+// disambiguate dd/mm vs mm/dd ordering when both parts are numeric and
+// both are valid day and month values (e.g. "05/06/2024"). Pass
+// language.EN to bias toward US ordering.
+//
+// Accepted input shapes (case-insensitive, lenient whitespace):
+//
+//   - ISO 8601: "2006-01-02", "2006/01/02", "2006.01.02", "2006 01 02"
+//   - ISO 8601 with time suffix, the date part is taken:
+//     "2006-01-02T15:04:05Z07:00", "30.11.2023 00:00:00"
+//   - dd.mm.yyyy / dd.mm.yy: "25.12.1975", "25.12.75"
+//   - mm/dd/yyyy / mm/dd/yy: "12/25/1975", "12/25/75"
+//   - "1st of 02/2003", "4th of dec. 2020"
+//   - Month-first English / German: "jan. 24 2012", "1. Dezember 2016"
+//   - Day-first English / German: "7 oct 1970", "1st of dec. 2020"
+//   - Month-first with comma: "Oct 7, 1970", "May 17, 2012",
+//     "September 17th, 2012"
+//   - Short year with leading apostrophe: "Oct 7, '70"
+//   - "yyyy-Mon-dd": "2013-Feb-03"
+//   - "dd-Mon-yyyy" / "dd-Mon-yy": "07-Feb-2004", "07-Feb-04"
+//   - With weekday prefix (dropped): "Mon Jan 02 2006",
+//     "Fri, 03 Jul 2015", "Wednesday, 28 Feb 2018"
+//   - CJK separators: "2014年04月08日"
+//   - French / Italian / Spanish month abbreviations:
+//     "2 janv. 2019", "23/gen/2019"
+//
+// 2-digit years map to 2000..2044 (< 45) or 1900..1999 (>= 45).
+//
+// Explicitly NOT supported (use a different parser, e.g. time.Parse):
+//
+//   - Year-only or year-month-only strings ("2014", "201412",
+//     "20140601", "2014-04", "2014.05")
+//   - Single-digit day-month-year combinations under 5 total digits
+//     ("8/8/71") — too ambiguous to disambiguate reliably
+//   - RubyDate / RFC1123 with embedded time and timezone offset
+//     ("Mon Jan 02 15:04:05 -0700 2006")
+//   - Locale-specific written forms beyond the abbreviations above
+//     (e.g. Arabic numerals, full Russian months)
 func Normalize(str string, lang ...language.Code) (Date, error) {
 	return Date(str).Normalized(lang...)
 }
@@ -752,7 +791,9 @@ func (Date) JSONSchema() *jsonschema.Schema {
 }
 
 func isDateSeparatorRune(r rune) bool {
-	return unicode.IsSpace(r) || r == '.' || r == '/' || r == '-'
+	// "'" splits a leading apostrophe off short years like '70.
+	return unicode.IsSpace(r) || r == '.' || r == '/' || r == '-' ||
+		r == ',' || r == '\'' || r == '年' || r == '月' || r == '日'
 }
 
 func isDateTrimRune(r rune) bool {
@@ -797,10 +838,13 @@ func normalizeDate(str string, langHint language.Code) (string, bool, error) {
 
 	parts := strings.FieldsFunc(trimmed, isDateSeparatorRune)
 	if len(parts) == 4 {
-		i := strutil.IndexInStrings("of", parts)
-		if i > 0 && i <= 2 {
-			// remove the word "of" within date
+		// Drop the English filler "of" ("1st of Dec 2020").
+		if i := strutil.IndexInStrings("of", parts); i > 0 && i <= 2 {
 			parts = append(parts[:i], parts[i+1:]...)
+		} else if _, isWeekday := weekdayNameSet[parts[0]]; isWeekday {
+			// Drop a leading weekday name ("Mon Jan 02 2006",
+			// "Fri, 03 Jul 2015", "Wednesday, 28 Feb 2018").
+			parts = parts[1:]
 		}
 	}
 	if len(parts) != 3 {
@@ -813,21 +857,21 @@ func normalizeDate(str string, langHint language.Code) (string, bool, error) {
 		totalLen += l
 		if l == 1 {
 			parts[i] = "0" + parts[i]
-		} else if parts[i] == "1st" {
-			parts[i] = "01"
-			dayHint = i
-		} else if parts[i] == "2nd" {
-			parts[i] = "02"
-			dayHint = i
-		} else if parts[i] == "3rd" {
-			parts[i] = "03"
-			dayHint = i
-		} else if before, ok := strings.CutSuffix(parts[i], "th"); ok {
-			parts[i] = before
-			if len(parts[i]) == 1 {
-				parts[i] = "0" + parts[i]
+			continue
+		}
+		// Strip English ordinal suffixes (1st, 2nd, 3rd, 4th, 21st,
+		// 22nd, 23rd, 31st, …). The suffix is always at the end and
+		// the preceding characters must be digits — verified via the
+		// validDay()/validMonth() checks downstream.
+		for _, suf := range [4]string{"st", "nd", "rd", "th"} {
+			if before, ok := strings.CutSuffix(parts[i], suf); ok && len(before) > 0 {
+				parts[i] = before
+				if len(parts[i]) == 1 {
+					parts[i] = "0" + parts[i]
+				}
+				dayHint = i
+				break
 			}
-			dayHint = i
 		}
 	}
 	if totalLen < 5 {
