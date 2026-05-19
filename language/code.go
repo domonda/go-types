@@ -17,6 +17,7 @@ import (
 	"github.com/invopop/jsonschema"
 
 	"github.com/domonda/go-types"
+	"github.com/domonda/go-types/strutil"
 )
 
 // Code represents a language code in its normalized form as an ISO 639-1 two-character language code.
@@ -39,16 +40,49 @@ func (c Code) ValidAndNormalized() bool {
 	return err == nil && c == norm
 }
 
-// Normalized returns the normalized language code or an error if invalid.
-// TODO: normalize 3 letter codes https://en.wikipedia.org/wiki/List_of_ISO_639-1_codes
-// TODO: normalize BCP-47 language codes, such as "en-US" or "sr-Latn"
-// http://www.unicode.org/reports/tr35/#Unicode_locale_identifier.
+// Normalized returns the normalized ISO 639-1 two-letter language code.
+//
+// Accepted input shapes:
+//   - ISO 639-1 two-letter codes, case-insensitive, with surrounding
+//     whitespace trimmed ("en", " EN ", "En").
+//   - ISO 639-2 three-letter codes, both the bibliographic (B) and
+//     terminologic (T) variants where they differ ("eng", "deu", "ger").
+//   - ISO 639-3 three-letter codes, where a 639-1 equivalent exists
+//     ("eng", "deu", "fra"). 639-3 codes for languages without a 639-1
+//     assignment are rejected.
+//   - BCP-47 language tags: only the leading language subtag is
+//     consulted; script, region, variant, and extension subtags are
+//     dropped ("en-US" → "en", "zh-Hant-CN" → "zh", "sr-Latn" → "sr").
+//     POSIX-style underscores ("en_US") are accepted as separators.
+//
+// Returns an error wrapping the original input if no 639-1 code can be
+// derived. The error preserves the unnormalized value for diagnostics.
+//
+// See:
+//   - https://en.wikipedia.org/wiki/List_of_ISO_639-1_codes
+//   - https://www.rfc-editor.org/info/bcp47
+//   - https://www.unicode.org/reports/tr35/#Unicode_locale_identifier
 func (c Code) Normalized() (Code, error) {
-	normalized := Code(strings.ToLower(string(c)))
-	if _, ok := codeNames[normalized]; !ok {
+	s := strings.ToLower(strutil.TrimSpace(string(c)))
+	if s == "" {
 		return c, fmt.Errorf("invalid language.Code: %q", string(c))
 	}
-	return normalized, nil
+	// Strip BCP-47 region/script/variant subtags by keeping only the
+	// primary language subtag. POSIX locale strings ("en_US") use '_'.
+	if i := strings.IndexAny(s, "-_"); i >= 0 {
+		s = s[:i]
+	}
+	switch len(s) {
+	case 2:
+		if _, ok := codeNames[Code(s)]; ok {
+			return Code(s), nil
+		}
+	case 3:
+		if code, ok := iso6393To1[s]; ok {
+			return code, nil
+		}
+	}
+	return c, fmt.Errorf("invalid language.Code: %q", string(c))
 }
 
 // LanguageName returns the English name of the language for the code.

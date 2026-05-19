@@ -8,18 +8,13 @@ Open issues and cleanup items before tagging `v1.0.0`. Grouped by what blocks a 
 
 ## Functional gaps with explicit TODOs
 
-- [ ] **`language.Code.Normalized()` doesn't handle ISO 639-2/3 or BCP-47** (`en-US`, `sr-Latn`). Either implement, or scope the limit in godoc.
-  - `language/code.go:43-44`
+- [x] **`language.Code.Normalized()` now handles ISO 639-2/B+T, ISO 639-3 (where a 639-1 mapping exists), and BCP-47 tags** by extracting the primary language subtag. Added `language/iso6393.go` with the mapping and table-driven tests in `language/code_test.go`. Languages without a 639-1 assignment still error.
 - [ ] **VAT checksum implementation is incomplete for at least one country.** Finish or remove.
   - `vat/formats.go:133`
 - [ ] **Spanish VAT validation needs improvement.** See pointer in code.
   - `vat/formats.go:34`
 - [ ] **`date` parser doesn't accept many common English date formats.** ~60 commented-out test cases in `date/date_test.go` document the gap (month names, abbreviated months, ordinal suffixes, year-only, CJK, US short forms). Decide per-format: in scope for v1, or explicit non-goal documented in godoc.
   - `date/date_test.go:50-168, 451`
-
-## Bugs surfaced during the test pass
-
-- [x] **`queue.channelPump` called `sync.Cond.Wait` without holding the associated mutex** — a contract violation that fataled with "sync: Unlock of unlocked RWMutex" the first time a buffered Add fired `Signal`. The bug was latent because typical usage stayed under `ChanLen=32` items and never exercised the buffer path. Fixed by holding `q.mutex` across the pump's loop and switching to the standard guarded-wait pattern.
 
 ## Defensive panics worth reviewing
 
@@ -34,9 +29,9 @@ Open issues and cleanup items before tagging `v1.0.0`. Grouped by what blocks a 
 
 ## Test coverage
 
-- [x] Smoke pass for previously untested packages: added `deref/deref_test.go`, `set/set_test.go`, `queue/queue_test.go`, `notnull/stringarray_test.go`, `notnull/trimmedstring_test.go`, `charset/bom_test.go`, `charset/encoding_test.go`. `language` already had `code_test.go`; the only other surface in that package (`iso6393macro.go`, `iso6393names.go`) is dead commented-out data.
+- [x] Smoke pass for previously untested packages: added `deref/deref_test.go`, `set/set_test.go`, `queue/queue_test.go`, `notnull/stringarray_test.go`, `notnull/trimmedstring_test.go`, `charset/bom_test.go`, `charset/encoding_test.go`. `language` was extended with the BCP-47 / 639-3 work above and its test file grown to cover the new paths.
 - [ ] Still thin or absent: deeper coverage for `notnull/intarray`, `notnull/nullboolarray`, `notnull/arrays` helpers, and `notnull/json` helpers (only `stringarray`, `floatarray`, `trimmedstring` are smoke-covered today).
-- [ ] `language/iso6393macro.go` and `language/iso6393names.go` together contain ~8500 lines of commented-out data with no live symbols. Decide whether to bring them in (tie to the BCP-47 / 639-3 normalization item above) or delete the files.
+- [ ] `language/iso6393macro.go` (macrolanguage → macrolanguage map) and `language/iso6393names.go` (English names of every 639-3 code) together contain ~8500 lines of commented-out data with no live symbols. Independent of the 639-1 mapping that now lives in `language/iso6393.go`. Decide whether to revive (different use cases — dialect rollup and language-name display) or delete.
 
 ## Docs & release hygiene
 
