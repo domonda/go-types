@@ -22,6 +22,11 @@ var _ types.NormalizableValidator[ID] = ID("")
 // https://europa.eu/youreurope/business/taxation/vat/vat-digital-services-moss-scheme/index_en.htm
 const MOSSSchemaVATCountryCode = "EU"
 
+// NorthernIrelandVATCountryCode is the post-Brexit VAT prefix for Northern Ireland businesses
+// that remain inside the EU VAT regime for goods. "XI" is not an ISO 3166-1 country code, so
+// it is allow-listed alongside MOSSSchemaVATCountryCode.
+const NorthernIrelandVATCountryCode = "XI"
+
 const ErrInvalidID errs.Sentinel = "invalid VAT ID"
 
 // ID is a european VAT ID.
@@ -70,7 +75,7 @@ func (id ID) Normalized() (ID, error) {
 
 	// Check country code
 	countryCode := country.Code(normalized[:2])
-	if countryCode != MOSSSchemaVATCountryCode && !countryCode.Valid() {
+	if countryCode != MOSSSchemaVATCountryCode && countryCode != NorthernIrelandVATCountryCode && !countryCode.Valid() {
 		return id, fmt.Errorf("%w: %q has an invalid country code: %q", ErrInvalidID, string(id), string(countryCode))
 	}
 
@@ -149,6 +154,8 @@ func (id ID) Nullable() NullableID {
 // For a VAT Mini One Stop Shop (MOSS) ID that begins with "EU"
 // the EU's capital Brussels' country Belgum's
 // code country.BE will be returned.
+// For a Northern Ireland VAT ID that begins with "XI" the UK code country.GB
+// will be returned, since "XI" is not a real ISO 3166-1 country code.
 // See also ID.IsMOSS.
 func (id ID) CountryCode() country.Code {
 	norm, err := id.Normalized()
@@ -159,6 +166,9 @@ func (id ID) CountryCode() country.Code {
 	if code == MOSSSchemaVATCountryCode {
 		// MOSS VAT begins with "EU" - Europe is not a country
 		return country.BE
+	}
+	if code == NorthernIrelandVATCountryCode {
+		return country.GB
 	}
 	return code
 }

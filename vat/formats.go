@@ -22,9 +22,9 @@ const (
 // Online debug tool: https://regex101.com/
 var idRegex = map[country.Code]*regexp.Regexp{
 	"AT": regexp.MustCompile(`^ATU\d{8}$`),
-	"BE": regexp.MustCompile(`^BE\d{10}$`),
+	"BE": regexp.MustCompile(`^BE[01]\d{9}$`),
 	"BG": regexp.MustCompile(`^BG\d{9,10}$`),
-	"CH": regexp.MustCompile(`^CHE-?(?:\d{9}|(?:\d{3}\.\d{3}\.\d{3}))$`),
+	"CH": regexp.MustCompile(`^CHE\d{9}$`),
 	"CY": regexp.MustCompile(`^CY\d{8}[A-Z]$`),
 	"CZ": regexp.MustCompile(`^CZ\d{8,10}$`),
 	"DE": regexp.MustCompile(`^DE[1-9]\d{8}$`),
@@ -44,11 +44,13 @@ var idRegex = map[country.Code]*regexp.Regexp{
 	"ES": regexp.MustCompile(`^ES(?:[ABEH]\d{8}|[PQSNWR]\d{7}[A-J]|[CDFGJUV]\d{7}[0-9A-J]|\d{8}[A-Z]|[YZ]\d{7}[A-Z]|[KLMX]\d{7}[A-Z])$`),
 	"FI": regexp.MustCompile(`^FI\d{8}$`),
 	"FR": regexp.MustCompile(`^FR[0-9A-Z][0-9A-Z]\d{9}$`),
-	"GB": regexp.MustCompile(`^GB(?:\d{9})|(?:\d{12})|(?:GD\d{3})|(?:HA\d{3})$`),
+	"GB": regexp.MustCompile(`^GB(?:\d{9}|\d{12}|GD\d{3}|HA\d{3})$`),
 	"HR": regexp.MustCompile(`^HR\d{11}$`),
-	"HU": regexp.MustCompile(`^HU\d{8,9}$`),
-	"IE": regexp.MustCompile(`^IE(?:\d[0-9A-Z]\d{5}[A-Z])|(?:\d{7}[A-W][A-I])$`),
+	"HU": regexp.MustCompile(`^HU\d{8}$`),
+	"IE": regexp.MustCompile(`^IE(?:\d[0-9A-Z]\d{5}[A-Z]|\d{7}[A-W][A-I])$`),
+	"IS": regexp.MustCompile(`^IS\d{5,6}$`), // Iceland VSK (EFTA, non-EU)
 	"IT": regexp.MustCompile(`^IT\d{11}$`),
+	"LI": regexp.MustCompile(`^LI\d{5}$`), // Liechtenstein (EFTA, non-EU)
 	"LT": regexp.MustCompile(`^LT(?:\d{9}|\d{12})$`),
 	"LU": regexp.MustCompile(`^LU\d{8}$`),
 	"LV": regexp.MustCompile(`^LV\d{11}$`),
@@ -58,9 +60,13 @@ var idRegex = map[country.Code]*regexp.Regexp{
 	"PL": regexp.MustCompile(`^PL\d{10}$`),
 	"PT": regexp.MustCompile(`^PT\d{9}$`),
 	"RO": regexp.MustCompile(`^RO\d{2,10}$`),
-	"SE": regexp.MustCompile(`^SE\d{12}$`),
+	"SE": regexp.MustCompile(`^SE\d{10}01$`),
 	"SI": regexp.MustCompile(`^SI\d{8}$`),
 	"SK": regexp.MustCompile(`^SK\d{10}$`),
+	"SM": regexp.MustCompile(`^SM\d{5}$`), // San Marino (EU-facing via Italian intermediary)
+	// Northern Ireland — post-Brexit VAT prefix for EU goods regime.
+	// Same shape and same mod-97 checksum (see checkSumGB) as GB.
+	NorthernIrelandVATCountryCode: regexp.MustCompile(`^XI(?:\d{9}|\d{12}|GD\d{3}|HA\d{3})$`),
 	// > For the non-Union scheme, the taxable person can choose any Member State to be
 	// > the Member State of identification. That Member State will allocate an individual
 	// > VAT identification number to the taxable person (using the format EUxxxyyyyyz).
@@ -73,10 +79,12 @@ var idRegex = map[country.Code]*regexp.Regexp{
 //
 // List of check-sum algorithms: https://www.bmf.gv.at/dam/jcr:9f9f8d5f-5496-4886-aa4f-81a4e39ba83e/BMF_UID_Konstruktionsregeln.pdf
 var checkSumFuncs = map[country.Code]func(raw, normalized ID) bool{
-	"AT": checkSumAT,
-	"DE": checkSumDE,
-	"ES": checkSumES,
-	"NO": checkSumNO,
+	"AT":                          checkSumAT,
+	"DE":                          checkSumDE,
+	"ES":                          checkSumES,
+	"GB":                          checkSumGB,
+	"NO":                          checkSumNO,
+	NorthernIrelandVATCountryCode: checkSumGB,
 }
 
 func checkSumAT(raw, normalized ID) bool {
@@ -122,6 +130,41 @@ func checkSumDE(raw, normalized ID) bool {
 		}
 	}
 	return false
+}
+
+// checkSumGB validates the United Kingdom mod-97 VAT checksum.
+// Shared with the Northern Ireland "XI" prefix, which uses the same algorithm.
+//
+// After normalization the ID is GB/XI followed by either:
+//
+//   - 9 digits  — standard VRN, checksum applies
+//   - 12 digits — branch trader VAT; the first 9 are a VRN and carry the checksum,
+//     the trailing 3 are the branch code
+//   - GD\d{3}   — government department
+//   - HA\d{3}   — health authority
+//
+// The GD and HA forms have no checksum.
+//
+// The 9-digit VRN uses MOD-97 with two accepted residues — "old" format requires
+// the weighted sum plus the 2-digit check to be divisible by 97; "new" format
+// (introduced 2010) adds a constant 55 before the mod. References:
+//
+//   - https://en.wikipedia.org/wiki/VAT_identification_number#United_Kingdom
+//   - https://library.croneri.co.uk/cch_uk/btr/85-260
+func checkSumGB(raw, normalized ID) bool {
+	_ = raw
+	body := normalized[2:]
+	// GD###/HA### have no checksum; the regex already validated the shape.
+	if body[0] < '0' || body[0] > '9' {
+		return true
+	}
+	weights := [7]int{8, 7, 6, 5, 4, 3, 2}
+	sum := 0
+	for i := range 7 {
+		sum += int(body[i]-'0') * weights[i]
+	}
+	check := int(body[7]-'0')*10 + int(body[8]-'0')
+	return (sum+check)%97 == 0 || (sum+check+55)%97 == 0
 }
 
 // dniCheckLetter returns the Spanish DNI/NIE control letter for a

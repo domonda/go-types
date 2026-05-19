@@ -23,14 +23,34 @@ var validVATIDs = map[string]string{
 	"AT U 10223006":    "ATU10223006",
 	"at U 10223006":    "ATU10223006",
 	"ATU.10223006":     "ATU10223006",
-	"GB123456789012":   "GB123456789012",
-	"GB 123456789012":  "GB123456789012",
+	"GB123456782":      "GB123456782", // 9-digit VRN, mod-97 valid
+	"GB123456782012":   "GB123456782012",
+	"GB 123456782012":  "GB123456782012",
 	"GBGD001":          "GBGD001",
 	"GBHA599":          "GBHA599",
 	"GB GD001":         "GBGD001",
 	"GB HA599":         "GBHA599",
 	"IE9S99999L":       "IE9S99999L",
 	"IE 9999999LI":     "IE9999999LI",
+	// Belgium — first digit must be 0 or 1.
+	"BE0123456789": "BE0123456789",
+	"BE1234567890": "BE1234567890",
+	// Hungary — exactly 8 digits.
+	"HU12345678": "HU12345678",
+	// Sweden — 10-digit org number followed by literal "01".
+	"SE123456789001": "SE123456789001",
+	// Northern Ireland — same shape and mod-97 checksum as GB.
+	"XI123456782":    "XI123456782",
+	"XI123456782012": "XI123456782012",
+	"XIGD001":        "XIGD001",
+	"XIHA599":        "XIHA599",
+	// Iceland VSK — 5 or 6 digits, no checksum.
+	"IS12345":  "IS12345",
+	"IS123456": "IS123456",
+	// Liechtenstein — 5 digits, no checksum.
+	"LI12345": "LI12345",
+	// San Marino — 5 digits, no checksum.
+	"SM12345": "SM12345",
 	"DE 1367 25570":    "DE136725570",
 	"NO916634773":      "NO916634773",
 	"NO 916634773":     "NO916634773",
@@ -64,7 +84,40 @@ var invalidVATIDs = []ID{
 	"ESP00000000",  // P requires a letter check, not a digit
 	"ESA0000000J",  // A requires a digit check, not a letter
 	// Norway — must reject (mod-11 checksum fails):
-	"NO916634770",  // valid format, last digit broken (3 → 0)
+	"NO916634770", // valid format, last digit broken (3 → 0)
+	// GB — regex precedence bug: each alternative must be anchored to ^GB...$
+	"GBXGD123",    // 'X' between GB and GD must not slip through
+	"GBHA999Y",    // trailing 'Y' after HA\d{3} must not slip through
+	"GB12345678",  // 8 digits is not a valid GB length
+	"GB123456789", // 9-digit shape OK but mod-97 checksum fails
+	// Northern Ireland — shares GB regex + checksum.
+	"XI123456789", // checksum fails
+	"XIXGD123",    // precedence bug guard
+	"XIHA999Y",    // precedence bug guard
+	// Iceland — 4 or 7 digits are out of range.
+	"IS1234",
+	"IS1234567",
+	// Liechtenstein — must be exactly 5 digits.
+	"LI1234",
+	"LI123456",
+	// San Marino — must be exactly 5 digits.
+	"SM1234",
+	"SM123456",
+	// IE — regex precedence bug: second alternative must be anchored to ^IE
+	"IEX9999999LI", // unexpected 'X' before \d{7}[A-W][A-I] must not slip through
+	// Belgium — first digit must be 0 or 1.
+	"BE2345678901", // starts with 2
+	"BE9999999999", // starts with 9
+	"BE123456789",  // only 9 digits
+	// Hungary — exactly 8 digits, not 9.
+	"HU123456789",
+	// Sweden — last two digits must be "01".
+	"SE123456789002", // ends in 02
+	"SE123456789010", // ends in 10
+	"SE12345678901",  // only 11 digits
+	// Switzerland — no alternative dotted format after normalization.
+	"CHE12345678",   // 8 digits
+	"CHE1234567890", // 10 digits
 }
 
 func Test_NormalizeVATID(t *testing.T) {
