@@ -17,6 +17,10 @@ Open issues and cleanup items before tagging `v1.0.0`. Grouped by what blocks a 
 - [ ] **`date` parser doesn't accept many common English date formats.** ~60 commented-out test cases in `date/date_test.go` document the gap (month names, abbreviated months, ordinal suffixes, year-only, CJK, US short forms). Decide per-format: in scope for v1, or explicit non-goal documented in godoc.
   - `date/date_test.go:50-168, 451`
 
+## Bugs surfaced during the test pass
+
+- [x] **`queue.channelPump` called `sync.Cond.Wait` without holding the associated mutex** — a contract violation that fataled with "sync: Unlock of unlocked RWMutex" the first time a buffered Add fired `Signal`. The bug was latent because typical usage stayed under `ChanLen=32` items and never exercised the buffer path. Fixed by holding `q.mutex` across the pump's loop and switching to the standard guarded-wait pattern.
+
 ## Defensive panics worth reviewing
 
 - [ ] **`validator.go:234, 246`** — `MaxValue` / `MinValue` panic on type mismatch. More idiomatic to return an error in v1.
@@ -30,7 +34,9 @@ Open issues and cleanup items before tagging `v1.0.0`. Grouped by what blocks a 
 
 ## Test coverage
 
-- [ ] Audit thin coverage. 52 test files for 192 source files. Packages without tests at all worth a smoke pass: `deref`, `set` (root-level), `queue`, `notnull`, `charset` (partial), `language` (partial).
+- [x] Smoke pass for previously untested packages: added `deref/deref_test.go`, `set/set_test.go`, `queue/queue_test.go`, `notnull/stringarray_test.go`, `notnull/trimmedstring_test.go`, `charset/bom_test.go`, `charset/encoding_test.go`. `language` already had `code_test.go`; the only other surface in that package (`iso6393macro.go`, `iso6393names.go`) is dead commented-out data.
+- [ ] Still thin or absent: deeper coverage for `notnull/intarray`, `notnull/nullboolarray`, `notnull/arrays` helpers, and `notnull/json` helpers (only `stringarray`, `floatarray`, `trimmedstring` are smoke-covered today).
+- [ ] `language/iso6393macro.go` and `language/iso6393names.go` together contain ~8500 lines of commented-out data with no live symbols. Decide whether to bring them in (tie to the BCP-47 / 639-3 normalization item above) or delete the files.
 
 ## Docs & release hygiene
 

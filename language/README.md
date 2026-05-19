@@ -30,7 +30,7 @@ const Null Code = ""
 
 The package defines a constant for every ISO 639-1 code — `AA, AB, AF, …, EN, DE, FR, ZH, …`. See `constants.go` for the full list.
 
-Helpers in `iso6393macro.go` and `iso6393names.go` cover ISO 639-3 macrolanguage and English-name lookups when you need to bridge two-letter and three-letter standards.
+The `iso6393macro.go` and `iso6393names.go` files contain ISO 639-3 macrolanguage and English-name data, but the maps are currently commented out and no lookup helpers are exported — see TODOS for the BCP-47 / 639-3 normalization item.
 
 ## Example
 

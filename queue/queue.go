@@ -36,15 +36,21 @@ type queue struct {
 }
 
 func (q *queue) channelPump() {
+	// sync.Cond.Wait requires the associated lock to be held: Wait
+	// atomically releases the lock and suspends, then re-acquires it
+	// before returning. Holding mutex across the loop keeps both
+	// fillChanFromBuffer and the closed/buffer-state checks
+	// synchronized with Add and Close.
+	q.mutex.Lock()
+	defer q.mutex.Unlock()
 	for {
-		q.bufferCond.Wait()
+		for !q.closed && q.buffer.isEmpty() {
+			q.bufferCond.Wait()
+		}
 		if q.closed {
 			return
 		}
-
-		q.mutex.Lock()
 		q.fillChanFromBuffer()
-		q.mutex.Unlock()
 	}
 }
 
