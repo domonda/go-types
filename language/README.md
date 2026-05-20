@@ -18,13 +18,13 @@ const Null Code = ""
 
 ## API
 
-| Method                                           | Description                                                                    |
-|--------------------------------------------------|--------------------------------------------------------------------------------|
-| `Valid()`                                        | True if the code is already in the strict ISO 639-1 table.                     |
-| `ValidAndNormalized()`                           | True if valid AND already lowercase.                                           |
-| `Normalized()`                                   | Trim, lowercase, strip BCP-47 region/script subtags, map ISO 639-2/3 to 639-1. |
-| `LanguageName()`                                 | English name (e.g. `"German"`).                                                |
-| `String()`                                       | Normalized form if valid, raw otherwise.                                       |
+| Method                 | Description                                        |
+|------------------------|----------------------------------------------------|
+| `Valid()`              | True if the code is already in the strict ISO 639-1 table. |
+| `ValidAndNormalized()` | True if valid AND already lowercase.               |
+| `Normalized()`         | Trim, lowercase, strip BCP-47 region/script subtags, map ISO 639-2/3 to 639-1. |
+| `LanguageName()`       | English name (e.g. `"German"`).                    |
+| `String()`             | Normalized form if valid, raw otherwise.           |
 
 `Normalized()` accepts a broader range of inputs than `Valid()`:
 
