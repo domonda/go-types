@@ -27,6 +27,9 @@ const MOSSSchemaVATCountryCode = "EU"
 // it is allow-listed alongside MOSSSchemaVATCountryCode.
 const NorthernIrelandVATCountryCode = "XI"
 
+// ErrInvalidID is returned (wrapped) by Normalized and Validate when a VAT ID
+// string does not conform to the expected format or fails the country-specific
+// check-sum verification.
 const ErrInvalidID errs.Sentinel = "invalid VAT ID"
 
 // ID is a european VAT ID.
@@ -249,6 +252,9 @@ func (id ID) Value() (driver.Value, error) {
 	return string(normalized), nil
 }
 
+// JSONSchema returns the JSON schema for ID, describing it as a string with
+// the title "Value Added Tax ID" and the package-defined minimum and maximum
+// length constraints.
 func (ID) JSONSchema() *jsonschema.Schema {
 	minLength := uint64(IDMinLength)
 	maxLength := uint64(IDMaxLength)

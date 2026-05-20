@@ -8,10 +8,10 @@ import "github.com/domonda/go-types/vat"
 
 ## Types
 
-| Type                                             | Purpose                                               |
-|--------------------------------------------------|-------------------------------------------------------|
-| `ID`                                             | Non-nullable VAT ID. Empty string is treated as NULL. |
-| `NullableID`                                     | Same; empty string is a *valid* null value.           |
+| Type         | Purpose                                            |
+|--------------|----------------------------------------------------|
+| `ID`         | Non-nullable VAT ID. Empty string is treated as NULL. |
+| `NullableID` | Same; empty string is a *valid* null value.        |
 
 Both implement `fmt.Stringer`, `driver.Valuer`, `sql.Scanner`, `JSONSchema`, and the `ScanString(source, validate)` helper. `ID` implements `types.NormalizableValidator[ID]`. `NullableID` implements `nullable.NullSetable[ID]`.
 

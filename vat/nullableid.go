@@ -236,6 +236,9 @@ func (n NullableID) MarshalJSON() ([]byte, error) {
 	return json.Marshal(string(n))
 }
 
+// JSONSchema returns the JSON schema for NullableID, describing it with the
+// title "Nullable Value Added Tax ID" as a oneOf that accepts either a string
+// with the package-defined length constraints or a JSON null value.
 func (NullableID) JSONSchema() *jsonschema.Schema {
 	minLength := uint64(IDMinLength)
 	maxLength := uint64(IDMaxLength)
