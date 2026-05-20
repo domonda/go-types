@@ -46,6 +46,19 @@ func Test_SplitBOM(t *testing.T) {
 	assert.Equal(t, []byte("plain"), data)
 }
 
+func Test_TrimBOM(t *testing.T) {
+	// Strips the matching BOM.
+	assert.Equal(t, []byte("hi"), TrimBOM([]byte("\xEF\xBB\xBFhi"), BOMUTF8))
+	assert.Equal(t, []byte("hi"), TrimBOM([]byte("\xFF\xFEhi"), BOMUTF16LE))
+
+	// Non-matching BOM leaves b unchanged.
+	assert.Equal(t, []byte("\xEF\xBB\xBFhi"), TrimBOM([]byte("\xEF\xBB\xBFhi"), BOMUTF16LE))
+
+	// NoBOM and a BOM-less input are both no-ops.
+	assert.Equal(t, []byte("\xEF\xBB\xBFhi"), TrimBOM([]byte("\xEF\xBB\xBFhi"), NoBOM))
+	assert.Equal(t, []byte("plain"), TrimBOM([]byte("plain"), BOMUTF8))
+}
+
 func Test_BOM_Endian(t *testing.T) {
 	assert.Equal(t, binary.LittleEndian, BOMUTF16LE.Endian())
 	assert.Equal(t, binary.BigEndian, BOMUTF16BE.Endian())

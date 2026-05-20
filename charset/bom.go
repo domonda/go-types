@@ -11,6 +11,7 @@ import (
 type BOM string
 
 var (
+	// NoBOM is the zero value of BOM, indicating that no byte order mark is present.
 	NoBOM BOM
 	// UTF-8, BOM bytes: EF BB BF
 	BOMUTF8 = BOM(bomUTF8)
@@ -37,6 +38,8 @@ var (
 	bomUTF32LE = []byte{0xFF, 0xFE, 0x00, 0x00}
 )
 
+// BOMOfString returns the BOM found at the beginning of str,
+// or NoBOM if no byte order mark is present.
 func BOMOfString(str string) BOM {
 	switch {
 	case strings.HasPrefix(str, string(BOMUTF8)):
@@ -53,6 +56,8 @@ func BOMOfString(str string) BOM {
 	return NoBOM
 }
 
+// BOMOfBytes returns the BOM found at the beginning of b,
+// or NoBOM if no byte order mark is present.
 func BOMOfBytes(b []byte) BOM {
 	switch {
 	case bytes.HasPrefix(b, bomUTF8):
@@ -69,28 +74,40 @@ func BOMOfBytes(b []byte) BOM {
 	return NoBOM
 }
 
+// TrimBOM removes a leading bom byte order mark from b and returns the
+// remaining bytes. If b does not start with bom, or bom is NoBOM, b is
+// returned unchanged.
 func TrimBOM(b []byte, bom BOM) []byte {
-	if bytes.HasPrefix(b, bomUTF8) {
-		return b[len(bomUTF8):]
+	if bom != NoBOM && bytes.HasPrefix(b, []byte(bom)) {
+		return b[len(bom):]
 	}
 	return b
 }
 
+// SplitBOM detects and returns the BOM at the beginning of b together with
+// the remaining bytes after the BOM. If no BOM is present, NoBOM and b are returned.
 func SplitBOM(b []byte) (BOM, []byte) {
 	bom := BOMOfBytes(b)
 	return bom, b[len(bom):]
 }
 
+// DecodeWithBOM detects the BOM at the beginning of b and decodes the remaining
+// bytes to UTF-8. Returns an error if the BOM indicates an unsupported encoding.
 func DecodeWithBOM(b []byte) ([]byte, error) {
 	bom, data := SplitBOM(b)
 	return bom.Decode(data)
 }
 
+// DecodeStringWithBOM detects the BOM at the beginning of b and decodes the remaining
+// bytes to a UTF-8 string. Returns an error if the BOM indicates an unsupported encoding.
 func DecodeStringWithBOM(b []byte) (string, error) {
 	bom, data := SplitBOM(b)
 	return bom.DecodeString(data)
 }
 
+// Encoding returns the Encoding corresponding to the BOM.
+// NoBOM and BOMUTF8 both map to the UTF-8 encoding.
+// Returns an error for unrecognised BOM values.
 func (bom BOM) Encoding() (Encoding, error) {
 	switch bom {
 	case NoBOM, BOMUTF8:
@@ -106,6 +123,9 @@ func (bom BOM) Encoding() (Encoding, error) {
 	return nil, fmt.Errorf("unsupported BOM: %v", []byte(bom))
 }
 
+// Decode decodes data from the encoding indicated by bom to UTF-8 bytes.
+// An optional leading BOM in data is validated against bom and then stripped.
+// Returns an error if the BOM does not match or the encoding is unsupported.
 func (bom BOM) Decode(data []byte) ([]byte, error) {
 	dataBOM, data := SplitBOM(data)
 	if dataBOM != NoBOM && dataBOM != bom {
@@ -126,6 +146,9 @@ func (bom BOM) Decode(data []byte) ([]byte, error) {
 	return nil, fmt.Errorf("unsupported BOM: %v", []byte(bom))
 }
 
+// DecodeString decodes data from the encoding indicated by bom to a UTF-8 string.
+// An optional leading BOM in data is validated against bom and then stripped.
+// Returns an error if the BOM does not match or the encoding is unsupported.
 func (bom BOM) DecodeString(data []byte) (string, error) {
 	dataBOM, data := SplitBOM(data)
 	if dataBOM != NoBOM && dataBOM != bom {
@@ -146,6 +169,9 @@ func (bom BOM) DecodeString(data []byte) (string, error) {
 	return "", fmt.Errorf("unsupported BOM: %v", []byte(bom))
 }
 
+// Endian returns the binary.ByteOrder implied by the BOM:
+// binary.LittleEndian for UTF-16LE/UTF-32LE, binary.BigEndian for UTF-16BE/UTF-32BE,
+// and nil for NoBOM or BOMUTF8.
 func (bom BOM) Endian() binary.ByteOrder {
 	switch bom {
 	case BOMUTF16LE, BOMUTF32LE:

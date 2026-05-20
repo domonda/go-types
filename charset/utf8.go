@@ -1,5 +1,7 @@
 package charset
 
+// UTF8Encoding returns an Encoding that passes UTF-8 bytes through unchanged,
+// stripping a leading UTF-8 BOM during decoding if one is present.
 func UTF8Encoding() Encoding {
 	return utf8Encoding{}
 }
