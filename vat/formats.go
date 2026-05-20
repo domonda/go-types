@@ -184,7 +184,7 @@ func checkSumGB(raw, normalized ID) bool {
 	weights := [7]int{8, 7, 6, 5, 4, 3, 2}
 	sum := 0
 	for i := range 7 {
-		sum += int(body[i]-'0') * weights[i]
+		sum += int(body[i]-'0') * weights[i] //#nosec G602 -- index bounded by the country idRegex matched before dispatch
 	}
 	check := int(body[7]-'0')*10 + int(body[8]-'0')
 	return (sum+check)%97 == 0 || (sum+check+55)%97 == 0
@@ -339,7 +339,7 @@ func checkSumBG(_, normalized ID) bool {
 	weights := [9]int{2, 4, 8, 5, 10, 9, 7, 3, 6}
 	sum := 0
 	for i := range 9 {
-		sum += int(body[i]-'0') * weights[i]
+		sum += int(body[i]-'0') * weights[i] //#nosec G602 -- index bounded by the country idRegex matched before dispatch
 	}
 	r := sum % 11
 	if r == 10 {
@@ -382,7 +382,7 @@ func checkSumCZ(_, normalized ID) bool {
 	weights := [7]int{8, 7, 6, 5, 4, 3, 2}
 	sum := 0
 	for i := range 7 {
-		sum += int(body[i]-'0') * weights[i]
+		sum += int(body[i]-'0') * weights[i] //#nosec G602 -- index bounded by the country idRegex matched before dispatch
 	}
 	r := sum % 11
 	var check int
@@ -406,7 +406,7 @@ func checkSumDK(_, normalized ID) bool {
 	weights := [8]int{2, 7, 6, 5, 4, 3, 2, 1}
 	sum := 0
 	for i := range 8 {
-		sum += int(body[i]-'0') * weights[i]
+		sum += int(body[i]-'0') * weights[i] //#nosec G602 -- index bounded by the country idRegex matched before dispatch
 	}
 	return sum%11 == 0
 }
@@ -420,7 +420,7 @@ func checkSumEE(_, normalized ID) bool {
 	weights := [9]int{3, 7, 1, 3, 7, 1, 3, 7, 1}
 	sum := 0
 	for i := range 9 {
-		sum += int(body[i]-'0') * weights[i]
+		sum += int(body[i]-'0') * weights[i] //#nosec G602 -- index bounded by the country idRegex matched before dispatch
 	}
 	return sum%10 == 0
 }
@@ -434,7 +434,7 @@ func checkSumEL(_, normalized ID) bool {
 	weights := [8]int{256, 128, 64, 32, 16, 8, 4, 2}
 	sum := 0
 	for i := range 8 {
-		sum += int(body[i]-'0') * weights[i]
+		sum += int(body[i]-'0') * weights[i] //#nosec G602 -- index bounded by the country idRegex matched before dispatch
 	}
 	r := sum % 11
 	if r == 10 {
@@ -453,7 +453,7 @@ func checkSumFI(_, normalized ID) bool {
 	weights := [7]int{7, 9, 10, 5, 8, 4, 2}
 	sum := 0
 	for i := range 7 {
-		sum += int(body[i]-'0') * weights[i]
+		sum += int(body[i]-'0') * weights[i] //#nosec G602 -- index bounded by the country idRegex matched before dispatch
 	}
 	r := sum % 11
 	if r == 1 {
@@ -511,7 +511,7 @@ func checkSumHU(_, normalized ID) bool {
 	weights := [7]int{9, 7, 3, 1, 9, 7, 3}
 	sum := 0
 	for i := range 7 {
-		sum += int(body[i]-'0') * weights[i]
+		sum += int(body[i]-'0') * weights[i] //#nosec G602 -- index bounded by the country idRegex matched before dispatch
 	}
 	return int(body[7]-'0') == (10-sum%10)%10
 }
@@ -590,7 +590,7 @@ func checkSumLV(_, normalized ID) bool {
 	weights := [10]int{9, 1, 4, 8, 3, 10, 2, 5, 7, 6}
 	sum := 0
 	for i := range 10 {
-		sum += int(body[i]-'0') * weights[i]
+		sum += int(body[i]-'0') * weights[i] //#nosec G602 -- index bounded by the country idRegex matched before dispatch
 	}
 	r := sum % 11
 	if r == 4 {
@@ -613,7 +613,7 @@ func checkSumMT(_, normalized ID) bool {
 	weights := [6]int{3, 4, 6, 7, 8, 9}
 	sum := 0
 	for i := range 6 {
-		sum += int(body[i]-'0') * weights[i]
+		sum += int(body[i]-'0') * weights[i] //#nosec G602 -- index bounded by the country idRegex matched before dispatch
 	}
 	check := 37 - sum%37
 	return int(body[6]-'0')*10+int(body[7]-'0') == check
@@ -630,7 +630,7 @@ func checkSumNL(_, normalized ID) bool {
 	weights := [8]int{9, 8, 7, 6, 5, 4, 3, 2}
 	sum := 0
 	for i := range 8 {
-		sum += int(body[i]-'0') * weights[i]
+		sum += int(body[i]-'0') * weights[i] //#nosec G602 -- index bounded by the country idRegex matched before dispatch
 	}
 	r := sum % 11
 	if r == 10 {
@@ -648,7 +648,7 @@ func checkSumPL(_, normalized ID) bool {
 	weights := [9]int{6, 5, 7, 2, 3, 4, 5, 6, 7}
 	sum := 0
 	for i := range 9 {
-		sum += int(body[i]-'0') * weights[i]
+		sum += int(body[i]-'0') * weights[i] //#nosec G602 -- index bounded by the country idRegex matched before dispatch
 	}
 	r := sum % 11
 	if r == 10 {
@@ -666,7 +666,7 @@ func checkSumPT(_, normalized ID) bool {
 	weights := [8]int{9, 8, 7, 6, 5, 4, 3, 2}
 	sum := 0
 	for i := range 8 {
-		sum += int(body[i]-'0') * weights[i]
+		sum += int(body[i]-'0') * weights[i] //#nosec G602 -- index bounded by the country idRegex matched before dispatch
 	}
 	check := 11 - sum%11
 	if check >= 10 {
@@ -729,7 +729,7 @@ func checkSumSI(_, normalized ID) bool {
 	weights := [7]int{8, 7, 6, 5, 4, 3, 2}
 	sum := 0
 	for i := range 7 {
-		sum += int(body[i]-'0') * weights[i]
+		sum += int(body[i]-'0') * weights[i] //#nosec G602 -- index bounded by the country idRegex matched before dispatch
 	}
 	check := 11 - sum%11
 	if check >= 10 {
@@ -778,7 +778,7 @@ func checkSumNO(raw, normalized ID) bool {
 	weights := [8]int{3, 2, 7, 6, 5, 4, 3, 2}
 	sum := 0
 	for i := range 8 {
-		sum += int(digits[i]-'0') * weights[i]
+		sum += int(digits[i]-'0') * weights[i] //#nosec G602 -- digits is normalized[2:11], a fixed length-9 slice
 	}
 	rem := sum % 11
 	var check int
