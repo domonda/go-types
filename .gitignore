@@ -16,3 +16,6 @@ main
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out
 pkg/linux_js/
+
+# Local AI agent session artifacts (e.g. Codex session id)
+.context/
