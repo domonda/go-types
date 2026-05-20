@@ -18,27 +18,26 @@ A comprehensive Go library providing enhanced type definitions, validation, and 
 
 ## Packages
 
-| Package                                          | Description                                                                                           |
-|--------------------------------------------------|-------------------------------------------------------------------------------------------------------|
-| [`types`](./) (root)                             | Generic `Set`, validation framework, pointer/iterator/JSON helpers, `LenString`, `Finder`, `KeyMutex` |
-| [`account`](./account/)                          | Alphanumeric account numbers with validation and SQL/JSON/XML support                                 |
-| [`bank`](./bank/)                                | IBAN, BIC/SWIFT, bank accounts, and ISO 20022 CAMT.053 statement parsing                              |
-| [`charset`](./charset/)                          | UTF-8/16/32 encoding, BOM detection, and `golang.org/x/text` integration                              |
-| [`country`](./country/)                          | ISO 3166-1 alpha-2 country codes with normalization and EU membership                                 |
-| [`date`](./date/)                                | ISO 8601 `Date`, `YearMonth`, `YearQuarter`, lenient locale-aware parsing                             |
-| [`deref`](./deref/)                              | Safe pointer dereferencing with default values for common scalar types                                |
-| [`email`](./email/)                              | Lenient email parsing, address lists/sets, MIME and TNEF message handling                             |
-| [`float`](./float/)                              | Locale-aware float parsing/formatting and a JSON-tolerant float type                                  |
-| [`language`](./language/)                        | ISO 639-1 language codes with normalization                                                           |
-| [`money`](./money/)                              | Monetary amounts, ISO 4217 currencies, currency+amount pairs, and rates                               |
-| [`notnull`](./notnull/)                          | Never-null SQL/JSON wrappers (nil slices serialize as `'{}'` / `[]`)                                  |
-| [`nullable`](./nullable/)                        | SQL-friendly nullable wrappers and the generic `Type[T]`                                              |
-| [`queue`](./queue/)                              | Unbounded concurrent FIFO queue exposed as a channel                                                  |
-| [`set`](./set/)                                  | Generic set helpers over the idiomatic `map[T]struct{}` representation                                |
-| [`strfmt`](./strfmt/)                            | Reflection-driven string scan/format with locale presets                                              |
-| [`strutil`](./strutil/)                          | String manipulation, trimming, transliteration, domain extraction, sets                               |
-| [`uu`](./uu/)                                    | UUID type with `ID`, `NullableID`, `IDSlice`, `IDSet`, and helpers                                    |
-| [`vat`](./vat/)                                  | European VAT IDs with per-country format and checksum validation                                      |
+| Package                   | Description                                        |
+|---------------------------|----------------------------------------------------|
+| [`types`](./) (root)      | Generic `Set`, validation framework, pointer/iterator/JSON helpers, `LenString`, `Finder`, `KeyMutex` |
+| [`account`](./account/)   | Alphanumeric account numbers with validation and SQL/JSON/XML support |
+| [`bank`](./bank/)         | IBAN, BIC/SWIFT, bank accounts, and ISO 20022 CAMT.053 statement parsing |
+| [`charset`](./charset/)   | UTF-8/16/32 encoding, BOM detection, and `golang.org/x/text` integration |
+| [`country`](./country/)   | ISO 3166-1 alpha-2 country codes with normalization and EU membership |
+| [`date`](./date/)         | ISO 8601 `Date`, `YearMonth`, `YearQuarter`, lenient locale-aware parsing |
+| [`email`](./email/)       | Lenient email parsing, address lists/sets, MIME and TNEF message handling |
+| [`float`](./float/)       | Locale-aware float parsing/formatting and a JSON-tolerant float type |
+| [`language`](./language/) | ISO 639-1 language codes with normalization        |
+| [`money`](./money/)       | Monetary amounts, ISO 4217 currencies, currency+amount pairs, and rates |
+| [`notnull`](./notnull/)   | Never-null SQL/JSON wrappers (nil slices serialize as `'{}'` / `[]`) |
+| [`nullable`](./nullable/) | SQL-friendly nullable wrappers and the generic `Type[T]` |
+| [`queue`](./queue/)       | Generic unbounded concurrent FIFO queue exposed as a channel |
+| [`set`](./set/)           | Generic set helpers over the idiomatic `map[T]struct{}` representation |
+| [`strfmt`](./strfmt/)     | Reflection-driven string scan/format with locale presets |
+| [`strutil`](./strutil/)   | String manipulation, trimming, transliteration, domain extraction, sets |
+| [`uu`](./uu/)             | UUID type with `ID`, `NullableID`, `IDSlice`, `IDSet`, and helpers |
+| [`vat`](./vat/)           | European VAT IDs with per-country format and checksum validation |
 
 ## Core Packages
 
@@ -142,8 +141,9 @@ The main package provides core utilities and type definitions:
 - **Tolerant**: Tolerant float operations
 
 #### `queue` - Queue Implementation
-- **Queue**: Generic queue interface and implementation
-- **RingBuffer**: Ring buffer for efficient queue operations
+- **Queue[T]**: Generic, unbounded, goroutine-safe FIFO queue consumed via a channel
+- **New[T]**: Constructor configured by functional options (`ChanLen`, `InitialBufferSize`)
+- **Non-blocking Add**: An internal growable ring buffer absorbs bursts, so producers never block
 
 #### `charset` - Character Set Handling
 - **Encoding**: Character encoding detection and conversion

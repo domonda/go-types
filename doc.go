@@ -54,7 +54,6 @@
 //
 // Generic collection helpers:
 //
-//   - [github.com/domonda/go-types/deref] — safe pointer dereferencing
 //   - [github.com/domonda/go-types/queue] — concurrent FIFO queue
 //   - [github.com/domonda/go-types/set] — set helpers over map[T]struct{}
 //
