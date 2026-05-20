@@ -31,12 +31,18 @@ const (
 	ErrAlphanumericNumber errs.Sentinel = "account number is alphanumeric"
 )
 
-// NumberRegex defines the regular expression pattern for valid account numbers.
+// DefaultNumberRegex defines the regular expression pattern for valid account numbers.
 // Allows alphanumeric characters, underscores, hyphens, forward slashes, colons,
 // periods, semicolons, and commas. Must start with alphanumeric character.
-const NumberRegex = `^[0-9A-Za-z][0-9A-Za-z_\-\/:.;,]*$`
+const DefaultNumberRegex = `^[0-9A-Za-z][0-9A-Za-z_\-\/:.;,]*$`
 
-var numberRegexp = regexp.MustCompile(NumberRegex)
+// NumberRegexp is the regular expression used by Number.Validate to decide
+// whether an account number is valid. It defaults to DefaultNumberRegex but
+// can be reassigned at startup to configure what a valid account number must
+// look like (for example to enforce a stricter, application-specific format).
+// Reassigning it is not safe for concurrent use, so do it once during
+// initialization before any validation happens.
+var NumberRegexp = regexp.MustCompile(DefaultNumberRegex)
 
 // Compile time check if types implement interfaces
 var (
@@ -74,7 +80,7 @@ func NumberFromUint(u uint64) Number {
 // The pattern allows alphanumeric characters and special characters like
 // underscores, hyphens, forward slashes, colons, periods, semicolons, and commas.
 func (n Number) Valid() bool {
-	return numberRegexp.MatchString(string(n))
+	return NumberRegexp.MatchString(string(n))
 }
 
 // Validate returns an error if the Number does not match the regular expression pattern.
@@ -272,7 +278,7 @@ func (Number) JSONSchema() *jsonschema.Schema {
 	return &jsonschema.Schema{
 		Title:   "Account Number",
 		Type:    "string",
-		Pattern: NumberRegex,
+		Pattern: DefaultNumberRegex,
 	}
 }
 

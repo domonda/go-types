@@ -291,7 +291,7 @@ func (NullableNumber) JSONSchema() *jsonschema.Schema {
 		OneOf: []*jsonschema.Schema{
 			{
 				Type:    "string",
-				Pattern: NumberRegex,
+				Pattern: DefaultNumberRegex,
 			},
 			{Type: "null"},
 		},

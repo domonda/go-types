@@ -18,14 +18,18 @@ Both implement `fmt.Stringer`, `driver.Valuer`, `sql.Scanner`, `json.Marshaler`/
 ## Constants & errors
 
 ```go
-const NumberRegex = `^[0-9A-Za-z][0-9A-Za-z_\-\/:.;,]*$`
+const DefaultNumberRegex = `^[0-9A-Za-z][0-9A-Za-z_\-\/:.;,]*$`
 const NumberNull NullableNumber = ""
 
-var (
+var NumberRegexp = regexp.MustCompile(DefaultNumberRegex)
+
+const (
     ErrInvalidNumber      errs.Sentinel = "invalid account number"
     ErrAlphanumericNumber errs.Sentinel = "account number is alphanumeric"
 )
 ```
+
+`NumberRegexp` is the compiled pattern that `Valid()` and `Validate()` check against. It defaults to `DefaultNumberRegex`, but you can reassign it once at startup to configure what a valid account number must look like — for example to enforce a stricter, application-specific format. Reassignment is not safe for concurrent use, so do it during initialization before any validation runs.
 
 ## Constructors
 
@@ -40,7 +44,7 @@ account.NullableNumberFromUint(u)  // 0 → NumberNull
 
 | Method                    | Description                                        |
 |---------------------------|----------------------------------------------------|
-| `Valid()`                 | True if matches `NumberRegex` (or null, for `NullableNumber`). |
+| `Valid()`                 | True if matches `NumberRegexp` (or null, for `NullableNumber`). |
 | `Validate()`              | Returns wrapped `ErrInvalidNumber` if invalid.     |
 | `IsNumeric()`             | True if contains only digits (`0-9`).              |
 | `ValidateNumeric()`       | Returns wrapped `ErrAlphanumericNumber` if not purely numeric. |
