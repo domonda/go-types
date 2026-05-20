@@ -16,6 +16,7 @@ import (
 // interpreted as JSON "null" and SQL "NULL".
 type JSON []byte
 
+// MarshalJSON marshals source as JSON and returns it as a notnull JSON value.
 func MarshalJSON(source any) (JSON, error) {
 	return json.Marshal(source)
 }
@@ -116,6 +117,8 @@ func (j JSON) String() string {
 	return string(j)
 }
 
+// GoString returns a Go syntax representation of j as a notnull.JSON literal.
+// GoString implements the fmt.GoStringer interface.
 func (j JSON) GoString() string {
 	return fmt.Sprintf("notnull.JSON(`%s`)", j)
 }

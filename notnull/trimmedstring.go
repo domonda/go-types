@@ -208,10 +208,14 @@ func (s *TrimmedString) UnmarshalJSON(j []byte) error {
 	return nil
 }
 
+// MarshalXML implements encoding/xml.Marshaler by encoding the trimmed string
+// as the character data of an XML element.
 func (s TrimmedString) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
 	return e.EncodeElement(s.String(), start)
 }
 
+// UnmarshalXML implements encoding/xml.Unmarshaler by decoding the character data
+// of the XML element, trimming whitespace, and storing the result.
 func (s *TrimmedString) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 	var str string
 	err := d.DecodeElement(&str, &start)

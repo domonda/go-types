@@ -19,9 +19,15 @@ func SplitArray(array string) ([]string, error) {
 	return s, nil
 }
 
-// SQLArrayLiteral joins the passed strings as an SQL array literal
-// A nil slice will produce NULL, pass an empty non nil slice to
-// get the empty SQL array literal {}.
+// SQLArrayLiteral joins the passed strings as an SQL array literal.
+// Both a nil and an empty slice produce the empty array literal {}
+// (use nullable.SQLArrayLiteral if a nil slice should produce NULL).
+//
+// The result uses the PostgreSQL array text format ({"a","b"}), see
+// https://www.postgresql.org/docs/current/arrays.html. That format is
+// understood by PostgreSQL and array-compatible databases such as
+// CockroachDB and YugabyteDB; databases without a native array type
+// (MySQL, MariaDB, SQLite, SQL Server, Oracle) are not supported.
 func SQLArrayLiteral(s []string) string {
 	if len(s) == 0 {
 		return `{}`

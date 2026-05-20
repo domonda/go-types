@@ -14,6 +14,12 @@ import (
 // The nil default value of the slice is returned as an empty (non null) array
 // for SQL and JSON.
 // Use nullable.IntArray if the nil value should be treated as SQL and JSON null.
+//
+// Value and Scan use the PostgreSQL array text format ({1,2,3}), see
+// https://www.postgresql.org/docs/current/arrays.html. That format is
+// understood by PostgreSQL and array-compatible databases such as
+// CockroachDB and YugabyteDB; databases without a native array type
+// (MySQL, MariaDB, SQLite, SQL Server, Oracle) are not supported.
 type IntArray []int64
 
 // String implements the fmt.Stringer interface.
@@ -35,7 +41,9 @@ func (a IntArray) Contains(value int64) bool {
 	return slices.Contains(a, value)
 }
 
-// Value implements the database/sql/driver.Valuer interface
+// Value implements the database/sql/driver.Valuer interface.
+// It returns the slice as a PostgreSQL integer array literal
+// like {1,2,3}. A nil or empty slice returns the empty array {}.
 func (a IntArray) Value() (driver.Value, error) {
 	var b strings.Builder
 	b.WriteByte('{')
@@ -50,6 +58,10 @@ func (a IntArray) Value() (driver.Value, error) {
 }
 
 // Scan implements the sql.Scanner interface.
+// It parses a PostgreSQL integer array literal like {1,2,3}
+// from a string or []byte. A nil source (SQL NULL), an empty
+// string, or {} all scan to a non-nil empty slice;
+// a notnull array is never nil.
 func (a *IntArray) Scan(src any) error {
 	switch src := src.(type) {
 	case []byte:
@@ -59,7 +71,7 @@ func (a *IntArray) Scan(src any) error {
 		return a.scanBytes([]byte(src))
 
 	case nil:
-		*a = nil
+		*a = IntArray{}
 		return nil
 	}
 
@@ -68,14 +80,14 @@ func (a *IntArray) Scan(src any) error {
 
 func (a *IntArray) scanBytes(src []byte) (err error) {
 	if len(src) == 0 {
-		*a = nil
+		*a = IntArray{}
 		return nil
 	}
 	if src[0] != '{' || src[len(src)-1] != '}' {
 		return fmt.Errorf("can't parse %q as notnull.IntArray", string(src))
 	}
 	if len(src) == 2 { // src == "{}"
-		*a = nil
+		*a = IntArray{}
 		return nil
 	}
 
@@ -91,13 +103,30 @@ func (a *IntArray) scanBytes(src []byte) (err error) {
 	return nil
 }
 
-// MarshalJSON returns a as the JSON encoding of a.
 // MarshalJSON implements encoding/json.Marshaler.
+// A nil or empty array is encoded as the empty JSON array []
+// instead of null; a notnull array is never null.
 func (a IntArray) MarshalJSON() ([]byte, error) {
 	if len(a) == 0 {
 		return []byte("[]"), nil
 	}
 	return json.Marshal([]int64(a))
+}
+
+// UnmarshalJSON implements encoding/json.Unmarshaler.
+// JSON null and [] both unmarshal to a non-nil empty slice;
+// a notnull array is never nil.
+func (a *IntArray) UnmarshalJSON(data []byte) error {
+	if string(data) == "null" {
+		*a = IntArray{}
+		return nil
+	}
+	var s []int64
+	if err := json.Unmarshal(data, &s); err != nil {
+		return err
+	}
+	*a = IntArray(s)
+	return nil
 }
 
 // Len is the number of elements in the collection.
