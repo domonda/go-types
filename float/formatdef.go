@@ -19,6 +19,8 @@ func NewFormatDef() *FormatDef {
 	}
 }
 
+// Format formats the float64 value f using the thousands separator, decimal
+// separator, precision, and padding settings defined in ff.
 func (ff *FormatDef) Format(f float64) string {
 	return Format(f, ff.ThousandsSep, ff.DecimalSep, ff.Precision, ff.PadPrecision)
 }
