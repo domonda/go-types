@@ -10,15 +10,15 @@ import "github.com/domonda/go-types/strutil"
 
 The package's `TrimSpace` is more aggressive than `strings.TrimSpace`: it removes any Unicode whitespace, any non-printable rune (control / format / surrogate / private-use / unassigned, including zero-width chars like `​‌‍⁠` and the BOM `﻿`), and any byte sequence that doesn't decode as valid UTF-8.
 
-| Function                                         | Description                                               |
-|--------------------------------------------------|-----------------------------------------------------------|
-| `TrimSpace[S ~string](s)`                        | Generic trim using the predicate above.                   |
-| `TrimSpaceBytes(b []byte)`                       | Same for `[]byte`.                                        |
-| `CutTrimSpace(s, sep)`                           | `strings.Cut`-style split with both halves trimmed.       |
-| `Truncate[S ~string](s, maxRunes)`               | UTF-8-aware truncation.                                   |
-| `TruncateTrimSpace(s, maxRunes)`                 | Truncate then trim.                                       |
-| `TruncateWithEllipsis(s, maxRunes)`              | Append `…` if truncated; total length stays within bound. |
-| `IsSpace(r rune)`                                | Unicode space OR zero-width space `​`.                    |
+| Function                            | Description                                        |
+|-------------------------------------|----------------------------------------------------|
+| `TrimSpace[S ~string](s)`           | Generic trim using the predicate above.            |
+| `TrimSpaceBytes(b []byte)`          | Same for `[]byte`.                                 |
+| `CutTrimSpace(s, sep)`              | `strings.Cut`-style split with both halves trimmed. |
+| `Truncate[S ~string](s, maxRunes)`  | UTF-8-aware truncation.                            |
+| `TruncateTrimSpace(s, maxRunes)`    | Truncate then trim.                                |
+| `TruncateWithEllipsis(s, maxRunes)` | Append `…` if truncated; total length stays within bound. |
+| `IsSpace(r rune)`                   | Unicode space OR zero-width space `​`.              |
 
 ## Rune predicates
 
@@ -33,12 +33,12 @@ IsWordSeparator(r)           // whitespace + punctuation + symbols
 IsNorLetterOrDigit(r)        // !letter && !digit
 ```
 
-| Helper                                           | Description                                           |
-|--------------------------------------------------|-------------------------------------------------------|
-| `RemoveRunes(str, removeRunes...)`               | Filter out matching runes; returns `[]byte`.          |
-| `KeepRunes(str, keepRunes...)`                   | Keep only matching runes; returns `[]byte`.           |
-| `RemoveRunesString` / `KeepRunesString`          | Same, returning `string`.                             |
-| `MapRuneIsAfterWordSeparator(str)`               | `[]bool` aligned with runes — true after a separator. |
+| Helper                                  | Description                                        |
+|-----------------------------------------|----------------------------------------------------|
+| `RemoveRunes(str, removeRunes...)`      | Filter out matching runes; returns `[]byte`.       |
+| `KeepRunes(str, keepRunes...)`          | Keep only matching runes; returns `[]byte`.        |
+| `RemoveRunesString` / `KeepRunesString` | Same, returning `string`.                          |
+| `MapRuneIsAfterWordSeparator(str)`      | `[]bool` aligned with runes — true after a separator. |
 
 ## Splitting
 
@@ -54,16 +54,16 @@ strutil.SplitAndTrimIndex(str, isSplit, isTrim)
 
 ## Transliteration & sanitization
 
-| Function                                                | Description                                        |
-|---------------------------------------------------------|----------------------------------------------------|
-| `TransliterateSpecialCharacters(s)`                     | Replace umlauts/diacritics with ASCII equivalents. |
-| `TransliterateSpecialCharactersMaxLen(s, n)`            | Same, bounded.                                     |
-| `MakeValidFileName(name)` / `SanitizeFileName(n)`       | Replace forbidden filename characters.             |
-| `NormalizeExt(ext)`                                     | Canonicalize a file extension.                     |
-| `SanitizeLineEndings(s)` / `...Bytes(b)`                | Normalize CRLF / LF / CR.                          |
-| `ToSnakeCase(s)`                                        | `MyHTTPRequest` → `my_http_request`.               |
+| Function                                           | Description                                        |
+|----------------------------------------------------|----------------------------------------------------|
+| `TransliterateSpecialCharacters(s)`                | Replace umlauts/diacritics with ASCII equivalents. |
+| `TransliterateSpecialCharactersMaxLen(s, n)`       | Same, bounded.                                     |
+| `MakeValidFileName(name)` / `SanitizeFileName(n)`  | Replace forbidden filename characters.             |
+| `NormalizeExt(ext)`                                | Canonicalize a file extension.                     |
+| `SanitizeLineEndings(s)` / `...Bytes(b)`           | Normalize CRLF / LF / CR.                          |
+| `ToSnakeCase(s)`                                   | `MyHTTPRequest` → `my_http_request`.               |
 | `StringContainsAny(s, subs)` / `SubStringIn(sub, strs)` | Membership probes.                                 |
-| `EqualJSON(a, b any)`                                   | Compare two values for JSON-equivalent content.    |
+| `EqualJSON(a, b any)`                              | Compare two values for JSON-equivalent content.    |
 
 ## DomainName
 
