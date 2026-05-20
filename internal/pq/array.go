@@ -77,6 +77,9 @@ type ArrayDelimiter interface {
 type BoolArray []bool
 
 // Scan implements the sql.Scanner interface.
+// It parses a PostgreSQL boolean array literal like {t,f,t}
+// from a string or []byte. A nil source scans to a nil slice,
+// the empty array {} to a non-nil empty slice.
 func (a *BoolArray) Scan(src any) error {
 	switch src := src.(type) {
 	case []byte:
@@ -119,6 +122,9 @@ func (a *BoolArray) scanBytes(src []byte) error {
 }
 
 // Value implements the driver.Valuer interface.
+// A nil slice returns SQL NULL. Otherwise it returns the slice
+// as a PostgreSQL boolean array literal like {t,f,t}, an empty
+// slice returning the empty array {}.
 func (a BoolArray) Value() (driver.Value, error) {
 	if a == nil {
 		return nil, nil
@@ -627,6 +633,9 @@ func (a Int32Array) Value() (driver.Value, error) {
 type StringArray []string
 
 // Scan implements the sql.Scanner interface.
+// It parses a PostgreSQL text array literal like {"a","b"}
+// from a string or []byte. A nil source scans to a nil slice,
+// the empty array {} to a non-nil empty slice.
 func (a *StringArray) Scan(src any) error {
 	switch src := src.(type) {
 	case []byte:
@@ -661,6 +670,9 @@ func (a *StringArray) scanBytes(src []byte) error {
 }
 
 // Value implements the driver.Valuer interface.
+// A nil slice returns SQL NULL. Otherwise it returns the slice
+// as a PostgreSQL text array literal like {"a","b"} with each
+// element quoted and escaped, an empty slice returning {}.
 func (a StringArray) Value() (driver.Value, error) {
 	if a == nil {
 		return nil, nil
