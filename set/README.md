@@ -12,15 +12,15 @@ For an opaque `Set[T]` struct with methods (union, intersection, difference, Sor
 
 All functions are generic over `T cmp.Ordered`.
 
-| Function                                         | Purpose                                                               |
-|--------------------------------------------------|-----------------------------------------------------------------------|
-| `New(values...)`                                 | Create a new set populated with `values`.                             |
-| `Add(set, values...)`                            | Add values; creates the set if `nil`. Returns the (possibly new) set. |
-| `Contains(set, v)`                               | Whether `v` is in the set.                                            |
-| `ContainsAll(set, values...)`                    | All values are present.                                               |
-| `ContainsAny(set, values...)`                    | At least one value is present.                                        |
-| `ContainsAllOther(set, other)`                   | All keys of `other` are present.                                      |
-| `ContainsAnyOther(set, other)`                   | At least one key of `other` is present.                               |
+| Function                       | Purpose                                            |
+|--------------------------------|----------------------------------------------------|
+| `New(values...)`               | Create a new set populated with `values`.          |
+| `Add(set, values...)`          | Add values; creates the set if `nil`. Returns the (possibly new) set. |
+| `Contains(set, v)`             | Whether `v` is in the set.                         |
+| `ContainsAll(set, values...)`  | All values are present.                            |
+| `ContainsAny(set, values...)`  | At least one value is present.                     |
+| `ContainsAllOther(set, other)` | All keys of `other` are present.                   |
+| `ContainsAnyOther(set, other)` | At least one key of `other` is present.            |
 
 ## Example
 
