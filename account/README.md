@@ -8,10 +8,10 @@ import "github.com/domonda/go-types/account"
 
 ## Types
 
-| Type                                             | Purpose                                                      |
-|--------------------------------------------------|--------------------------------------------------------------|
-| `Number`                                         | Non-nullable account number (a `string` underneath).         |
-| `NullableNumber`                                 | Same shape; empty string is treated as SQL NULL / JSON null. |
+| Type             | Purpose                                            |
+|------------------|----------------------------------------------------|
+| `Number`         | Non-nullable account number (a `string` underneath). |
+| `NullableNumber` | Same shape; empty string is treated as SQL NULL / JSON null. |
 
 Both implement `fmt.Stringer`, `driver.Valuer`, `sql.Scanner`, `json.Marshaler`/`Unmarshaler`, `xml.Unmarshaler`, `encoding.TextUnmarshaler`, and `JSONSchema`.
 
@@ -38,15 +38,15 @@ account.NullableNumberFromUint(u)  // 0 → NumberNull
 
 ## Inspection
 
-| Method                                           | Description                                                    |
-|--------------------------------------------------|----------------------------------------------------------------|
-| `Valid()`                                        | True if matches `NumberRegex` (or null, for `NullableNumber`). |
-| `Validate()`                                     | Returns wrapped `ErrInvalidNumber` if invalid.                 |
-| `IsNumeric()`                                    | True if contains only digits (`0-9`).                          |
-| `ValidateNumeric()`                              | Returns wrapped `ErrAlphanumericNumber` if not purely numeric. |
-| `HasPrefix` / `HasSuffix`                        | String-prefix/suffix tests.                                    |
-| `Cut(sep)`                                       | Like `strings.Cut`, returning `Number` halves.                 |
-| `TrimLeadingZeros()`                             | Drops leading `'0'`s.                                          |
+| Method                    | Description                                        |
+|---------------------------|----------------------------------------------------|
+| `Valid()`                 | True if matches `NumberRegex` (or null, for `NullableNumber`). |
+| `Validate()`              | Returns wrapped `ErrInvalidNumber` if invalid.     |
+| `IsNumeric()`             | True if contains only digits (`0-9`).              |
+| `ValidateNumeric()`       | Returns wrapped `ErrAlphanumericNumber` if not purely numeric. |
+| `HasPrefix` / `HasSuffix` | String-prefix/suffix tests.                        |
+| `Cut(sep)`                | Like `strings.Cut`, returning `Number` halves.     |
+| `TrimLeadingZeros()`      | Drops leading `'0'`s.                              |
 
 ## Numeric conversion
 

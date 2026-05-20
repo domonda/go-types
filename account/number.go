@@ -266,6 +266,8 @@ func (n *Number) UnmarshalJSON(j []byte) error {
 	return nil
 }
 
+// JSONSchema returns a JSON schema for Number as a string constrained
+// to the account number pattern.
 func (Number) JSONSchema() *jsonschema.Schema {
 	return &jsonschema.Schema{
 		Title:   "Account Number",
@@ -274,10 +276,14 @@ func (Number) JSONSchema() *jsonschema.Schema {
 	}
 }
 
+// MarshalXML implements encoding/xml.Marshaler.
+// Encodes the Number as an XML element containing its string value.
 func (n Number) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
 	return e.EncodeElement(string(n), start)
 }
 
+// UnmarshalXML implements encoding/xml.Unmarshaler.
+// Decodes an XML element into a Number, validating the account number format.
 func (n *Number) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 	var str string
 	err := d.DecodeElement(&str, &start)

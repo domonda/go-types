@@ -26,6 +26,7 @@ var (
 	_ nullable.NullSetable[Number] = (*NullableNumber)(nil)
 )
 
+// NumberNull is the null value for NullableNumber, represented as an empty string.
 const NumberNull NullableNumber = ""
 
 // NullableNumber represents an account number with the option for alphanumerical characters
@@ -69,10 +70,12 @@ func (n NullableNumber) Validate() error {
 	return nil
 }
 
+// HasPrefix reports whether the NullableNumber begins with the given prefix string.
 func (n NullableNumber) HasPrefix(prefix string) bool {
 	return strings.HasPrefix(string(n), prefix)
 }
 
+// HasSuffix reports whether the NullableNumber ends with the given suffix string.
 func (n NullableNumber) HasSuffix(suffix string) bool {
 	return strings.HasSuffix(string(n), suffix)
 }
@@ -131,6 +134,9 @@ func (n NullableNumber) GetOr(defaultNumber Number) Number {
 	return Number(n)
 }
 
+// Uint converts the NullableNumber to a uint64.
+// Returns 0 and no error if the NullableNumber is null.
+// Returns an error if the value is not purely numeric.
 func (n NullableNumber) Uint() (uint64, error) {
 	if n == NumberNull {
 		return 0, nil
@@ -138,6 +144,9 @@ func (n NullableNumber) Uint() (uint64, error) {
 	return Number(n).Uint()
 }
 
+// UintPtr converts the NullableNumber to a *uint64.
+// Returns nil and no error if the NullableNumber is null.
+// Returns an error if the value is not purely numeric.
 func (n NullableNumber) UintPtr() (*uint64, error) {
 	if n == NumberNull {
 		return nil, nil
@@ -149,6 +158,9 @@ func (n NullableNumber) UintPtr() (*uint64, error) {
 	return &u, nil
 }
 
+// Int converts the NullableNumber to an int64.
+// Returns 0 and no error if the NullableNumber is null.
+// Returns an error if the value is not purely numeric.
 func (n NullableNumber) Int() (int64, error) {
 	if n == NumberNull {
 		return 0, nil
@@ -157,11 +169,16 @@ func (n NullableNumber) Int() (int64, error) {
 
 }
 
+// Cut splits the NullableNumber at the first occurrence of sep.
+// Returns the text before and after the separator, and a boolean indicating
+// whether the separator was found.
 func (n NullableNumber) Cut(sep string) (before, after NullableNumber, found bool) {
 	left, right, found := strings.Cut(string(n), sep)
 	return NullableNumber(left), NullableNumber(right), found
 }
 
+// TrimLeadingZeros removes leading zero characters from the NullableNumber.
+// Returns an empty NullableNumber (null) if the value consists only of zeros.
 func (n NullableNumber) TrimLeadingZeros() NullableNumber {
 	for i, r := range n {
 		if r != '0' {
@@ -171,6 +188,8 @@ func (n NullableNumber) TrimLeadingZeros() NullableNumber {
 	return ""
 }
 
+// String returns the string representation of the NullableNumber,
+// returning an empty string if the NullableNumber is null.
 func (n NullableNumber) String() string {
 	return string(n)
 }
@@ -264,6 +283,8 @@ func (n *NullableNumber) UnmarshalJSON(j []byte) error {
 	return (*Number)(n).UnmarshalJSON(j)
 }
 
+// JSONSchema returns a JSON schema for NullableNumber, allowing either
+// a string matching the account number pattern or null.
 func (NullableNumber) JSONSchema() *jsonschema.Schema {
 	return &jsonschema.Schema{
 		Title: "Nullable Account Number",
@@ -278,10 +299,14 @@ func (NullableNumber) JSONSchema() *jsonschema.Schema {
 	}
 }
 
+// MarshalXML implements encoding/xml.Marshaler.
+// Encodes the NullableNumber as an XML element containing its string value.
 func (n NullableNumber) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
 	return e.EncodeElement(string(n), start)
 }
 
+// UnmarshalXML implements encoding/xml.Unmarshaler.
+// Decodes an XML element into a NullableNumber, validating the account number format.
 func (n *NullableNumber) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 	var str string
 	err := d.DecodeElement(&str, &start)
