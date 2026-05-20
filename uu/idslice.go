@@ -17,6 +17,12 @@ import (
 // Implements the database/sql.Scanner and database/sql/driver.Valuer interfaces.
 // Implements the encoding/json.Marshaler and Unmarshaler interfaces.
 // with the nil slice value used as SQL NULL and JSON null.
+//
+// Value and Scan use the PostgreSQL array text format ({"id1","id2"}),
+// see https://www.postgresql.org/docs/current/arrays.html. That format
+// is understood by PostgreSQL and array-compatible databases such as
+// CockroachDB and YugabyteDB; databases without a native array type
+// (MySQL, MariaDB, SQLite, SQL Server, Oracle) are not supported.
 type IDSlice []ID
 
 // IDSliceFromString parses a string created with IDSlice.String()
@@ -169,10 +175,12 @@ func (s IDSlice) IndexOf(id ID) int {
 	return -1
 }
 
+// Contains reports whether id is present in the slice.
 func (s IDSlice) Contains(id ID) bool {
 	return slices.Contains(s, id)
 }
 
+// ContainsAny reports whether any ID in other is also present in s.
 func (s IDSlice) ContainsAny(other IDSlice) bool {
 	for _, curr := range s {
 		if slices.Contains(other, curr) {
@@ -182,6 +190,7 @@ func (s IDSlice) ContainsAny(other IDSlice) bool {
 	return false
 }
 
+// Equal reports whether s and other contain the same IDs in the same order.
 func (s IDSlice) Equal(other IDSlice) bool {
 	if len(s) != len(other) {
 		return false
@@ -194,6 +203,7 @@ func (s IDSlice) Equal(other IDSlice) bool {
 	return true
 }
 
+// ContainsAnyFromSet reports whether any ID in s is present in set.
 func (s IDSlice) ContainsAnyFromSet(set IDSet) bool {
 	return slices.ContainsFunc(s, set.Contains)
 }

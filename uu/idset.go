@@ -14,6 +14,12 @@ import (
 // It is a map[ID]struct{} underneath.
 // Implements the database/sql.Scanner and database/sql/driver.Valuer interfaces
 // with the nil map value used as SQL NULL
+//
+// Value and Scan use the PostgreSQL array text format ({"id1","id2"}),
+// see https://www.postgresql.org/docs/current/arrays.html. That format
+// is understood by PostgreSQL and array-compatible databases such as
+// CockroachDB and YugabyteDB; databases without a native array type
+// (MySQL, MariaDB, SQLite, SQL Server, Oracle) are not supported.
 type IDSet map[ID]struct{}
 
 // MakeIDSet returns an IDSet with
@@ -154,18 +160,21 @@ func (s IDSet) AsSortedSlice() IDSlice {
 	return sl
 }
 
+// AddSlice adds all IDs from s to the set.
 func (set IDSet) AddSlice(s IDSlice) {
 	for _, id := range s {
 		set[id] = struct{}{}
 	}
 }
 
+// AddSet adds all IDs from other into the set.
 func (s IDSet) AddSet(other IDSet) {
 	for id := range other {
 		s[id] = struct{}{}
 	}
 }
 
+// AddIDs adds all IDs yielded by ids into the set.
 func (s IDSet) AddIDs(ids IDs) {
 	ids.ForEach(func(id ID) error {
 		s[id] = struct{}{}
@@ -173,6 +182,7 @@ func (s IDSet) AddIDs(ids IDs) {
 	}) //#nosec G104 -- always returns nil
 }
 
+// Add inserts id into the set.
 func (s IDSet) Add(id ID) {
 	s[id] = struct{}{}
 }
@@ -187,26 +197,31 @@ func (s IDSet) Contains(id ID) bool {
 	return ok
 }
 
+// Delete removes id from the set. It is a no-op if id is not present.
 func (s IDSet) Delete(id ID) {
 	delete(s, id)
 }
 
+// Clear removes all IDs from the set, leaving it empty.
 func (s IDSet) Clear() {
 	clear(s)
 }
 
+// DeleteSlice removes every ID in sl from the set.
 func (s IDSet) DeleteSlice(sl IDSlice) {
 	for _, id := range sl {
 		delete(s, id)
 	}
 }
 
+// DeleteSet removes every ID contained in other from the set.
 func (s IDSet) DeleteSet(other IDSet) {
 	for id := range other {
 		delete(s, id)
 	}
 }
 
+// Clone returns a shallow copy of the set, or nil if the set is nil.
 func (s IDSet) Clone() IDSet {
 	if s == nil {
 		return nil
@@ -214,6 +229,8 @@ func (s IDSet) Clone() IDSet {
 	return maps.Clone(s)
 }
 
+// Diff returns a new IDSet containing all IDs that are in s but not in other,
+// and all IDs that are in other but not in s (symmetric difference).
 func (s IDSet) Diff(other IDSet) IDSet {
 	diff := make(IDSet)
 	for id := range s {
@@ -229,6 +246,7 @@ func (s IDSet) Diff(other IDSet) IDSet {
 	return diff
 }
 
+// Equal reports whether s and other contain exactly the same set of IDs.
 func (s IDSet) Equal(other IDSet) bool {
 	if len(s) != len(other) {
 		return false

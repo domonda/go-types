@@ -400,6 +400,8 @@ func (n NullableID) MarshalJSON() ([]byte, error) {
 	return b, nil
 }
 
+// JSONSchema returns the JSON schema for NullableID as a string with format "uuid"
+// or null, reflecting that the nil UUID is treated as the null value.
 func (NullableID) JSONSchema() *jsonschema.Schema {
 	return &jsonschema.Schema{
 		Title: "Nullable UUID",

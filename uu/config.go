@@ -27,6 +27,8 @@ const (
 	IDDomainOrg
 )
 
+// IDRegex is a regular expression string that matches the canonical lowercase
+// dashed UUID format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx.
 const IDRegex = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
 
 // Difference in 100-nanosecond intervals between

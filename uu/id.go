@@ -362,6 +362,8 @@ func IDFromAny(val any) (ID, error) {
 	}
 }
 
+// IDSource is a type constraint that covers all types that can be converted
+// to an ID by the generic IDFrom, IDMust, and related functions.
 type IDSource interface {
 	string | []byte | ID | NullableID | [16]byte
 }
@@ -670,6 +672,7 @@ func (id *ID) Scan(src any) error {
 	return fmt.Errorf("cannot convert %T to uu.ID", src)
 }
 
+// JSONSchema returns the JSON schema for ID as a string with format "uuid".
 func (ID) JSONSchema() *jsonschema.Schema {
 	return &jsonschema.Schema{
 		Title:  "UUID",
