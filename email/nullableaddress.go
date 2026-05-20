@@ -21,8 +21,11 @@ type NullableAddress string
 // Compile-time check that NullableAddress implements nullable.NullSetable[Address]
 var _ nullable.NullSetable[Address] = (*NullableAddress)(nil)
 
+// AddressNull is the NULL value for NullableAddress.
 const AddressNull NullableAddress = ""
 
+// NullableAddressFrom creates a NullableAddress from a parsed mail.Address.
+// A nil address results in the NULL value.
 func NullableAddressFrom(a *mail.Address) NullableAddress {
 	if a == nil {
 		return ""
@@ -38,6 +41,8 @@ func NormalizedNullableAddress(addr string) (normalized NullableAddress, err err
 	return NullableAddress(addr).Normalized()
 }
 
+// Parse converts the NullableAddress to a *mail.Address using lenient
+// validation, or returns nil if the address is null.
 func (n NullableAddress) Parse() (*mail.Address, error) {
 	if n.IsNull() {
 		return nil, nil
@@ -45,6 +50,8 @@ func (n NullableAddress) Parse() (*mail.Address, error) {
 	return Address(n).Parse()
 }
 
+// Validate returns an error if the NullableAddress is not null
+// and not a valid email address.
 func (n NullableAddress) Validate() error {
 	if n.IsNull() {
 		return nil
@@ -70,6 +77,8 @@ func (n NullableAddress) Normalized() (NullableAddress, error) {
 	return NullableAddress(norm), err
 }
 
+// NamePart extracts the display name part from the email address,
+// or returns an empty string if the address is null or has no name part.
 func (n NullableAddress) NamePart() (string, error) {
 	if n.IsNull() {
 		return "", nil
@@ -204,6 +213,7 @@ func (n NullableAddress) MarshalJSON() ([]byte, error) {
 	return json.Marshal(string(n))
 }
 
+// JSONSchema returns the JSON schema definition for the NullableAddress type.
 func (NullableAddress) JSONSchema() *jsonschema.Schema {
 	return &jsonschema.Schema{
 		Title: "Email Address",
@@ -218,6 +228,8 @@ func (NullableAddress) JSONSchema() *jsonschema.Schema {
 	}
 }
 
+// AsList converts the NullableAddress to a NullableAddressList
+// containing this single address.
 func (n NullableAddress) AsList() NullableAddressList {
 	return NullableAddressList(n)
 }

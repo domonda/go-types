@@ -131,6 +131,8 @@ func (l AddressList) UniqueAddressParts() (AddressSet, error) {
 	return set, nil
 }
 
+// Validate returns an error if the AddressList
+// is not a valid list of email addresses.
 func (l AddressList) Validate() error {
 	_, err := l.Parse()
 	return err
@@ -147,6 +149,9 @@ func (l AddressList) ValidAndNormalized() bool {
 	return err == nil && l == norm
 }
 
+// Normalized parses the AddressList using lenient validation,
+// normalizes every address part to lowercase, and returns
+// the addresses re-joined with ", " separators.
 func (l AddressList) Normalized() (AddressList, error) {
 	parsed, err := l.Parse()
 	if err != nil {
@@ -163,6 +168,7 @@ func (l AddressList) Normalized() (AddressList, error) {
 	return AddressList(b.String()), nil
 }
 
+// Nullable converts the AddressList to a NullableAddressList type.
 func (l AddressList) Nullable() NullableAddressList {
 	return NullableAddressList(l)
 }

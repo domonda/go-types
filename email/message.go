@@ -19,6 +19,8 @@ import (
 	"github.com/domonda/go-types/strutil"
 )
 
+// Header represents the header fields of an email message.
+// It is an alias for net/textproto.MIMEHeader.
 type Header = textproto.MIMEHeader
 
 var parsedMessageHeaders = map[string]struct{}{
@@ -35,15 +37,22 @@ var parsedMessageHeaders = map[string]struct{}{
 	"Subject":      {},
 }
 
+// IsParsedHeader returns true if the passed header key is one of
+// the headers parsed into dedicated fields of the Message struct.
 func IsParsedHeader(key string) bool {
 	_, is := parsedMessageHeaders[textproto.CanonicalMIMEHeaderKey(key)]
 	return is
 }
 
+// IsExtraHeader returns true if the passed header key is not parsed
+// into a dedicated field of the Message struct and would therefore
+// be stored in Message.ExtraHeader.
 func IsExtraHeader(key string) bool {
 	return !IsParsedHeader(key)
 }
 
+// Message represents a parsed email message with its
+// headers, body, and attachments.
 type Message struct {
 	// ProviderID is the optional ID of the message
 	// at the email provider like GMail that might be
@@ -71,25 +80,34 @@ type Message struct {
 	// Date header
 	Date *time.Time `json:"date,omitempty"`
 
-	From        Address             `json:"from,omitempty"`
-	ReplyTo     NullableAddress     `json:"replyTo,omitempty"`
-	To          AddressList         `json:"to,omitempty"`
+	// From is the "From" header address of the message.
+	From Address `json:"from,omitempty"`
+	// ReplyTo is the "Reply-To" header address of the message.
+	ReplyTo NullableAddress `json:"replyTo,omitempty"`
+	// To is the "To" header address list of the message.
+	To AddressList `json:"to,omitempty"`
+	// DeliveredTo is the "Delivered-To" header address list of the message.
 	DeliveredTo NullableAddressList `json:"deliveredTo,omitempty"`
-	Cc          NullableAddressList `json:"cc,omitempty"`
-	Bcc         NullableAddressList `json:"bcc,omitempty"`
+	// Cc is the "Cc" header address list of the message.
+	Cc NullableAddressList `json:"cc,omitempty"`
+	// Bcc is the "Bcc" header address list of the message.
+	Bcc NullableAddressList `json:"bcc,omitempty"`
 
 	// ExtraHeader can be used for additional header data
 	// not covered by the other fields of the struct.
 	ExtraHeader Header `json:"extraHeader,omitempty"`
 
+	// Subject is the "Subject" header of the message.
 	Subject string `json:"subject,omitempty"`
 
 	// Body is the plaintext body of the email.
 	Body string `json:"body,omitempty"`
 
-	// BodyHTML returns the HTML body if available.
+	// BodyHTML is the HTML body of the email if available.
 	BodyHTML nullable.TrimmedString `json:"bodyHTML,omitempty"`
 
+	// Attachments holds the attachments, inline parts,
+	// and other parts of the message.
 	Attachments []*Attachment `json:"attachments,omitempty"`
 }
 
@@ -147,6 +165,10 @@ func (msg *Message) ReferencesMessageIDs() []string {
 	return ids
 }
 
+// ParseMessage parses an email message from the passed data,
+// auto-detecting the format. JSON objects are unmarshalled directly,
+// data with a TNEF signature is parsed as TNEF, and everything else
+// is parsed as a MIME message.
 func ParseMessage(data []byte) (msg *Message, err error) {
 	defer errs.WrapWithFuncParams(&err, data)
 
@@ -181,7 +203,7 @@ func (msg *Message) ReplyToAddress() Address {
 	return msg.ReplyTo.Get()
 }
 
-// Returns if the "Auto-Submitted" header is set
+// IsAutoSubmitted returns if the "Auto-Submitted" header is set
 // and has a different value than "no".
 // See RFC 3834: https://datatracker.ietf.org/doc/html/rfc3834
 func (msg *Message) IsAutoSubmitted() bool {
@@ -189,7 +211,7 @@ func (msg *Message) IsAutoSubmitted() bool {
 	return as != "" && as != "no"
 }
 
-// Returns if the X-Auto-Response-Suppress header
+// AutoResponseSuppress returns if the X-Auto-Response-Suppress header
 // contains any of the values "DR", "AutoReply", or "All".
 // See https://docs.microsoft.com/en-us/openspecs/exchange_server_protocols/ms-oxcmail/ced68690-498a-4567-9d14-5c01f974d8b1
 func (msg *Message) AutoResponseSuppress() bool {
@@ -215,6 +237,7 @@ func (msg *Message) FeedbackID() string {
 	return msg.ExtraHeader.Get("Feedback-Id")
 }
 
+// String implements the fmt.Stringer interface.
 func (msg *Message) String() string {
 	return fmt.Sprintf(
 		"Message{Subject: `%s`, From: %s, DeliveredTo: %s, MessageID: %s, ProviderID: %s, Labels: %s}",
@@ -227,16 +250,26 @@ func (msg *Message) String() string {
 	)
 }
 
+// AddAttachment appends a new Attachment created from the passed
+// partID, filename, and content to the message.
 func (msg *Message) AddAttachment(partID, filename string, content []byte) {
 	msg.Attachments = append(msg.Attachments, NewAttachment(partID, filename, content))
 }
 
+// ReplyTemplateData is the context passed to the text and HTML
+// templates used by Message.NewReplyMessage.
 type ReplyTemplateData struct {
+	// Message is the original message being replied to.
 	Message
-	Date      string
+	// Date is the formatted date of the original message.
+	Date string
+	// BodyLines are the lines of the original plaintext body.
 	BodyLines []string
-	BodyHTML  template.HTML
+	// BodyHTML is the HTML body of the original message.
+	BodyHTML template.HTML
+	// ReplyText is the plaintext reply.
 	ReplyText string
+	// ReplyHTML is the HTML reply.
 	ReplyHTML template.HTML
 }
 
@@ -309,6 +342,9 @@ func (msg *Message) NewReplyMessage(from Address, replyText, replyHTML string, k
 	return re, nil
 }
 
+// BuildRawMessage encodes the message as a raw RFC 5322 MIME message,
+// building a multipart structure as needed for the plaintext body,
+// HTML body, and attachments.
 func (msg *Message) BuildRawMessage() (raw []byte, err error) {
 	defer errs.WrapWithFuncParams(&err)
 

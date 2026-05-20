@@ -13,12 +13,22 @@ import (
 	"github.com/domonda/go-types/nullable"
 )
 
-// AddressSet is a set of unique email addresses
+// AddressSet is a set of unique email addresses.
+//
+// Value writes the set as a PostgreSQL array text literal
+// ({"a@example.com",...}) and Scan reads that format, see
+// https://www.postgresql.org/docs/current/arrays.html; Scan also
+// accepts a plain non-array string as a single-element set.
+// The array format is understood by PostgreSQL and array-compatible
+// databases such as CockroachDB and YugabyteDB; databases without a
+// native array type (MySQL, MariaDB, SQLite, SQL Server, Oracle) are
+// not supported.
 type AddressSet map[Address]struct{}
 
 // Compile-time check that AddressSet implements types.NormalizableValidator[AddressSet]
 var _ types.NormalizableValidator[AddressSet] = AddressSet{}
 
+// MakeAddressSet returns an AddressSet containing the passed addresses.
 func MakeAddressSet(addrs ...Address) AddressSet {
 	set := make(AddressSet, len(addrs))
 	for _, addr := range addrs {
@@ -27,6 +37,8 @@ func MakeAddressSet(addrs ...Address) AddressSet {
 	return set
 }
 
+// NormalizedAddressSet returns an AddressSet containing the normalized
+// form of the passed addresses, or an error if any address is invalid.
 func NormalizedAddressSet(addrs ...Address) (AddressSet, error) {
 	set := make(AddressSet, len(addrs))
 	for _, addr := range addrs {
@@ -39,6 +51,9 @@ func NormalizedAddressSet(addrs ...Address) (AddressSet, error) {
 	return set, nil
 }
 
+// NormalizedAddressPartSet returns an AddressSet containing the normalized
+// address parts (without name part) of the passed addresses,
+// or an error if any address is invalid.
 func NormalizedAddressPartSet(addrs ...Address) (AddressSet, error) {
 	set := make(AddressSet, len(addrs))
 	for _, addr := range addrs {
@@ -67,11 +82,14 @@ func (set AddressSet) IsNull() bool {
 	return set == nil
 }
 
+// Contains returns true if the set contains the passed address.
 func (set AddressSet) Contains(addr Address) bool {
 	_, ok := set[addr]
 	return ok
 }
 
+// Add inserts the passed address into the set,
+// allocating the underlying map if necessary.
 func (set *AddressSet) Add(addr Address) {
 	if *set == nil {
 		*set = AddressSet{addr: struct{}{}}
@@ -80,6 +98,8 @@ func (set *AddressSet) Add(addr Address) {
 	}
 }
 
+// AddSet inserts all addresses from other into the set,
+// allocating the underlying map if necessary.
 func (set *AddressSet) AddSet(other AddressSet) {
 	if len(other) == 0 {
 		return
@@ -92,6 +112,8 @@ func (set *AddressSet) AddSet(other AddressSet) {
 	}
 }
 
+// AddNormalized normalizes the passed address and inserts it into the set.
+// It returns an error if the address is invalid.
 func (set *AddressSet) AddNormalized(addr Address) error {
 	norm, err := addr.Normalized()
 	if err != nil {
@@ -101,6 +123,9 @@ func (set *AddressSet) AddNormalized(addr Address) error {
 	return nil
 }
 
+// AddAddressPart inserts the normalized address part (without name part)
+// of the passed address into the set.
+// It returns an error if the address is invalid.
 func (set *AddressSet) AddAddressPart(addr Address) error {
 	norm, err := addr.AddressPart()
 	if err != nil {
@@ -110,26 +135,31 @@ func (set *AddressSet) AddAddressPart(addr Address) error {
 	return nil
 }
 
+// Delete removes the passed address from the set.
 func (set AddressSet) Delete(val Address) {
 	delete(set, val)
 }
 
+// DeleteSlice removes all addresses in the passed slice from the set.
 func (set AddressSet) DeleteSlice(vals []Address) {
 	for _, val := range vals {
 		delete(set, val)
 	}
 }
 
+// DeleteSet removes all addresses contained in other from the set.
 func (set AddressSet) DeleteSet(other AddressSet) {
 	for str := range other {
 		delete(set, str)
 	}
 }
 
+// Clear removes all addresses from the set.
 func (set AddressSet) Clear() {
 	clear(set)
 }
 
+// Clone returns a copy of the set, or nil if the set is nil.
 func (set AddressSet) Clone() AddressSet {
 	if set == nil {
 		return nil
@@ -146,10 +176,12 @@ func (set AddressSet) GetOne() Address {
 	return ""
 }
 
+// Sorted returns the addresses of the set as a sorted slice.
 func (set AddressSet) Sorted() []Address {
 	return types.SetToSortedSlice(set)
 }
 
+// Strings returns the addresses of the set as a sorted slice of strings.
 func (set AddressSet) Strings() []string {
 	switch len(set) {
 	case 0:
@@ -169,14 +201,20 @@ func (set AddressSet) Strings() []string {
 	return s
 }
 
+// AddressList returns the sorted addresses of the set
+// joined as a comma separated AddressList.
 func (set AddressSet) AddressList() AddressList {
 	return AddressListJoin(set.Sorted()...)
 }
 
+// String implements the fmt.Stringer interface returning
+// the sorted addresses joined as a comma separated list.
 func (set AddressSet) String() string {
 	return string(set.AddressList())
 }
 
+// Normalized returns a new AddressSet with all addresses normalized,
+// or the original set together with an error if any address is invalid.
 func (set AddressSet) Normalized() (AddressSet, error) {
 	if len(set) == 0 {
 		return set, nil

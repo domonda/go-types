@@ -11,6 +11,8 @@ import (
 	"github.com/domonda/go-types/nullable"
 )
 
+// ParseTNEFMessageBytes parses a TNEF (Transport Neutral Encapsulation
+// Format) email message from the passed bytes.
 func ParseTNEFMessageBytes(messageBytes []byte) (msg *Message, err error) {
 	defer errs.WrapWithFuncParams(&err, messageBytes)
 

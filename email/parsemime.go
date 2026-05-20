@@ -13,6 +13,7 @@ import (
 	"github.com/domonda/go-types/strutil"
 )
 
+// ParseMIMEMessage parses a MIME email message read from the passed reader.
 func ParseMIMEMessage(reader io.Reader) (msg *Message, err error) {
 	defer errs.WrapWithFuncParams(&err, reader)
 
@@ -131,6 +132,7 @@ func ParseMIMEMessage(reader io.Reader) (msg *Message, err error) {
 	return msg, nil
 }
 
+// ParseMIMEMessageBytes parses a MIME email message from the passed bytes.
 func ParseMIMEMessageBytes(msgBytes []byte) (msg *Message, err error) {
 	defer errs.WrapWithFuncParams(&err, msgBytes)
 

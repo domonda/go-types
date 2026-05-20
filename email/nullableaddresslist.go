@@ -20,14 +20,20 @@ type NullableAddressList string
 
 var _ nullable.NullSetable[AddressList] = (*NullableAddressList)(nil)
 
+// NullableAddressListJoin creates a NullableAddressList by joining
+// multiple Address values with comma separators. Empty addresses are skipped.
 func NullableAddressListJoin(addrs ...Address) NullableAddressList {
 	return NullableAddressList(AddressListJoin(addrs...))
 }
 
+// NullableAddressListJoinStrings creates a NullableAddressList by joining
+// multiple string values with comma separators. Empty strings are skipped.
 func NullableAddressListJoinStrings(addrs ...string) NullableAddressList {
 	return NullableAddressList(AddressListJoinStrings(addrs...))
 }
 
+// Append adds additional addresses to the NullableAddressList.
+// Empty addresses are skipped.
 func (n NullableAddressList) Append(addrs ...Address) NullableAddressList {
 	var b strings.Builder
 	b.WriteString(string(n))
@@ -43,6 +49,8 @@ func (n NullableAddressList) Append(addrs ...Address) NullableAddressList {
 	return NullableAddressList(b.String())
 }
 
+// Parse converts the NullableAddressList to a slice of *mail.Address
+// using lenient validation, or returns nil if the list is null.
 func (n NullableAddressList) Parse() ([]*mail.Address, error) {
 	if n.IsNull() {
 		return nil, nil
@@ -50,6 +58,8 @@ func (n NullableAddressList) Parse() ([]*mail.Address, error) {
 	return AddressList(n).Parse()
 }
 
+// Split converts the NullableAddressList to a slice of Address values,
+// or returns nil if the list is null.
 func (n NullableAddressList) Split() ([]Address, error) {
 	if n.IsNull() {
 		return nil, nil
@@ -57,6 +67,8 @@ func (n NullableAddressList) Split() ([]Address, error) {
 	return AddressList(n).Split()
 }
 
+// Validate returns an error if the NullableAddressList is not null
+// and not a valid list of email addresses.
 func (n NullableAddressList) Validate() error {
 	if n.IsNull() {
 		return nil
@@ -70,6 +82,8 @@ func (n NullableAddressList) ValidAndNormalized() bool {
 	return err == nil && n == norm
 }
 
+// Normalized parses and normalizes the NullableAddressList,
+// returning the null value unchanged.
 func (n NullableAddressList) Normalized() (NullableAddressList, error) {
 	if n.IsNull() {
 		return n, nil
@@ -106,6 +120,8 @@ func (n NullableAddressList) Get() AddressList {
 	return AddressList(n)
 }
 
+// GetOr returns the non nullable AddressList value
+// or the passed defaultValue if the NullableAddressList is null.
 func (n NullableAddressList) GetOr(defaultValue AddressList) AddressList {
 	if n.IsNull() {
 		return defaultValue
@@ -113,6 +129,8 @@ func (n NullableAddressList) GetOr(defaultValue AddressList) AddressList {
 	return AddressList(n)
 }
 
+// Set the passed AddressList as NullableAddressList.
+// Passing an empty string will be interpreted as setting NULL.
 func (n *NullableAddressList) Set(s AddressList) {
 	*n = NullableAddressList(s)
 }
@@ -123,7 +141,12 @@ func (n *NullableAddressList) SetNull() {
 }
 
 // Scan implements the database/sql.Scanner interface.
-// Supports scanning SQL strings and string arrays.
+// It accepts a plain string (an already joined address list) or a
+// PostgreSQL array text literal ({"a@x.com","b@y.com"}, see
+// https://www.postgresql.org/docs/current/arrays.html) whose elements
+// are joined into the list. The array form requires PostgreSQL or an
+// array-compatible database such as CockroachDB or YugabyteDB; Value
+// always writes a plain string and works with any database.
 func (n *NullableAddressList) Scan(value any) error {
 	switch s := value.(type) {
 	case nil:

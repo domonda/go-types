@@ -14,13 +14,13 @@ type Address string // "user@example.com" or "John Doe <user@example.com>"
 
 Lenient parser that fixes common malformations encountered in real-world mail and lowercases the address part. More permissive than `net/mail.ParseAddress`.
 
-| Function / Method                                | Description                                                                |
-|--------------------------------------------------|----------------------------------------------------------------------------|
-| `NormalizedAddress(str)`                         | Parse + normalize.                                                         |
-| `AddressFrom(*mail.Address)`                     | Convert a stdlib address.                                                  |
-| `a.Normalized()` / `Validate()` / `Valid()`      | Validation variants.                                                       |
-| `a.Parse()`                                      | To `*mail.Address` via the package's lenient parser.                       |
-| `ParseAddress(str)`                              | Underlying parser; supports umlauts, RFC 2047 encoded-words, quoted names. |
+| Function / Method                           | Description                                        |
+|---------------------------------------------|----------------------------------------------------|
+| `NormalizedAddress(str)`                    | Parse + normalize.                                 |
+| `AddressFrom(*mail.Address)`                | Convert a stdlib address.                          |
+| `a.Normalized()` / `Validate()` / `Valid()` | Validation variants.                               |
+| `a.Parse()`                                 | To `*mail.Address` via the package's lenient parser. |
+| `ParseAddress(str)`                         | Underlying parser; supports umlauts, RFC 2047 encoded-words, quoted names. |
 
 `AddressRegexp` is the compiled regex for the email-only form. It tolerates a wide range of umlaut/diacritic characters since real-world mail commonly violates strict RFC 2821/2822.
 
