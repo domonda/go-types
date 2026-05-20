@@ -1,5 +1,7 @@
 package strfmt
 
+// Scannable is implemented by types that can parse and assign a string
+// value to themselves, optionally enforcing validity constraints.
 type Scannable interface {
 	// ScanString tries to parse and assign the passed
 	// source string as value of the implementing type.

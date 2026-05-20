@@ -10,8 +10,14 @@ import (
 	"github.com/domonda/go-types/strutil"
 )
 
+// DefaultScanConfig is a package-level ScanConfig initialized with NewScanConfig defaults,
+// suitable for general-purpose string scanning without further configuration.
 var DefaultScanConfig = NewScanConfig()
 
+// ScanConfig holds the settings that control how strings are interpreted
+// when scanned into typed values by Scan. It defines which strings are
+// treated as true, false, nil, and how date/time strings are parsed.
+// An optional ValidateFunc can be used to validate values after scanning.
 type ScanConfig struct {
 	TrueStrings                 []string `json:"trueStrings"`
 	FalseStrings                []string `json:"falseStrings"`
@@ -24,6 +30,12 @@ type ScanConfig struct {
 	ValidateFunc func(any) error `json:"-"`
 }
 
+// NewScanConfig returns a ScanConfig with sensible defaults:
+// common true/false string variants, an empty string and "null"/"nil"
+// variants as nil indicators, several time layouts ordered from most
+// to least specific, accepted money decimal counts of 0, 2, and 4,
+// and the package-level types.Validate function as ValidateFunc.
+// Type-specific scanners for time.Time and time.Duration are pre-registered.
 func NewScanConfig() *ScanConfig {
 	c := &ScanConfig{
 		TrueStrings:  []string{"true", "True", "TRUE", "yes", "Yes", "YES", "1"},
@@ -52,22 +64,31 @@ func (c *ScanConfig) initTypeScanners() {
 	}
 }
 
+// SetTypeScanner registers a custom Scanner for the given reflect.Type,
+// replacing any previously registered scanner for that type.
+// The registered scanner takes priority over all built-in scanning logic.
 func (c *ScanConfig) SetTypeScanner(t reflect.Type, s Scanner) {
 	c.TypeScanners[t] = s
 }
 
+// IsTrue reports whether str is one of the configured true strings.
 func (c *ScanConfig) IsTrue(str string) bool {
 	return slices.Contains(c.TrueStrings, str)
 }
 
+// IsFalse reports whether str is one of the configured false strings.
 func (c *ScanConfig) IsFalse(str string) bool {
 	return slices.Contains(c.FalseStrings, str)
 }
 
+// IsNil reports whether str is one of the configured nil strings.
 func (c *ScanConfig) IsNil(str string) bool {
 	return slices.Contains(c.NilStrings, str)
 }
 
+// ParseTime tries to parse str using each of the configured TimeFormats in order,
+// returning the first successfully parsed time.Time and ok=true.
+// If no format matches, it returns the zero time.Time and ok=false.
 func (c *ScanConfig) ParseTime(str string) (t time.Time, ok bool) {
 	for _, format := range c.TimeFormats {
 		t, err := time.Parse(format, str)

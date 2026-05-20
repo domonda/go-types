@@ -10,6 +10,10 @@ import (
 	"github.com/domonda/go-types/nullable"
 )
 
+// FormatConfig holds the locale-specific formatting settings used
+// by Format and FormatValue when converting typed values to strings.
+// It covers numeric separators, date/time layouts, boolean labels,
+// a nil/null placeholder, and an optional per-type formatter registry.
 type FormatConfig struct {
 	Float          float.FormatDef
 	MoneyAmount    MoneyFormat
@@ -22,6 +26,12 @@ type FormatConfig struct {
 	TypeFormatters map[reflect.Type]Formatter
 }
 
+// NewFormatConfig returns a FormatConfig with English-style defaults:
+// dot decimal separator, RFC3339 time layout, ISO date layout,
+// empty nil string, and "true"/"false" boolean labels.
+// It pre-registers type-specific formatters for date.Date,
+// date.NullableDate, time.Time, nullable.Time, time.Duration,
+// money.Amount, and money.CurrencyAmount.
 func NewFormatConfig() *FormatConfig {
 	return &FormatConfig{
 		Float:       EnglishFloatFormat(-1),
@@ -44,6 +54,9 @@ func NewFormatConfig() *FormatConfig {
 	}
 }
 
+// NewEnglishFormatConfig returns a FormatConfig based on NewFormatConfig
+// adjusted for English locale conventions: DD/MM/YYYY date layout,
+// a long-form time layout, and "yes"/"no" boolean labels.
 func NewEnglishFormatConfig() *FormatConfig {
 	config := NewFormatConfig()
 	config.Date = "02/01/2006"
@@ -53,6 +66,10 @@ func NewEnglishFormatConfig() *FormatConfig {
 	return config
 }
 
+// NewGermanFormatConfig returns a FormatConfig based on NewFormatConfig
+// adjusted for German locale conventions: comma decimal separator,
+// dot thousands separator, DD.MM.YYYY date layout, a long-form time
+// layout, and "ja"/"nein" boolean labels.
 func NewGermanFormatConfig() *FormatConfig {
 	config := NewFormatConfig()
 	config.Float = GermanFloatFormat(-1)
