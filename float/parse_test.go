@@ -126,10 +126,77 @@ func Test_ParseFloat_invalid(t *testing.T) {
 		"123,123 23 123",
 		"123,1234,123.99",
 		"123 1234 123.99",
+		"1234567,123,456", // first grouped block longer than 6 digits
+		"1234567 123 456", // first grouped block longer than 6 digits (space)
 	}
 
 	for _, s := range invalidDecimalFloats {
 		_, err := Parse(s)
 		assert.Error(t, err, "ParseFloat(%#v)", s)
+	}
+}
+
+// Test_Parse exercises the Parse wrapper, which returns only the float value.
+func Test_Parse(t *testing.T) {
+	f, err := Parse("1.234.567,89")
+	assert.NoError(t, err)
+	assert.Equal(t, 1234567.89, f)
+
+	f, err = Parse(" -158,00 ")
+	assert.NoError(t, err)
+	assert.Equal(t, -158.0, f)
+
+	_, err = Parse("not a number")
+	assert.Error(t, err)
+}
+
+// Test_ParseFloat_decimals locks the decimals return value of ParseDetails,
+// which reports how many fractional digits the input carried.
+func Test_ParseFloat_decimals(t *testing.T) {
+	tests := []struct {
+		str          string
+		wantDecimals int
+	}{
+		{"100", 0},
+		{"100.", 0},
+		{"100.9", 1},
+		{"100.90", 2},
+		{"123.456", 3},
+		{"1,234.5678", 4},
+		{"1.2e6", 1},
+		{"2.48689957516035e14", 14},
+	}
+	for _, tt := range tests {
+		_, _, _, decimals, err := ParseDetails(tt.str)
+		assert.NoError(t, err, "ParseDetails(%q)", tt.str)
+		assert.Equal(t, tt.wantDecimals, decimals, "ParseDetails(%q) decimals", tt.str)
+	}
+}
+
+// Test_ParseDetails_singleSeparatorAmbiguity locks the current interpretation
+// of a number with exactly one separator and a 1-3 digit trailing group.
+// "1,234" is ambiguous: it could be the integer 1234 (US grouping) or the
+// decimal 1.234. ParseDetails resolves a lone separator as the decimal
+// separator. This is asymmetric with Format, which writes
+// Format(1234, ',', '.', -1, false) == "1,234" — so that specific integer
+// does not round-trip. See Test_FormatParse_roundTrip for the cases that do.
+func Test_ParseDetails_singleSeparatorAmbiguity(t *testing.T) {
+	tests := []struct {
+		str        string
+		wantFloat  float64
+		wantDecSep rune
+	}{
+		{"1,234", 1.234, ','},
+		{"1.234", 1.234, '.'},
+		{"12,345", 12.345, ','},
+		{"123,456", 123.456, ','},
+		{"123.456", 123.456, '.'},
+	}
+	for _, tt := range tests {
+		f, thousandsSep, decimalSep, _, err := ParseDetails(tt.str)
+		assert.NoError(t, err, "ParseDetails(%q)", tt.str)
+		assert.Equal(t, tt.wantFloat, f, "ParseDetails(%q) value", tt.str)
+		assert.Equal(t, rune(0), thousandsSep, "ParseDetails(%q) thousandsSep", tt.str)
+		assert.Equal(t, string(tt.wantDecSep), string(decimalSep), "ParseDetails(%q) decimalSep", tt.str)
 	}
 }

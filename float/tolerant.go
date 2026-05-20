@@ -3,6 +3,7 @@ package float
 import (
 	"fmt"
 	"math"
+	"strconv"
 )
 
 // Tolerant is a float64 underneath
@@ -49,7 +50,7 @@ func (f Tolerant) IsInf() bool {
 
 // UnmarshalJSON implements encoding/json.Unmarshaler
 // and accepts numbers, strings, and null.
-// JSON null and "" will set the amout to zero.
+// JSON null and "" will set the amount to zero.
 func (f *Tolerant) UnmarshalJSON(j []byte) error {
 	s := string(j)
 
@@ -58,14 +59,18 @@ func (f *Tolerant) UnmarshalJSON(j []byte) error {
 		return nil
 	}
 
-	// Strip quotes
-	if l := len(s); l > 2 && s[0] == '"' && s[l-1] == '"' {
-		s = s[1 : l-1]
+	// Unquote JSON string values so escaped contents are decoded correctly
+	if len(s) > 0 && s[0] == '"' {
+		unquoted, err := strconv.Unquote(s)
+		if err != nil {
+			return fmt.Errorf("can't unmarshal JSON(%s) as float.Tolerant because of: %w", j, err)
+		}
+		s = unquoted
 	}
 
 	parsed, err := Parse(s)
 	if err != nil {
-		return fmt.Errorf("can't unmarshal JSON(%s) as money.Amount because of: %w", j, err)
+		return fmt.Errorf("can't unmarshal JSON(%s) as float.Tolerant because of: %w", j, err)
 	}
 
 	*f = Tolerant(parsed)
