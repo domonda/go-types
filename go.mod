@@ -10,7 +10,7 @@ require (
 	github.com/jhillyerd/enmime/v2 v2.4.0
 	github.com/stretchr/testify v1.11.1
 	github.com/teamwork/tnef v0.0.0-20200108124832-7deabccfdb32
-	github.com/ungerik/go-fs v0.0.0-20260518175848-02c1f6ef370a
+	github.com/ungerik/go-fs v0.0.0-20260519122754-65e3c83e7b40
 	github.com/ungerik/go-reflection v0.0.0-20260517092327-1cef41d7e199
 	golang.org/x/net v0.54.0
 	golang.org/x/text v0.37.0
@@ -43,7 +43,7 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/ssor/bom v0.0.0-20170718123548-6386211fdfcf // indirect
 	github.com/teamwork/test v0.0.0-20200108114543-02621bae84ad // indirect
-	github.com/teamwork/utils v0.0.0-20220314153103-637fa45fa6cc // indirect
+	github.com/teamwork/utils v1.0.0 // indirect
 	go.yaml.in/yaml/v4 v4.0.0-rc.4 // indirect
 	golang.org/x/sys v0.44.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect

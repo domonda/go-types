@@ -73,10 +73,10 @@ github.com/teamwork/test v0.0.0-20200108114543-02621bae84ad h1:25sEr0awm0ZPancg5
 github.com/teamwork/test v0.0.0-20200108114543-02621bae84ad/go.mod h1:TIbx7tx6WHBjQeLRM4eWQZBL7kmBZ7/KI4x4v7Y5YmA=
 github.com/teamwork/tnef v0.0.0-20200108124832-7deabccfdb32 h1:j15wq0XPAY/HR/0+dtwUrIrF2ZTKbk7QIES2p4dAG+k=
 github.com/teamwork/tnef v0.0.0-20200108124832-7deabccfdb32/go.mod h1:v7dFaQrF/4+curx7UTH9rqTkHTgXqghfI3thANW150o=
-github.com/teamwork/utils v0.0.0-20220314153103-637fa45fa6cc h1:BidxxRk9kopF5IGEyosTRtanaYVYTUbGJh9eULOhv04=
-github.com/teamwork/utils v0.0.0-20220314153103-637fa45fa6cc/go.mod h1:3Fn0qxFeRNpvsg/9T1+btOOOKkd1qG2nPYKKcOmNpcs=
-github.com/ungerik/go-fs v0.0.0-20260518175848-02c1f6ef370a h1:gRM9Nrjy8f6TRAWLll5YakHv7Xf/n7YnH9+ZCctnRak=
-github.com/ungerik/go-fs v0.0.0-20260518175848-02c1f6ef370a/go.mod h1:qCHNyfJFShwOyCfktO+3gwwsTsfV2WbQgjRVjjd0ckw=
+github.com/teamwork/utils v1.0.0 h1:30WqhSbZ9nFhaJSx9HH+yFLiQvL64nqAOyyl5IxoYlY=
+github.com/teamwork/utils v1.0.0/go.mod h1:3Fn0qxFeRNpvsg/9T1+btOOOKkd1qG2nPYKKcOmNpcs=
+github.com/ungerik/go-fs v0.0.0-20260519122754-65e3c83e7b40 h1:hfvXz37fFV5znDa5hW8XengcEKqT2Rs/RhrkIHhwpCI=
+github.com/ungerik/go-fs v0.0.0-20260519122754-65e3c83e7b40/go.mod h1:qCHNyfJFShwOyCfktO+3gwwsTsfV2WbQgjRVjjd0ckw=
 github.com/ungerik/go-reflection v0.0.0-20260517092327-1cef41d7e199 h1:yOcB0X4anHxPGSkN0478g1CO2ShCIgpim2Ner0PKVNc=
 github.com/ungerik/go-reflection v0.0.0-20260517092327-1cef41d7e199/go.mod h1:2HaymCMIvGNYIy+2JDI9RdPytWuP/Q8fJSGcS+2mb20=
 go.yaml.in/yaml/v4 v4.0.0-rc.4 h1:UP4+v6fFrBIb1l934bDl//mmnoIZEDK0idg1+AIvX5U=
