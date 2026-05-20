@@ -13,6 +13,12 @@ import (
 // for a slice of float64.
 // A nil slice is mapped to the SQL NULL value,
 // and a non nil zero length slice to an empty SQL array '{}'.
+//
+// Value and Scan use the PostgreSQL array text format ({1.5,2,3}), see
+// https://www.postgresql.org/docs/current/arrays.html. That format is
+// understood by PostgreSQL and array-compatible databases such as
+// CockroachDB and YugabyteDB; databases without a native array type
+// (MySQL, MariaDB, SQLite, SQL Server, Oracle) are not supported.
 type FloatArray []float64
 
 // IsNull returns true if a is nil.
@@ -36,6 +42,8 @@ func (a FloatArray) String() string {
 	return b.String()
 }
 
+// StringOr returns the string representation of a
+// or nilStr if a is null.
 func (a FloatArray) StringOr(nilStr string) string {
 	if a.IsNull() {
 		return nilStr
@@ -48,7 +56,10 @@ func (a FloatArray) Contains(value float64) bool {
 	return slices.Contains(a, value)
 }
 
-// Value implements the database/sql/driver.Valuer interface
+// Value implements the database/sql/driver.Valuer interface.
+// A nil slice returns SQL NULL. Otherwise it returns the slice
+// as a PostgreSQL float array literal like {1.5,2,3}, an empty
+// slice returning the empty array {}.
 func (a FloatArray) Value() (driver.Value, error) {
 	if a.IsNull() {
 		return nil, nil
@@ -57,7 +68,14 @@ func (a FloatArray) Value() (driver.Value, error) {
 }
 
 // Scan implements the sql.Scanner interface.
+// A nil source scans to a nil slice (SQL NULL). Any other source
+// scans to a non-nil slice: {} to an empty slice, otherwise the
+// parsed PostgreSQL float array literal like {1.5,2,3}.
 func (a *FloatArray) Scan(src any) error {
+	if src == nil {
+		*a = nil
+		return nil
+	}
 	return (*notnull.FloatArray)(a).Scan(src)
 }
 

@@ -301,6 +301,9 @@ func (s *TrimmedString) UnmarshalJSON(j []byte) error {
 	return nil
 }
 
+// JSONSchema returns a JSON schema for TrimmedString as a nullable string,
+// allowing either a plain string or null.
+// JSONSchema implements the github.com/invopop/jsonschema.Schema interface.
 func (TrimmedString) JSONSchema() *jsonschema.Schema {
 	return &jsonschema.Schema{
 		Title: "Nullable Trimmed String",
@@ -312,10 +315,15 @@ func (TrimmedString) JSONSchema() *jsonschema.Schema {
 	}
 }
 
+// MarshalXML implements encoding/xml.Marshaler by encoding the trimmed string
+// as the character data of an XML element. A null (empty) string encodes as an empty element.
 func (s TrimmedString) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
 	return e.EncodeElement(s.String(), start)
 }
 
+// UnmarshalXML implements encoding/xml.Unmarshaler by decoding the character data
+// of the XML element, trimming whitespace, and storing the result.
+// An empty element sets s to the null value.
 func (s *TrimmedString) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 	var str string
 	err := d.DecodeElement(&str, &start)

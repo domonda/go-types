@@ -174,3 +174,18 @@ func (n NonEmptyString) MarshalJSON() ([]byte, error) {
 	}
 	return json.Marshal(string(n))
 }
+
+// UnmarshalJSON implements encoding/json.Unmarshaler
+// by interpreting the JSON null value as an empty (null) string.
+func (n *NonEmptyString) UnmarshalJSON(j []byte) error {
+	if string(j) == "null" {
+		n.SetNull()
+		return nil
+	}
+	var str string
+	if err := json.Unmarshal(j, &str); err != nil {
+		return fmt.Errorf("can not unmarshal JSON (%s) as nullable.NonEmptyString because: %w", j, err)
+	}
+	*n = NonEmptyString(str)
+	return nil
+}

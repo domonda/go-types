@@ -251,6 +251,9 @@ func (n Time) MarshalJSON() ([]byte, error) {
 	return json.Marshal(n.Time)
 }
 
+// JSONSchema returns a JSON schema for Time as a nullable date-time string,
+// allowing either an RFC 3339 date-time string or null.
+// JSONSchema implements the github.com/invopop/jsonschema.Schema interface.
 func (Time) JSONSchema() *jsonschema.Schema {
 	return &jsonschema.Schema{
 		Title: "Nullable Time",

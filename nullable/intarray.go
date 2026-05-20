@@ -12,6 +12,12 @@ import (
 // for a slice of int64.
 // A nil slice is mapped to the SQL NULL value,
 // and a non nil zero length slice to an empty SQL array '{}'.
+//
+// Value and Scan use the PostgreSQL array text format ({1,2,3}), see
+// https://www.postgresql.org/docs/current/arrays.html. That format is
+// understood by PostgreSQL and array-compatible databases such as
+// CockroachDB and YugabyteDB; databases without a native array type
+// (MySQL, MariaDB, SQLite, SQL Server, Oracle) are not supported.
 type IntArray []int64
 
 // IsNull returns true if a is nil.
@@ -29,7 +35,10 @@ func (a IntArray) Contains(value int64) bool {
 	return slices.Contains(a, value)
 }
 
-// Value implements the database/sql/driver.Valuer interface
+// Value implements the database/sql/driver.Valuer interface.
+// A nil slice returns SQL NULL. Otherwise it returns the slice
+// as a PostgreSQL integer array literal like {1,2,3}, an empty
+// slice returning the empty array {}.
 func (a IntArray) Value() (driver.Value, error) {
 	if a.IsNull() {
 		return nil, nil
@@ -38,7 +47,14 @@ func (a IntArray) Value() (driver.Value, error) {
 }
 
 // Scan implements the sql.Scanner interface.
+// A nil source scans to a nil slice (SQL NULL). Any other source
+// scans to a non-nil slice: {} to an empty slice, otherwise the
+// parsed PostgreSQL integer array literal like {1,2,3}.
 func (a *IntArray) Scan(src any) error {
+	if src == nil {
+		*a = nil
+		return nil
+	}
 	return (*notnull.IntArray)(a).Scan(src)
 }
 

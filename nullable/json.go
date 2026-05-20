@@ -19,6 +19,8 @@ import (
 // as nil value ot the type JSON.
 type JSON []byte
 
+// MarshalJSON marshals source as JSON and returns it as a nullable JSON value.
+// The result is nil (null) if source marshals to the JSON "null" value.
 func MarshalJSON(source any) (JSON, error) {
 	return json.Marshal(source)
 }
@@ -136,6 +138,8 @@ func (j JSON) String() string {
 	return string(j)
 }
 
+// GoString returns a Go syntax representation of j as a nullable.JSON literal.
+// GoString implements the fmt.GoStringer interface.
 func (j JSON) GoString() string {
 	return fmt.Sprintf("nullable.JSON(`%s`)", j)
 }
