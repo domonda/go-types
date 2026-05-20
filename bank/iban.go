@@ -15,8 +15,13 @@ import (
 )
 
 const (
-	IBANRegex     = `^([A-Z]{2})(\d{2})([A-Z\d]{8,30})$`
+	// IBANRegex is the regular expression pattern for validating an IBAN.
+	IBANRegex = `^([A-Z]{2})(\d{2})([A-Z\d]{8,30})$`
+	// IBANMinLength is the minimum length of a valid IBAN (15 characters for Norway).
 	IBANMinLength = 15
+	// IBANMaxLength is the length of the longest IBAN known to this
+	// package (32 characters for Saint Lucia). The ISO 13616 standard
+	// permits up to 34 characters.
 	IBANMaxLength = 32
 )
 
@@ -73,6 +78,7 @@ func (iban IBAN) Validate() error {
 	return err
 }
 
+// ValidAndNormalized returns true if the IBAN is valid and already in normalized form.
 func (iban IBAN) ValidAndNormalized() bool {
 	norm, err := iban.Normalized()
 	return err == nil && iban == norm
@@ -116,6 +122,8 @@ func (iban IBAN) Normalized() (IBAN, error) {
 	return normalized, nil
 }
 
+// NormalizedOrNull returns the IBAN as NullableIBAN in normalized form,
+// or IBANNull if normalization fails.
 func (iban IBAN) NormalizedOrNull() NullableIBAN {
 	normalized, err := iban.Normalized()
 	if err != nil {
@@ -211,6 +219,7 @@ func (iban IBAN) Value() (driver.Value, error) {
 	return string(iban), nil
 }
 
+// JSONSchema returns the JSON schema definition for the IBAN type.
 func (IBAN) JSONSchema() *jsonschema.Schema {
 	return &jsonschema.Schema{
 		Title:   "IBAN",
@@ -219,6 +228,9 @@ func (IBAN) JSONSchema() *jsonschema.Schema {
 	}
 }
 
+// BankAndAccountNumbers extracts the bank number and account number from the IBAN
+// for supported countries (AT, CH, DE). Returns an error if the IBAN is invalid
+// or the country is not supported.
 func (iban *IBAN) BankAndAccountNumbers() (bankNo, accountNo string, err error) {
 	country := iban.CountryCode()
 	if country == "" {

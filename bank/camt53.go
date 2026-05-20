@@ -7,6 +7,8 @@ import (
 	"github.com/domonda/go-types/money"
 )
 
+// CAMT53 represents a CAMT.053 bank-to-customer account statement XML message,
+// containing statement metadata, account information, balances, and transaction entries.
 type CAMT53 struct {
 	MessageID            string          `xml:"BkToCstmrStmt>GrpHdr>MsgId"`
 	Created              time.Time       `xml:"BkToCstmrStmt>GrpHdr>CreDtTm"`
@@ -23,11 +25,14 @@ type CAMT53 struct {
 	Entries              []CAMT53Entry   `xml:"BkToCstmrStmt>Stmt>Ntry"`
 }
 
+// CAMT53Amount holds a monetary amount together with its currency as parsed from a CAMT.053 XML element.
 type CAMT53Amount struct {
 	Amount   money.Amount   `xml:",chardata"`
 	Currency money.Currency `xml:"Ccy,attr"`
 }
 
+// CAMT53Balance represents a single balance record within a CAMT.053 statement,
+// including the balance type, amount, credit/debit indicator, and date.
 type CAMT53Balance struct {
 	Type          string       `xml:"Tp>CdOrPrtry>Cd"` // PRCD: Endsaldo gebucht vorheriger Auszug   "MSIN" "CNFA" "DNFA" "CINV" "CREN" "DEBN" "HIRI" "SBIN" "CMCN" "SOAC" "DISP" "BOLD" "VCHR" "AROI" "TSUT"
 	Proprietary   string       `xml:"Tp>CdOrPrtry>Prtry"`
@@ -36,6 +41,9 @@ type CAMT53Balance struct {
 	Date          date.Date    `xml:"Dt>Dt"`
 }
 
+// CAMT53Entry represents a single transaction entry within a CAMT.053 statement,
+// including amount, credit/debit indicator, booking and value dates, and the
+// related debitor/creditor party details with their IBANs and BICs.
 type CAMT53Entry struct {
 	Amount        CAMT53Amount `xml:"Amt"`
 	CreditOrDebit string       `xml:"CdtDbtInd"` // Soll (DBIT) oder Haben (CRDT)

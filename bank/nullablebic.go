@@ -65,6 +65,9 @@ func (bic NullableBIC) ValidAndNormalized() bool {
 	return err == nil && bic == norm
 }
 
+// Normalized returns the BIC normalized to 11 characters,
+// or BICNull unchanged if the value is null.
+// Returns an error if the BIC is non-null but invalid.
 func (bic NullableBIC) Normalized() (NullableBIC, error) {
 	if bic.IsNull() {
 		return bic, nil
@@ -76,6 +79,8 @@ func (bic NullableBIC) Normalized() (NullableBIC, error) {
 	return NullableBIC(normalized), nil
 }
 
+// NormalizedOrNull returns the NullableBIC in normalized form,
+// or BICNull if the value is null or normalization fails.
 func (bic NullableBIC) NormalizedOrNull() NullableBIC {
 	normalized, err := bic.Normalized()
 	if err != nil {
@@ -162,6 +167,7 @@ func (bic NullableBIC) IsNull() bool {
 	return bic == BICNull
 }
 
+// IsNotNull returns true if the NullableBIC is not null.
 func (bic NullableBIC) IsNotNull() bool {
 	return bic != BICNull
 }
@@ -175,6 +181,8 @@ func (bic NullableBIC) MarshalJSON() ([]byte, error) {
 	return json.Marshal(string(bic))
 }
 
+// JSONSchema returns the JSON schema definition for the NullableBIC type,
+// accepting either a BIC string matching BICRegex or JSON null.
 func (NullableBIC) JSONSchema() *jsonschema.Schema {
 	return &jsonschema.Schema{
 		Title: "Nullable BIC/SWIFT-Code",

@@ -66,6 +66,8 @@ func (iban NullableIBAN) Validate() error {
 	return err
 }
 
+// ValidAndNormalized returns true if the IBAN is valid and already in normalized form,
+// or if it is null.
 func (iban NullableIBAN) ValidAndNormalized() bool {
 	norm, err := iban.Normalized()
 	return err == nil && iban == norm
@@ -93,6 +95,8 @@ func (iban NullableIBAN) Normalized() (NullableIBAN, error) {
 	return NullableIBAN(normalized), nil
 }
 
+// NormalizedOrNull returns the NullableIBAN in normalized form,
+// or IBANNull if the value is null or normalization fails.
 func (iban NullableIBAN) NormalizedOrNull() NullableIBAN {
 	normalized, err := iban.Normalized()
 	if err != nil {
@@ -182,6 +186,7 @@ func (iban NullableIBAN) IsNull() bool {
 	return iban == IBANNull
 }
 
+// IsNotNull returns true if the NullableIBAN is not null.
 func (iban NullableIBAN) IsNotNull() bool {
 	return iban != IBANNull
 }
@@ -206,6 +211,8 @@ func (iban NullableIBAN) MarshalJSON() ([]byte, error) {
 	return json.Marshal(string(iban))
 }
 
+// JSONSchema returns the JSON schema definition for the NullableIBAN type,
+// accepting either an IBAN string matching IBANRegex or JSON null.
 func (NullableIBAN) JSONSchema() *jsonschema.Schema {
 	return &jsonschema.Schema{
 		Title: "Nullable IBAN",
