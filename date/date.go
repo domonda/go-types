@@ -278,6 +278,11 @@ func YearWeekRange(year, week int) (monday, sunday Date) {
 	return monday, sunday
 }
 
+// FromUntilFromYearAndMonths returns the first and last date of a month range
+// within a given year. The year argument must be a 4-digit year string (e.g. "2024").
+// The months argument is either a single month number ("3") or a dash-separated
+// range ("3-9"); an empty months string defaults to the full year ("1-12").
+// Returns empty dates without an error when year is empty.
 func FromUntilFromYearAndMonths(year, months string) (fromDate, untilDate Date, err error) {
 	if year == "" {
 		return "", "", nil

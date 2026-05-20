@@ -8,11 +8,17 @@ import (
 	"github.com/domonda/go-types/nullable"
 )
 
+// YearQuarterNull is the null/zero value for NullableYearQuarter (empty string),
+// which is treated as SQL NULL.
 const YearQuarterNull NullableYearQuarter = ""
 
 // Compile-time check that NullableYearQuarter implements nullable.NullSetable[YearQuarter]
 var _ nullable.NullSetable[YearQuarter] = (*NullableYearQuarter)(nil)
 
+// NullableYearQuarter is a year-quarter string in YYYY-Q# format (e.g. "2024-Q3")
+// that can also represent a NULL value as an empty string.
+// It implements the database/sql.Scanner and database/sql/driver.Valuer interfaces,
+// treating empty string as SQL NULL.
 type NullableYearQuarter string
 
 // Validate returns nil if the year-quarter is in valid YYYY-Q# format.

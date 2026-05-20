@@ -8,14 +8,24 @@ import (
 	"github.com/domonda/go-types/language"
 )
 
+// NewFinder returns a Finder that uses the first element of lang as a language
+// hint when parsing date candidates. The hint is used to disambiguate ambiguous
+// dd/mm vs mm/dd orderings (e.g. pass language.EN to prefer US ordering).
 func NewFinder(lang ...language.Code) *Finder {
 	return &Finder{LangHint: getLangHint(lang)}
 }
 
+// Finder scans arbitrary text for substrings that can be parsed as dates.
+// Use NewFinder to create one, optionally with a language hint to resolve
+// ambiguous day/month orderings.
 type Finder struct {
 	LangHint language.Code
 }
 
+// FindAllIndex returns the byte-index pairs [start, end] of every date found in
+// str, trying spans of up to three whitespace-delimited words at a time.
+// At most n results are returned; pass n < 0 to return all matches.
+// The returned slice is nil when no dates are found.
 func (df *Finder) FindAllIndex(str []byte, n int) (indices [][]int) {
 	if len(str) < MinLength {
 		return nil

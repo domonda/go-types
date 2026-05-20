@@ -8,11 +8,17 @@ import (
 	"github.com/domonda/go-types/nullable"
 )
 
+// YearMonthNull is the null/zero value for NullableYearMonth (empty string),
+// which is treated as SQL NULL.
 const YearMonthNull NullableYearMonth = ""
 
 // Compile-time check that NullableYearMonth implements nullable.NullSetable[Date]
 var _ nullable.NullSetable[YearMonth] = (*NullableYearMonth)(nil)
 
+// NullableYearMonth is a year-month string in YYYY-MM format that
+// can also represent a NULL value as an empty string.
+// It implements the database/sql.Scanner and database/sql/driver.Valuer interfaces,
+// treating empty string as SQL NULL.
 type NullableYearMonth string
 
 // Validate returns nil if the year-month is in valid YYYY-MM format.
