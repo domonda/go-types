@@ -8,6 +8,11 @@
 # Test binary, build with `go test -c`
 *.test
 
+# Compiled "gen-lang-maps" and "main" generator binaries.
+# Unanchored: also matches the language/gen-lang-maps/ source directory.
+gen-lang-maps
+main
+
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out
 pkg/linux_js/
