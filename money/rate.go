@@ -17,6 +17,8 @@ import (
 // useful for money conversion rates and percentages.
 type Rate float64
 
+// NullableRate is a nullable wrapper around Rate,
+// where the zero value of the underlying nullable.Type represents NULL.
 type NullableRate = nullable.Type[Rate]
 
 // NullableRateFrom returns a not null nullable rate from a value
@@ -169,6 +171,8 @@ func (r Rate) BigFloat() *big.Float {
 	return big.NewFloat(float64(r))
 }
 
+// Equal returns true if two Rate pointers point to rates with equal values
+// or are the same pointer. Returns false if either pointer is nil while the other is not.
 func (r *Rate) Equal(other *Rate) bool {
 	if r == other {
 		return true
@@ -250,14 +254,20 @@ func (r Rate) Valid() bool {
 	return !math.IsNaN(float64(r)) && !math.IsInf(float64(r), 0)
 }
 
+// ValidAndPositive returns true if the rate is neither infinite nor NaN
+// and greater than or equal to zero.
 func (r Rate) ValidAndPositive() bool {
 	return r.Valid() && r >= 0
 }
 
+// ValidAndGreaterZero returns true if the rate is neither infinite nor NaN
+// and strictly greater than zero.
 func (r Rate) ValidAndGreaterZero() bool {
 	return r.Valid() && r > 0
 }
 
+// ValidAndSmallerZero returns true if the rate is neither infinite nor NaN
+// and strictly less than zero.
 func (r Rate) ValidAndSmallerZero() bool {
 	return r.Valid() && r < 0
 }

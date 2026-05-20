@@ -71,6 +71,8 @@ func isAmountSplitRune(r rune) bool {
 
 var isAmountTrimRune = strutil.IsRune('.', ',', ';')
 
+// AmountFinder is a singleton that implements the strutil.Finder interface
+// to locate all valid amount substrings within a byte slice.
 var AmountFinder amountFinder
 
 type amountFinder struct{}

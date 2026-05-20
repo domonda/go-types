@@ -8,6 +8,7 @@ import (
 	"github.com/domonda/go-types/strutil"
 )
 
+// CurrencyAmount combines a Currency code with a monetary Amount.
 type CurrencyAmount struct {
 	Currency Currency
 	Amount   Amount
@@ -81,6 +82,9 @@ func (ca CurrencyAmount) String() string {
 	return ca.Format(true, 0, '.', 2)
 }
 
+// Format formats the CurrencyAmount using the given separators and decimal precision.
+// If currencyFirst is true the currency code is placed before the amount,
+// otherwise it is placed after. See Amount.Format for details about the separator and precision arguments.
 func (ca CurrencyAmount) Format(currencyFirst bool, thousandsSep, decimalSep rune, precision int) string {
 	amountStr := ca.Amount.Format(thousandsSep, decimalSep, precision)
 	if ca.Currency == "" {
@@ -92,6 +96,8 @@ func (ca CurrencyAmount) Format(currencyFirst bool, thousandsSep, decimalSep run
 	return amountStr + " " + string(ca.Currency)
 }
 
+// GoString returns a Go syntax representation of the CurrencyAmount for debugging.
+// GoString implements the fmt.GoStringer interface.
 func (ca CurrencyAmount) GoString() string {
 	return fmt.Sprintf("{Currency: %#v, Amount: %#v}", ca.Currency, ca.Amount)
 }

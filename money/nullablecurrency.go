@@ -185,6 +185,8 @@ func (n NullableCurrency) EnglishName() string {
 	return currencyCodeToName[Currency(n)]
 }
 
+// Currency returns the NullableCurrency as a Currency value,
+// regardless of whether it is null or not.
 func (n NullableCurrency) Currency() Currency {
 	return Currency(n)
 }

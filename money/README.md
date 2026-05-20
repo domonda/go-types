@@ -15,17 +15,17 @@ type NullableAmount = nullable.Type[Amount]
 
 `Amount` is a `float64` with money-specific behavior. Helpers:
 
-| Function / Method                                          | Description                                                              |
-|------------------------------------------------------------|--------------------------------------------------------------------------|
-| `ParseAmount(str, decimals...)`                            | Locale-aware parse via `float.ParseDetails`. Optional decimal allowlist. |
-| `NewAmount(v)` / `AmountFromPtr`                           | Pointer round-trip helpers.                                              |
-| `a.Cents()`                                                | Rounded to integer cents (`int64`).                                      |
-| `a.WithinOneCent(b)`                                       | True if `abs(a - b)` ≤ 0.01.                                             |
-| `a.RoundToInt()` / `RoundToCents()` / `RoundToDecimals(n)` | Rounding helpers.                                                        |
-| `a.Format(...)`                                            | Wraps `float.Format` for locale output.                                  |
-| `a.Valid()`                                                | Not NaN, not Inf.                                                        |
-| `a.Ptr()`                                                  | Pointer to a copy of the value.                                          |
-| `a.ScanString(src, validate)`                              | Assign from string, validating only if asked.                            |
+| Function / Method                                  | Description                                        |
+|----------------------------------------------------|----------------------------------------------------|
+| `ParseAmount(str, decimals...)`                    | Locale-aware parse via `float.ParseDetails`. Optional decimal allowlist. |
+| `NewAmount(v)` / `AmountFromPtr`                   | Pointer round-trip helpers.                        |
+| `a.Cents()`                                        | Rounded to integer cents (`int64`).                |
+| `a.WithinOneCent(b)`                               | True if `abs(a - b)` ≤ 0.01.                       |
+| `a.RoundToInt()` / `RoundToCents()` / `RoundToDecimals(n)` | Rounding helpers.                                  |
+| `a.Format(...)`                                    | Wraps `float.Format` for locale output.            |
+| `a.Valid()`                                        | Not NaN, not Inf.                                  |
+| `a.Ptr()`                                          | Pointer to a copy of the value.                    |
+| `a.ScanString(src, validate)`                      | Assign from string, validating only if asked.      |
 
 `NullableAmount` is `nullable.Type[Amount]`. Constructors `NullableAmountFrom(v)` and `NullableAmountFromPtr(*Amount)`.
 
@@ -40,13 +40,13 @@ type NullableCurrency string // empty → SQL NULL; NullableCurrency("").Valid()
 
 ISO 4217 alphabetic codes (`USD`, `EUR`, `CHF`, …). Each currency has a package-level constant — see `constants.go`. Both types implement `fmt.Stringer`, `driver.Valuer`, `sql.Scanner`, `JSONSchema`, and the `ScanString(src, validate)` helper.
 
-| Method                                           | Description                                                                                 |
-|--------------------------------------------------|---------------------------------------------------------------------------------------------|
-| `c.Normalized()`                                 | Trim, uppercase, resolve symbols (`€`, `$`) or English aliases (`"Euro"`, `"Swiss Franc"`). |
-| `c.Valid()` / `c.Validate()`                     | Pass/error variants.                                                                        |
-| `c.ValidAndNormalized()`                         | Already in canonical form.                                                                  |
-| `c.NullableCurrency()` / `n.Currency()`          | Convert between the two flavors.                                                            |
-| `c.GetOrDefault(def)`                            | Pointer-safe with fallback.                                                                 |
+| Method                                  | Description                                        |
+|-----------------------------------------|----------------------------------------------------|
+| `c.Normalized()`                        | Trim, uppercase, resolve symbols (`€`, `$`) or English aliases (`"Euro"`, `"Swiss Franc"`). |
+| `c.Valid()` / `c.Validate()`            | Pass/error variants.                               |
+| `c.ValidAndNormalized()`                | Already in canonical form.                         |
+| `c.NullableCurrency()` / `n.Currency()` | Convert between the two flavors.                   |
+| `c.GetOrDefault(def)`                   | Pointer-safe with fallback.                        |
 
 Helpers: `NormalizeCurrency(str)`, `StringIsCurrency(str)`. `CurrencyParser{}` implements `strfmt.Parser`.
 

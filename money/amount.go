@@ -14,6 +14,8 @@ import (
 // Amount adds money related methods to float64
 type Amount float64
 
+// NullableAmount is a nullable wrapper around Amount,
+// where the zero value of the underlying nullable.Type represents NULL.
 type NullableAmount = nullable.Type[Amount]
 
 // NullableAmountFrom returns a not null nullable amount from a value
