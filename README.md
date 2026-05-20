@@ -1,5 +1,7 @@
 # go-types
 
+[![Go Reference](https://pkg.go.dev/badge/github.com/domonda/go-types.svg)](https://pkg.go.dev/github.com/domonda/go-types) [![Go Report Card](https://goreportcard.com/badge/github.com/domonda/go-types)](https://goreportcard.com/report/github.com/domonda/go-types) [![Go](https://github.com/domonda/go-types/actions/workflows/go.yml/badge.svg)](https://github.com/domonda/go-types/actions/workflows/go.yml) [![Go version](https://img.shields.io/github/go-mod/go-version/domonda/go-types)](https://github.com/domonda/go-types) [![license](https://img.shields.io/badge/license-MIT-red.svg?style=flat)](https://github.com/domonda/go-types/blob/master/LICENSE)
+
 A comprehensive Go library providing enhanced type definitions, validation, and utility functions for common data types and operations.
 
 ## Overview
