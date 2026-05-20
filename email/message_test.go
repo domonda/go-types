@@ -1,21 +1,19 @@
 package email_test
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/domonda/go-types/email"
 	"github.com/domonda/go-types/nullable"
 	"github.com/stretchr/testify/require"
-	"github.com/ungerik/go-fs"
 )
 
 func TestParseMessage(t *testing.T) {
-	ctx := t.Context()
-
-	eml := fs.File("examplemessage_test.eml")
-
-	bytes, err := eml.ReadAllContext(ctx)
+	bytes, err := os.ReadFile("examplemessage_test.eml")
 	require.NoError(t, err)
 
 	msg, err := email.ParseMessage(bytes)
@@ -25,11 +23,8 @@ func TestParseMessage(t *testing.T) {
 }
 
 func TestBuildRawMessage(t *testing.T) {
-	ctx := t.Context()
-
 	// original
-	eml := fs.File("examplemessage_test.eml")
-	bytes, err := eml.ReadAllContext(ctx)
+	bytes, err := os.ReadFile("examplemessage_test.eml")
 	require.NoError(t, err)
 	msg, err := email.ParseMessage(bytes)
 	require.NoError(t, err)
@@ -88,19 +83,16 @@ func equalsExamplemessage(t *testing.T, actual *email.Message, built bool) {
 
 	require.Len(t, actualAttachments, 5)
 
+	// SHA-256 of each attachment's decoded content
 	expectedHashes := map[string]string{
-		"more invoices and stuff.zip":       "f4d4dd017109789c8eeadf4fc7fcd31cb2406d534d94e6fd85b52fe1f8f610f6",
-		"ReadMe.txt":                        "c8d257fa43d1fd263ce130342d0d3f22d28ad67f3a8ec3e3f9c5e32b8c38a2de",
-		"PastedGraphic-1.png":               "9e8e28af259bab8ce625fcdba75699906638fdcaf126f17292894a972070e44c",
-		"invoice_Yoseph Carroll_31061.tiff": "86d60a0faea42001861cf0239e92f78b80aea6233417410973ae500a8a30b671",
-		"invoice_Aaron Bergman_36258.pdf":   "3440581a3ea3c7506dff48ed7d830770d79efa55de57f019e6e4b49df6b6d03e",
+		"more invoices and stuff.zip":       "2002c7fc676e23732a28e806a8424b41ecf842f7d91f11c96499891a7d706399",
+		"ReadMe.txt":                        "458f19173e7ed372d7c550a9b79f535f4a7265222a41ab8f75b1d817ed4283e8",
+		"PastedGraphic-1.png":               "eeb05b27c3e19956cd6d46da06969aef01435568380095eb7d6196c330507411",
+		"invoice_Yoseph Carroll_31061.tiff": "541c00ccbb8b1ad7f2ff898d2dd6b5896c38f181b55b6867aaa0d71296b47d92",
+		"invoice_Aaron Bergman_36258.pdf":   "2e8206cd45c73701246757a641013aac483b4d58a9ee7ac3695c6f4b167c0101",
 	}
 	for _, attachment := range actualAttachments {
-		att := fs.NewMemFile(attachment.Filename, attachment.Content)
-
-		hash, err := att.ContentHash()
-		require.NoError(t, err)
-
-		require.Equal(t, expectedHashes[attachment.Filename], hash)
+		hash := sha256.Sum256(attachment.Content)
+		require.Equal(t, expectedHashes[attachment.Filename], hex.EncodeToString(hash[:]))
 	}
 }

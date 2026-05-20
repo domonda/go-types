@@ -5,8 +5,6 @@ import (
 	"reflect"
 	"time"
 
-	reflection "github.com/ungerik/go-reflection"
-
 	"github.com/domonda/go-types/language"
 	"github.com/domonda/go-types/nullable"
 	"github.com/domonda/go-types/strutil"
@@ -100,8 +98,8 @@ func (f *Format) AssignString(dest reflect.Value, source string /*, loc *time.Lo
 
 // FormatString formats a value as a date string using the configured layout.
 func (f *Format) FormatString(val reflect.Value) (string, error) {
-	v := reflection.DerefValue(val)
-	if reflection.IsNil(v) {
+	v := derefValue(val)
+	if isNilValue(v) {
 		return f.NilString, nil
 	}
 
@@ -122,4 +120,25 @@ func (f *Format) FormatString(val reflect.Value) (string, error) {
 	}
 
 	return "", fmt.Errorf("could not format as date string: %s", val.Type())
+}
+
+// derefValue dereferences v through any non-nil pointers.
+func derefValue(v reflect.Value) reflect.Value {
+	for v.Kind() == reflect.Pointer && !v.IsNil() {
+		v = v.Elem()
+	}
+	return v
+}
+
+// isNilValue reports whether v is invalid or a nil chan, func, map, pointer,
+// interface, or slice.
+func isNilValue(v reflect.Value) bool {
+	if !v.IsValid() {
+		return true
+	}
+	switch v.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Map, reflect.Pointer, reflect.Interface, reflect.Slice:
+		return v.IsNil()
+	}
+	return false
 }

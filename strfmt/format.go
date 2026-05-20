@@ -8,7 +8,6 @@ import (
 
 	"github.com/domonda/go-types/float"
 	"github.com/domonda/go-types/nullable"
-	"github.com/ungerik/go-reflection"
 )
 
 // Format the passed value following the format config.
@@ -31,7 +30,7 @@ func FormatValue(val reflect.Value, config *FormatConfig) string {
 	if !val.IsValid() {
 		return config.Nil
 	}
-	derefVal, derefType := reflection.DerefValueAndType(val)
+	derefVal, derefType := derefValueAndType(val)
 	if f, ok := config.TypeFormatters[derefType]; ok && derefVal.IsValid() {
 		return f.FormatValue(derefVal, config)
 	}
@@ -98,4 +97,13 @@ func FormatValue(val reflect.Value, config *FormatConfig) string {
 	default:
 		return fmt.Sprint(val.Interface())
 	}
+}
+
+// derefValueAndType dereferences v through any non-nil pointers and returns
+// the resulting value together with its type.
+func derefValueAndType(v reflect.Value) (reflect.Value, reflect.Type) {
+	for v.Kind() == reflect.Pointer && !v.IsNil() {
+		v = v.Elem()
+	}
+	return v, v.Type()
 }
