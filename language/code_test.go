@@ -104,3 +104,59 @@ func TestCodeLanguageName(t *testing.T) {
 	assert.Equal(t, "German", DE.LanguageName())
 	assert.Equal(t, "", Code("xx").LanguageName())
 }
+
+func TestParseCode(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want Code
+	}{
+		// 1. Short path: already a canonical ISO 639-1 code.
+		{"canonical 639-1", "en", EN},
+		{"canonical 639-1 de", "de", DE},
+
+		// 2. Codes and tags, resolved via Normalized.
+		{"uppercase", "EN", EN},
+		{"whitespace", "  de  ", DE},
+		{"639-3 code", "eng", EN},
+		{"639-2/B bibliographic", "ger", DE},
+		{"BCP-47 tag", "en-US", EN},
+		{"POSIX locale", "zh_Hant", ZH},
+
+		// 3. English language name.
+		{"name", "German", DE},
+		{"name lowercase", "english", EN},
+		{"name with whitespace", "  French  ", FR},
+		{"name primary from synonym list", "Catalan", CA},
+		{"name synonym from synonym list", "Valencian", CA},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ParseCode(tt.in)
+			require.NoError(t, err, "ParseCode(%q)", tt.in)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestParseCodeErrors(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+	}{
+		{"empty", ""},
+		{"whitespace only", "   "},
+		{"gibberish", "qwerty"},
+		{"unknown 2-letter", "xx"},
+		{"639-3 without 639-1 equivalent", "abq"},
+		{"language name without 639-1 code", "Klingon"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ParseCode(tt.in)
+			require.Error(t, err, "ParseCode(%q) should error", tt.in)
+			// Errors preserve the original input.
+			assert.Equal(t, Code(tt.in), got, "error path should return input unchanged")
+		})
+	}
+}

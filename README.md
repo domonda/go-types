@@ -112,7 +112,7 @@ The main package provides core utilities and type definitions:
 #### `language` - Language Codes
 - **Code**: ISO 639 language codes
 - **Constants**: Language code constants
-- **ISO6393**: ISO 639-3 language names
+- **ISO 639-3**: Language-name and macrolanguage lookups
 
 #### `nullable` - Nullable Types
 - **Type[T]**: Generic nullable type wrapper

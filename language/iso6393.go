@@ -196,3 +196,32 @@ var iso6393To1 = map[string]Code{
 	"zha": ZA,
 	"zul": ZU,
 }
+
+// ISO6393Name returns the English reference name of the language
+// identified by the given ISO 639-3 three-letter code, as published in
+// the SIL ISO 639-3 Name Index. It returns an empty string if the code
+// is not a known ISO 639-3 code.
+//
+// A code with several recorded names resolves to its primary name
+// (for example "deu" → "German"). The lookup is case-sensitive and
+// expects the canonical lower-case form ("deu", not "DEU").
+//
+// See https://iso639-3.sil.org/code_tables/download_tables for the data.
+func ISO6393Name(code string) string {
+	return iso6393Names[code]
+}
+
+// ISO6393Macrolanguage returns the ISO 639-3 macrolanguage code that
+// encompasses the given ISO 639-3 individual language code, as published
+// in the SIL ISO 639-3 macrolanguage mappings. It returns an empty
+// string if the code is not a member of any macrolanguage (or is not a
+// known individual ISO 639-3 code).
+//
+// For example "twi" (Twi) and "fat" (Fanti) both roll up to "aka"
+// (Akan). The lookup is case-sensitive and expects the canonical
+// lower-case form ("twi", not "TWI").
+//
+// See https://iso639-3.sil.org/code_tables/download_tables for the data.
+func ISO6393Macrolanguage(code string) string {
+	return iso6393Macro[code]
+}

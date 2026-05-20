@@ -13,6 +13,7 @@ import (
 	"database/sql/driver"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/invopop/jsonschema"
 
@@ -83,6 +84,81 @@ func (c Code) Normalized() (Code, error) {
 		}
 	}
 	return c, fmt.Errorf("invalid language.Code: %q", string(c))
+}
+
+// ParseCode parses and normalizes a language identifier given in any of
+// the formats this package understands, returning the canonical ISO
+// 639-1 two-letter Code.
+//
+// It tries the cheapest and most common interpretations first and only
+// falls back to the more expensive ones:
+//
+//  1. An input that is already a canonical ISO 639-1 code ("en", "de")
+//     is returned unchanged without any further work.
+//  2. Otherwise the input is run through Normalized, which accepts case
+//     and whitespace variants, ISO 639-2/T and 639-2/B codes, ISO 639-3
+//     codes with a 639-1 equivalent, BCP-47 tags, and POSIX locale
+//     strings ("EN", " eng ", "ger", "en-US", "zh_Hant").
+//  3. As a last resort the input is matched case-insensitively against
+//     the English language names of the ISO 639-1 and ISO 639-3 tables
+//     ("German", "english", "Catalan").
+//
+// ParseCode returns an error wrapping the original input if no ISO 639-1
+// code can be derived. Like Normalized, the error preserves the
+// unnormalized value for diagnostics.
+func ParseCode(str string) (Code, error) {
+	// 1. Short path: the input is already a canonical ISO 639-1 code.
+	if c := Code(str); c.Valid() {
+		return c, nil
+	}
+	// 2. Codes and tags: case and whitespace variants, ISO 639-2/3,
+	//    639-2/B bibliographic variants, BCP-47 tags, POSIX locales.
+	c, err := Code(str).Normalized()
+	if err == nil {
+		return c, nil
+	}
+	// 3. English language name.
+	if named, ok := codeForName(str); ok {
+		return named, nil
+	}
+	// Reuse the input-preserving Code and error returned by Normalized.
+	return c, err
+}
+
+// nameToCode is the lazily-built reverse index from a lower-cased English
+// language name to its ISO 639-1 Code. It is consulted only by ParseCode
+// when the input is not a recognizable code or tag, so it is built on
+// first use rather than at package initialization.
+var nameToCode = sync.OnceValue(func() map[string]Code {
+	m := make(map[string]Code, len(codeNames)+len(iso6393Names))
+	// Index the ISO 639-3 names first so the curated ISO 639-1 names
+	// added below take precedence on any name collision.
+	for code3, name := range iso6393Names {
+		if code1, ok := iso6393To1[code3]; ok {
+			m[strings.ToLower(name)] = code1
+		}
+	}
+	for code, names := range codeNames {
+		// A codeNames value may list synonyms separated by "; ".
+		for name := range strings.SplitSeq(names, ";") {
+			if name = strings.ToLower(strings.TrimSpace(name)); name != "" {
+				m[name] = code
+			}
+		}
+	}
+	return m
+})
+
+// codeForName resolves an English language name to its ISO 639-1 Code,
+// matching case-insensitively. The bool result reports whether a match
+// was found.
+func codeForName(name string) (Code, bool) {
+	key := strings.ToLower(strutil.TrimSpace(name))
+	if key == "" {
+		return Null, false
+	}
+	c, ok := nameToCode()[key]
+	return c, ok
 }
 
 // LanguageName returns the English name of the language for the code.

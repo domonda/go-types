@@ -52,6 +52,19 @@ There's no `From(str)` constructor — assign the literal and call `Normalized()
 
 If neither matches, the original value is returned unchanged with a non-nil error.
 
+### ParseCode
+
+`ParseCode(str)` is a package-level function that resolves a country identifier in any supported format to its canonical `Code`, trying the cheapest interpretation first:
+
+1. An already-canonical alpha-2 code (`"DE"`) — returned as is.
+2. Anything `Normalized()` accepts — case/whitespace variants, `AltCodes` (ITU codes, German names).
+3. An English country name, matched case-insensitively (`"Germany"`, `"united kingdom"`).
+
+```go
+country.ParseCode("Germany") // "DE", nil
+country.ParseCode("  fr  ")  // "FR", nil
+```
+
 ## Example
 
 ```go

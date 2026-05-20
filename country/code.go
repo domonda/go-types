@@ -15,6 +15,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/invopop/jsonschema"
 
@@ -68,6 +69,69 @@ func (c Code) Normalized() (Code, error) {
 		return norm, nil
 	}
 	return c, fmt.Errorf("invalid country.Code: '%s'", string(c))
+}
+
+// ParseCode parses and normalizes a country identifier given in any of
+// the formats this package understands, returning the canonical ISO
+// 3166-1 alpha-2 Code.
+//
+// It tries the cheapest and most common interpretations first and only
+// falls back to the more expensive ones:
+//
+//  1. An input that is already a canonical ISO 3166-1 alpha-2 code
+//     ("DE", "FR") is returned unchanged without any further work.
+//  2. Otherwise the input is run through Normalized, which accepts case
+//     and whitespace variants of alpha-2 codes plus the alternative
+//     codes and German country names of AltCodes ("d", " AUT ", "SUI",
+//     "Deutschland", "Österreich").
+//  3. As a last resort the input is matched case-insensitively against
+//     the English country names ("Germany", "united kingdom").
+//
+// ParseCode returns an error wrapping the original input if no ISO
+// 3166-1 alpha-2 code can be derived. Like Normalized, the error
+// preserves the unnormalized value for diagnostics.
+func ParseCode(str string) (Code, error) {
+	// 1. Short path: the input is already a canonical alpha-2 code.
+	if _, ok := countryMap[Code(str)]; ok {
+		return Code(str), nil
+	}
+	// 2. Codes and names handled by Normalized: case and whitespace
+	//    variants, plus the alternative codes and German country names
+	//    of AltCodes.
+	c, err := Code(str).Normalized()
+	if err == nil {
+		return c, nil
+	}
+	// 3. English country name.
+	if named, ok := codeForName(str); ok {
+		return named, nil
+	}
+	// Reuse the input-preserving Code and error returned by Normalized.
+	return c, err
+}
+
+// nameToCode is the lazily-built reverse index from a lower-cased English
+// country name to its ISO 3166-1 alpha-2 Code. It is consulted only by
+// ParseCode when the input is not a recognizable code, so it is built on
+// first use rather than at package initialization.
+var nameToCode = sync.OnceValue(func() map[string]Code {
+	m := make(map[string]Code, len(countryMap))
+	for code, name := range countryMap {
+		m[strings.ToLower(name)] = code
+	}
+	return m
+})
+
+// codeForName resolves an English country name to its ISO 3166-1 alpha-2
+// Code, matching case-insensitively. The bool result reports whether a
+// match was found.
+func codeForName(name string) (Code, bool) {
+	key := strings.ToLower(strutil.TrimSpace(name))
+	if key == "" {
+		return Invalid, false
+	}
+	c, ok := nameToCode()[key]
+	return c, ok
 }
 
 // IsEU indicates if a country is a member of the European Union.

@@ -6,10 +6,6 @@ Open issues and cleanup items before tagging `v1.0.0`. Grouped by what blocks a 
 
 - [ ] **Tag `v1.0.0`.** No git tags exist yet. Pick semver baseline first.
 
-## Test coverage
-
-- [ ] `language/iso6393macro.go` (macrolanguage → macrolanguage map) and `language/iso6393names.go` (English names of every 639-3 code) together contain ~8500 lines of commented-out data with no live symbols. Independent of the 639-1 mapping that now lives in `language/iso6393.go`. Decide whether to revive (different use cases — dialect rollup and language-name display) or delete.
-
 ## Docs & release hygiene
 
 - [ ] **No `CHANGELOG.md`.** Add one for the v1 cut.
