@@ -60,43 +60,83 @@ type NullableValidator interface {
 	ValidAndNotNull() bool
 }
 
-// ReflectIsNull returns if a reflect.Value contains either a nil value
-// or implements the Nullable interface and returns true from IsNull
-// or implements the Zeroable interface and returns true from IsZero.
-// It's safe to call ReflectIsNull on any reflect.Value
-// with true returned for the zero value of reflect.Value.
+// Cached type descriptors used by ReflectIsNull to avoid boxing
+// via v.Interface() when the value's type does not implement
+// Nullable or Zeroable.
+var (
+	nullableType = reflect.TypeFor[Nullable]()
+	zeroableType = reflect.TypeFor[Zeroable]()
+)
+
+// ReflectIsNull returns true if v represents a "null" value, defined as:
+//   - the zero reflect.Value (Kind Invalid),
+//   - a nil pointer, interface, map, slice, channel, function, or unsafe.Pointer
+//     anywhere along the chain of pointer/interface unwrapping,
+//   - a value whose type (or addressable pointer-to-type) implements Nullable
+//     and whose IsNull method returns true,
+//   - a value whose type (or addressable pointer-to-type) implements Zeroable
+//     and whose IsZero method returns true (only when Nullable is not implemented).
+//
+// Pointers and interfaces are unwrapped iteratively, so a non-nil **T pointing
+// at a nil *T, or a non-nil interface holding a typed-nil pointer, are both
+// reported as null without invoking IsNull on the nil receiver.
+//
+// ReflectIsNull never panics. Values that cannot be passed to reflect.Value.Interface
+// (for example, unexported struct fields) are reported as not-null instead.
 func ReflectIsNull(v reflect.Value) bool {
+	for {
+		switch v.Kind() {
+		case reflect.Invalid:
+			return true
+		case reflect.Pointer, reflect.Interface:
+			if v.IsNil() {
+				return true
+			}
+			v = v.Elem()
+			continue
+		}
+		break
+	}
+
 	switch v.Kind() {
-	case reflect.Pointer:
+	case reflect.Map, reflect.Slice, reflect.Chan, reflect.Func, reflect.UnsafePointer:
 		if v.IsNil() {
 			return true
 		}
-		v = v.Elem()
+	}
 
-	case reflect.Map, reflect.Slice, reflect.Interface, reflect.Chan, reflect.Func, reflect.UnsafePointer:
-		if v.IsNil() {
-			return true
+	if !v.CanInterface() {
+		return false
+	}
+
+	t := v.Type()
+	if t.Implements(nullableType) {
+		return v.Interface().(Nullable).IsNull()
+	}
+	if v.CanAddr() && reflect.PointerTo(t).Implements(nullableType) {
+		addr := v.Addr()
+		if addr.CanInterface() {
+			return addr.Interface().(Nullable).IsNull()
 		}
-
-	case reflect.Invalid:
-		return true
 	}
 
-	nullable, _ := v.Interface().(Nullable)
-	if nullable == nil && v.CanAddr() {
-		nullable, _ = v.Addr().Interface().(Nullable)
+	if t.Implements(zeroableType) {
+		return v.Interface().(Zeroable).IsZero()
 	}
-	if nullable != nil {
-		return nullable.IsNull()
-	}
-
-	zeroable, _ := v.Interface().(Zeroable)
-	if zeroable == nil && v.CanAddr() {
-		zeroable, _ = v.Addr().Interface().(Zeroable)
-	}
-	if zeroable != nil {
-		return zeroable.IsZero()
+	if v.CanAddr() && reflect.PointerTo(t).Implements(zeroableType) {
+		addr := v.Addr()
+		if addr.CanInterface() {
+			return addr.Interface().(Zeroable).IsZero()
+		}
 	}
 
 	return false
+}
+
+// IsNull is the any-typed convenience wrapper around [ReflectIsNull].
+// See ReflectIsNull for the full unwrapping and dispatch rules.
+//
+// IsNull never panics.
+func IsNull(v any) bool {
+	return ReflectIsNull(reflect.ValueOf(v))
 }
