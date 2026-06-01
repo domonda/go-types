@@ -84,7 +84,12 @@ func Test_Type_Value(t *testing.T) {
 
 	val, err = TypeFrom(42).Value()
 	require.NoError(t, err)
-	assert.Equal(t, 42, val)
+	assert.Equal(t, int64(42), val, "int is converted to int64 for driver compatibility")
+
+	type namedFloat float64
+	val, err = TypeFrom(namedFloat(3.14)).Value()
+	require.NoError(t, err)
+	assert.Equal(t, float64(3.14), val, "named float64 is converted to primitive float64")
 }
 
 func Test_Type_Scan(t *testing.T) {
