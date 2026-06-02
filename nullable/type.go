@@ -124,7 +124,10 @@ func (t Type[T]) Value() (driver.Value, error) {
 	if !t.valid {
 		return nil, nil
 	}
-	return t.value, nil
+	if v, ok := any(t.value).(driver.Valuer); ok {
+		return v.Value()
+	}
+	return driver.DefaultParameterConverter.ConvertValue(t.value)
 }
 
 // Scan implements the database/sql.Scanner interface.
