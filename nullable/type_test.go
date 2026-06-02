@@ -1,8 +1,12 @@
 package nullable
 
 import (
+	"database/sql/driver"
 	"encoding/json"
+	"errors"
+	"math"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -353,5 +357,156 @@ func Test_Type_Scan_convertAssign(t *testing.T) {
 	t.Run("unsupported conversion", func(t *testing.T) {
 		var v Type[int]
 		assert.Error(t, v.Scan(struct{}{}))
+	})
+}
+
+// valuerString is a named string that implements driver.Valuer
+// to exercise the Valuer branch of Type[T].Value.
+type valuerString string
+
+func (v valuerString) Value() (driver.Value, error) {
+	return "valuer:" + string(v), nil
+}
+
+// erroringValuer always returns an error from Value() to exercise
+// error propagation from a wrapped driver.Valuer.
+type erroringValuer struct{}
+
+func (erroringValuer) Value() (driver.Value, error) {
+	return nil, errors.New("valuer boom")
+}
+
+// Test_Type_Value_EdgeCases covers the two branches added in PR 10:
+//   - T implements driver.Valuer: delegate to its Value() method
+//   - otherwise: route through driver.DefaultParameterConverter,
+//     which normalizes ints/uints to int64, named types to their
+//     primitive, and rejects unsupported types.
+func Test_Type_Value_EdgeCases(t *testing.T) {
+	t.Run("null short-circuits before Valuer is called", func(t *testing.T) {
+		// A null Type[valuerString] must return nil, nil without
+		// invoking the inner Valuer (which would prefix "valuer:").
+		var null Type[valuerString]
+		val, err := null.Value()
+		require.NoError(t, err)
+		assert.Nil(t, val)
+	})
+
+	t.Run("T implements driver.Valuer", func(t *testing.T) {
+		val, err := TypeFrom(valuerString("hello")).Value()
+		require.NoError(t, err)
+		assert.Equal(t, "valuer:hello", val)
+	})
+
+	t.Run("Valuer error is propagated", func(t *testing.T) {
+		_, err := TypeFrom(erroringValuer{}).Value()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "valuer boom")
+	})
+
+	t.Run("int8 is widened to int64", func(t *testing.T) {
+		val, err := TypeFrom(int8(7)).Value()
+		require.NoError(t, err)
+		assert.Equal(t, int64(7), val)
+	})
+
+	t.Run("int16 is widened to int64", func(t *testing.T) {
+		val, err := TypeFrom(int16(-1234)).Value()
+		require.NoError(t, err)
+		assert.Equal(t, int64(-1234), val)
+	})
+
+	t.Run("int32 is widened to int64", func(t *testing.T) {
+		val, err := TypeFrom(int32(1 << 20)).Value()
+		require.NoError(t, err)
+		assert.Equal(t, int64(1<<20), val)
+	})
+
+	t.Run("uint8 is widened to int64", func(t *testing.T) {
+		val, err := TypeFrom(uint8(255)).Value()
+		require.NoError(t, err)
+		assert.Equal(t, int64(255), val)
+	})
+
+	t.Run("uint32 is widened to int64", func(t *testing.T) {
+		val, err := TypeFrom(uint32(1 << 30)).Value()
+		require.NoError(t, err)
+		assert.Equal(t, int64(1<<30), val)
+	})
+
+	t.Run("uint64 below high bit is widened to int64", func(t *testing.T) {
+		val, err := TypeFrom(uint64(math.MaxInt64)).Value()
+		require.NoError(t, err)
+		assert.Equal(t, int64(math.MaxInt64), val)
+	})
+
+	t.Run("uint64 with high bit set returns error", func(t *testing.T) {
+		// DefaultParameterConverter refuses uint64 values that do not
+		// fit in int64 — this is the documented database/sql behavior.
+		_, err := TypeFrom(uint64(math.MaxUint64)).Value()
+		require.Error(t, err)
+	})
+
+	t.Run("named int is converted to int64", func(t *testing.T) {
+		type namedInt int
+		val, err := TypeFrom(namedInt(99)).Value()
+		require.NoError(t, err)
+		assert.Equal(t, int64(99), val)
+	})
+
+	t.Run("named string is converted to string", func(t *testing.T) {
+		type namedString string
+		val, err := TypeFrom(namedString("abc")).Value()
+		require.NoError(t, err)
+		assert.Equal(t, "abc", val)
+	})
+
+	t.Run("named bool is converted to bool", func(t *testing.T) {
+		type namedBool bool
+		val, err := TypeFrom(namedBool(true)).Value()
+		require.NoError(t, err)
+		assert.Equal(t, true, val)
+	})
+
+	t.Run("float32 is widened to float64", func(t *testing.T) {
+		val, err := TypeFrom(float32(0.5)).Value()
+		require.NoError(t, err)
+		assert.Equal(t, float64(0.5), val)
+	})
+
+	t.Run("bool passes through", func(t *testing.T) {
+		val, err := TypeFrom(true).Value()
+		require.NoError(t, err)
+		assert.Equal(t, true, val)
+	})
+
+	t.Run("string passes through", func(t *testing.T) {
+		val, err := TypeFrom("hello").Value()
+		require.NoError(t, err)
+		assert.Equal(t, "hello", val)
+	})
+
+	t.Run("bytes pass through", func(t *testing.T) {
+		val, err := TypeFrom([]byte{1, 2, 3}).Value()
+		require.NoError(t, err)
+		assert.Equal(t, []byte{1, 2, 3}, val)
+	})
+
+	t.Run("time.Time passes through", func(t *testing.T) {
+		ts := time.Date(2024, 1, 2, 3, 4, 5, 0, time.UTC)
+		val, err := TypeFrom(ts).Value()
+		require.NoError(t, err)
+		assert.Equal(t, ts, val)
+	})
+
+	t.Run("unsupported struct without Valuer returns error", func(t *testing.T) {
+		type notAValuer struct{ X int }
+		_, err := TypeFrom(notAValuer{X: 1}).Value()
+		require.Error(t, err)
+	})
+
+	t.Run("unsupported slice element returns error", func(t *testing.T) {
+		// DefaultParameterConverter only allows []byte slices.
+		_, err := TypeFrom([]int{1, 2, 3}).Value()
+		require.Error(t, err)
 	})
 }
