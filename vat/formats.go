@@ -55,6 +55,12 @@ var idRegex = map[country.Code]*regexp.Regexp{
 	"LU": regexp.MustCompile(`^LU\d{8}$`),
 	"LV": regexp.MustCompile(`^LV\d{11}$`),
 	"MT": regexp.MustCompile(`^MT\d{8}$`),
+	// Netherlands — "NL" + 9 digits + "B" + 2-digit branch. Format only, no
+	// checksum: the pre-2020 number embedded an "11-proof" (elfproef) derived
+	// from the BSN/RSIN, but the btw-id issued to sole proprietors since
+	// 2020-01-01 is randomly generated and does NOT satisfy it. The two forms
+	// share the same shape, so a checksum gate would reject valid btw-ids;
+	// rely on the format here and VIES for the authoritative check.
 	"NL": regexp.MustCompile(`^NL\d{9}B\d{2}$`),
 	"NO": regexp.MustCompile(`^NO[89]\d{8}(?:MVA)?$`), // https://vatstack.com/articles/norway-vat-number-validation
 	"PL": regexp.MustCompile(`^PL\d{10}$`),
@@ -79,27 +85,28 @@ var idRegex = map[country.Code]*regexp.Regexp{
 //
 // List of check-sum algorithms: https://www.bmf.gv.at/dam/jcr:9f9f8d5f-5496-4886-aa4f-81a4e39ba83e/BMF_UID_Konstruktionsregeln.pdf
 var checkSumFuncs = map[country.Code]func(raw, normalized ID) bool{
-	"AT":                          checkSumAT,
-	"BE":                          checkSumBE,
-	"BG":                          checkSumBG,
-	"CY":                          checkSumCY,
-	"CZ":                          checkSumCZ,
-	"DE":                          checkSumDE,
-	"DK":                          checkSumDK,
-	"EE":                          checkSumEE,
-	"EL":                          checkSumEL,
-	"ES":                          checkSumES,
-	"FI":                          checkSumFI,
-	"FR":                          checkSumFR,
-	"GB":                          checkSumGB,
-	"HR":                          checkSumHR,
-	"HU":                          checkSumHU,
-	"IT":                          checkSumIT,
-	"LT":                          checkSumLT,
-	"LU":                          checkSumLU,
-	"LV":                          checkSumLV,
-	"MT":                          checkSumMT,
-	"NL":                          checkSumNL,
+	"AT": checkSumAT,
+	"BE": checkSumBE,
+	"BG": checkSumBG,
+	"CY": checkSumCY,
+	"CZ": checkSumCZ,
+	"DE": checkSumDE,
+	"DK": checkSumDK,
+	"EE": checkSumEE,
+	"EL": checkSumEL,
+	"ES": checkSumES,
+	"FI": checkSumFI,
+	"FR": checkSumFR,
+	"GB": checkSumGB,
+	"HR": checkSumHR,
+	"HU": checkSumHU,
+	"IT": checkSumIT,
+	"LT": checkSumLT,
+	"LU": checkSumLU,
+	"LV": checkSumLV,
+	"MT": checkSumMT,
+	// NL has no checksum entry: the post-2020 btw-id is randomly generated and
+	// does not satisfy the old 11-proof. See the idRegex comment for "NL".
 	"NO":                          checkSumNO,
 	"PL":                          checkSumPL,
 	"PT":                          checkSumPT,
@@ -617,26 +624,6 @@ func checkSumMT(_, normalized ID) bool {
 	}
 	check := 37 - sum%37
 	return int(body[6]-'0')*10+int(body[7]-'0') == check
-}
-
-// checkSumNL validates a Dutch VAT ID (pre-2020 numeric form).
-// 9 digits + "B" + 2-digit branch suffix; first 9 follow a weighted sum
-// [9,8,7,6,5,4,3,2] over digits 1..8 with the 9th digit equal to mod 11
-// (mod 10 invalid).
-//
-// Reference: https://en.wikipedia.org/wiki/VAT_identification_number
-func checkSumNL(_, normalized ID) bool {
-	body := normalized[2:]
-	weights := [8]int{9, 8, 7, 6, 5, 4, 3, 2}
-	sum := 0
-	for i := range 8 {
-		sum += int(body[i]-'0') * weights[i] //#nosec G602 -- index bounded by the country idRegex matched before dispatch
-	}
-	r := sum % 11
-	if r == 10 {
-		return false
-	}
-	return int(body[8]-'0') == r
 }
 
 // checkSumPL validates a Polish NIP — 10 digits, weighted sum

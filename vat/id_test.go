@@ -9,29 +9,29 @@ import (
 
 var validVATIDs = map[string]string{
 	// "ATU Nr. 1-022 3 006": "ATU10223006", // Real world encounter, but we'll probably never support this mess
-	"atu10223006":      "ATU10223006", // Example
-	"ATU10223006":      "ATU10223006", // Example
-	"ATU67554568":      "ATU67554568", // Real but inactive by now
-	"ATU68765099":      "ATU68765099", // Real
-	"ATU46983509":      "ATU46983509", // Real
-	"ATU65785527":      "ATU65785527", // Real
-	"ESW0184081H":      "ESW0184081H", // Real: Amazon EU Sarl Sucursal EN España
-	"DE111111125":      "DE111111125", // Example
-	"LT347776113":      "LT347776113",
-	"DE 167015661":     "DE167015661",
-	"ATU 10223006":     "ATU10223006",
-	"AT U 10223006":    "ATU10223006",
-	"at U 10223006":    "ATU10223006",
-	"ATU.10223006":     "ATU10223006",
-	"GB123456782":      "GB123456782", // 9-digit VRN, mod-97 valid
-	"GB123456782012":   "GB123456782012",
-	"GB 123456782012":  "GB123456782012",
-	"GBGD001":          "GBGD001",
-	"GBHA599":          "GBHA599",
-	"GB GD001":         "GBGD001",
-	"GB HA599":         "GBHA599",
-	"IE9S99999L":       "IE9S99999L",
-	"IE 9999999LI":     "IE9999999LI",
+	"atu10223006":     "ATU10223006", // Example
+	"ATU10223006":     "ATU10223006", // Example
+	"ATU67554568":     "ATU67554568", // Real but inactive by now
+	"ATU68765099":     "ATU68765099", // Real
+	"ATU46983509":     "ATU46983509", // Real
+	"ATU65785527":     "ATU65785527", // Real
+	"ESW0184081H":     "ESW0184081H", // Real: Amazon EU Sarl Sucursal EN España
+	"DE111111125":     "DE111111125", // Example
+	"LT347776113":     "LT347776113",
+	"DE 167015661":    "DE167015661",
+	"ATU 10223006":    "ATU10223006",
+	"AT U 10223006":   "ATU10223006",
+	"at U 10223006":   "ATU10223006",
+	"ATU.10223006":    "ATU10223006",
+	"GB123456782":     "GB123456782", // 9-digit VRN, mod-97 valid
+	"GB123456782012":  "GB123456782012",
+	"GB 123456782012": "GB123456782012",
+	"GBGD001":         "GBGD001",
+	"GBHA599":         "GBHA599",
+	"GB GD001":        "GBGD001",
+	"GB HA599":        "GBHA599",
+	"IE9S99999L":      "IE9S99999L",
+	"IE 9999999LI":    "IE9999999LI",
 	// Belgium — first digit 0 or 1, mod-97 control on last 2 digits.
 	"BE0776091951": "BE0776091951",
 	"BE1234567894": "BE1234567894",
@@ -67,8 +67,11 @@ var validVATIDs = map[string]string{
 	"LV40003521600": "LV40003521600",
 	// Malta — mod-37.
 	"MT15121333": "MT15121333",
-	// Netherlands — mod-11 weighted, then "B" + 2-digit branch.
-	"NL005033019B01": "NL005033019B01",
+	// Netherlands — "B" + 2-digit branch, format only (no checksum). The
+	// pre-2020 number satisfied an 11-proof, but the post-2020 btw-id for
+	// sole proprietors is randomly generated and does not.
+	"NL005033019B01": "NL005033019B01", // pre-2020 form (also passes the old 11-proof)
+	"NL002483642B72": "NL002483642B72", // post-2020 btw-id, valid in VIES, fails the old 11-proof
 	// Poland — mod-11 weighted.
 	"PL5260250274": "PL5260250274",
 	// Portugal — mod-11 weighted.
@@ -92,7 +95,7 @@ var validVATIDs = map[string]string{
 	// Liechtenstein — 5 digits, no checksum.
 	"LI12345": "LI12345",
 	// San Marino — 5 digits, no checksum.
-	"SM12345": "SM12345",
+	"SM12345":          "SM12345",
 	"DE 1367 25570":    "DE136725570",
 	"NO916634773":      "NO916634773",
 	"NO 916634773":     "NO916634773",
@@ -104,12 +107,12 @@ var validVATIDs = map[string]string{
 	"CHE123456788":     "CHE123456788",
 	"EU372008134":      "EU372008134", // MOSS scheme VAT
 	// Spain — coverage of all four sub-formats.
-	"ES12345678Z":  "ES12345678Z",  // DNI / NIF, mod-23 letter = Z
-	"ESY1234567X":  "ESY1234567X",  // NIE (Y → 1)
-	"ESZ0000000M":  "ESZ0000000M",  // NIE (Z → 2)
-	"ESX1234567L":  "ESX1234567L",  // NIE (X → 0, historic form)
-	"ESA82018474":  "ESA82018474",  // CIF requiring numeric check
-	"ESP0000000J":  "ESP0000000J",  // CIF requiring letter check
+	"ES12345678Z": "ES12345678Z", // DNI / NIF, mod-23 letter = Z
+	"ESY1234567X": "ESY1234567X", // NIE (Y → 1)
+	"ESZ0000000M": "ESZ0000000M", // NIE (Z → 2)
+	"ESX1234567L": "ESX1234567L", // NIE (X → 0, historic form)
+	"ESA82018474": "ESA82018474", // CIF requiring numeric check
+	"ESP0000000J": "ESP0000000J", // CIF requiring letter check
 }
 
 var invalidVATIDs = []ID{
@@ -119,12 +122,12 @@ var invalidVATIDs = []ID{
 	"No. 62-1764389",
 	"No.821764389",
 	// Spain — must reject:
-	"EST99600678",  // T is not a valid CIF entity prefix
-	"ES12345678A",  // wrong DNI check letter (should be Z)
-	"ESX1234567A",  // wrong NIE check letter (should be L)
-	"ESA82018470",  // wrong CIF numeric check (should be 4)
-	"ESP00000000",  // P requires a letter check, not a digit
-	"ESA0000000J",  // A requires a digit check, not a letter
+	"EST99600678", // T is not a valid CIF entity prefix
+	"ES12345678A", // wrong DNI check letter (should be Z)
+	"ESX1234567A", // wrong NIE check letter (should be L)
+	"ESA82018470", // wrong CIF numeric check (should be 4)
+	"ESP00000000", // P requires a letter check, not a digit
+	"ESA0000000J", // A requires a digit check, not a letter
 	// Norway — must reject (mod-11 checksum fails):
 	"NO916634770", // valid format, last digit broken (3 → 0)
 	// GB — regex precedence bug: each alternative must be anchored to ^GB...$
@@ -185,8 +188,8 @@ var invalidVATIDs = []ID{
 	"LV40003521601",
 	// Malta — mod-37.
 	"MT15121334",
-	// Netherlands — mod-11 (after stripping B-suffix).
-	"NL005033018B01",
+	// Netherlands — format only (no checksum); shape must still hold.
+	"NL005033018B0", // branch suffix must be exactly 2 digits
 	// Poland — mod-11.
 	"PL5260250275",
 	// Portugal — mod-11.
@@ -194,10 +197,10 @@ var invalidVATIDs = []ID{
 	// Romania — mod-11 over left-padded body.
 	"RO18158684",
 	// Sweden — last two digits must be "01"; Luhn over the org number.
-	"SE123456789002",  // ends in 02
-	"SE123456789010",  // ends in 10
-	"SE12345678901",   // only 11 digits
-	"SE556677889001",  // valid format, Luhn fails (org digit moved)
+	"SE123456789002", // ends in 02
+	"SE123456789010", // ends in 10
+	"SE12345678901",  // only 11 digits
+	"SE556677889001", // valid format, Luhn fails (org digit moved)
 	// Slovenia — mod-11.
 	"SI80267433",
 	// Slovakia — full number divisible by 11.
