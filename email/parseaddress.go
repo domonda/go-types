@@ -3,7 +3,6 @@ package email
 import (
 	"errors"
 	"fmt"
-	"mime"
 	"net/mail"
 	"regexp"
 	"slices"
@@ -143,8 +142,7 @@ func parseAddress(addr string) (mailAddress *mail.Address, unparsed string, err 
 		name = addr[i[4]:i[5]]
 	}
 	if name != "" {
-		var dec mime.WordDecoder
-		name, err = dec.DecodeHeader(name)
+		name, err = mimeHeaderDecoder.DecodeHeader(name)
 		if err != nil {
 			return nil, "", err
 		}

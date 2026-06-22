@@ -7,11 +7,19 @@ import (
 	"mime"
 
 	"github.com/jhillyerd/enmime/v2"
+	"golang.org/x/net/html/charset"
 
 	"github.com/domonda/go-errs"
 	"github.com/domonda/go-types/nullable"
 	"github.com/domonda/go-types/strutil"
 )
+
+// mimeHeaderDecoder decodes RFC 2047 encoded-words in email headers.
+// The CharsetReader extends Go's stdlib mime support (us-ascii, utf-8,
+// iso-8859-1) to the full IANA charset set (iso-8859-2…16, windows-125x,
+// koi8, big5, shift_jis, …) so that headers from senders using other
+// charsets are decoded instead of failing the whole message.
+var mimeHeaderDecoder = &mime.WordDecoder{CharsetReader: charset.NewReaderLabel}
 
 // ParseMIMEMessage parses a MIME email message read from the passed reader.
 func ParseMIMEMessage(reader io.Reader) (msg *Message, err error) {
@@ -84,11 +92,10 @@ func ParseMIMEMessage(reader io.Reader) (msg *Message, err error) {
 		msg.Bcc = msg.Bcc.Append(addrs...)
 	}
 
-	dec := new(mime.WordDecoder)
 	for key, values := range envelope.Root.Header {
 		if IsExtraHeader(key) {
 			for _, value := range values {
-				decodedvalue, err := dec.DecodeHeader(value)
+				decodedvalue, err := mimeHeaderDecoder.DecodeHeader(value)
 				if err != nil {
 					// ignore decoding issues, just use value
 					msg.ExtraHeader.Add(key, value)
