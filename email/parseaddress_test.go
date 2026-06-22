@@ -56,6 +56,9 @@ var (
 
 		// RFC 2047 encoding
 		`=?utf-8?b?wqFIb2xhLCBzZcOxb3Ih?= <senor@hola.com>`: {Name: `¡Hola, señor!`, Address: "senor@hola.com"}, // mime.BEncoding.Encode("utf-8", `¡Hola, señor!`)
+		// Non-stdlib charsets decoded via the CharsetReader (Central-European senders)
+		`=?iso-8859-2?q?=A3ukasz?= <lukasz@example.pl>`:     {Name: `Łukasz`, Address: "lukasz@example.pl"}, // 0xA3 = Ł in ISO 8859-2
+		`=?windows-1250?Q?Wa=B3=EAsa?= <walesa@example.pl>`: {Name: `Wałęsa`, Address: "walesa@example.pl"}, // 0xB3 = ł, 0xEA = ę in Windows-1250
 
 		`'stupid@quoting.me'`:                         {Name: ``, Address: "stupid@quoting.me"},
 		`<'stupid@quoting.me'>`:                       {Name: ``, Address: "stupid@quoting.me"},

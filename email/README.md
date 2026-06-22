@@ -20,7 +20,7 @@ Lenient parser that fixes common malformations encountered in real-world mail an
 | `AddressFrom(*mail.Address)`                | Convert a stdlib address.                          |
 | `a.Normalized()` / `Validate()` / `Valid()` | Validation variants.                               |
 | `a.Parse()`                                 | To `*mail.Address` via the package's lenient parser. |
-| `ParseAddress(str)`                         | Underlying parser; supports umlauts, RFC 2047 encoded-words, quoted names. |
+| `ParseAddress(str)`                         | Underlying parser; supports umlauts, RFC 2047 encoded-words (decoded across many charsets beyond Go's stdlib set), quoted names. |
 
 `AddressRegexp` is the compiled regex for the email-only form. It tolerates a wide range of umlaut/diacritic characters since real-world mail commonly violates strict RFC 2821/2822.
 
@@ -71,7 +71,7 @@ f, _ := os.Open("mail.eml")
 msg, err := email.ParseMIMEMessage(f)
 ```
 
-Backed by [`jhillyerd/enmime`](https://github.com/jhillyerd/enmime). For Microsoft TNEF (`winmail.dat`) attachments, see `parsetnef.go`.
+Backed by [`jhillyerd/enmime`](https://github.com/jhillyerd/enmime). RFC 2047 encoded-words in address headers (`From`, `To`, `Cc`, …) and extra (non-parsed) headers are decoded across many charsets beyond Go's stdlib defaults (us-ascii, utf-8, iso-8859-1) — e.g. ISO 8859-2 or Windows-1250 — so a `From` display name in such a charset no longer drops the whole message. For Microsoft TNEF (`winmail.dat`) attachments, see `parsetnef.go`.
 
 ## Attachment
 
