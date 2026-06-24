@@ -2,6 +2,7 @@ package email
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"mime"
@@ -22,6 +23,12 @@ import (
 var mimeHeaderDecoder = &mime.WordDecoder{CharsetReader: charset.NewReaderLabel}
 
 // ParseMIMEMessage parses a MIME email message read from the passed reader.
+//
+// As long as the underlying envelope can be read, a non-nil message with
+// all usable data is returned even if individual headers (Date, From, To)
+// can't be parsed. Such parsing errors are collected and returned joined
+// via errors.Join alongside the message, so callers can use the partial
+// result while still being able to inspect what went wrong.
 func ParseMIMEMessage(reader io.Reader) (msg *Message, err error) {
 	defer errs.WrapWithFuncParams(&err, reader)
 
@@ -41,15 +48,21 @@ func ParseMIMEMessage(reader io.Reader) (msg *Message, err error) {
 		BodyHTML:    nullable.TrimmedStringFrom(envelope.HTML),
 		ExtraHeader: make(Header),
 	}
+	// parseErrs collects non-fatal header parsing errors so that a message
+	// with usable data is still returned together with the joined errors.
+	var parseErrs []error
+
 	if date := envelope.GetHeader("Date"); date != "" {
 		msg.Date, err = parseDate(date)
 		if err != nil {
-			return nil, err
+			parseErrs = append(parseErrs, fmt.Errorf("can't parse email header 'Date': %w", err))
+			msg.Date = nil
 		}
 	}
 	msg.From, err = NormalizedAddress(envelope.GetHeader("From"))
 	if err != nil {
-		return nil, fmt.Errorf("can't parse email header 'From': %w", err)
+		parseErrs = append(parseErrs, fmt.Errorf("can't parse email header 'From': %w", err))
+		msg.From = ""
 	}
 	msg.ReplyTo, err = NormalizedNullableAddress(envelope.GetHeader("Reply-To"))
 	if err != nil {
@@ -58,37 +71,33 @@ func ParseMIMEMessage(reader io.Reader) (msg *Message, err error) {
 		msg.ReplyTo = NullableAddress("")
 	}
 	for _, to := range envelope.GetHeaderValues("To") {
+		// Split returns all parsable addresses even when others fail,
+		// so keep the usable ones and collect the error.
 		addrs, err := AddressList(to).Split()
 		if err != nil {
-			return nil, fmt.Errorf("can't parse email header 'To': %w", err)
+			parseErrs = append(parseErrs, fmt.Errorf("can't parse email header 'To': %w", err))
 		}
 		msg.To = msg.To.Append(addrs...)
 	}
 	for _, deliveredTo := range envelope.GetHeaderValues("Delivered-To") {
-		addrs, err := AddressList(deliveredTo).Split()
-		if err != nil {
-			// intentionally ignoring parsing issues with nullable lists
-			// we've seen weird and unparsable values
-			continue
-		}
+		// intentionally ignoring parsing issues with nullable lists
+		// (we've seen weird and unparsable values) but keep the
+		// addresses that could be parsed
+		addrs, _ := AddressList(deliveredTo).Split()
 		msg.DeliveredTo = msg.DeliveredTo.Append(addrs...)
 	}
 	for _, cc := range envelope.GetHeaderValues("Cc") {
-		addrs, err := AddressList(cc).Split()
-		if err != nil {
-			// intentionally ignoring parsing issues with nullable lists
-			// we've seen weird and unparsable values
-			continue
-		}
+		// intentionally ignoring parsing issues with nullable lists
+		// (we've seen weird and unparsable values) but keep the
+		// addresses that could be parsed
+		addrs, _ := AddressList(cc).Split()
 		msg.Cc = msg.Cc.Append(addrs...)
 	}
 	for _, bcc := range envelope.GetHeaderValues("Bcc") {
-		addrs, err := AddressList(bcc).Split()
-		if err != nil {
-			// intentionally ignoring parsing issues with nullable lists
-			// we've seen weird and unparsable values
-			continue
-		}
+		// intentionally ignoring parsing issues with nullable lists
+		// (we've seen weird and unparsable values) but keep the
+		// addresses that could be parsed
+		addrs, _ := AddressList(bcc).Split()
 		msg.Bcc = msg.Bcc.Append(addrs...)
 	}
 
@@ -136,7 +145,7 @@ func ParseMIMEMessage(reader io.Reader) (msg *Message, err error) {
 		})
 	}
 
-	return msg, nil
+	return msg, errors.Join(parseErrs...)
 }
 
 // ParseMIMEMessageBytes parses a MIME email message from the passed bytes.

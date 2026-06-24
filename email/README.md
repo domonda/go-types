@@ -32,6 +32,8 @@ type AddressList string // comma-separated
 
 `NormalizeAddressList(str)` parses, normalizes, and de-duplicates by normalized address part. Methods: `Normalized()`, `Validate()`, plus `ParseAddressList(str)` for the parsed slice.
 
+`ParseAddressList(str)` and `Split()` (on both `AddressList` and `NullableAddressList`) are lenient: when an entry is malformed the parser skips past the next comma and keeps going, so well-formed entries elsewhere in the list are still returned. The failures are collected into a single `errors.Join` error, so a non-nil error can accompany a non-empty result; treat the error as fatal only when you need a strictly valid list. Empty input and the `undisclosed-recipients` / `withheld-recipients` placeholders parse as an empty list without an error.
+
 ## AddressSet
 
 ```go
@@ -71,7 +73,7 @@ f, _ := os.Open("mail.eml")
 msg, err := email.ParseMIMEMessage(f)
 ```
 
-Backed by [`jhillyerd/enmime`](https://github.com/jhillyerd/enmime). RFC 2047 encoded-words in address headers (`From`, `To`, `Cc`, …) and extra (non-parsed) headers are decoded across many charsets beyond Go's stdlib defaults (us-ascii, utf-8, iso-8859-1) — e.g. ISO 8859-2 or Windows-1250 — so a `From` display name in such a charset no longer drops the whole message. For Microsoft TNEF (`winmail.dat`) attachments, see `parsetnef.go`.
+Backed by [`jhillyerd/enmime`](https://github.com/jhillyerd/enmime). RFC 2047 encoded-words in address headers (`From`, `To`, `Cc`, …) and extra (non-parsed) headers are decoded across many charsets beyond Go's stdlib defaults (us-ascii, utf-8, iso-8859-1) — e.g. ISO 8859-2 or Windows-1250 — so a `From` display name in such a charset no longer drops the whole message. More broadly, as long as the envelope is readable `ParseMIMEMessage` returns a `*Message` with all usable data even when individual headers (`Date`, `From`, `To`) can't be parsed; those failures are collected into a single `errors.Join` error returned alongside the message, so a non-nil error can accompany a usable result. For Microsoft TNEF (`winmail.dat`) attachments, see `parsetnef.go`.
 
 ## Attachment
 

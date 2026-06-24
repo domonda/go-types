@@ -60,6 +60,10 @@ func (n NullableAddressList) Parse() ([]*mail.Address, error) {
 
 // Split converts the NullableAddressList to a slice of Address values,
 // or returns nil if the list is null.
+//
+// Like AddressList.Split it returns all successfully parsed addresses
+// even when other addresses in the list can't be parsed, with the
+// parsing errors collected and returned joined.
 func (n NullableAddressList) Split() ([]Address, error) {
 	if n.IsNull() {
 		return nil, nil
