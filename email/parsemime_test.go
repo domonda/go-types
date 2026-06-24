@@ -67,3 +67,34 @@ func TestParseMIMEMessage_NonStdlibCharset(t *testing.T) {
 	// ignores the decode error and keeps the raw value instead of failing.
 	require.Equal(t, []string{`=?made-up-9999?Q?abc?=`}, msg.ExtraHeader["X-Bogus-Charset"])
 }
+
+// TestParseMIMEMessage_PartialResult verifies that a message with usable data
+// is returned together with the joined header parsing errors instead of being
+// dropped entirely when individual headers (Date, From, To) can't be parsed.
+func TestParseMIMEMessage_PartialResult(t *testing.T) {
+	raw := rawMessage(
+		`From: not an email address`,
+		`To: good@example.com, this is broken`,
+		`Subject: Partial parse`,
+		`Date: definitely not a date`,
+		`Content-Type: text/plain; charset=utf-8`,
+		``,
+		`Body text.`,
+	)
+
+	msg, err := email.ParseMessage(raw)
+	require.Error(t, err, "unparseable Date/From/To headers must surface a joined error")
+	require.NotNil(t, msg, "a message with usable data must still be returned")
+
+	// Usable data is preserved instead of dropping the whole message.
+	require.Equal(t, "Partial parse", msg.Subject)
+	require.Equal(t, "Body text.", strings.TrimSpace(msg.Body))
+
+	// Unparseable single-value headers are left unset.
+	require.Empty(t, string(msg.From))
+	require.Nil(t, msg.Date)
+
+	// The valid address from the To list is kept even though the list also
+	// contained an unparseable entry.
+	require.Equal(t, email.AddressList("good@example.com"), msg.To)
+}

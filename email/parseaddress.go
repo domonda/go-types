@@ -197,8 +197,16 @@ func parseAddress(addr string) (mailAddress *mail.Address, unparsed string, err 
 // ParseAddressList parses an email address list less strict
 // than the standard net/mail.ParseAddressList function
 // fixing malformed addresses and lower cases the address part.
-// ParseAddressList returns an error if list does not contain
-// at least one address.
+//
+// All successfully parsed addresses are returned even when other
+// addresses in the list can't be parsed. Parsing errors are collected
+// and returned joined via errors.Join, so a non-nil error can accompany
+// a non-empty result slice. Callers that need a strictly valid list
+// should treat any non-nil error as a failure.
+//
+// The empty list and the common "undisclosed-recipients" /
+// "withheld-recipients" placeholders are parsed as an empty list
+// without an error.
 func ParseAddressList(list string) (addrs []*mail.Address, err error) {
 	list = strings.TrimRight(sanitizeAddr(list), ", ")
 
@@ -211,23 +219,37 @@ func ParseAddressList(list string) (addrs []*mail.Address, err error) {
 		return nil, nil
 	}
 
-	mailAddress, unparsed, err := parseAddress(list)
-	if err != nil {
-		return nil, fmt.Errorf("could not parse email address list '%s', because of: %w", list, err)
-	}
-	addrs = append(addrs, mailAddress)
-
-	for unparsed != "" {
-		if unparsed[0] != ',' {
-			return nil, fmt.Errorf("expected ',' after parsing email address in unparsed part: '%s' | full list: '%s'", unparsed, list)
-		}
-		unparsed = strings.TrimLeft(unparsed[1:], " ")
-		mailAddress, unparsed, err = parseAddress(unparsed)
-		if err != nil {
-			return nil, fmt.Errorf("could not parse email address list '%s', because of: %w", list, err)
+	var errList []error
+	for remaining := list; remaining != ""; {
+		mailAddress, unparsed, parseErr := parseAddress(remaining)
+		if parseErr != nil {
+			errList = append(errList, fmt.Errorf("could not parse email address list '%s', because of: %w", list, parseErr))
+			// Recover by skipping past the next separator so the
+			// remaining addresses can still be parsed and returned.
+			_, after, found := strings.Cut(remaining, ",")
+			if !found {
+				break
+			}
+			remaining = strings.TrimLeft(after, " ")
+			continue
 		}
 		addrs = append(addrs, mailAddress)
+
+		unparsed = strings.TrimLeft(unparsed, " ")
+		if unparsed == "" {
+			break
+		}
+		if unparsed[0] != ',' {
+			errList = append(errList, fmt.Errorf("expected ',' after parsing email address in unparsed part: '%s' | full list: '%s'", unparsed, list))
+			_, after, found := strings.Cut(unparsed, ",")
+			if !found {
+				break
+			}
+			remaining = strings.TrimLeft(after, " ")
+			continue
+		}
+		remaining = strings.TrimLeft(unparsed[1:], " ")
 	}
 
-	return addrs, nil
+	return addrs, errors.Join(errList...)
 }

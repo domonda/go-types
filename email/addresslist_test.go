@@ -41,6 +41,9 @@ func TestAddressList_Split(t *testing.T) {
 		{l: ``, want: nil},
 		{l: `<hello@example.com>,`, want: []Address{`hello@example.com`}},
 		{l: `<Hello@example.com>, World@example.com`, want: []Address{`hello@example.com`, `world@example.com`}},
+		// Partial result: parsable addresses are returned alongside the error.
+		{l: `alice@example.com, broken address, bob@example.com`, want: []Address{`alice@example.com`, `bob@example.com`}, wantErr: true},
+		{l: `@broken`, want: nil, wantErr: true},
 	}
 	for _, tt := range tests {
 		t.Run(string(tt.l), func(t *testing.T) {

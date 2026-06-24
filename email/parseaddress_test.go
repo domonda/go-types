@@ -10,6 +10,7 @@ import (
 
 	"github.com/domonda/go-types/strutil"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 var (
@@ -359,4 +360,40 @@ func TestParseAddressList(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestParseAddressList_PartialResult verifies that ParseAddressList collects
+// parsing errors, joins them, and still returns all addresses that could be
+// parsed even when other entries in the list are invalid.
+func TestParseAddressList_PartialResult(t *testing.T) {
+	t.Run("invalid entry between valid ones", func(t *testing.T) {
+		addrs, err := ParseAddressList("alice@example.com, not a valid address, bob@example.com")
+		require.Error(t, err, "the invalid middle entry must produce an error")
+
+		got := make([]string, len(addrs))
+		for i, a := range addrs {
+			got[i] = a.Address
+		}
+		require.Equal(t, []string{"alice@example.com", "bob@example.com"}, got,
+			"the valid addresses must still be returned")
+	})
+
+	t.Run("leading invalid entry", func(t *testing.T) {
+		addrs, err := ParseAddressList("@broken, valid@example.com")
+		require.Error(t, err)
+		require.Len(t, addrs, 1)
+		require.Equal(t, "valid@example.com", addrs[0].Address)
+	})
+
+	t.Run("all valid has no error", func(t *testing.T) {
+		addrs, err := ParseAddressList("alice@example.com, bob@example.com")
+		require.NoError(t, err)
+		require.Len(t, addrs, 2)
+	})
+
+	t.Run("all invalid returns nil and error", func(t *testing.T) {
+		addrs, err := ParseAddressList("@broken, also broken")
+		require.Error(t, err)
+		require.Nil(t, addrs)
+	})
 }

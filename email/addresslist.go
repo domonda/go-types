@@ -97,20 +97,21 @@ func (l AddressList) Parse() ([]*mail.Address, error) {
 }
 
 // Split converts the AddressList to a slice of Address values.
-// Returns nil if the list is empty or invalid.
+//
+// All successfully parsed addresses are returned even when other
+// addresses in the list can't be parsed. Parsing errors are collected
+// and returned joined (see ParseAddressList), so a non-nil error can
+// accompany a non-empty result slice. Returns nil if the list is empty.
 func (l AddressList) Split() ([]Address, error) {
 	parsed, err := l.Parse()
-	if err != nil {
-		return nil, err
-	}
 	if len(parsed) == 0 {
-		return nil, nil
+		return nil, err
 	}
 	a := make([]Address, len(parsed))
 	for i, p := range parsed {
 		a[i] = AddressFrom(p)
 	}
-	return a, nil
+	return a, err
 }
 
 // UniqueAddressParts returns an AddressSet containing the unique normalized
