@@ -255,7 +255,7 @@ func main() {
     fmt.Printf("Normalized: %s\n", addr)
     
     // Create address list
-    list := email.AddressList{addr, email.Address("jane@example.com")}
+    list := email.AddressListJoin(addr, email.Address("jane@example.com"))
     fmt.Printf("Address list: %v\n", list)
 }
 ```
