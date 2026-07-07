@@ -126,7 +126,7 @@ func (r Rate) RoundToDecimals(decimals int) Rate {
 	return Rate(math.Round(float64(r)*pow) / pow)
 }
 
-// Format formats the Rate similar to strconv.FormatFloat with the 'f' format option,
+// FormatSep formats the Rate similar to strconv.FormatFloat with the 'f' format option,
 // but with decimalSep as decimal separator instead of a point
 // and optional grouping of the integer part.
 // Valid values for decimalSep are '.' and ','.
@@ -138,7 +138,7 @@ func (r Rate) RoundToDecimals(decimals int) Rate {
 // Note that the last digit is not rounded!
 // The special precision -1 uses the smallest number of digits
 // necessary such that ParseFloat will return f exactly.
-func (r Rate) Format(thousandsSep, decimalSep rune, precision int) string {
+func (r Rate) FormatSep(thousandsSep, decimalSep rune, precision int) string {
 	return float.Format(float64(r), thousandsSep, decimalSep, precision, true)
 }
 

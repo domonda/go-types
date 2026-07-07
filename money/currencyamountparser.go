@@ -32,5 +32,5 @@ func (p *CurrencyAmountParser) Parse(str string, langHints ...language.Code) (no
 			}
 		}
 	}
-	return amount.Format(true, 0, '.', decimals), nil
+	return amount.FormatSep(true, 0, '.', decimals), nil
 }
