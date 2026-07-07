@@ -95,8 +95,10 @@ func (a Amount) Cents() int64 {
 
 // DecimalAmount converts the float64 Amount to an exact fixed-point
 // DecimalAmount rounded to the given scale with the given rounding mode.
-// It panics if the Amount is NaN, infinite, or does not fit the DecimalAmount
-// range. See DecimalAmountFromAmount for an error-returning variant.
+// A NaN or infinite Amount maps to the corresponding non-finite DecimalAmount
+// and an out-of-range value maps to ±Inf; it panics only if scale is out of
+// range. See DecimalAmountFromAmount for a variant that returns an error
+// instead of panicking on an out-of-range scale.
 func (a Amount) DecimalAmount(scale int, rounding RoundingMode) DecimalAmount {
 	return mustDecimalFromFloat(float64(a), scale, rounding)
 }
