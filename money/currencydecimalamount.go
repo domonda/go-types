@@ -126,12 +126,15 @@ func (ca CurrencyDecimalAmount) CurrencyAmount() CurrencyAmount {
 }
 
 // ScanString tries to parse and assign the passed source string as value of the
-// implementing type. Because a DecimalAmount is always exact and finite, the
-// validate flag has no additional effect.
+// implementing type. If validate is true, a non-finite amount (NaN or ±Inf) is
+// rejected.
 func (ca *CurrencyDecimalAmount) ScanString(source string, validate bool) error {
 	parsed, err := ParseCurrencyDecimalAmount(source)
 	if err != nil {
 		return err
+	}
+	if validate && !parsed.Amount.Valid() {
+		return fmt.Errorf("invalid money.CurrencyDecimalAmount: %q", source)
 	}
 	*ca = parsed
 	return nil

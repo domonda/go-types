@@ -519,33 +519,56 @@ func (a DecimalAmount) Equal(b DecimalAmount) bool {
 	return a.Cmp(b) == 0
 }
 
-// Add returns a + b. The result scale is the larger of the two scales.
-// Overflow yields ±Inf; +Inf + -Inf and any NaN operand yield NaN.
+// Add returns a + b. The result scale is the larger of the two scales, reduced
+// only when needed to keep the exact sum representable (so x + 0 is always x).
+// Overflow of the integer part yields ±Inf; +Inf + -Inf and any NaN operand
+// yield NaN.
 func (a DecimalAmount) Add(b DecimalAmount) DecimalAmount {
 	if r, ok := addNonFinite(a, b); ok {
 		return r
 	}
+	ca, cb := a.Coefficient(), b.Coefficient()
 	scale := a.Scale()
 	if bs := b.Scale(); bs > scale {
 		scale = bs
 	}
-	// Aligning to the larger scale only ever increases scale (pads with zeros),
-	// so no rounding happens and the mode is irrelevant. Alignment overflow
-	// means the dominant operand is unrepresentable at the target scale, so the
-	// result is that operand's infinity.
-	ac, aOver := scaleCoefficient(a.Coefficient(), a.Scale(), scale, RoundHalfAwayFromZero)
-	if aOver {
-		return decimalInf(a.Signbit())
+	// Align both to the common scale in 128-bit magnitudes (padding can exceed
+	// the 59-bit coefficient range, so int64 is not wide enough) and add with
+	// sign. Computing the true sum first — instead of rejecting a padded operand
+	// — lets near-cancelling terms produce a small, representable result.
+	negA, negB := ca < 0, cb < 0
+	aHi, aLo := bits.Mul64(abs64(ca), pow10u(scale-a.Scale()))
+	bHi, bLo := bits.Mul64(abs64(cb), pow10u(scale-b.Scale()))
+	var sumHi, sumLo uint64
+	var negSum bool
+	if negA == negB {
+		sumHi, sumLo = addU128(aHi, aLo, bHi, bLo)
+		negSum = negA
+	} else if cmpUint128(aHi, aLo, bHi, bLo) >= 0 {
+		sumHi, sumLo = subU128(aHi, aLo, bHi, bLo)
+		negSum = negA
+	} else {
+		sumHi, sumLo = subU128(bHi, bLo, aHi, aLo)
+		negSum = negB
 	}
-	bc, bOver := scaleCoefficient(b.Coefficient(), b.Scale(), scale, RoundHalfAwayFromZero)
-	if bOver {
-		return decimalInf(b.Signbit())
+	// Reduce the scale by stripping exact trailing zeros while the magnitude
+	// exceeds the coefficient range; only a genuinely too-large integer part
+	// (indivisible by 10) overflows to ±Inf.
+	for scale > 0 && (sumHi != 0 || sumLo > uint64(maxDecimalAmountCoefficient)) {
+		quoHi, quoLo, rem := div128by64(sumHi, sumLo, 10)
+		if rem != 0 {
+			break
+		}
+		sumHi, sumLo, scale = quoHi, quoLo, scale-1
 	}
-	sum, over := addOverflow(ac, bc)
-	if over || sum < minDecimalAmountCoefficient || sum > maxDecimalAmountCoefficient {
-		return decimalInf(ac < 0)
+	if sumHi != 0 || sumLo > uint64(maxDecimalAmountCoefficient) {
+		return decimalInf(negSum)
 	}
-	return packDecimalAmount(sum, scale)
+	coeff := int64(sumLo) //#nosec G115 -- sumLo is a bounded coefficient magnitude
+	if negSum {
+		coeff = -coeff
+	}
+	return packDecimalAmount(coeff, scale)
 }
 
 // Sub returns a - b. The result scale is the larger of the two scales.
@@ -871,10 +894,12 @@ func (a *DecimalAmount) UnmarshalBinary(data []byte) error {
 		return fmt.Errorf("money.DecimalAmount.UnmarshalBinary needs 8 bytes but got %d", len(data))
 	}
 	packed := int64(binary.BigEndian.Uint64(data)) //#nosec G115 -- restoring a bit pattern
-	if int(packed&scaleMask) > MaxDecimalAmountScale {
-		// Any scale above the maximum is non-finite; canonicalize it to scale
-		// nonFiniteScale from its coefficient sign.
-		switch coeff := packed >> scaleBits; {
+	scale := int(packed & scaleMask)
+	coeff := packed >> scaleBits
+	switch {
+	case scale == nonFiniteScale:
+		// Canonicalize the non-finite encoding from its coefficient sign.
+		switch {
 		case coeff > 0:
 			*a = decimalInf(false)
 		case coeff < 0:
@@ -882,9 +907,13 @@ func (a *DecimalAmount) UnmarshalBinary(data []byte) error {
 		default:
 			*a = DecimalAmountNaN()
 		}
-		return nil
+	case scale > MaxDecimalAmountScale:
+		return fmt.Errorf("money.DecimalAmount.UnmarshalBinary got invalid scale %d", scale)
+	case coeff < minDecimalAmountCoefficient || coeff > maxDecimalAmountCoefficient:
+		return fmt.Errorf("money.DecimalAmount.UnmarshalBinary got out-of-range coefficient %d", coeff)
+	default:
+		a.packed = packed
 	}
-	a.packed = packed
 	return nil
 }
 
@@ -942,19 +971,32 @@ func (a *DecimalAmount) Scan(value any) error {
 }
 
 // ScanString implements the strfmt scanning convention by parsing source as a
-// DecimalAmount. Parsing already rejects invalid input, so the validate flag
-// has no additional effect.
+// DecimalAmount. If validate is true, a non-finite result (NaN or ±Inf) is
+// rejected, mirroring Amount.ScanString.
 func (a *DecimalAmount) ScanString(source string, validate bool) error {
-	return a.scanParse(source)
+	parsed, err := ParseDecimalAmount(source)
+	if err != nil {
+		return err
+	}
+	if validate && !parsed.Valid() {
+		return fmt.Errorf("invalid money.DecimalAmount: %q", source)
+	}
+	*a = parsed
+	return nil
 }
 
 // JSONSchema returns the JSON Schema for a DecimalAmount as a numeric type,
 // matching the JSON number produced by MarshalJSON.
 func (DecimalAmount) JSONSchema() *jsonschema.Schema {
+	// Finite values marshal as a JSON number; non-finite values marshal as the
+	// quoted strings "NaN", "Inf" or "-Inf", so the schema allows either.
 	return &jsonschema.Schema{
-		Type:        "number",
 		Title:       "Decimal Amount",
-		Description: "Exact fixed-point monetary amount",
+		Description: `Exact fixed-point monetary amount; a JSON number, or "NaN"/"Inf"/"-Inf" for non-finite values`,
+		OneOf: []*jsonschema.Schema{
+			{Type: "number"},
+			{Type: "string"},
+		},
 	}
 }
 
@@ -1123,15 +1165,6 @@ func mulOverflow(a, b int64) (int64, bool) {
 	return p, false
 }
 
-// addOverflow adds a and b and reports signed overflow.
-func addOverflow(a, b int64) (int64, bool) {
-	s := a + b
-	if (a > 0 && b > 0 && s < 0) || (a < 0 && b < 0 && s >= 0) {
-		return 0, true
-	}
-	return s, false
-}
-
 // pow10u returns 10^scale as a uint64 for 0 ≤ scale ≤ MaxDecimalAmountScale.
 func pow10u(scale int) uint64 {
 	return uint64(decimalPow10[scale]) //#nosec G115 -- 10^scale is a positive int64
@@ -1162,6 +1195,22 @@ func signOf(x int64) int {
 	default:
 		return 0
 	}
+}
+
+// addU128 returns the 128-bit sum of (h1,l1) and (h2,l2). The final carry is
+// dropped: callers only add aligned coefficient magnitudes (< 2^119).
+func addU128(h1, l1, h2, l2 uint64) (hi, lo uint64) {
+	lo, carry := bits.Add64(l1, l2, 0)
+	hi, _ = bits.Add64(h1, h2, carry)
+	return hi, lo
+}
+
+// subU128 returns (h1,l1) - (h2,l2). The caller must ensure the first operand is
+// the larger magnitude so the result does not borrow past 128 bits.
+func subU128(h1, l1, h2, l2 uint64) (hi, lo uint64) {
+	lo, borrow := bits.Sub64(l1, l2, 0)
+	hi, _ = bits.Sub64(h1, h2, borrow)
+	return hi, lo
 }
 
 // cmpUint128 compares two 128-bit unsigned values (hi, lo), returning -1, 0 or +1.

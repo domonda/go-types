@@ -222,9 +222,79 @@ func TestDecimalAmount_AddSub(t *testing.T) {
 	z := NewDecimalAmount(5, 2).Add(NewDecimalAmount(-5, 2))
 	assert.True(t, z.IsZero())
 
-	// Overflow yields +Inf (or -Inf for negative operands).
+	// Overflow of the integer part yields +Inf (or -Inf for negative operands).
 	assert.True(t, NewDecimalAmount(maxDecimalAmountCoefficient, 0).Add(NewDecimalAmount(maxDecimalAmountCoefficient, 0)).IsInf(1))
 	assert.True(t, NewDecimalAmount(minDecimalAmountCoefficient, 0).Add(NewDecimalAmount(minDecimalAmountCoefficient, 0)).IsInf(-1))
+}
+
+// TestDecimalAmount_AddScaleMismatch guards the regression where aligning a
+// representable sum to the larger scale overflowed to ±Inf.
+func TestDecimalAmount_AddScaleMismatch(t *testing.T) {
+	// x + 0 is identity even when the zero carries a large scale (used to
+	// return +Inf because 2.5 is not representable at scale 18).
+	x := NewDecimalAmount(25, 1) // 2.5
+	sum := x.Add(NewDecimalAmount(0, 18))
+	assert.True(t, sum.IsFinite(), "x + 0 must stay finite")
+	assert.True(t, x.Equal(sum), "x + 0 must equal x, got %s", sum)
+
+	// Near-cancellation of large opposite-sign operands yields the small sum.
+	got := NewDecimalAmount(28823037615171175, 0).Add(NewDecimalAmount(-288230376151711743, 1))
+	assert.Equal(t, "0.7", got.String())
+
+	// Sub inherits the fix.
+	assert.True(t, x.Equal(x.Sub(NewDecimalAmount(0, 18))))
+}
+
+// TestDecimalAmount_AddOracle fuzzes Add against a big.Rat reference, including
+// the representability boundary for the ±Inf result.
+func TestDecimalAmount_AddOracle(t *testing.T) {
+	rng := rand.New(rand.NewSource(2))
+	randDec := func() DecimalAmount {
+		return NewDecimalAmount(rng.Int63n(2*maxDecimalAmountCoefficient+1)-maxDecimalAmountCoefficient, rng.Intn(MaxDecimalAmountScale+1))
+	}
+	toRat := func(d DecimalAmount) *big.Rat {
+		r := new(big.Rat).SetInt64(d.Coefficient())
+		return r.Quo(r, new(big.Rat).SetInt(new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(d.Scale())), nil)))
+	}
+	maxc := big.NewInt(maxDecimalAmountCoefficient)
+	representable := func(want *big.Rat) bool {
+		for s := 0; s <= MaxDecimalAmountScale; s++ {
+			scaled := new(big.Rat).Mul(want, new(big.Rat).SetInt(new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(s)), nil)))
+			if scaled.IsInt() {
+				return scaled.Num().CmpAbs(maxc) <= 0
+			}
+		}
+		return false
+	}
+	for range 20000 {
+		a, b := randDec(), randDec()
+		got := a.Add(b)
+		want := new(big.Rat).Add(toRat(a), toRat(b))
+		if got.IsInf(0) {
+			require.Falsef(t, representable(want), "Add(%s,%s)=Inf but %s is representable", a, b, want.FloatString(20))
+			continue
+		}
+		require.Zerof(t, toRat(got).Cmp(want), "Add(%s,%s)=%s, want %s", a, b, got, want.FloatString(20))
+	}
+}
+
+func TestDecimalAmount_ScanStringValidate(t *testing.T) {
+	var d DecimalAmount
+	// validate=true rejects non-finite input (mirrors Amount.ScanString).
+	assert.Error(t, d.ScanString("NaN", true))
+	assert.Error(t, d.ScanString("Inf", true))
+	assert.Error(t, d.ScanString("-Infinity", true))
+	// validate=false still accepts it as a sentinel.
+	require.NoError(t, d.ScanString("NaN", false))
+	assert.True(t, d.IsNaN())
+	// Finite values pass validation.
+	require.NoError(t, d.ScanString("1.23", true))
+	assert.Equal(t, "1.23", d.String())
+
+	var ca CurrencyDecimalAmount
+	assert.Error(t, ca.ScanString("EUR Inf", true))
+	require.NoError(t, ca.ScanString("EUR 1.23", true))
+	assert.Equal(t, "1.23", ca.Amount.String())
 }
 
 func TestDecimalAmount_MulInt(t *testing.T) {
@@ -422,12 +492,14 @@ func TestDecimalAmount_Binary(t *testing.T) {
 
 	var got DecimalAmount
 	assert.Error(t, got.UnmarshalBinary([]byte{1, 2, 3}))
-	// Any scale > MaxDecimalAmountScale is non-finite; a scale-19 zero
-	// coefficient canonicalizes to NaN rather than being rejected.
-	nonCanonical := make([]byte, 8)
-	nonCanonical[7] = 19
-	require.NoError(t, got.UnmarshalBinary(nonCanonical))
-	assert.True(t, got.IsNaN())
+	// A non-canonical scale (19..30 is never emitted) is rejected as corrupt.
+	badScale := make([]byte, 8)
+	badScale[7] = 19
+	assert.Error(t, got.UnmarshalBinary(badScale))
+	// An out-of-range coefficient (-2^58, one below the valid minimum) is
+	// rejected so it can never break the Neg/Abs invariant. 0x80.. decodes to
+	// scale 0, coefficient -2^58.
+	assert.Error(t, got.UnmarshalBinary([]byte{0x80, 0, 0, 0, 0, 0, 0, 0}))
 }
 
 func TestDecimalAmount_SQL(t *testing.T) {
@@ -779,8 +851,11 @@ func TestDecimalAmount_accessors(t *testing.T) {
 
 	assert.Equal(t, pos, *pos.Ptr())
 
-	// JSONSchema describes a numeric type.
-	assert.Equal(t, "number", DecimalAmount{}.JSONSchema().Type)
+	// JSONSchema allows a number (finite) or a string (non-finite tokens).
+	schema := DecimalAmount{}.JSONSchema()
+	require.Len(t, schema.OneOf, 2)
+	assert.Equal(t, "number", schema.OneOf[0].Type)
+	assert.Equal(t, "string", schema.OneOf[1].Type)
 }
 
 func TestDecimalAmount_AmountInterop(t *testing.T) {
