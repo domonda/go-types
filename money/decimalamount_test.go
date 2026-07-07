@@ -1,0 +1,688 @@
+package money
+
+import (
+	"bytes"
+	"database/sql/driver"
+	"encoding/json"
+	"fmt"
+	"math"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func TestDecimalAmount_packing(t *testing.T) {
+	cases := []struct {
+		coeff int64
+		scale int
+	}{
+		{0, 0},
+		{123456, 2},
+		{-123456, 2},
+		{1, 18},
+		{-1, 18},
+		{maxDecimalAmountCoefficient, 0},
+		{minDecimalAmountCoefficient, 0},
+		{maxDecimalAmountCoefficient, 18},
+		{minDecimalAmountCoefficient, 18},
+	}
+	for _, c := range cases {
+		a := NewDecimalAmount(c.coeff, c.scale)
+		assert.Equal(t, c.coeff, a.Coefficient(), "coefficient for %d/%d", c.coeff, c.scale)
+		assert.Equal(t, c.scale, a.Scale(), "scale for %d/%d", c.coeff, c.scale)
+	}
+}
+
+func TestDecimalAmount_zeroValue(t *testing.T) {
+	var a DecimalAmount
+	assert.Equal(t, int64(0), a.Coefficient())
+	assert.Equal(t, 0, a.Scale())
+	assert.True(t, a.IsZero())
+	assert.Equal(t, "0", a.String())
+}
+
+func TestNewDecimalAmount_panics(t *testing.T) {
+	assert.Panics(t, func() { NewDecimalAmount(1, -1) })
+	assert.Panics(t, func() { NewDecimalAmount(1, MaxDecimalAmountScale+1) })
+	assert.Panics(t, func() { NewDecimalAmount(maxDecimalAmountCoefficient+1, 0) })
+	assert.Panics(t, func() { NewDecimalAmount(minDecimalAmountCoefficient-1, 0) })
+}
+
+func TestParseDecimalAmount(t *testing.T) {
+	cases := []struct {
+		str   string
+		coeff int64
+		scale int
+	}{
+		{"0", 0, 0},
+		{"1234", 1234, 0},
+		{"1234.56", 123456, 2},
+		{"-99.99", -9999, 2},
+		{"0.005", 5, 3},
+		{"-0.005", -5, 3},
+		{"007.50", 750, 2},
+		{"1,234.56", 123456, 2}, // English grouping
+		{"1.234,56", 123456, 2}, // German grouping
+		{"1'234.56", 123456, 2}, // Swiss grouping
+		{"1,234,567.89", 123456789, 2},
+		{"-0.00", 0, 2},
+		// Exactness: this loses its last cent through a float64 round-trip
+		// but must be preserved here.
+		{"99999999999999.99", 9999999999999999, 2},
+	}
+	for _, c := range cases {
+		a, err := ParseDecimalAmount(c.str)
+		require.NoError(t, err, "ParseDecimalAmount(%q)", c.str)
+		assert.Equal(t, c.coeff, a.Coefficient(), "coefficient of %q", c.str)
+		assert.Equal(t, c.scale, a.Scale(), "scale of %q", c.str)
+	}
+}
+
+func TestParseDecimalAmount_exactBeatsFloat(t *testing.T) {
+	const s = "99999999999999.99"
+	a, err := ParseDecimalAmount(s)
+	require.NoError(t, err)
+	assert.Equal(t, s, a.String())
+
+	// The float64 path used by the plain Amount type loses the last cent.
+	f, err := ParseAmount(s)
+	require.NoError(t, err)
+	assert.NotEqual(t, s, f.String())
+}
+
+func TestParseDecimalAmount_acceptedDecimals(t *testing.T) {
+	_, err := ParseDecimalAmount("1.234", 0, 2)
+	assert.Error(t, err, "3 decimals not in {0,2}")
+
+	a, err := ParseDecimalAmount("1.23", 0, 2)
+	require.NoError(t, err)
+	assert.Equal(t, "1.23", a.String())
+}
+
+func TestParseDecimalAmount_errors(t *testing.T) {
+	for _, s := range []string{
+		"",
+		"1.5e3",                 // scientific notation rejected
+		"1.1234567890123456789", // 19 decimals > MaxDecimalAmountScale
+		"999999999999999999",    // 18 nines ~1e18 exceeds coefficient range
+		"abc",
+	} {
+		_, err := ParseDecimalAmount(s)
+		assert.Error(t, err, "expected error parsing %q", s)
+	}
+}
+
+func TestParseDecimalAmount_nonFinite(t *testing.T) {
+	for _, s := range []string{"NaN"} {
+		a, err := ParseDecimalAmount(s)
+		require.NoError(t, err)
+		assert.True(t, a.IsNaN(), "%q should parse to NaN", s)
+	}
+	for _, s := range []string{"Inf", "+Inf"} {
+		a, err := ParseDecimalAmount(s)
+		require.NoError(t, err)
+		assert.True(t, a.IsInf(1), "%q should parse to +Inf", s)
+	}
+	a, err := ParseDecimalAmount("-Inf")
+	require.NoError(t, err)
+	assert.True(t, a.IsInf(-1))
+}
+
+func TestDecimalAmount_String(t *testing.T) {
+	cases := map[string]DecimalAmount{
+		"0":        NewDecimalAmount(0, 0),
+		"0.00":     NewDecimalAmount(0, 2),
+		"1234.56":  NewDecimalAmount(123456, 2),
+		"-1234.56": NewDecimalAmount(-123456, 2),
+		"0.005":    NewDecimalAmount(5, 3),
+		"-0.005":   NewDecimalAmount(-5, 3),
+		"1.50":     NewDecimalAmount(150, 2),
+		"1000":     NewDecimalAmount(1000, 0),
+	}
+	for want, a := range cases {
+		assert.Equal(t, want, a.String(), "String of coeff=%d scale=%d", a.Coefficient(), a.Scale())
+	}
+}
+
+func TestDecimalAmount_GoString(t *testing.T) {
+	assert.Equal(t, "money.NewDecimalAmount(123456, 2)", NewDecimalAmount(123456, 2).GoString())
+	assert.Equal(t, "money.NewDecimalAmount(123456, 2)", fmt.Sprintf("%#v", NewDecimalAmount(123456, 2)))
+}
+
+func TestDecimalAmount_FormatSep(t *testing.T) {
+	a := NewDecimalAmount(123456789, 2) // 1234567.89
+	assert.Equal(t, "1234567.89", a.FormatSep(0, '.'))
+	assert.Equal(t, "1,234,567.89", a.FormatSep(',', '.'))
+	assert.Equal(t, "1.234.567,89", a.FormatSep('.', ','))
+	assert.Equal(t, "-1.234.567,89", a.Neg().FormatSep('.', ','))
+	// zero decimalSep defaults to '.'
+	assert.Equal(t, "1,234,567.89", a.FormatSep(',', 0))
+}
+
+func TestDecimalAmount_Format(t *testing.T) {
+	a := NewDecimalAmount(123456, 2) // 1234.56
+	cases := map[string]string{
+		"%s":     "1234.56",
+		"%v":     "1234.56",
+		"%q":     `"1234.56"`,
+		"%f":     "1234.56",   // default precision = scale
+		"%.1f":   "1234.6",    // rounds half away from zero
+		"%.4f":   "1234.5600", // pads
+		"%.0f":   "1235",
+		"%d":     "1235",
+		"%#f":    "1,234.56", // grouping
+		"%#d":    "1,235",
+		"%+.2f":  "+1234.56",
+		"% .2f":  " 1234.56",
+		"%8.1f":  "  1234.6", // width padding
+		"%-8.1f": "1234.6  ",
+		"%08.1f": "001234.6",
+	}
+	for format, want := range cases {
+		assert.Equal(t, want, fmt.Sprintf(format, a), "format %q", format)
+	}
+	// Negative zero-padding keeps the sign leftmost.
+	assert.Equal(t, "-01234.6", fmt.Sprintf("%08.1f", a.Neg()))
+	// Unknown verb reports the type.
+	assert.Equal(t, "%!x(money.DecimalAmount=1234.56)", fmt.Sprintf("%x", a))
+	// Formatting must not panic even for the largest value at high precision.
+	big := NewDecimalAmount(maxDecimalAmountCoefficient, 0)
+	assert.NotPanics(t, func() { _ = fmt.Sprintf("%.18f", big) })
+}
+
+func TestDecimalAmount_CmpEqual(t *testing.T) {
+	// Same value, different scale.
+	a := NewDecimalAmount(150, 2) // 1.50
+	b := NewDecimalAmount(15, 1)  // 1.5
+	assert.NotEqual(t, a, b, "different packed representation")
+	assert.True(t, a.Equal(b), "equal value")
+	assert.Equal(t, 0, a.Cmp(b))
+
+	assert.Equal(t, -1, NewDecimalAmount(149, 2).Cmp(b))
+	assert.Equal(t, +1, NewDecimalAmount(151, 2).Cmp(b))
+	assert.Equal(t, -1, NewDecimalAmount(-1, 0).Cmp(NewDecimalAmount(1, 0)))
+	// Large cross-scale comparison must not overflow.
+	assert.Equal(t, +1, NewDecimalAmount(maxDecimalAmountCoefficient, 0).Cmp(NewDecimalAmount(1, 18)))
+}
+
+func TestDecimalAmount_AddSub(t *testing.T) {
+	a := NewDecimalAmount(123, 2)  // 1.23
+	b := NewDecimalAmount(4567, 4) // 0.4567
+	sum := a.Add(b)
+	assert.Equal(t, "1.6867", sum.String())
+	assert.Equal(t, 4, sum.Scale())
+
+	diff := a.Sub(b)
+	assert.Equal(t, "0.7733", diff.String())
+
+	// Adding opposite values yields zero at the larger scale.
+	z := NewDecimalAmount(5, 2).Add(NewDecimalAmount(-5, 2))
+	assert.True(t, z.IsZero())
+
+	// Overflow yields +Inf (or -Inf for negative operands).
+	assert.True(t, NewDecimalAmount(maxDecimalAmountCoefficient, 0).Add(NewDecimalAmount(maxDecimalAmountCoefficient, 0)).IsInf(1))
+	assert.True(t, NewDecimalAmount(minDecimalAmountCoefficient, 0).Add(NewDecimalAmount(minDecimalAmountCoefficient, 0)).IsInf(-1))
+}
+
+func TestDecimalAmount_MulInt(t *testing.T) {
+	a := NewDecimalAmount(199, 2) // 1.99
+	assert.Equal(t, "5.97", a.MulInt(3).String())
+	assert.Equal(t, "-3.98", a.MulInt(-2).String())
+	assert.Equal(t, "0.00", a.MulInt(0).String())
+	assert.True(t, NewDecimalAmount(maxDecimalAmountCoefficient, 0).MulInt(2).IsInf(1))
+
+	// MulInt64 takes the wider int64 and MulInt delegates to it.
+	assert.Equal(t, "5.97", a.MulInt64(3).String())
+	assert.Equal(t, a.MulInt(3), a.MulInt64(3))
+	assert.True(t, NewDecimalAmount(maxDecimalAmountCoefficient, 0).MulInt64(2).IsInf(1))
+	assert.True(t, NewDecimalAmount(minDecimalAmountCoefficient, 0).MulInt(2).IsInf(-1))
+}
+
+func TestDecimalAmount_Mul(t *testing.T) {
+	cases := []struct {
+		a, b DecimalAmount
+		want string
+	}{
+		// Result takes the scale of a.
+		{NewDecimalAmount(150, 2), NewDecimalAmount(150, 2), "2.25"}, // 1.50 * 1.50
+		{NewDecimalAmount(10, 1), NewDecimalAmount(10, 1), "1.0"},    // 1.0 * 1.0
+		{NewDecimalAmount(3, 0), NewDecimalAmount(4, 0), "12"},       // 3 * 4
+		{NewDecimalAmount(-2, 0), NewDecimalAmount(150, 2), "-3"},    // -2 * 1.50 -> -3.00 at scale 0
+		{NewDecimalAmount(100, 2), NewDecimalAmount(119, 2), "1.19"}, // 1.00 * 1.19
+		// Rounding to a's scale, half away from zero.
+		{NewDecimalAmount(11, 1), NewDecimalAmount(11, 1), "1.2"}, // 1.1 * 1.1 = 1.21 -> 1.2
+	}
+	for _, c := range cases {
+		got := c.a.Mul(c.b, RoundHalfAwayFromZero)
+		assert.Equal(t, c.want, got.String(), "%s * %s", c.a, c.b)
+		assert.Equal(t, c.a.Scale(), got.Scale())
+	}
+
+	// Large product whose exact 128-bit intermediate exceeds 64 bits:
+	// 5.000000000 * 5.000000000 = 25.000000000 (product 2.5e19 needs 65 bits).
+	x := NewDecimalAmount(5_000_000_000, 9)
+	assert.Equal(t, "25.000000000", x.Mul(x, RoundHalfAwayFromZero).String())
+
+	// Overflow yields ±Inf by the product sign.
+	assert.True(t, NewDecimalAmount(maxDecimalAmountCoefficient, 0).Mul(NewDecimalAmount(maxDecimalAmountCoefficient, 0), RoundHalfAwayFromZero).IsInf(1))
+	assert.True(t, NewDecimalAmount(minDecimalAmountCoefficient, 0).Mul(NewDecimalAmount(maxDecimalAmountCoefficient, 0), RoundHalfAwayFromZero).IsInf(-1))
+}
+
+func TestDecimalAmount_Div(t *testing.T) {
+	cases := []struct {
+		a, b DecimalAmount
+		want string
+	}{
+		{NewDecimalAmount(1000, 2), NewDecimalAmount(400, 2), "2.50"}, // 10.00 / 4.00
+		{NewDecimalAmount(1000, 2), NewDecimalAmount(3, 0), "3.33"},   // 10.00 / 3
+		{NewDecimalAmount(10, 0), NewDecimalAmount(3, 0), "3"},        // 10 / 3 -> 3 at scale 0
+		{NewDecimalAmount(1000, 3), NewDecimalAmount(8, 0), "0.125"},  // 1.000 / 8
+		{NewDecimalAmount(-1000, 2), NewDecimalAmount(3, 0), "-3.33"}, // -10.00 / 3
+	}
+	for _, c := range cases {
+		got := c.a.Div(c.b, RoundHalfAwayFromZero)
+		assert.Equal(t, c.want, got.String(), "%s / %s", c.a, c.b)
+		assert.Equal(t, c.a.Scale(), got.Scale())
+	}
+
+	// Division by zero yields ±Inf, and 0/0 yields NaN.
+	assert.True(t, NewDecimalAmount(1, 0).Div(NewDecimalAmount(0, 2), RoundHalfAwayFromZero).IsInf(1))
+	assert.True(t, NewDecimalAmount(-1, 0).Div(NewDecimalAmount(0, 2), RoundHalfAwayFromZero).IsInf(-1))
+	assert.True(t, NewDecimalAmount(0, 0).Div(NewDecimalAmount(0, 2), RoundHalfAwayFromZero).IsNaN())
+}
+
+func TestDecimalAmount_MulDivRoundingModes(t *testing.T) {
+	// 1 / 3 at scale 2: exact 0.3333..., not a tie -> all near modes give 0.33.
+	third := NewDecimalAmount(100, 2).Div(NewDecimalAmount(3, 0), RoundDown)
+	assert.Equal(t, "0.33", third.String())
+	assert.Equal(t, "0.34", NewDecimalAmount(100, 2).Div(NewDecimalAmount(3, 0), RoundUp).String())
+
+	// Exact ties at scale 1: 0.05 and 0.15 via division by 2 exercise tie modes.
+	// 0.1 / 2 = 0.05 -> tie at scale 1.
+	tie := func(dividend int64, mode RoundingMode) string {
+		return NewDecimalAmount(dividend, 1).Div(NewDecimalAmount(2, 0), mode).String()
+	}
+	// 0.1/2 = 0.05, quotient before rounding = 0 (even); 0.3/2 = 0.15, quotient = 1 (odd).
+	assert.Equal(t, "0.1", tie(1, RoundHalfAwayFromZero)) // 0.05 -> 0.1
+	assert.Equal(t, "0.0", tie(1, RoundHalfToEven))       // 0.05 -> 0.0 (even)
+	assert.Equal(t, "0.2", tie(3, RoundHalfToEven))       // 0.15 -> 0.2 (even)
+	assert.Equal(t, "0.1", tie(1, RoundHalfUp))           // ties toward +Inf
+	assert.Equal(t, "0.0", tie(1, RoundHalfDown))         // ties toward -Inf
+	assert.Equal(t, "0.0", tie(-1, RoundHalfUp))          // -0.05 tie toward +Inf -> 0.0
+	assert.Equal(t, "-0.1", tie(-1, RoundHalfDown))       // -0.05 tie toward -Inf -> -0.1
+
+	// Directed modes on 0.05.
+	assert.Equal(t, "0.0", tie(1, RoundFloor))
+	assert.Equal(t, "0.1", tie(1, RoundCeil))
+	assert.Equal(t, "-0.1", tie(-1, RoundFloor))
+	assert.Equal(t, "0.0", tie(-1, RoundCeil))
+	assert.Equal(t, "0.0", tie(1, RoundDown))
+	assert.Equal(t, "0.1", tie(1, RoundUp))
+
+	assert.Equal(t, "RoundHalfToEven", RoundHalfToEven.String())
+}
+
+func TestDecimalAmount_Rounding(t *testing.T) {
+	cases := []struct {
+		in       DecimalAmount
+		decimals int
+		want     string
+	}{
+		{NewDecimalAmount(12345, 3), 2, "12.35"}, // 12.345 -> 12.35 (half away)
+		{NewDecimalAmount(12344, 3), 2, "12.34"},
+		{NewDecimalAmount(-12345, 3), 2, "-12.35"},
+		{NewDecimalAmount(125, 2), 1, "1.3"},    // 1.25 -> 1.3 (half away from zero)
+		{NewDecimalAmount(150, 2), 4, "1.5000"}, // padding
+		{NewDecimalAmount(19, 1), 0, "2"},       // 1.9 -> 2
+		{NewDecimalAmount(-15, 1), 0, "-2"},     // -1.5 -> -2 (half away)
+	}
+	for _, c := range cases {
+		got := c.in.RoundToDecimals(c.decimals, RoundHalfAwayFromZero).String()
+		assert.Equal(t, c.want, got, "%s round to %d", c.in, c.decimals)
+	}
+	assert.Equal(t, "1.25", NewDecimalAmount(12500, 4).RoundToCents(RoundHalfAwayFromZero).String())
+	assert.Equal(t, "2", NewDecimalAmount(150, 2).RoundToInt(RoundHalfAwayFromZero).String())
+
+	// RoundToDecimals honors the rounding mode.
+	assert.Equal(t, "12.34", NewDecimalAmount(12345, 3).RoundToDecimals(2, RoundHalfToEven).String()) // 12.345 -> 12.34 (even)
+	assert.Equal(t, "12.35", NewDecimalAmount(12350, 3).RoundToDecimals(2, RoundUp).String())
+	assert.Equal(t, "12.34", NewDecimalAmount(12345, 3).RoundToDecimals(2, RoundDown).String())
+	assert.Equal(t, "-12.35", NewDecimalAmount(-12341, 3).RoundToDecimals(2, RoundFloor).String())
+}
+
+func TestDecimalAmount_FloatAndAmount(t *testing.T) {
+	a := NewDecimalAmount(123456, 2)
+	assert.InDelta(t, 1234.56, a.Float(), 1e-9)
+	assert.InDelta(t, 1234.56, float64(a.Amount()), 1e-9)
+}
+
+func TestDecimalAmount_JSON(t *testing.T) {
+	a := NewDecimalAmount(123456, 2)
+	data, err := json.Marshal(a)
+	require.NoError(t, err)
+	assert.Equal(t, "1234.56", string(data)) // unquoted number
+
+	var got DecimalAmount
+	require.NoError(t, json.Unmarshal([]byte("1234.56"), &got))
+	assert.True(t, a.Equal(got))
+
+	// Accept quoted string too.
+	got = DecimalAmount{}
+	require.NoError(t, json.Unmarshal([]byte(`"1234.56"`), &got))
+	assert.Equal(t, "1234.56", got.String())
+
+	// null and "" decode to zero.
+	got = NewDecimalAmount(1, 0)
+	require.NoError(t, json.Unmarshal([]byte("null"), &got))
+	assert.True(t, got.IsZero())
+
+	// Round-trip inside a struct.
+	type wrap struct {
+		Price DecimalAmount `json:"price"`
+	}
+	b, err := json.Marshal(wrap{Price: NewDecimalAmount(99999, 2)})
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"price":999.99}`, string(b))
+}
+
+func TestDecimalAmount_Text(t *testing.T) {
+	a := NewDecimalAmount(-5, 3)
+	text, err := a.MarshalText()
+	require.NoError(t, err)
+	assert.Equal(t, "-0.005", string(text))
+
+	var got DecimalAmount
+	require.NoError(t, got.UnmarshalText(text))
+	assert.Equal(t, a, got)
+
+	got = NewDecimalAmount(1, 0)
+	require.NoError(t, got.UnmarshalText(nil))
+	assert.True(t, got.IsZero())
+}
+
+func TestDecimalAmount_Binary(t *testing.T) {
+	for _, a := range []DecimalAmount{
+		NewDecimalAmount(0, 0),
+		NewDecimalAmount(123456, 2),
+		NewDecimalAmount(-123456, 2),
+		NewDecimalAmount(maxDecimalAmountCoefficient, 18),
+		NewDecimalAmount(minDecimalAmountCoefficient, 18),
+	} {
+		data, err := a.MarshalBinary()
+		require.NoError(t, err)
+		assert.Len(t, data, 8)
+
+		var got DecimalAmount
+		require.NoError(t, got.UnmarshalBinary(data))
+		assert.Equal(t, a, got, "binary round-trip of %s", a)
+	}
+
+	var got DecimalAmount
+	assert.Error(t, got.UnmarshalBinary([]byte{1, 2, 3}))
+	// A scale > MaxDecimalAmountScale in the low bits must be rejected.
+	bad := make([]byte, 8)
+	bad[7] = 19
+	assert.Error(t, got.UnmarshalBinary(bad))
+}
+
+func TestDecimalAmount_SQL(t *testing.T) {
+	a := NewDecimalAmount(123456, 2)
+	v, err := a.Value()
+	require.NoError(t, err)
+	assert.Equal(t, "1234.56", v)
+	assert.IsType(t, driver.Value(""), v)
+
+	cases := []struct {
+		src  any
+		want string
+	}{
+		{"1234.56", "1234.56"},
+		{[]byte("1.234,56"), "1234.56"},
+		{int64(42), "42"},
+		{float64(12.5), "12.5"},
+	}
+	for _, c := range cases {
+		var got DecimalAmount
+		require.NoError(t, got.Scan(c.src), "scan %#v", c.src)
+		assert.Equal(t, c.want, got.String(), "scan %#v", c.src)
+	}
+
+	var got DecimalAmount
+	assert.Error(t, got.Scan(true))
+}
+
+func TestNullableDecimalAmount(t *testing.T) {
+	// Non-null round-trips through JSON as a number.
+	n := NullableDecimalAmountFrom(NewDecimalAmount(123456, 2))
+	data, err := json.Marshal(n)
+	require.NoError(t, err)
+	assert.Equal(t, "1234.56", string(data))
+
+	// Null marshals to JSON null.
+	var null NullableDecimalAmount
+	data, err = json.Marshal(null)
+	require.NoError(t, err)
+	assert.Equal(t, "null", string(data))
+
+	// FromPtr with nil is null.
+	assert.True(t, NullableDecimalAmountFromPtr(nil).IsNull())
+	a := NewDecimalAmount(1, 0)
+	assert.True(t, NullableDecimalAmountFromPtr(&a).IsNotNull())
+
+	// SQL Value/Scan through the nullable wrapper.
+	v, err := n.Value()
+	require.NoError(t, err)
+	assert.Equal(t, "1234.56", v)
+
+	var scanned NullableDecimalAmount
+	require.NoError(t, scanned.Scan("9.99"))
+	assert.True(t, scanned.IsNotNull())
+	assert.Equal(t, "9.99", scanned.Get().String())
+
+	require.NoError(t, scanned.Scan(nil))
+	assert.True(t, scanned.IsNull())
+}
+
+func TestDecimalAmount_ScanString(t *testing.T) {
+	var a DecimalAmount
+	require.NoError(t, a.ScanString("1.234,56", true))
+	assert.Equal(t, "1234.56", a.String())
+	assert.Error(t, a.ScanString("not a number", false))
+}
+
+func TestDecimalAmountFromFloat(t *testing.T) {
+	a, err := DecimalAmountFromFloat(1234.567, 2, RoundHalfAwayFromZero)
+	require.NoError(t, err)
+	assert.Equal(t, "1234.57", a.String())
+
+	// Exact float value is rounded per mode: 0.5 is exactly representable.
+	half, err := DecimalAmountFromFloat(0.5, 0, RoundHalfToEven)
+	require.NoError(t, err)
+	assert.Equal(t, "0", half.String()) // 0.5 -> 0 (even)
+	half, err = DecimalAmountFromFloat(0.5, 0, RoundHalfAwayFromZero)
+	require.NoError(t, err)
+	assert.Equal(t, "1", half.String())
+
+	_, err = DecimalAmountFromFloat(1, MaxDecimalAmountScale+1, RoundHalfAwayFromZero)
+	assert.Error(t, err)
+}
+
+// TestDecimalAmount_MarshalJSONValidNumber guards that MarshalJSON always emits
+// a token the standard library re-parses as the same number.
+func TestDecimalAmount_MarshalJSONValidNumber(t *testing.T) {
+	for _, a := range []DecimalAmount{
+		NewDecimalAmount(0, 0),
+		NewDecimalAmount(-5, 3),
+		NewDecimalAmount(maxDecimalAmountCoefficient, 2),
+	} {
+		data, err := json.Marshal(a)
+		require.NoError(t, err)
+		assert.True(t, json.Valid(data), "invalid JSON %q", data)
+		assert.False(t, bytes.HasPrefix(data, []byte(`"`)), "should be a number, got %q", data)
+	}
+}
+
+func TestDecimalAmount_sentinels(t *testing.T) {
+	nan := DecimalAmountNaN()
+	posInf := DecimalAmountInf(1)
+	negInf := DecimalAmountInf(-1)
+	fin := NewDecimalAmount(150, 2)
+
+	// Predicates.
+	for _, s := range []DecimalAmount{nan, posInf, negInf} {
+		assert.False(t, s.IsFinite())
+		assert.False(t, s.Valid())
+		assert.False(t, s.IsZero())
+	}
+	assert.True(t, fin.IsFinite())
+	assert.True(t, nan.IsNaN())
+	assert.True(t, posInf.IsInf(1))
+	assert.True(t, posInf.IsInf(0))
+	assert.False(t, posInf.IsInf(-1))
+	assert.True(t, negInf.IsInf(-1))
+	assert.False(t, nan.IsInf(0))
+
+	// Sign/Signbit.
+	assert.Equal(t, 1, posInf.Sign())
+	assert.Equal(t, -1, negInf.Sign())
+	assert.Equal(t, 0, nan.Sign())
+	assert.True(t, negInf.Signbit())
+
+	// Neg/Abs.
+	assert.True(t, posInf.Neg().IsInf(-1))
+	assert.True(t, negInf.Abs().IsInf(1))
+	assert.True(t, nan.Neg().IsNaN())
+	assert.True(t, nan.Abs().IsNaN())
+
+	// Strings.
+	assert.Equal(t, "NaN", nan.String())
+	assert.Equal(t, "Inf", posInf.String())
+	assert.Equal(t, "-Inf", negInf.String())
+	assert.Equal(t, "money.DecimalAmountInf(1)", fmt.Sprintf("%#v", posInf))
+	assert.Equal(t, "Inf", fmt.Sprintf("%.2f", posInf))
+	assert.Equal(t, "  -Inf", fmt.Sprintf("%6s", negInf))
+
+	// Total order via Cmp: -Inf < finite < +Inf < NaN.
+	assert.Equal(t, -1, negInf.Cmp(fin))
+	assert.Equal(t, -1, fin.Cmp(posInf))
+	assert.Equal(t, -1, posInf.Cmp(nan))
+	assert.Equal(t, 0, nan.Cmp(DecimalAmountNaN()))
+	assert.True(t, posInf.Equal(DecimalAmountInf(1)))
+
+	// Propagation.
+	assert.True(t, posInf.Add(fin).IsInf(1))
+	assert.True(t, posInf.Add(negInf).IsNaN()) // +Inf + -Inf
+	assert.True(t, nan.Add(fin).IsNaN())
+	assert.True(t, posInf.Mul(NewDecimalAmount(0, 0), RoundHalfAwayFromZero).IsNaN()) // Inf * 0
+	assert.True(t, nan.Mul(fin, RoundHalfAwayFromZero).IsNaN())
+	assert.True(t, posInf.Mul(negInf, RoundHalfAwayFromZero).IsInf(-1)) // +Inf * -Inf
+	assert.True(t, negInf.Mul(fin, RoundHalfAwayFromZero).IsInf(-1))    // -Inf * positive finite
+	assert.True(t, posInf.Div(posInf, RoundHalfAwayFromZero).IsNaN())   // Inf / Inf
+	assert.True(t, fin.Div(posInf, RoundHalfAwayFromZero).IsZero())     // finite / Inf
+	assert.True(t, negInf.Div(fin, RoundHalfAwayFromZero).IsInf(-1))    // -Inf / positive finite
+	assert.True(t, nan.Div(fin, RoundHalfAwayFromZero).IsNaN())
+	assert.True(t, nan.RoundToCents(RoundHalfAwayFromZero).IsNaN())
+
+	// MulInt on non-finite: NaN propagates, Inf × 0 is NaN, sign follows n.
+	assert.True(t, nan.MulInt(5).IsNaN())
+	assert.True(t, posInf.MulInt(0).IsNaN())
+	assert.True(t, posInf.MulInt(3).IsInf(1))
+	assert.True(t, posInf.MulInt(-3).IsInf(-1))
+
+	// JSON round-trips through quoted strings.
+	for _, s := range []DecimalAmount{nan, posInf, negInf} {
+		data, err := json.Marshal(s)
+		require.NoError(t, err)
+		assert.True(t, json.Valid(data), "invalid JSON %q", data)
+		var got DecimalAmount
+		require.NoError(t, json.Unmarshal(data, &got))
+		assert.Equal(t, s, got, "JSON round-trip of %s", s)
+	}
+
+	// Binary round-trips.
+	for _, s := range []DecimalAmount{nan, posInf, negInf} {
+		data, err := s.MarshalBinary()
+		require.NoError(t, err)
+		var got DecimalAmount
+		require.NoError(t, got.UnmarshalBinary(data))
+		assert.Equal(t, s, got, "binary round-trip of %s", s)
+	}
+
+	// SQL uses PostgreSQL numeric literals and round-trips.
+	for _, tc := range []struct {
+		in  DecimalAmount
+		sql string
+	}{
+		{posInf, "Infinity"},
+		{negInf, "-Infinity"},
+		{nan, "NaN"},
+	} {
+		v, err := tc.in.Value()
+		require.NoError(t, err)
+		assert.Equal(t, tc.sql, v)
+		var scanned DecimalAmount
+		require.NoError(t, scanned.Scan(tc.sql))
+		assert.Equal(t, tc.in, scanned, "SQL round-trip of %s", tc.in)
+	}
+}
+
+func TestDecimalAmount_accessors(t *testing.T) {
+	assert.Equal(t, "42", DecimalAmountFromInt(42).String())
+
+	pos := NewDecimalAmount(150, 2)
+	neg := NewDecimalAmount(-150, 2)
+	zero := DecimalAmount{}
+
+	assert.Equal(t, +1, pos.Sign())
+	assert.Equal(t, -1, neg.Sign())
+	assert.Equal(t, 0, zero.Sign())
+
+	assert.False(t, pos.Signbit())
+	assert.True(t, neg.Signbit())
+
+	assert.Equal(t, pos, pos.Abs())
+	assert.Equal(t, pos, neg.Abs())
+	assert.Equal(t, neg, pos.Neg())
+
+	assert.Equal(t, pos, *pos.Ptr())
+
+	// JSONSchema describes a numeric type.
+	assert.Equal(t, "number", DecimalAmount{}.JSONSchema().Type)
+}
+
+func TestDecimalAmount_AmountInterop(t *testing.T) {
+	d := NewDecimalAmount(123456, 2)
+	assert.InDelta(t, 1234.56, float64(d.Amount()), 1e-9)
+
+	got, err := DecimalAmountFromAmount(Amount(1234.567), 2, RoundHalfAwayFromZero)
+	require.NoError(t, err)
+	assert.Equal(t, "1234.57", got.String())
+
+	// Amount.DecimalAmount method mirror.
+	assert.Equal(t, "1234.57", Amount(1234.567).DecimalAmount(2, RoundHalfAwayFromZero).String())
+	// A non-finite Amount maps to the matching sentinel instead of panicking.
+	assert.True(t, Amount(math.Inf(1)).DecimalAmount(2, RoundHalfAwayFromZero).IsInf(1))
+	assert.True(t, Amount(math.NaN()).DecimalAmount(2, RoundHalfAwayFromZero).IsNaN())
+
+	// Round-trip Amount -> DecimalAmount -> Amount at 2 decimals.
+	back, err := DecimalAmountFromAmount(d.Amount(), 2, RoundHalfAwayFromZero)
+	require.NoError(t, err)
+	assert.True(t, d.Equal(back))
+}
+
+func TestDecimalAmount_RateInterop(t *testing.T) {
+	price := NewDecimalAmount(10000, 2) // 100.00
+
+	// 100.00 * 1.19 VAT rate -> 119.00 at 2 decimals.
+	assert.Equal(t, "119.00", price.MultipliedByRate(Rate(1.19), 2, RoundHalfAwayFromZero).String())
+	// Reverse: 119.00 / 1.19 -> 100.00.
+	assert.Equal(t, "100.00", NewDecimalAmount(11900, 2).DividedByRate(Rate(1.19), 2, RoundHalfAwayFromZero).String())
+	// 19% of 100.00 -> 19.00.
+	assert.Equal(t, "19.00", price.Percentage(19, 2, RoundHalfAwayFromZero).String())
+	// Result scale is the requested one.
+	assert.Equal(t, 4, price.MultipliedByRate(Rate(1.19), 4, RoundHalfAwayFromZero).Scale())
+
+	// Dividing by a zero rate yields +Inf instead of panicking.
+	assert.True(t, price.DividedByRate(Rate(0), 2, RoundHalfAwayFromZero).IsInf(1))
+}

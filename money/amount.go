@@ -93,6 +93,14 @@ func (a Amount) Cents() int64 {
 	return int64(math.Round(float64(a) * 100))
 }
 
+// DecimalAmount converts the float64 Amount to an exact fixed-point
+// DecimalAmount rounded to the given scale with the given rounding mode.
+// It panics if the Amount is NaN, infinite, or does not fit the DecimalAmount
+// range. See DecimalAmountFromAmount for an error-returning variant.
+func (a Amount) DecimalAmount(scale int, rounding RoundingMode) DecimalAmount {
+	return mustDecimalFromFloat(float64(a), scale, rounding)
+}
+
 // WithinOneCent returns true if a and b are equal
 // within a one cent tolerance.
 func (a Amount) WithinOneCent(b Amount) bool {
