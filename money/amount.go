@@ -97,8 +97,8 @@ func (a Amount) Cents() int64 {
 // DecimalAmount rounded to the given scale with the given rounding mode.
 // A NaN or infinite Amount maps to the corresponding non-finite DecimalAmount
 // and an out-of-range value maps to ±Inf; it panics only if scale is out of
-// range. See DecimalAmountFromAmount for a variant that returns an error
-// instead of panicking on an out-of-range scale.
+// range. See DecimalAmountFrom for a conversion that keeps the full float64
+// precision instead of rounding to a fixed scale.
 func (a Amount) DecimalAmount(scale int, rounding RoundingMode) DecimalAmount {
 	return mustDecimalFromFloat(float64(a), scale, rounding)
 }
@@ -131,7 +131,7 @@ func (a Amount) RoundToDecimals(decimals int) Amount {
 // formatted with a dot as decimal separator.
 // String implements the fmt.Stringer interface.
 func (a Amount) String() string {
-	return a.RoundToCents().Format(0, '.', 2)
+	return a.RoundToCents().FormatSep(0, '.', 2)
 
 	// neg := a < 0
 	// s := strconv.FormatInt(a.Abs().Cents(), 10)
@@ -201,7 +201,7 @@ func (ptr *Amount) AmountOr(defaultVal Amount) Amount {
 	return *ptr
 }
 
-// Format formats the Amount similar to strconv.FormatFloat with the 'f' format option,
+// FormatSep formats the Amount similar to strconv.FormatFloat with the 'f' format option,
 // but with decimalSep as decimal separator instead of a point
 // and optional grouping of the integer part.
 // Valid values for decimalSep are '.' and ','.
@@ -213,7 +213,7 @@ func (ptr *Amount) AmountOr(defaultVal Amount) Amount {
 // Note that the last digit is not rounded!
 // The special precision -1 uses the smallest number of digits
 // necessary such that ParseFloat will return f exactly.
-func (a Amount) Format(thousandsSep, decimalSep rune, precision int) string {
+func (a Amount) FormatSep(thousandsSep, decimalSep rune, precision int) string {
 	return float.Format(float64(a), thousandsSep, decimalSep, precision, true)
 }
 

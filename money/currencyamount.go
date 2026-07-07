@@ -79,14 +79,14 @@ func ParseCurrencyAmount(str string, acceptedDecimals ...int) (result CurrencyAm
 
 // String implements the fmt.Stringer interface.
 func (ca CurrencyAmount) String() string {
-	return ca.Format(true, 0, '.', 2)
+	return ca.FormatSep(true, 0, '.', 2)
 }
 
-// Format formats the CurrencyAmount using the given separators and decimal precision.
+// FormatSep formats the CurrencyAmount using the given separators and decimal precision.
 // If currencyFirst is true the currency code is placed before the amount,
-// otherwise it is placed after. See Amount.Format for details about the separator and precision arguments.
-func (ca CurrencyAmount) Format(currencyFirst bool, thousandsSep, decimalSep rune, precision int) string {
-	amountStr := ca.Amount.Format(thousandsSep, decimalSep, precision)
+// otherwise it is placed after. See Amount.FormatSep for details about the separator and precision arguments.
+func (ca CurrencyAmount) FormatSep(currencyFirst bool, thousandsSep, decimalSep rune, precision int) string {
+	amountStr := ca.Amount.FormatSep(thousandsSep, decimalSep, precision)
 	if ca.Currency == "" {
 		return amountStr
 	}

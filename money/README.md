@@ -22,7 +22,7 @@ type NullableAmount = nullable.Type[Amount]
 | `a.Cents()`                                        | Rounded to integer cents (`int64`).                |
 | `a.WithinOneCent(b)`                               | True if `abs(a - b)` ≤ 0.01.                       |
 | `a.RoundToInt()` / `RoundToCents()` / `RoundToDecimals(n)` | Rounding helpers.                                  |
-| `a.Format(...)`                                    | Wraps `float.Format` for locale output.            |
+| `a.FormatSep(...)`                                 | Wraps `float.Format` for locale output.            |
 | `a.Valid()`                                        | Not NaN, not Inf.                                  |
 | `a.Ptr()`                                          | Pointer to a copy of the value.                    |
 | `a.ScanString(src, validate)`                      | Assign from string, validating only if asked.      |
@@ -48,13 +48,13 @@ Implements `fmt.Stringer`, `fmt.GoStringer`, `fmt.Formatter`, `driver.Valuer`, `
 |----------------------------------------------------|----------------------------------------------------|
 | `NewDecimalAmount(coeff, scale)`                   | From integer coefficient and scale (panics if out of range). |
 | `ParseDecimalAmount(str, decimals...)`             | Exact locale-aware parse (no `float64` round-trip). Reads `NaN`/`Inf`/`Infinity`. |
-| `DecimalAmountFromInt(i)` / `FromFloat(f, scale, mode)` / `FromAmount(a, scale, mode)` | Conversions. |
+| `DecimalAmountFrom(v)`                             | Generic conversion from integer types (exact, scale 0) and float types incl. `Amount`/`Rate` (shortest exact decimal of the float value). |
 | `DecimalAmountNaN()` / `DecimalAmountInf(sign)`    | Non-finite constructors.                           |
 | `a.Coefficient()` / `a.Scale()`                    | Raw parts (finite values only).                    |
-| `a.Add(b)` / `a.Sub(b)` / `a.MulInt(n)` / `a.MulInt64(n)` | Exact arithmetic; overflow → ±Inf.          |
-| `a.Mul(b, mode)` / `a.Div(b, mode)`                | 128-bit exact multiply/divide, rounded to `a`'s scale. |
+| `a.Add(b)` / `a.Sub(b)` / `a.MulInt(n)` / `a.MulInt64(n)` | Exact arithmetic; integer overflow → ±Inf.  |
+| `a.Mul(b, mode)` / `a.Div(b, mode)`                | 128-bit exact multiply/divide at full result precision; `mode` only applies when the exact result exceeds the representable precision. |
 | `a.RoundToDecimals(n, mode)` / `RoundToCents(mode)` / `RoundToInt(mode)` | Rounding with an explicit `RoundingMode`. |
-| `a.MultipliedByRate(r, scale, mode)` / `DividedByRate` / `Percentage` | Apply a `float64` `Rate`.        |
+| `a.MultipliedByRate(r)` / `DividedByRate(r)` / `Percentage(p)` | Apply a `float64` `Rate`; result is the exact shortest decimal of the `float64` result. |
 | `a.Cmp(b)` / `a.Equal(b)` / `a.Sign()` / `a.IsZero()` | Value comparison (total order `-Inf < finite < +Inf < NaN`). |
 | `a.IsFinite()` / `a.Valid()` / `a.IsNaN()` / `a.IsInf(sign)` | Non-finite tests (mirror `Amount`).      |
 | `a.Abs()` / `a.Neg()`                              | Sign helpers (propagate non-finite).               |
@@ -63,7 +63,28 @@ Implements `fmt.Stringer`, `fmt.GoStringer`, `fmt.Formatter`, `driver.Valuer`, `
 
 `RoundingMode`: `RoundHalfAwayFromZero` (zero value / default), `RoundHalfToEven`, `RoundHalfUp`, `RoundHalfDown`, `RoundDown`, `RoundUp`, `RoundFloor`, `RoundCeil`.
 
-`NullableDecimalAmount` is `nullable.Type[DecimalAmount]`. Constructors `NullableDecimalAmountFrom(v)` and `NullableDecimalAmountFromPtr(*DecimalAmount)`.
+### Calculate exactly, round once at the end
+
+Arithmetic results carry the scale that holds the full precision of the result: `Add`/`Sub` use the larger operand scale, `Mul` the sum of the operand scales, and `Div` extends the scale as far as needed (up to the 18-place maximum for non-terminating quotients). So a chain of calculations loses no data along the way — round to the final precision (typically 2 decimal places for cents, or 4 in accounting) exactly once, at the end:
+
+```go
+price := money.NewDecimalAmount(1999, 2) // 19.99 per unit
+qty := money.DecimalAmountFrom(7)
+vatFactor := money.NewDecimalAmount(119, 2) // 1.19 → 19% VAT
+
+net := price.Mul(qty, money.RoundHalfAwayFromZero)   // 139.93   (scale 2, exact)
+gross := net.Mul(vatFactor, money.RoundHalfAwayFromZero) // 166.5167 (scale 4, exact)
+perMonth := gross.Div(money.DecimalAmountFrom(12), money.RoundHalfAwayFromZero)
+// 13.8763916666666667 — non-terminating, so it is rounded at the
+// maximum representable precision (this is the only step that rounds)
+
+cents := perMonth.RoundToCents(money.RoundHalfToEven)        // 13.88
+account := perMonth.RoundToDecimals(4, money.RoundHalfToEven) // 13.8764
+```
+
+Had every step been rounded to cents instead, the monthly amount would come out as `166.52 / 12 → 13.88` here, but chains of such intermediate roundings drift by whole cents; keeping full precision until the final rounding avoids that. The float-based `MultipliedByRate`/`DividedByRate`/`Percentage` follow the same pattern: they return the exact shortest decimal of the `float64` result (e.g. `0.10 × Rate(3)` → `0.30000000000000004`) for you to round once at the end.
+
+`NullableDecimalAmount` is `nullable.Type[DecimalAmount]`. Wrap a value with `a.Nullable()` or a pointer with `NullableDecimalAmountFromPtr(*DecimalAmount)` (nil → null).
 
 ## Currency
 
@@ -106,7 +127,7 @@ type CurrencyDecimalAmount struct {
 }
 ```
 
-The exact counterpart of `CurrencyAmount`, pairing a `Currency` with a `DecimalAmount`. Same shape — constructors `NewCurrencyDecimalAmount`, `CurrencyDecimalAmountUSD/EUR/CHF/GBP/JPY`, and `ParseCurrencyDecimalAmount(str, decimals...)` — plus `Format`, `String`, `GoString`, `ScanString`, `sql.Scanner`/`driver.Valuer`. Formatting uses the amount's own scale rather than forcing two decimals, and `ca.CurrencyAmount()` bridges back to the `float64` form.
+The exact counterpart of `CurrencyAmount`, pairing a `Currency` with a `DecimalAmount`. Same shape — constructors `NewCurrencyDecimalAmount`, `CurrencyDecimalAmountUSD/EUR/CHF/GBP/JPY`, and `ParseCurrencyDecimalAmount(str, decimals...)` — plus `FormatSep`, `String`, `GoString`, `ScanString`, `sql.Scanner`/`driver.Valuer`. Formatting uses the amount's own scale rather than forcing two decimals, and `ca.CurrencyAmount()` bridges back to the `float64` form.
 
 ## Rate
 

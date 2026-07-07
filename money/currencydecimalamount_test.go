@@ -34,8 +34,8 @@ func TestCurrencyDecimalAmount_constructors(t *testing.T) {
 
 func TestCurrencyDecimalAmount_Format(t *testing.T) {
 	ca := CurrencyDecimalAmountEUR(NewDecimalAmount(123456789, 2)) // 1234567.89
-	assert.Equal(t, "EUR 1,234,567.89", ca.Format(true, ',', '.'))
-	assert.Equal(t, "1.234.567,89 EUR", ca.Format(false, '.', ','))
+	assert.Equal(t, "EUR 1,234,567.89", ca.FormatSep(true, ',', '.'))
+	assert.Equal(t, "1.234.567,89 EUR", ca.FormatSep(false, '.', ','))
 }
 
 func TestParseCurrencyDecimalAmount(t *testing.T) {

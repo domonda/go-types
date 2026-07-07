@@ -37,8 +37,8 @@ var (
 
 // RoundingMode selects how a value that cannot be represented exactly at the
 // target scale is rounded. It is used by every DecimalAmount operation that may
-// round: RoundToDecimals, RoundToCents, RoundToInt, Mul, Div, MultipliedByRate,
-// DividedByRate, Percentage and the float conversions.
+// round: RoundToDecimals, RoundToCents, RoundToInt, the float conversions, and
+// Mul/Div when the exact result needs more precision than is representable.
 type RoundingMode uint8
 
 const (
@@ -110,6 +110,15 @@ func (m RoundingMode) String() string {
 // The zero value is a valid finite amount of 0 with scale 0.
 type DecimalAmount struct {
 	packed int64
+}
+
+// NullableDecimalAmount is a nullable DecimalAmount whose zero value is NULL.
+type NullableDecimalAmount = nullable.Type[DecimalAmount]
+
+// NullableDecimalAmountFromPtr returns a NullableDecimalAmount from a pointer,
+// using nil as the null value.
+func NullableDecimalAmountFromPtr(ptr *DecimalAmount) NullableDecimalAmount {
+	return nullable.TypeFromPtr(ptr)
 }
 
 const (
@@ -203,10 +212,75 @@ func NewDecimalAmount(coefficient int64, scale int) DecimalAmount {
 	return packDecimalAmount(coefficient, scale)
 }
 
-// DecimalAmountFromInt returns i as a DecimalAmount with scale 0.
-// It panics if i is outside the representable coefficient range.
-func DecimalAmountFromInt(i int64) DecimalAmount {
-	return NewDecimalAmount(i, 0)
+// DecimalAmountConvertible lists the types DecimalAmountFrom converts from:
+// the integer and floating point types and the float64-based Amount and Rate.
+type DecimalAmountConvertible interface {
+	int | int8 | int16 | int32 | int64 |
+		uint | uint8 | uint16 | uint32 | uint64 |
+		float32 | float64 | Amount | Rate
+}
+
+// DecimalAmountFrom returns value as a DecimalAmount without losing any
+// precision of the source type.
+//
+// An integer converts exactly with scale 0. A floating point value (float32,
+// float64, Amount, Rate) converts to the shortest decimal representation that
+// round-trips to the same value, so no float precision is lost; a value whose
+// shortest representation needs more than MaxDecimalAmountScale fractional
+// digits is rounded half away from zero at that scale. NaN and ±Inf map to
+// the corresponding non-finite DecimalAmount, and a value outside the
+// representable range maps to ±Inf.
+func DecimalAmountFrom[T DecimalAmountConvertible](value T) DecimalAmount {
+	switch v := any(value).(type) {
+	case int:
+		return decimalFromInt64(int64(v))
+	case int8:
+		return decimalFromInt64(int64(v))
+	case int16:
+		return decimalFromInt64(int64(v))
+	case int32:
+		return decimalFromInt64(int64(v))
+	case int64:
+		return decimalFromInt64(v)
+	case uint:
+		return decimalFromUint64(uint64(v))
+	case uint8:
+		return decimalFromInt64(int64(v))
+	case uint16:
+		return decimalFromInt64(int64(v))
+	case uint32:
+		return decimalFromInt64(int64(v))
+	case uint64:
+		return decimalFromUint64(v)
+	case float32:
+		return decimalFromFloatShortest(float64(v), 32)
+	case float64:
+		return decimalFromFloatShortest(v, 64)
+	case Amount:
+		return decimalFromFloatShortest(float64(v), 64)
+	case Rate:
+		return decimalFromFloatShortest(float64(v), 64)
+	default:
+		panic("unreachable: DecimalAmountConvertible covers all cases")
+	}
+}
+
+// decimalFromInt64 returns i at scale 0, or ±Inf if i is outside the
+// representable coefficient range.
+func decimalFromInt64(i int64) DecimalAmount {
+	if i < minDecimalAmountCoefficient || i > maxDecimalAmountCoefficient {
+		return decimalInf(i < 0)
+	}
+	return packDecimalAmount(i, 0)
+}
+
+// decimalFromUint64 returns u at scale 0, or +Inf if u is outside the
+// representable coefficient range.
+func decimalFromUint64(u uint64) DecimalAmount {
+	if u > uint64(maxDecimalAmountCoefficient) {
+		return decimalInf(false)
+	}
+	return packDecimalAmount(int64(u), 0) //#nosec G115 -- u is a bounded coefficient magnitude
 }
 
 // DecimalAmountNaN returns the not-a-number DecimalAmount.
@@ -259,22 +333,6 @@ func (a DecimalAmount) IsInf(sign int) bool {
 	default:
 		return c != 0
 	}
-}
-
-// DecimalAmountFromFloat converts f to a DecimalAmount at the given scale,
-// rounding the exact value of the binary float64 with the given rounding mode.
-// A NaN or infinite f maps to the corresponding non-finite DecimalAmount and an
-// out-of-range value maps to ±Inf; an error is returned only for an out-of-range
-// scale.
-func DecimalAmountFromFloat(f float64, scale int, rounding RoundingMode) (DecimalAmount, error) {
-	return decimalFromFloatRounded(f, scale, rounding)
-}
-
-// DecimalAmountFromAmount converts the float64-based Amount to a DecimalAmount at
-// the given scale using the given rounding mode. It is the inverse of
-// DecimalAmount.Amount and shares the precision caveat of DecimalAmountFromFloat.
-func DecimalAmountFromAmount(amount Amount, scale int, rounding RoundingMode) (DecimalAmount, error) {
-	return decimalFromFloatRounded(float64(amount), scale, rounding)
 }
 
 // ParseDecimalAmount parses an exact fixed-point amount from str using the same
@@ -345,20 +403,6 @@ func ParseDecimalAmount(str string, acceptedDecimals ...int) (DecimalAmount, err
 	return packDecimalAmount(coefficient, decimals), nil
 }
 
-// NullableDecimalAmount is a nullable DecimalAmount whose zero value is NULL.
-type NullableDecimalAmount = nullable.Type[DecimalAmount]
-
-// NullableDecimalAmountFrom returns a non-null NullableDecimalAmount wrapping value.
-func NullableDecimalAmountFrom(value DecimalAmount) NullableDecimalAmount {
-	return nullable.TypeFrom(value)
-}
-
-// NullableDecimalAmountFromPtr returns a NullableDecimalAmount from a pointer,
-// using nil as the null value.
-func NullableDecimalAmountFromPtr(ptr *DecimalAmount) NullableDecimalAmount {
-	return nullable.TypeFromPtr(ptr)
-}
-
 // Coefficient returns the unscaled integer value; the finite amount equals
 // Coefficient × 10^-Scale. It is only meaningful when IsFinite is true.
 func (a DecimalAmount) Coefficient() int64 {
@@ -374,6 +418,11 @@ func (a DecimalAmount) Scale() int {
 // Ptr returns a pointer to a copy of the amount.
 func (a DecimalAmount) Ptr() *DecimalAmount {
 	return &a
+}
+
+// Nullable returns the amount wrapped in a non-null NullableDecimalAmount.
+func (a DecimalAmount) Nullable() NullableDecimalAmount {
+	return nullable.TypeFrom(a)
 }
 
 // Float returns the amount as a float64, which may lose precision.
@@ -551,21 +600,26 @@ func (a DecimalAmount) Add(b DecimalAmount) DecimalAmount {
 		sumHi, sumLo = subU128(bHi, bLo, aHi, aLo)
 		negSum = negB
 	}
-	// Reduce the scale by stripping exact trailing zeros while the magnitude
-	// exceeds the coefficient range; only a genuinely too-large integer part
-	// (indivisible by 10) overflows to ±Inf.
-	for scale > 0 && (sumHi != 0 || sumLo > uint64(maxDecimalAmountCoefficient)) {
-		quoHi, quoLo, rem := div128by64(sumHi, sumLo, 10)
+	return packReduced(sumHi, sumLo, scale, negSum)
+}
+
+// packReduced packs the 128-bit magnitude (hi, lo) at scale, reducing the
+// scale by stripping exact trailing zeros while the magnitude exceeds the
+// coefficient range; only a genuinely too-large integer part (indivisible by
+// 10) overflows to ±Inf. No rounding is performed.
+func packReduced(hi, lo uint64, scale int, negative bool) DecimalAmount {
+	for scale > 0 && (hi != 0 || lo > uint64(maxDecimalAmountCoefficient)) {
+		quoHi, quoLo, rem := div128by64(hi, lo, 10)
 		if rem != 0 {
 			break
 		}
-		sumHi, sumLo, scale = quoHi, quoLo, scale-1
+		hi, lo, scale = quoHi, quoLo, scale-1
 	}
-	if sumHi != 0 || sumLo > uint64(maxDecimalAmountCoefficient) {
-		return decimalInf(negSum)
+	if hi != 0 || lo > uint64(maxDecimalAmountCoefficient) {
+		return decimalInf(negative)
 	}
-	coeff := int64(sumLo) //#nosec G115 -- sumLo is a bounded coefficient magnitude
-	if negSum {
+	coeff := int64(lo) //#nosec G115 -- lo is a bounded coefficient magnitude
+	if negative {
 		coeff = -coeff
 	}
 	return packDecimalAmount(coeff, scale)
@@ -577,14 +631,18 @@ func (a DecimalAmount) Sub(b DecimalAmount) DecimalAmount {
 	return a.Add(b.Neg())
 }
 
-// MulInt returns a multiplied by the integer n, keeping a's scale.
-// Overflow yields ±Inf; a NaN receiver yields NaN and ±Inf × 0 yields NaN.
+// MulInt returns a multiplied by the integer n, keeping a's scale. The scale
+// is reduced only when needed to keep the exact product representable;
+// overflow of the integer part yields ±Inf. A NaN receiver yields NaN and
+// ±Inf × 0 yields NaN.
 func (a DecimalAmount) MulInt(n int) DecimalAmount {
 	return a.MulInt64(int64(n))
 }
 
-// MulInt64 returns a multiplied by the integer n, keeping a's scale.
-// Overflow yields ±Inf; a NaN receiver yields NaN and ±Inf × 0 yields NaN.
+// MulInt64 returns a multiplied by the integer n, keeping a's scale. The scale
+// is reduced only when needed to keep the exact product representable;
+// overflow of the integer part yields ±Inf. A NaN receiver yields NaN and
+// ±Inf × 0 yields NaN.
 func (a DecimalAmount) MulInt64(n int64) DecimalAmount {
 	if !a.IsFinite() {
 		switch {
@@ -596,57 +654,56 @@ func (a DecimalAmount) MulInt64(n int64) DecimalAmount {
 			return decimalInf(a.Signbit() != (n < 0))
 		}
 	}
-	product, over := mulOverflow(a.Coefficient(), n)
-	if over || product < minDecimalAmountCoefficient || product > maxDecimalAmountCoefficient {
-		return decimalInf((a.Coefficient() < 0) != (n < 0))
-	}
-	return packDecimalAmount(product, a.Scale())
+	ca := a.Coefficient()
+	hi, lo := bits.Mul64(abs64(ca), abs64(n))
+	return packReduced(hi, lo, a.Scale(), (ca < 0) != (n < 0))
 }
 
-// MultipliedByRate returns the amount multiplied by the float64 Rate, rounded to
-// the given number of decimal places with the given rounding mode. Because Rate
-// is a float64 the product is computed in floating point, so the result is exact
-// only to the requested scale. A non-finite product yields the corresponding
-// NaN or ±Inf. It panics only if scale is out of range.
-func (a DecimalAmount) MultipliedByRate(rate Rate, scale int, rounding RoundingMode) DecimalAmount {
-	return mustDecimalFromFloat(a.Float()*float64(rate), scale, rounding)
+// MultipliedByRate returns the amount multiplied by the float64 Rate. Because
+// Rate is a float64 the product is computed in floating point; the result is
+// the exact shortest decimal representation of that float64 product, so no
+// further precision is lost. Round to the final precision afterwards, e.g.
+// with RoundToCents. A non-finite product yields the corresponding NaN or ±Inf.
+func (a DecimalAmount) MultipliedByRate(rate Rate) DecimalAmount {
+	return decimalFromFloatShortest(a.Float()*float64(rate), 64)
 }
 
-// DividedByRate returns the amount divided by the float64 Rate, rounded to the
-// given number of decimal places with the given rounding mode. See
+// DividedByRate returns the amount divided by the float64 Rate. See
 // MultipliedByRate for the precision caveat. Division by a zero rate yields
-// ±Inf (or NaN). It panics only if scale is out of range.
-func (a DecimalAmount) DividedByRate(rate Rate, scale int, rounding RoundingMode) DecimalAmount {
-	return mustDecimalFromFloat(a.Float()/float64(rate), scale, rounding)
+// ±Inf (or NaN for 0/0).
+func (a DecimalAmount) DividedByRate(rate Rate) DecimalAmount {
+	return decimalFromFloatShortest(a.Float()/float64(rate), 64)
 }
 
-// Percentage returns the amount multiplied by (percent / 100), rounded to the
-// given number of decimal places with the given rounding mode. See
+// Percentage returns the amount multiplied by (percent / 100). See
 // MultipliedByRate for the precision caveat.
-func (a DecimalAmount) Percentage(percent float64, scale int, rounding RoundingMode) DecimalAmount {
-	return mustDecimalFromFloat(a.Float()*percent/100, scale, rounding)
+func (a DecimalAmount) Percentage(percent float64) DecimalAmount {
+	return decimalFromFloatShortest(a.Float()*percent/100, 64)
 }
 
-// Mul returns a × b rounded to the scale of a using the given rounding mode.
-// The exact product is computed in 128-bit integer arithmetic (no heap
-// allocation), so no intermediate precision is lost before rounding. Overflow
-// yields ±Inf; NaN propagates and ±Inf × 0 yields NaN.
+// Mul returns the exact product a × b, computed in 128-bit integer arithmetic
+// (no heap allocation). The result scale is a.Scale()+b.Scale(), reduced only
+// when needed to keep the result representable: exact trailing zeros are
+// stripped first and only then is the value rounded — once, with the given
+// rounding mode — at the largest scale that still fits. Overflow of the
+// integer part yields ±Inf; NaN propagates and ±Inf × 0 yields NaN.
 func (a DecimalAmount) Mul(b DecimalAmount, rounding RoundingMode) DecimalAmount {
 	if r, ok := mulNonFinite(a, b); ok {
 		return r
 	}
 	ca, cb := a.Coefficient(), b.Coefficient()
 	negative := (ca < 0) != (cb < 0)
-	// Exact product coefficient ca·cb has scale a.Scale()+b.Scale(); dividing
-	// by 10^b.Scale() brings it to the target scale a.Scale().
 	hi, lo := bits.Mul64(abs64(ca), abs64(cb))
-	return decimalDivRound(hi, lo, pow10u(b.Scale()), negative, a.Scale(), rounding)
+	return decimalFitRound(hi, lo, a.Scale()+b.Scale(), negative, rounding)
 }
 
-// Div returns a / b rounded to the scale of a using the given rounding mode.
-// The quotient is computed in 128-bit integer arithmetic (no heap allocation).
-// Division by zero yields ±Inf (or NaN for 0/0), overflow yields ±Inf, and NaN
-// propagates.
+// Div returns a / b, computed in 128-bit integer arithmetic (no heap
+// allocation). A quotient that terminates within MaxDecimalAmountScale decimal
+// places is returned exactly, with trailing zeros stripped down to (at least)
+// the preferred scale a.Scale()-b.Scale(); a non-terminating quotient is
+// rounded once with the given rounding mode at the largest scale whose
+// coefficient is representable. Division by zero yields ±Inf (or NaN for 0/0),
+// overflow of the integer part yields ±Inf, and NaN propagates.
 func (a DecimalAmount) Div(b DecimalAmount, rounding RoundingMode) DecimalAmount {
 	if r, ok := divNonFinite(a, b); ok {
 		return r
@@ -659,9 +716,65 @@ func (a DecimalAmount) Div(b DecimalAmount, rounding RoundingMode) DecimalAmount
 		return decimalInf(ca < 0)
 	}
 	negative := (ca < 0) != (cb < 0)
-	// result_coeff = round( ca·10^b.Scale() / cb ) at scale a.Scale().
-	hi, lo := bits.Mul64(abs64(ca), pow10u(b.Scale()))
-	return decimalDivRound(hi, lo, abs64(cb), negative, a.Scale(), rounding)
+	preferred := max(a.Scale()-b.Scale(), 0)
+	ua, ub := abs64(ca), abs64(cb)
+	// Try scales from the maximum downwards; each candidate rounds the true
+	// quotient exactly once. The coefficient at result scale s is
+	// ca·10^(s+b.Scale()-a.Scale()) / cb; the exponent stays non-negative for
+	// every s down to the preferred scale, where the quotient always fits.
+	for scale := MaxDecimalAmountScale; scale >= 0; scale-- {
+		hi, lo, fits := mulByPow10u128(ua, scale+b.Scale()-a.Scale())
+		if !fits {
+			continue // the quotient cannot fit either, retry one place lower
+		}
+		quoHi, quoLo, rem := div128by64(hi, lo, ub)
+		exact := rem == 0
+		if roundUpMagnitude(rounding, quoLo, rem, ub, negative) {
+			quoLo++
+			if quoLo == 0 {
+				quoHi++
+			}
+		}
+		if quoHi != 0 || quoLo > uint64(maxDecimalAmountCoefficient) {
+			continue // does not fit, retry with one decimal place less
+		}
+		if exact {
+			for scale > preferred && quoLo%10 == 0 {
+				quoLo /= 10
+				scale--
+			}
+		}
+		coeff := int64(quoLo) //#nosec G115 -- quoLo is a bounded coefficient magnitude
+		if negative {
+			coeff = -coeff
+		}
+		return packDecimalAmount(coeff, scale)
+	}
+	// Even the integer part of the quotient overflows the coefficient range.
+	return decimalInf(negative)
+}
+
+// mulByPow10u128 returns u·10^n as a 128-bit magnitude for n in
+// [0, 2·MaxDecimalAmountScale]. fits is false when the product overflows
+// 128 bits, which for coefficient-range inputs implies the quotient derived
+// from it cannot fit the coefficient range either.
+func mulByPow10u128(u uint64, n int) (hi, lo uint64, fits bool) {
+	if n <= MaxDecimalAmountScale {
+		hi, lo = bits.Mul64(u, pow10u(n))
+		return hi, lo, true
+	}
+	hi, lo = bits.Mul64(u, pow10u(MaxDecimalAmountScale))
+	m := pow10u(n - MaxDecimalAmountScale)
+	hiHi, hiLo := bits.Mul64(hi, m)
+	if hiHi != 0 {
+		return 0, 0, false
+	}
+	carry, lo2 := bits.Mul64(lo, m)
+	hi2, overflow := bits.Add64(hiLo, carry, 0)
+	if overflow != 0 {
+		return 0, 0, false
+	}
+	return hi2, lo2, true
 }
 
 // RoundToDecimals returns the amount rounded to the given number of decimal
@@ -955,15 +1068,7 @@ func (a *DecimalAmount) Scan(value any) error {
 		// Use the shortest exact decimal when it fits; a value needing more
 		// than MaxDecimalAmountScale fractional digits is rounded to that scale
 		// rather than rejected.
-		if parsed, err := ParseDecimalAmount(strconv.FormatFloat(x, 'f', -1, 64)); err == nil {
-			*a = parsed
-			return nil
-		}
-		parsed, err := DecimalAmountFromFloat(x, MaxDecimalAmountScale, RoundHalfAwayFromZero)
-		if err != nil {
-			return err
-		}
-		*a = parsed
+		*a = decimalFromFloatShortest(x, 64)
 		return nil
 	default:
 		return fmt.Errorf("can't scan value of type %T as money.DecimalAmount", value)
@@ -1067,6 +1172,20 @@ func mustDecimalFromFloat(f float64, scale int, rounding RoundingMode) DecimalAm
 		panic(fmt.Sprintf("money.DecimalAmount from float %v: %s", f, err))
 	}
 	return d
+}
+
+// decimalFromFloatShortest converts f to the DecimalAmount given exactly by
+// the shortest decimal representation that round-trips to f at the given
+// bitSize (32 or 64), so no float precision is lost. A value whose shortest
+// representation needs more than MaxDecimalAmountScale fractional digits (or
+// does not fit the coefficient range) is instead converted at
+// MaxDecimalAmountScale, rounding half away from zero (or yielding ±Inf on
+// overflow). NaN and ±Inf map to the corresponding non-finite values.
+func decimalFromFloatShortest(f float64, bitSize int) DecimalAmount {
+	if parsed, err := ParseDecimalAmount(strconv.FormatFloat(f, 'f', -1, bitSize)); err == nil {
+		return parsed
+	}
+	return mustDecimalFromFloat(f, MaxDecimalAmountScale, RoundHalfAwayFromZero)
 }
 
 // decimalDigits splits abs(coeff) into integer and fractional digit strings for
@@ -1176,8 +1295,9 @@ func writeStr(f fmt.State, s string) {
 	_, _ = io.WriteString(f, s) //#nosec G104 -- writing to a fmt.State cannot fail meaningfully
 }
 
-// abs64 returns the magnitude of x as an unsigned integer. It is safe for every
-// value in the coefficient range, which never reaches math.MinInt64.
+// abs64 returns the magnitude of x as an unsigned integer. It is correct for
+// every int64 including math.MinInt64, whose negation wraps to itself and
+// converts to the right magnitude 2^63.
 func abs64(x int64) uint64 {
 	if x < 0 {
 		return uint64(-x)
@@ -1229,26 +1349,48 @@ func cmpUint128(aHi, aLo, bHi, bLo uint64) int {
 	}
 }
 
-// decimalDivRound divides the 128-bit magnitude (numHi, numLo) by divisor,
-// rounds the quotient to an integer coefficient with the given rounding mode and
-// sign, and packs it at scale. It returns ±Inf if the result does not fit the
-// coefficient range. divisor must be non-zero.
-func decimalDivRound(numHi, numLo, divisor uint64, negative bool, scale int, rounding RoundingMode) DecimalAmount {
-	quoHi, quoLo, rem := div128by64(numHi, numLo, divisor)
-	if roundUpMagnitude(rounding, quoLo, rem, divisor, negative) {
-		quoLo++
-		if quoLo == 0 {
-			quoHi++
+// decimalFitRound packs the exact 128-bit magnitude (hi, lo) at scale,
+// reducing the scale only as needed to make the value representable: exact
+// trailing zeros are stripped first, and a value that still needs more
+// precision than representable is rounded — once, against the original
+// magnitude — with the given rounding mode at the largest scale that fits.
+// ±Inf is returned only when the integer part overflows.
+func decimalFitRound(hi, lo uint64, scale int, negative bool, rounding RoundingMode) DecimalAmount {
+	// Strip exact trailing zeros while the value does not fit.
+	for scale > 0 && (scale > MaxDecimalAmountScale || hi != 0 || lo > uint64(maxDecimalAmountCoefficient)) {
+		quoHi, quoLo, rem := div128by64(hi, lo, 10)
+		if rem != 0 {
+			break
+		}
+		hi, lo, scale = quoHi, quoLo, scale-1
+	}
+	if scale <= MaxDecimalAmountScale && hi == 0 && lo <= uint64(maxDecimalAmountCoefficient) {
+		coeff := int64(lo) //#nosec G115 -- lo is a bounded coefficient magnitude
+		if negative {
+			coeff = -coeff
+		}
+		return packDecimalAmount(coeff, scale)
+	}
+	// Rounded reduction: divide the remaining magnitude by 10^drop for the
+	// smallest drop that fits, so the value is rounded exactly once.
+	for drop := max(1, scale-MaxDecimalAmountScale); drop <= scale && drop <= MaxDecimalAmountScale; drop++ {
+		divisor := pow10u(drop)
+		quoHi, quoLo, rem := div128by64(hi, lo, divisor)
+		if roundUpMagnitude(rounding, quoLo, rem, divisor, negative) {
+			quoLo++
+			if quoLo == 0 {
+				quoHi++
+			}
+		}
+		if quoHi == 0 && quoLo <= uint64(maxDecimalAmountCoefficient) {
+			coeff := int64(quoLo) //#nosec G115 -- quoLo is a bounded coefficient magnitude
+			if negative {
+				coeff = -coeff
+			}
+			return packDecimalAmount(coeff, scale-drop)
 		}
 	}
-	if quoHi != 0 || quoLo > uint64(maxDecimalAmountCoefficient) {
-		return decimalInf(negative)
-	}
-	coeff := int64(quoLo)
-	if negative {
-		coeff = -coeff
-	}
-	return packDecimalAmount(coeff, scale)
+	return decimalInf(negative)
 }
 
 // addNonFinite applies the non-finite rules of Add/Sub. It returns (result,

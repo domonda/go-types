@@ -95,14 +95,14 @@ func ParseCurrencyDecimalAmount(str string, acceptedDecimals ...int) (result Cur
 // amount and using the amount's own scale (unlike CurrencyAmount.String, which
 // forces two decimal places).
 func (ca CurrencyDecimalAmount) String() string {
-	return ca.Format(true, 0, '.')
+	return ca.FormatSep(true, 0, '.')
 }
 
-// Format formats the CurrencyDecimalAmount using the given separators. If
+// FormatSep formats the CurrencyDecimalAmount using the given separators. If
 // currencyFirst is true the currency code is placed before the amount,
 // otherwise it is placed after. The number of decimal places is the amount's
 // own Scale; see DecimalAmount.FormatSep for the separator arguments.
-func (ca CurrencyDecimalAmount) Format(currencyFirst bool, thousandsSep, decimalSep rune) string {
+func (ca CurrencyDecimalAmount) FormatSep(currencyFirst bool, thousandsSep, decimalSep rune) string {
 	amountStr := ca.Amount.FormatSep(thousandsSep, decimalSep)
 	if ca.Currency == "" {
 		return amountStr

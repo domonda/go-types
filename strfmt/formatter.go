@@ -36,14 +36,14 @@ type MoneyFormat struct {
 // FormatAmount formats a monetary amount as a string using the
 // thousands separator, decimal separator, and precision defined in format.
 func (format *MoneyFormat) FormatAmount(amount money.Amount) string {
-	return amount.Format(format.ThousandsSep, format.DecimalSep, format.Precision)
+	return amount.FormatSep(format.ThousandsSep, format.DecimalSep, format.Precision)
 }
 
 // FormatCurrencyAmount formats a currency-tagged monetary amount as a string,
 // placing the currency code before or after the number according to
 // format.CurrencyFirst, and applying the configured separators and precision.
 func (format *MoneyFormat) FormatCurrencyAmount(currencyAmount money.CurrencyAmount) string {
-	return currencyAmount.Format(format.CurrencyFirst, format.ThousandsSep, format.DecimalSep, format.Precision)
+	return currencyAmount.FormatSep(format.CurrencyFirst, format.ThousandsSep, format.DecimalSep, format.Precision)
 }
 
 // EnglishFloatFormat returns a float.FormatDef using a dot as the decimal
