@@ -956,12 +956,20 @@ func (a DecimalAmount) MarshalJSON() ([]byte, error) {
 // decimal string, or null. null and "" are decoded as zero.
 func (a *DecimalAmount) UnmarshalJSON(data []byte) error {
 	s := string(data)
-	if s == "null" || s == `""` {
+	if s == "null" {
 		*a = DecimalAmount{}
 		return nil
 	}
-	if l := len(s); l >= 2 && s[0] == '"' && s[l-1] == '"' {
-		s = s[1 : l-1]
+	// Decode a JSON string through the standard library so \uXXXX and other
+	// escape sequences are resolved, not just the surrounding quotes stripped.
+	if len(s) > 0 && s[0] == '"' {
+		if err := json.Unmarshal(data, &s); err != nil {
+			return fmt.Errorf("can't unmarshal JSON %s as money.DecimalAmount: %w", data, err)
+		}
+	}
+	if s == "" {
+		*a = DecimalAmount{}
+		return nil
 	}
 	parsed, err := ParseDecimalAmount(s)
 	if err != nil {

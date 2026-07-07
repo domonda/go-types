@@ -150,6 +150,28 @@ func TestDecimalAmount_String(t *testing.T) {
 func TestDecimalAmount_GoString(t *testing.T) {
 	assert.Equal(t, "money.NewDecimalAmount(123456, 2)", NewDecimalAmount(123456, 2).GoString())
 	assert.Equal(t, "money.NewDecimalAmount(123456, 2)", fmt.Sprintf("%#v", NewDecimalAmount(123456, 2)))
+	// Non-finite sentinels produce constructor-call source (round-trips as Go).
+	assert.Equal(t, "money.DecimalAmountNaN()", DecimalAmountNaN().GoString())
+	assert.Equal(t, "money.DecimalAmountInf(-1)", DecimalAmountInf(-1).GoString())
+}
+
+func TestRoundingMode_String(t *testing.T) {
+	// Every mode has a distinct name and an unknown mode is reported by value;
+	// the strings match the constant identifiers so they are safe to log/parse.
+	cases := map[RoundingMode]string{
+		RoundHalfAwayFromZero: "RoundHalfAwayFromZero",
+		RoundHalfToEven:       "RoundHalfToEven",
+		RoundHalfUp:           "RoundHalfUp",
+		RoundHalfDown:         "RoundHalfDown",
+		RoundDown:             "RoundDown",
+		RoundUp:               "RoundUp",
+		RoundFloor:            "RoundFloor",
+		RoundCeil:             "RoundCeil",
+	}
+	for mode, want := range cases {
+		assert.Equal(t, want, mode.String())
+	}
+	assert.Equal(t, "Unknown rounding mode: 99", RoundingMode(99).String())
 }
 
 func TestDecimalAmount_FormatSep(t *testing.T) {
@@ -204,6 +226,9 @@ func TestDecimalAmount_CmpEqual(t *testing.T) {
 	assert.Equal(t, -1, NewDecimalAmount(149, 2).Cmp(b))
 	assert.Equal(t, +1, NewDecimalAmount(151, 2).Cmp(b))
 	assert.Equal(t, -1, NewDecimalAmount(-1, 0).Cmp(NewDecimalAmount(1, 0)))
+	// Equal scale, differing coefficients exercise both fast-path branches.
+	assert.Equal(t, +1, NewDecimalAmount(200, 2).Cmp(NewDecimalAmount(100, 2)))
+	assert.Equal(t, -1, NewDecimalAmount(100, 2).Cmp(NewDecimalAmount(200, 2)))
 	// Large cross-scale comparison must not overflow.
 	assert.Equal(t, +1, NewDecimalAmount(maxDecimalAmountCoefficient, 0).Cmp(NewDecimalAmount(1, 18)))
 }
@@ -535,9 +560,23 @@ func TestDecimalAmount_JSON(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(`"1234.56"`), &got))
 	assert.Equal(t, "1234.56", got.String())
 
+	// A quoted string carrying JSON escape sequences must be decoded through
+	// the standard library, not by stripping the outer quotes. The token here
+	// spells the digit 1 as a Unicode escape (u+0031); a conformant encoder
+	// may emit that and it must still decode to 1.23. byte(92) is the
+	// backslash, written numerically so the source carries no literal escape.
+	got = DecimalAmount{}
+	escaped := string([]byte{'"', byte(92), 'u', '0', '0', '3', '1', '.', '2', '3', '"'})
+	require.NoError(t, json.Unmarshal([]byte(escaped), &got))
+	assert.Equal(t, "1.23", got.String())
+
 	// null and "" decode to zero.
 	got = NewDecimalAmount(1, 0)
 	require.NoError(t, json.Unmarshal([]byte("null"), &got))
+	assert.True(t, got.IsZero())
+
+	got = NewDecimalAmount(1, 0)
+	require.NoError(t, json.Unmarshal([]byte(`""`), &got))
 	assert.True(t, got.IsZero())
 
 	// Round-trip inside a struct.
@@ -617,6 +656,9 @@ func TestDecimalAmount_SQL(t *testing.T) {
 
 	var got DecimalAmount
 	assert.Error(t, got.Scan(true))
+	// An int64 outside the coefficient range is rejected rather than silently
+	// truncated (the coefficient must round-trip Neg/Abs).
+	assert.Error(t, got.Scan(int64(math.MaxInt64)))
 }
 
 func TestNullableDecimalAmount(t *testing.T) {
