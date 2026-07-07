@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/domonda/go-types/strutil"
@@ -148,7 +147,7 @@ func (ca *CurrencyDecimalAmount) Scan(value any) (err error) {
 	case []byte:
 		parsed, err = ParseCurrencyDecimalAmount(string(x))
 	case float64:
-		parsed.Amount, err = ParseDecimalAmount(strconv.FormatFloat(x, 'f', -1, 64))
+		err = parsed.Amount.Scan(x)
 	default:
 		return fmt.Errorf("can't scan SQL value of type %T as money.CurrencyDecimalAmount", value)
 	}

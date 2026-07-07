@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"math/big"
 	"math/bits"
 	"slices"
 	"strconv"
@@ -136,6 +135,30 @@ const (
 	minDecimalAmountCoefficient = -maxDecimalAmountCoefficient
 )
 
+// pow5[i] == 5^i for i in 0..MaxDecimalAmountScale (5^18 < 2^42), used by the
+// int128 float-to-decimal conversion.
+var pow5 = [MaxDecimalAmountScale + 1]int64{
+	1,
+	5,
+	25,
+	125,
+	625,
+	3125,
+	15625,
+	78125,
+	390625,
+	1953125,
+	9765625,
+	48828125,
+	244140625,
+	1220703125,
+	6103515625,
+	30517578125,
+	152587890625,
+	762939453125,
+	3814697265625,
+}
+
 // decimalPow10[i] == 10^i for i in 0..MaxDecimalAmountScale.
 // 10^18 is the largest power of ten that fits in an int64.
 var decimalPow10 = [MaxDecimalAmountScale + 1]int64{
@@ -218,13 +241,13 @@ func (a DecimalAmount) Valid() bool {
 
 // IsNaN reports whether the amount is the not-a-number value.
 func (a DecimalAmount) IsNaN() bool {
-	return int(a.packed&scaleMask) == nonFiniteScale && a.Coefficient() == 0
+	return !a.IsFinite() && a.Coefficient() == 0
 }
 
 // IsInf reports whether the amount is an infinity of the given sign:
 // sign > 0 tests +Inf, sign < 0 tests -Inf, sign == 0 tests either.
 func (a DecimalAmount) IsInf(sign int) bool {
-	if int(a.packed&scaleMask) != nonFiniteScale {
+	if a.IsFinite() {
 		return false
 	}
 	c := a.Coefficient()
@@ -260,11 +283,15 @@ func DecimalAmountFromAmount(amount Amount, scale int, rounding RoundingMode) (D
 // coefficient is taken directly from the digits of str without a float64
 // round-trip, so values like 99999999999999.99 keep their last cent.
 //
-// The tokens "NaN", "Inf"/"+Inf" and "-Inf" parse to the corresponding
-// non-finite values. Scientific notation is rejected. If acceptedDecimals is
-// non-empty, the number of decimal places must be one of the listed values.
-// An error is returned if the value needs more than MaxDecimalAmountScale
-// decimal places or does not fit the coefficient range.
+// Like ParseAmount, a lone separator group is treated as a decimal separator,
+// not a thousands separator: "1,000" and "1'000" parse to 1.000 (== 1), not
+// 1000. Pass acceptedDecimals to reject such ambiguous inputs.
+//
+// The tokens "NaN", "Inf"/"+Inf"/"Infinity" and "-Inf"/"-Infinity" parse to the
+// corresponding non-finite values. Scientific notation is rejected. If
+// acceptedDecimals is non-empty, the number of decimal places must be one of the
+// listed values. An error is returned if the value needs more than
+// MaxDecimalAmountScale decimal places or does not fit the coefficient range.
 func ParseDecimalAmount(str string, acceptedDecimals ...int) (DecimalAmount, error) {
 	// The long "Infinity" spellings are not recognized by float.ParseDetails but
 	// are the PostgreSQL numeric literals emitted by Value.
@@ -350,7 +377,18 @@ func (a DecimalAmount) Ptr() *DecimalAmount {
 }
 
 // Float returns the amount as a float64, which may lose precision.
+// The non-finite states map to their float64 equivalents (NaN, ±Inf).
 func (a DecimalAmount) Float() float64 {
+	if !a.IsFinite() {
+		switch {
+		case a.IsNaN():
+			return math.NaN()
+		case a.Signbit():
+			return math.Inf(-1)
+		default:
+			return math.Inf(1)
+		}
+	}
 	return float64(a.Coefficient()) / float64(decimalPow10[a.Scale()])
 }
 
@@ -428,11 +466,25 @@ func (a DecimalAmount) Cmp(b DecimalAmount) int {
 				return 0
 			}
 		}
-		// Different scales: cross-multiply with big.Int to avoid overflow.
-		// a < b  <=>  a.coeff·10^b.scale < b.coeff·10^a.scale
-		ai := new(big.Int).Mul(big.NewInt(a.Coefficient()), big.NewInt(decimalPow10[bs]))
-		bi := new(big.Int).Mul(big.NewInt(b.Coefficient()), big.NewInt(decimalPow10[as]))
-		return ai.Cmp(bi)
+		// Different scales: compare a.coeff·10^b.scale vs b.coeff·10^a.scale.
+		// Both cross-products fit in 128 bits (coeff ≤ 2^58, 10^scale ≤ 10^18),
+		// so compare signs first, then magnitudes with 128-bit integers.
+		ac, bc := a.Coefficient(), b.Coefficient()
+		if sa, sb := signOf(ac), signOf(bc); sa != sb {
+			if sa < sb {
+				return -1
+			}
+			return +1
+		} else if sa == 0 {
+			return 0 // both zero
+		}
+		aHi, aLo := bits.Mul64(abs64(ac), pow10u(bs))
+		bHi, bLo := bits.Mul64(abs64(bc), pow10u(as))
+		cmp := cmpUint128(aHi, aLo, bHi, bLo)
+		if ac < 0 {
+			cmp = -cmp // both negative: larger magnitude is the smaller value
+		}
+		return cmp
 	}
 	switch ra, rb := a.orderRank(), b.orderRank(); {
 	case ra < rb:
@@ -565,7 +617,7 @@ func (a DecimalAmount) Mul(b DecimalAmount, rounding RoundingMode) DecimalAmount
 	// Exact product coefficient ca·cb has scale a.Scale()+b.Scale(); dividing
 	// by 10^b.Scale() brings it to the target scale a.Scale().
 	hi, lo := bits.Mul64(abs64(ca), abs64(cb))
-	return decimalDivRound(hi, lo, uint64(decimalPow10[b.Scale()]), negative, a.Scale(), rounding)
+	return decimalDivRound(hi, lo, pow10u(b.Scale()), negative, a.Scale(), rounding)
 }
 
 // Div returns a / b rounded to the scale of a using the given rounding mode.
@@ -585,7 +637,7 @@ func (a DecimalAmount) Div(b DecimalAmount, rounding RoundingMode) DecimalAmount
 	}
 	negative := (ca < 0) != (cb < 0)
 	// result_coeff = round( ca·10^b.Scale() / cb ) at scale a.Scale().
-	hi, lo := bits.Mul64(abs64(ca), uint64(decimalPow10[b.Scale()]))
+	hi, lo := bits.Mul64(abs64(ca), pow10u(b.Scale()))
 	return decimalDivRound(hi, lo, abs64(cb), negative, a.Scale(), rounding)
 }
 
@@ -710,20 +762,29 @@ func (a DecimalAmount) FormatSep(thousandsSep, decimalSep rune) string {
 func (a DecimalAmount) Format(f fmt.State, verb rune) {
 	if !a.IsFinite() {
 		if verb == 'v' && f.Flag('#') {
-			io.WriteString(f, a.GoString())
+			writeStr(f, a.GoString())
 			return
+		}
+		s := a.String() // "NaN", "Inf" or "-Inf"
+		if a.IsInf(1) {
+			if f.Flag('+') {
+				s = "+" + s
+			} else if f.Flag(' ') {
+				s = " " + s
+			}
 		}
 		if verb == 'q' {
-			writePadded(f, strconv.Quote(a.String()))
-			return
+			s = strconv.Quote(s)
 		}
-		writePadded(f, a.String())
+		// Non-finite tokens are never zero-padded, matching the standard
+		// library (e.g. "%08.2f" of +Inf is "     Inf", not "00000Inf").
+		writeSpacePadded(f, s)
 		return
 	}
 	switch verb {
 	case 'v':
 		if f.Flag('#') {
-			io.WriteString(f, a.GoString())
+			writeStr(f, a.GoString())
 			return
 		}
 		writePadded(f, a.formatBody(f, a.Scale()))
@@ -810,9 +871,9 @@ func (a *DecimalAmount) UnmarshalBinary(data []byte) error {
 		return fmt.Errorf("money.DecimalAmount.UnmarshalBinary needs 8 bytes but got %d", len(data))
 	}
 	packed := int64(binary.BigEndian.Uint64(data)) //#nosec G115 -- restoring a bit pattern
-	scale := int(packed & scaleMask)
-	if scale == nonFiniteScale {
-		// Canonicalize the non-finite encoding from its coefficient sign.
+	if int(packed&scaleMask) > MaxDecimalAmountScale {
+		// Any scale above the maximum is non-finite; canonicalize it to scale
+		// nonFiniteScale from its coefficient sign.
 		switch coeff := packed >> scaleBits; {
 		case coeff > 0:
 			*a = decimalInf(false)
@@ -822,9 +883,6 @@ func (a *DecimalAmount) UnmarshalBinary(data []byte) error {
 			*a = DecimalAmountNaN()
 		}
 		return nil
-	}
-	if scale > MaxDecimalAmountScale {
-		return fmt.Errorf("money.DecimalAmount.UnmarshalBinary got invalid scale %d", scale)
 	}
 	a.packed = packed
 	return nil
@@ -850,7 +908,8 @@ func (a DecimalAmount) Value() (driver.Value, error) {
 
 // Scan implements the database/sql.Scanner interface and accepts string,
 // []byte, int64 and float64. A float64 is converted via its shortest exact
-// decimal representation.
+// decimal representation, or rounded to MaxDecimalAmountScale if that needs
+// more fractional digits.
 func (a *DecimalAmount) Scan(value any) error {
 	switch x := value.(type) {
 	case string:
@@ -864,15 +923,27 @@ func (a *DecimalAmount) Scan(value any) error {
 		*a = packDecimalAmount(x, 0)
 		return nil
 	case float64:
-		return a.scanParse(strconv.FormatFloat(x, 'f', -1, 64))
+		// Use the shortest exact decimal when it fits; a value needing more
+		// than MaxDecimalAmountScale fractional digits is rounded to that scale
+		// rather than rejected.
+		if parsed, err := ParseDecimalAmount(strconv.FormatFloat(x, 'f', -1, 64)); err == nil {
+			*a = parsed
+			return nil
+		}
+		parsed, err := DecimalAmountFromFloat(x, MaxDecimalAmountScale, RoundHalfAwayFromZero)
+		if err != nil {
+			return err
+		}
+		*a = parsed
+		return nil
 	default:
 		return fmt.Errorf("can't scan value of type %T as money.DecimalAmount", value)
 	}
 }
 
 // ScanString implements the strfmt scanning convention by parsing source as a
-// DecimalAmount. Because a DecimalAmount is always finite and exact, the
-// validate flag has no additional effect.
+// DecimalAmount. Parsing already rejects invalid input, so the validate flag
+// has no additional effect.
 func (a *DecimalAmount) ScanString(source string, validate bool) error {
 	return a.scanParse(source)
 }
@@ -990,27 +1061,44 @@ func writeGrouped(b *strings.Builder, intPart string, sep rune) {
 	}
 }
 
+// writeSpacePadded writes s to f padded with spaces to the field width,
+// honoring the '-' (left-align) flag but never the '0' flag. Used for
+// non-finite tokens, which the standard library never zero-pads.
+func writeSpacePadded(f fmt.State, s string) {
+	width, ok := f.Width()
+	if !ok || len(s) >= width {
+		writeStr(f, s)
+		return
+	}
+	pad := strings.Repeat(" ", width-len(s))
+	if f.Flag('-') {
+		writeStr(f, s+pad)
+	} else {
+		writeStr(f, pad+s)
+	}
+}
+
 // writePadded writes s to f, applying the width and the '-' and '0' padding
 // flags. s is expected to be ASCII (digits, sign, '.', ',', '"').
 func writePadded(f fmt.State, s string) {
 	width, ok := f.Width()
 	if !ok || len(s) >= width {
-		io.WriteString(f, s)
+		writeStr(f, s)
 		return
 	}
 	pad := strings.Repeat(padByte(f), width-len(s))
 	switch {
 	case f.Flag('-'):
-		io.WriteString(f, s)
-		io.WriteString(f, pad)
+		writeStr(f, s)
+		writeStr(f, pad)
 	case f.Flag('0') && len(s) > 0 && (s[0] == '-' || s[0] == '+' || s[0] == ' '):
 		// Zero-pad after the sign so it stays leftmost.
-		io.WriteString(f, s[:1])
-		io.WriteString(f, pad)
-		io.WriteString(f, s[1:])
+		writeStr(f, s[:1])
+		writeStr(f, pad)
+		writeStr(f, s[1:])
 	default:
-		io.WriteString(f, pad)
-		io.WriteString(f, s)
+		writeStr(f, pad)
+		writeStr(f, s)
 	}
 }
 
@@ -1044,6 +1132,17 @@ func addOverflow(a, b int64) (int64, bool) {
 	return s, false
 }
 
+// pow10u returns 10^scale as a uint64 for 0 ≤ scale ≤ MaxDecimalAmountScale.
+func pow10u(scale int) uint64 {
+	return uint64(decimalPow10[scale]) //#nosec G115 -- 10^scale is a positive int64
+}
+
+// writeStr writes s to the fmt.State f, discarding the write error, which a
+// fmt.State never produces meaningfully.
+func writeStr(f fmt.State, s string) {
+	_, _ = io.WriteString(f, s) //#nosec G104 -- writing to a fmt.State cannot fail meaningfully
+}
+
 // abs64 returns the magnitude of x as an unsigned integer. It is safe for every
 // value in the coefficient range, which never reaches math.MinInt64.
 func abs64(x int64) uint64 {
@@ -1051,6 +1150,34 @@ func abs64(x int64) uint64 {
 		return uint64(-x)
 	}
 	return uint64(x)
+}
+
+// signOf returns -1, 0 or +1 for the sign of x.
+func signOf(x int64) int {
+	switch {
+	case x < 0:
+		return -1
+	case x > 0:
+		return +1
+	default:
+		return 0
+	}
+}
+
+// cmpUint128 compares two 128-bit unsigned values (hi, lo), returning -1, 0 or +1.
+func cmpUint128(aHi, aLo, bHi, bLo uint64) int {
+	switch {
+	case aHi < bHi:
+		return -1
+	case aHi > bHi:
+		return +1
+	case aLo < bLo:
+		return -1
+	case aLo > bLo:
+		return +1
+	default:
+		return 0
+	}
 }
 
 // decimalDivRound divides the 128-bit magnitude (numHi, numLo) by divisor,
@@ -1195,22 +1322,11 @@ func roundAwayFromZero(mode RoundingMode, negative, quotientOdd bool, halfCmp in
 	}
 }
 
-// roundBigQuotient reports whether the truncated quotient quo = num/den (with
-// remainder rem, den > 0) should have its magnitude incremented under the
-// rounding mode.
-func roundBigQuotient(mode RoundingMode, quo, rem, den *big.Int, negative bool) bool {
-	if rem.Sign() == 0 {
-		return false
-	}
-	twiceRem := new(big.Int).Lsh(new(big.Int).Abs(rem), 1)
-	return roundAwayFromZero(mode, negative, quo.Bit(0) == 1, twiceRem.Cmp(den))
-}
-
 // decimalFromFloatRounded converts f to a DecimalAmount at the given scale using
-// the exact value of the binary float64 and the given rounding mode. A NaN or
-// infinite f maps to the corresponding non-finite DecimalAmount and an
-// out-of-range value maps to ±Inf. It returns an error only for an out-of-range
-// scale (a programmer error).
+// the exact value of the binary float64 and the given rounding mode, computed in
+// 128-bit integer arithmetic without heap allocation. A NaN or infinite f maps
+// to the corresponding non-finite DecimalAmount and an out-of-range value maps to
+// ±Inf. It returns an error only for an out-of-range scale (a programmer error).
 func decimalFromFloatRounded(f float64, scale int, rounding RoundingMode) (DecimalAmount, error) {
 	if scale < 0 || scale > MaxDecimalAmountScale {
 		return DecimalAmount{}, fmt.Errorf("money.DecimalAmount scale %d out of range [0, %d]", scale, MaxDecimalAmountScale)
@@ -1220,29 +1336,114 @@ func decimalFromFloatRounded(f float64, scale int, rounding RoundingMode) (Decim
 		return DecimalAmountNaN(), nil
 	case math.IsInf(f, 0):
 		return decimalInf(math.Signbit(f)), nil
+	case f == 0:
+		return packDecimalAmount(0, scale), nil
 	}
-	// Exact value of f, scaled by 10^scale, as a rational num/den (den > 0).
-	r := new(big.Rat).SetFloat64(f)
-	r.Mul(r, new(big.Rat).SetInt64(decimalPow10[scale]))
-	num, den := r.Num(), r.Denom()
-	quo := new(big.Int)
-	rem := new(big.Int)
-	quo.QuoRem(num, den, rem) // truncated toward zero
-	if roundBigQuotient(rounding, quo, rem, den, num.Sign() < 0) {
-		if num.Sign() < 0 {
-			quo.Sub(quo, big.NewInt(1))
-		} else {
-			quo.Add(quo, big.NewInt(1))
-		}
+	// Decompose |f| exactly as m·2^e with m a 53-bit integer mantissa. Then
+	// value·10^scale = m·2^e·10^scale = (m·5^scale)·2^(e+scale). Since m ≤ 2^53
+	// and 5^scale < 2^42, the product m·5^scale fits in 128 bits, and the
+	// remaining factor is a pure power of two, i.e. a shift.
+	negative := math.Signbit(f)
+	frac, exp := math.Frexp(f) // f = frac·2^exp, 0.5 ≤ |frac| < 1
+	m := uint64(math.Ldexp(math.Abs(frac), 53))
+	hi, lo := bits.Mul64(m, uint64(pow5[scale])) //#nosec G115 -- 5^scale is a positive int64
+	var mag uint64
+	var over bool
+	if s := (exp - 53) + scale; s >= 0 {
+		mag, over = shiftLeft128(hi, lo, s) // exact, no rounding
+	} else {
+		mag, over = shiftRightRound128(hi, lo, -s, negative, rounding)
 	}
-	if !quo.IsInt64() {
-		return decimalInf(f < 0), nil
+	if over || mag > uint64(maxDecimalAmountCoefficient) {
+		return decimalInf(negative), nil
 	}
-	coeff := quo.Int64()
-	if coeff < minDecimalAmountCoefficient || coeff > maxDecimalAmountCoefficient {
-		return decimalInf(f < 0), nil
+	coeff := int64(mag)
+	if negative {
+		coeff = -coeff
 	}
 	return packDecimalAmount(coeff, scale), nil
+}
+
+// shiftLeft128 returns ((hi,lo) << n) as a uint64, reporting overflow if the
+// result does not fit in 64 bits (the coefficient range is below 2^64).
+func shiftLeft128(hi, lo uint64, n int) (uint64, bool) {
+	if hi != 0 {
+		return 0, true // value ≥ 2^64, shifting left only grows it
+	}
+	if n >= 64 {
+		return 0, lo != 0
+	}
+	r := lo << n
+	if r>>n != lo {
+		return 0, true // high bits shifted out
+	}
+	return r, false
+}
+
+// shiftRightRound128 returns round((hi,lo) / 2^k) as a uint64 using the rounding
+// mode and sign, reporting overflow if the quotient does not fit in 64 bits.
+func shiftRightRound128(hi, lo uint64, k int, negative bool, rounding RoundingMode) (uint64, bool) {
+	var qHi, qLo uint64
+	switch {
+	case k == 0:
+		qHi, qLo = hi, lo
+	case k < 64:
+		qLo = lo>>k | hi<<(64-k)
+		qHi = hi >> k
+	case k < 128:
+		qLo = hi >> (k - 64)
+	}
+	if qHi != 0 {
+		return 0, true
+	}
+	// The bits shifted out determine rounding: the round bit is bit k-1 and the
+	// sticky bit is any set bit below it.
+	roundBit := bit128(hi, lo, k-1)
+	sticky := lowBitsNonzero128(hi, lo, k-1)
+	if roundBit == 0 && !sticky {
+		return qLo, false // exact
+	}
+	halfCmp := -1 // remainder below the halfway point
+	if roundBit != 0 {
+		if sticky {
+			halfCmp = +1 // above halfway
+		} else {
+			halfCmp = 0 // exactly halfway
+		}
+	}
+	if roundAwayFromZero(rounding, negative, qLo&1 == 1, halfCmp) {
+		qLo++
+		if qLo == 0 { // wrapped past uint64
+			return 0, true
+		}
+	}
+	return qLo, false
+}
+
+// bit128 returns bit i (0-based) of the 128-bit value (hi,lo), or 0 out of range.
+func bit128(hi, lo uint64, i int) uint64 {
+	switch {
+	case i < 0 || i >= 128:
+		return 0
+	case i < 64:
+		return lo >> i & 1
+	default:
+		return hi >> (i - 64) & 1
+	}
+}
+
+// lowBitsNonzero128 reports whether any of bits [0, n) of (hi,lo) are set.
+func lowBitsNonzero128(hi, lo uint64, n int) bool {
+	switch {
+	case n <= 0:
+		return false
+	case n >= 128:
+		return hi != 0 || lo != 0
+	case n <= 64:
+		return lo&(1<<n-1) != 0
+	default:
+		return lo != 0 || hi&(1<<(n-64)-1) != 0
+	}
 }
 
 // scaleCoefficient returns coeff represented at toScale instead of fromScale and
@@ -1262,14 +1463,15 @@ func scaleCoefficient(coeff int64, fromScale, toScale int, rounding RoundingMode
 	default:
 		negative := coeff < 0
 		u := abs64(coeff)
-		d := uint64(decimalPow10[fromScale-toScale])
+		d := pow10u(fromScale - toScale)
 		q := u / d
 		if roundUpMagnitude(rounding, q, u%d, d, negative) {
 			q++
 		}
+		// q is a bounded coefficient magnitude ≤ maxDecimalAmountCoefficient.
 		if negative {
-			return -int64(q), false
+			return -int64(q), false //#nosec G115 -- q is a bounded coefficient magnitude
 		}
-		return int64(q), false
+		return int64(q), false //#nosec G115 -- q is a bounded coefficient magnitude
 	}
 }

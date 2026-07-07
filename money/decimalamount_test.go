@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"math/big"
+	"math/rand"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -420,10 +422,12 @@ func TestDecimalAmount_Binary(t *testing.T) {
 
 	var got DecimalAmount
 	assert.Error(t, got.UnmarshalBinary([]byte{1, 2, 3}))
-	// A scale > MaxDecimalAmountScale in the low bits must be rejected.
-	bad := make([]byte, 8)
-	bad[7] = 19
-	assert.Error(t, got.UnmarshalBinary(bad))
+	// Any scale > MaxDecimalAmountScale is non-finite; a scale-19 zero
+	// coefficient canonicalizes to NaN rather than being rejected.
+	nonCanonical := make([]byte, 8)
+	nonCanonical[7] = 19
+	require.NoError(t, got.UnmarshalBinary(nonCanonical))
+	assert.True(t, got.IsNaN())
 }
 
 func TestDecimalAmount_SQL(t *testing.T) {
@@ -520,6 +524,134 @@ func TestDecimalAmount_MarshalJSONValidNumber(t *testing.T) {
 		require.NoError(t, err)
 		assert.True(t, json.Valid(data), "invalid JSON %q", data)
 		assert.False(t, bytes.HasPrefix(data, []byte(`"`)), "should be a number, got %q", data)
+	}
+}
+
+func TestDecimalAmount_nonFiniteNoPanic(t *testing.T) {
+	nan := DecimalAmountNaN()
+	posInf := DecimalAmountInf(1)
+	negInf := DecimalAmountInf(-1)
+
+	// Float()/Amount() must not panic on non-finite values (regression).
+	assert.True(t, math.IsNaN(nan.Float()))
+	assert.True(t, math.IsInf(posInf.Float(), 1))
+	assert.True(t, math.IsInf(negInf.Float(), -1))
+	assert.True(t, math.IsNaN(float64(nan.Amount())))
+	assert.True(t, math.IsInf(float64(posInf.Amount()), 1))
+	assert.True(t, math.IsInf(float64(CurrencyDecimalAmountEUR(posInf).CurrencyAmount().Amount), 1))
+
+	// Rate methods on a non-finite receiver propagate instead of panicking.
+	assert.True(t, posInf.MultipliedByRate(Rate(2), 2, RoundHalfAwayFromZero).IsInf(1))
+	assert.True(t, negInf.DividedByRate(Rate(2), 2, RoundHalfAwayFromZero).IsInf(-1))
+	assert.True(t, nan.Percentage(50, 2, RoundHalfAwayFromZero).IsNaN())
+
+	// fmt: non-finite tokens are space-padded (never zero-padded) and honor the
+	// sign flag on +Inf, matching the standard library.
+	assert.Equal(t, "     Inf", fmt.Sprintf("%08.2f", posInf))
+	assert.Equal(t, "    -Inf", fmt.Sprintf("%8.2f", negInf))
+	assert.Equal(t, "     NaN", fmt.Sprintf("%08.2f", nan))
+	assert.Equal(t, "+Inf", fmt.Sprintf("%+f", posInf))
+	assert.Equal(t, "Inf   ", fmt.Sprintf("%-6.2f", posInf))
+	// The padded token still round-trips.
+	rt, err := ParseDecimalAmount("Inf")
+	require.NoError(t, err)
+	assert.True(t, rt.IsInf(1))
+
+	// Scan(float64) rounds a value that needs >18 decimals instead of erroring.
+	var scanned DecimalAmount
+	require.NoError(t, scanned.Scan(1e-19))
+	assert.True(t, scanned.IsZero())
+	require.NoError(t, scanned.Scan(12.5))
+	assert.Equal(t, "12.5", scanned.String())
+}
+
+// floatToDecimalOracle is an independent big.Rat reference for
+// decimalFromFloatRounded, used to validate the int128 implementation.
+func floatToDecimalOracle(f float64, scale int, mode RoundingMode) DecimalAmount {
+	switch {
+	case math.IsNaN(f):
+		return DecimalAmountNaN()
+	case math.IsInf(f, 0):
+		return decimalInf(math.Signbit(f))
+	}
+	r := new(big.Rat).SetFloat64(f)
+	pow := new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(scale)), nil)
+	r.Mul(r, new(big.Rat).SetInt(pow))
+	num, den := r.Num(), r.Denom()
+	quo, rem := new(big.Int), new(big.Int)
+	quo.QuoRem(num, den, rem)
+	negative := num.Sign() < 0
+	if rem.Sign() != 0 {
+		twiceRem := new(big.Int).Lsh(new(big.Int).Abs(rem), 1)
+		if roundAwayFromZero(mode, negative, quo.Bit(0) == 1, twiceRem.Cmp(den)) {
+			if negative {
+				quo.Sub(quo, big.NewInt(1))
+			} else {
+				quo.Add(quo, big.NewInt(1))
+			}
+		}
+	}
+	if !quo.IsInt64() {
+		return decimalInf(negative)
+	}
+	c := quo.Int64()
+	if c < minDecimalAmountCoefficient || c > maxDecimalAmountCoefficient {
+		return decimalInf(negative)
+	}
+	return packDecimalAmount(c, scale)
+}
+
+func TestDecimalAmount_FromFloatOracle(t *testing.T) {
+	values := []float64{
+		0, math.Copysign(0, -1), 1, -1, 0.5, -0.5, 0.25, 0.125, 0.0625,
+		1.5, 2.5, 12.5, 0.375, 2.675, 1.005, 100.0 / 3, 1.0 / 3, 2.0 / 3,
+		1234.56, -99.99, 0.1, 0.2, 0.3, 9.99999999, 123456789.123456,
+		1e-9, 1e-15, 1e-18, 1e-19, 1e-20, 5e-10,
+		1e6, 1e12, 1e15, 1e17, 2.8e17, 1e18, 1e19, 1e30,
+		math.SmallestNonzeroFloat64, math.MaxFloat64,
+		math.Nextafter(0.5, 1), math.Nextafter(0.5, 0),
+	}
+	modes := []RoundingMode{
+		RoundHalfAwayFromZero, RoundHalfToEven, RoundHalfUp, RoundHalfDown,
+		RoundDown, RoundUp, RoundFloor, RoundCeil,
+	}
+	rng := rand.New(rand.NewSource(1))
+	for range 4000 {
+		// Add random floats across a wide exponent range, both signs.
+		values = append(values, math.Ldexp(rng.Float64()-0.5, rng.Intn(200)-100))
+	}
+	for _, f := range values {
+		for scale := 0; scale <= MaxDecimalAmountScale; scale++ {
+			for _, mode := range modes {
+				want := floatToDecimalOracle(f, scale, mode)
+				got, err := DecimalAmountFromFloat(f, scale, mode)
+				require.NoError(t, err)
+				if want != got {
+					t.Fatalf("FromFloat(%v, %d, %s) = %s (packed %d), want %s (packed %d)",
+						f, scale, mode, got, got, want, want)
+				}
+			}
+		}
+	}
+}
+
+func TestDecimalAmount_CmpInt128(t *testing.T) {
+	// Exercise the 128-bit cross-scale comparison path with signs and magnitudes.
+	cases := []struct {
+		a, b DecimalAmount
+		want int
+	}{
+		{NewDecimalAmount(150, 2), NewDecimalAmount(15, 1), 0},    // 1.50 == 1.5
+		{NewDecimalAmount(151, 2), NewDecimalAmount(15, 1), 1},    // 1.51 > 1.5
+		{NewDecimalAmount(-151, 2), NewDecimalAmount(-15, 1), -1}, // -1.51 < -1.5
+		{NewDecimalAmount(-1, 0), NewDecimalAmount(1, 5), -1},     // negative < positive
+		{NewDecimalAmount(0, 0), NewDecimalAmount(0, 8), 0},       // zeros equal across scales
+		{NewDecimalAmount(maxDecimalAmountCoefficient, 0), NewDecimalAmount(1, 18), 1},
+		{NewDecimalAmount(minDecimalAmountCoefficient, 0), NewDecimalAmount(-1, 18), -1},
+	}
+	for _, c := range cases {
+		assert.Equal(t, c.want, c.a.Cmp(c.b), "%s cmp %s", c.a, c.b)
+		assert.Equal(t, -c.want, c.b.Cmp(c.a), "%s cmp %s (reversed)", c.b, c.a)
 	}
 }
 
