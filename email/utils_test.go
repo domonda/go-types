@@ -114,6 +114,16 @@ func Test_parseDate(t *testing.T) {
 			want: time.Date(2026, 2, 23, 11, 42, 0, 0, cetLocation),
 		},
 		{
+			name: "27 Apr 2026 11:16 -0000",
+			date: "27 Apr 2026 11:16 -0000",
+			want: time.Date(2026, 4, 27, 11, 16, 0, 0, time.UTC),
+		},
+		{
+			name: "8 Apr 2026 11:16 -0000",
+			date: "8 Apr 2026 11:16 -0000",
+			want: time.Date(2026, 4, 8, 11, 16, 0, 0, time.UTC),
+		},
+		{
 			name: "24 Feb 26 18:52:49 GMT",
 			date: "24 Feb 26 18:52:49 GMT",
 			want: time.Date(2026, 2, 24, 18, 52, 49, 0, time.UTC),
