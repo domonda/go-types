@@ -30,6 +30,8 @@ var parseDateLayouts = []string{
 	"2 Jan 2006 15:04:05 MST",
 	"Mon,  2 Jan 2006 15:04:05 MST",
 	"Mon, 2 Jan 2006 15:04 -0700",
+	"02 Jan 2006 15:04 -0700",
+	"2 Jan 2006 15:04 -0700",
 	// 2-digit year formats (RFC 850 style)
 	"02 Jan 06 15:04:05 MST",
 	"02 Jan 06 15:04:05 -0700",
