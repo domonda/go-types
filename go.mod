@@ -10,7 +10,7 @@ require (
 	github.com/jhillyerd/enmime/v2 v2.4.0
 	github.com/stretchr/testify v1.11.1
 	github.com/teamwork/tnef v0.0.0-20200108124832-7deabccfdb32
-	golang.org/x/net v0.54.0
+	golang.org/x/net v0.55.0
 	golang.org/x/text v0.37.0
 	mvdan.cc/xurls/v2 v2.6.0
 )
@@ -42,7 +42,7 @@ require (
 	github.com/teamwork/test v0.0.0-20200108114543-02621bae84ad // indirect
 	github.com/teamwork/utils v1.0.0 // indirect
 	go.yaml.in/yaml/v4 v4.0.0-rc.4 // indirect
-	golang.org/x/sys v0.44.0 // indirect
+	golang.org/x/sys v0.45.0 // indirect
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
