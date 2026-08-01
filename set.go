@@ -5,9 +5,12 @@ import (
 	"cmp"
 	"encoding/json"
 	"fmt"
+	"iter"
 	"maps"
 	"slices"
 	"strings"
+
+	"github.com/domonda/go-types/mapset"
 )
 
 // Set represents a collection of unique ordered values.
@@ -40,11 +43,16 @@ func (set Set[T]) GetOne() T {
 }
 
 // Add adds a value to the set.
+//
+// Deprecated: use [Set.Insert] which additionally reports
+// whether the set was changed.
 func (set Set[T]) Add(val T) {
 	set[val] = struct{}{}
 }
 
 // AddSlice adds all values from the slice to the set.
+//
+// Deprecated: use set.InsertAll(slices.Values(vals)).
 func (set Set[T]) AddSlice(vals []T) {
 	for _, val := range vals {
 		set[val] = struct{}{}
@@ -52,16 +60,38 @@ func (set Set[T]) AddSlice(vals []T) {
 }
 
 // AddSet adds all values from another set to this set.
+//
+// Deprecated: use [Set.UnionWith].
 func (set Set[T]) AddSet(other Set[T]) {
 	for val := range other {
 		set[val] = struct{}{}
 	}
 }
 
+// Insert adds val to the set and reports whether the set was changed.
+// It panics if the set is nil and val is not already an element.
+func (set Set[T]) Insert(val T) bool {
+	return mapset.Insert(set, val)
+}
+
+// InsertAll adds all values yielded by seq to the set
+// and reports whether the set was changed.
+// It panics if the set is nil and seq yields a value
+// that is not already an element.
+func (set Set[T]) InsertAll(seq iter.Seq[T]) bool {
+	return mapset.InsertAll(set, seq)
+}
+
+// All returns an iterator over the values of the set in undefined order.
+// It is valid to call this method on a nil set.
+func (set Set[T]) All() iter.Seq[T] {
+	return mapset.All(set)
+}
+
 // Contains returns true if the set contains the specified value.
+// It is valid to call this method on a nil set.
 func (set Set[T]) Contains(val T) bool {
-	_, ok := set[val]
-	return ok
+	return mapset.Contains(set, val)
 }
 
 // ContainsAny returns true if the set contains any of the specified values.
@@ -69,32 +99,40 @@ func (set Set[T]) ContainsAny(vals ...T) bool {
 	return slices.ContainsFunc(vals, set.Contains)
 }
 
-// ContainsAll returns true if the set contains all of the specified values.
-func (set Set[T]) ContainsAll(vals ...T) bool {
-	for _, val := range vals {
-		if !set.Contains(val) {
-			return false
-		}
-	}
-	return true
+// ContainsAll returns true if the set contains all values yielded by seq.
+// It returns true for an empty sequence and is valid to call on a nil set.
+func (set Set[T]) ContainsAll(seq iter.Seq[T]) bool {
+	return mapset.ContainsAll(set, seq)
 }
 
 // ContainsSet returns true if this set contains all values from the other set.
 func (set Set[T]) ContainsSet(other Set[T]) bool {
-	for val := range other {
-		if !set.Contains(val) {
-			return false
-		}
-	}
-	return true
+	return mapset.ContainsAll(set, other.All())
 }
 
-// Delete removes a value from the set.
-func (set Set[T]) Delete(val T) {
-	delete(set, val)
+// Delete removes a value from the set and reports whether the set was changed.
+// It is valid to call this method on a nil set.
+func (set Set[T]) Delete(val T) bool {
+	return mapset.Delete(set, val)
+}
+
+// DeleteAll removes all values yielded by seq from the set
+// and reports whether the set was changed.
+// It is valid to call this method on a nil set.
+func (set Set[T]) DeleteAll(seq iter.Seq[T]) bool {
+	return mapset.DeleteAll(set, seq)
+}
+
+// DeleteFunc removes all values for which del returns true
+// and reports whether the set was changed.
+// It is valid to call this method on a nil set.
+func (set Set[T]) DeleteFunc(del func(T) bool) bool {
+	return mapset.DeleteFunc(set, del)
 }
 
 // DeleteSlice removes all values from the slice from the set.
+//
+// Deprecated: use set.DeleteAll(slices.Values(vals)).
 func (set Set[T]) DeleteSlice(vals []T) {
 	for _, val := range vals {
 		delete(set, val)
@@ -102,6 +140,8 @@ func (set Set[T]) DeleteSlice(vals []T) {
 }
 
 // DeleteSet removes all values from the other set from this set.
+//
+// Deprecated: use [Set.DifferenceWith].
 func (set Set[T]) DeleteSet(other Set[T]) {
 	for str := range other {
 		delete(set, str)
@@ -109,6 +149,7 @@ func (set Set[T]) DeleteSet(other Set[T]) {
 }
 
 // Clear removes all values from the set.
+// It is valid to call this method on a nil set.
 func (set Set[T]) Clear() {
 	clear(set)
 }
@@ -123,41 +164,63 @@ func (set Set[T]) Clone() Set[T] {
 
 // Union returns a new set containing all values from both this set and the other set.
 func (set Set[T]) Union(other Set[T]) Set[T] {
-	union := make(Set[T], (len(set)+len(other))/2)
-	for val := range set {
-		union.Add(val)
-	}
-	for val := range other {
-		union.Add(val)
-	}
-	return union
+	return mapset.Union(set, other)
+}
+
+// UnionWith adds all values of the other set to this set.
+// It panics if this set is nil and the other set has a value
+// that is not already an element.
+func (set Set[T]) UnionWith(other Set[T]) {
+	mapset.UnionWith(set, other)
 }
 
 // Intersection returns a new set containing only values that exist in both sets.
 func (set Set[T]) Intersection(other Set[T]) Set[T] {
-	inter := make(Set[T], (len(set)+len(other))/2)
-	for val := range set {
-		if other.Contains(val) {
-			inter.Add(val)
-		}
-	}
-	return inter
+	return mapset.Intersection(set, other)
 }
 
-// Difference returns a new set containing values that exist in either set but not in both.
+// IntersectionWith removes all values from this set
+// that are not also in the other set.
+// It is valid to call this method on a nil set.
+func (set Set[T]) IntersectionWith(other Set[T]) {
+	mapset.IntersectionWith(set, other)
+}
+
+// Intersects reports whether this set and the other set
+// have at least one value in common.
+func (set Set[T]) Intersects(other Set[T]) bool {
+	return mapset.Intersects(set, other)
+}
+
+// Difference returns a new set containing the values of this set
+// that are not in the other set.
+//
+// Note that this is the asymmetric difference as defined by the Go
+// collections proposal. Up to and including go-types v0 pseudo-versions
+// before 2026-08 this method returned the symmetric difference, which is
+// now [Set.SymmetricDifference].
 func (set Set[T]) Difference(other Set[T]) Set[T] {
-	diff := make(Set[T])
-	for val := range set {
-		if !other.Contains(val) {
-			diff.Add(val)
-		}
-	}
-	for val := range other {
-		if !set.Contains(val) {
-			diff.Add(val)
-		}
-	}
-	return diff
+	return mapset.Difference(set, other)
+}
+
+// DifferenceWith removes all values of the other set from this set.
+// It is valid to call this method on a nil set.
+func (set Set[T]) DifferenceWith(other Set[T]) {
+	mapset.DifferenceWith(set, other)
+}
+
+// SymmetricDifference returns a new set containing the values
+// that exist in either set but not in both.
+func (set Set[T]) SymmetricDifference(other Set[T]) Set[T] {
+	return mapset.SymmetricDifference(set, other)
+}
+
+// SymmetricDifferenceWith replaces the values of this set with the values
+// that exist in either set but not in both.
+// It panics if this set is nil and the other set has a value
+// that is not already an element.
+func (set Set[T]) SymmetricDifferenceWith(other Set[T]) {
+	mapset.SymmetricDifferenceWith(set, other)
 }
 
 // Map applies a transformation function to each value in the set and returns a new set
@@ -167,7 +230,7 @@ func (set Set[T]) Map(mapFunc func(T) (T, bool)) Set[T] {
 	result := make(Set[T], len(set))
 	for val := range set {
 		if mappedVal, ok := mapFunc(val); ok {
-			result.Add(mappedVal)
+			result.Insert(mappedVal)
 		}
 	}
 	return result
@@ -175,7 +238,7 @@ func (set Set[T]) Map(mapFunc func(T) (T, bool)) Set[T] {
 
 // Equal returns true if both sets contain exactly the same values.
 func (set Set[T]) Equal(other Set[T]) bool {
-	return maps.Equal(set, other)
+	return mapset.Equal(set, other)
 }
 
 // Len returns the number of values in the set.
@@ -235,7 +298,7 @@ func (set *Set[T]) UnmarshalJSON(j []byte) error {
 		*set = NewSet(slice...)
 	} else {
 		set.Clear()
-		set.AddSlice(slice)
+		set.InsertAll(slices.Values(slice))
 	}
 	return nil
 }

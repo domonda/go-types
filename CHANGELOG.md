@@ -28,6 +28,27 @@ No version has been tagged yet, so everything below is unreleased. See
   nanoseconds, which is how a duration is represented by its underlying
   `int64` kind and how it is marshalled as JSON.
 
+- **`mapset` package** — set operations on `map[K]struct{}` and `map[K]bool`,
+  mirroring the `container/mapset` package proposed for Go 1.28
+  ([go.dev/issue/77052](https://go.dev/issue/77052), CL 724420) function for
+  function. It is the shared implementation behind the set methods of
+  `types.Set[T]`, `uu.IDSet`, `strutil.StringSet` and `email.AddressSet`, and
+  can be replaced by the standard library package with an import path change
+  once Go 1.28 ships.
+- The methods of the abstract set interface of the Go collections proposal
+  ([go.dev/issue/80590](https://go.dev/issue/80590)) on all four set types:
+  `All`, `ContainsAll`, `DeleteAll`, `DeleteFunc`, `Difference`,
+  `DifferenceWith`, `Insert`, `InsertAll`, `Intersection`, `IntersectionWith`,
+  `Intersects`, `SymmetricDifference`, `SymmetricDifferenceWith`, `Union` and
+  `UnionWith`. They now behave like the `container/set.Set` type planned for
+  Go 1.28, which is likewise represented as `map[E]struct{}`.
+- `strutil.StringSet.Len` and `email.AddressSet.Equal`, which were missing.
+- `internal/collections` holding the proposal's abstract interfaces, and
+  `internal/collections/settest` holding the abstract set specification as a
+  reusable test. Every set type is checked against that specification and by a
+  compile-time interface assertion, so a behaviour change in `mapset` is caught
+  at each type that delegates to it, not only in `mapset` itself.
+
 ### Fixed
 
 - `strfmt.FormatValue` returned the text of `encoding.TextMarshaler` only when
@@ -83,6 +104,56 @@ No version has been tagged yet, so everything below is unreleased. See
   `ScanConfig.ValidateFunc`, because the absence of a value is not a value to
   validate. A `string` destination assigned the source string is validated
   like any other scanned value.
+
+- **Breaking:** the minimum Go version is now 1.26.0, raised from 1.25.0, in
+  `go.mod` and `tools/go.mod`; CI builds, tests and gosec run on 1.26. This
+  lets `internal/collections` declare the abstract interfaces with the
+  self-referential constraint the collections proposal specifies, as in
+  `Collection[E any, C Collection[E, C]]`, which the Go 1.25 type checker
+  rejected with "invalid recursive type".
+- **Breaking:** `types.Set.Difference` now returns the asymmetric difference
+  (the elements of the receiver that are not in the argument), as specified by
+  the collections proposal. It previously returned the *symmetric* difference,
+  which is now `types.Set.SymmetricDifference`. This is the one change of this
+  release that does not produce a compile error — review any call site that
+  relies on the old meaning.
+- **Breaking:** `types.Set.ContainsAll` takes an `iter.Seq[T]` instead of
+  variadic values. Use `set.ContainsAll(slices.Values(vals))`.
+- `Delete` now reports whether the set changed on all four set types. Existing
+  statement calls keep compiling unchanged; only method values typed `func(E)`
+  break.
+- Nil sets are documented as valid empty sets for every read and for removals.
+  `Insert`, `InsertAll`, `UnionWith` and `SymmetricDifferenceWith` panic on a
+  nil set, exactly like an assignment to a nil Go map.
+- `email.AddressSet` keeps its pointer-receiver `Add`, `AddSet`,
+  `AddNormalized` and `AddAddressPart` methods, which allocate the underlying
+  map and therefore work on a nil variable or struct field. They are the
+  nil-safe counterparts of the value-receiver `Insert` and `UnionWith` that the
+  abstract interface requires.
+
+### Deprecated
+
+Still present and working, scheduled for removal before `v1.0.0`:
+
+| Deprecated                             | Replacement                             |
+|----------------------------------------|-----------------------------------------|
+| `Add(v)`¹                              | `Insert(v) bool`                        |
+| `AddSlice(s)`                          | `InsertAll(slices.Values(s))`           |
+| `AddSet(other)`                        | `UnionWith(other)`                      |
+| `DeleteSlice(s)`                       | `DeleteAll(slices.Values(s))`           |
+| `DeleteSet(other)`                     | `DifferenceWith(other)`                 |
+
+¹ Not deprecated on `email.AddressSet`, where `Add` has different nil semantics
+than `Insert`, see above.
+
+The `set` package is superseded by `mapset` for new code but is unchanged and
+not deprecated.
+
+### Removed
+
+- **Breaking:** `uu.IDSet.Diff` and `strutil.StringSet.Diff`, which returned the
+  symmetric difference. Use `SymmetricDifference` — or `Difference` if the
+  asymmetric difference was what was meant.
 
 ### Performance
 

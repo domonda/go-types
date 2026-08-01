@@ -85,7 +85,7 @@ func IDSliceMust[T IDSource](vals ...T) IDSlice {
 // AsSet returns the IDs of the slice as a IDSet.
 func (s IDSlice) AsSet() IDSet {
 	set := make(IDSet, len(s))
-	set.AddSlice(s)
+	set.InsertAll(slices.Values(s))
 	return set
 }
 

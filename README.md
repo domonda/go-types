@@ -31,6 +31,7 @@ A comprehensive Go library providing enhanced type definitions, validation, and 
 | [`email`](./email/)       | Lenient email parsing, address lists/sets, MIME and TNEF message handling |
 | [`float`](./float/)       | Locale-aware float parsing/formatting and a JSON-tolerant float type |
 | [`language`](./language/) | ISO 639-1 language codes with normalization        |
+| [`mapset`](./mapset/)     | Set operations on `map[K]struct{}` / `map[K]bool`, mirroring the proposed `container/mapset` |
 | [`money`](./money/)       | Monetary amounts, ISO 4217 currencies, currency+amount pairs, and rates |
 | [`notnull`](./notnull/)   | Never-null SQL/JSON wrappers (nil slices serialize as `'{}'` / `[]`) |
 | [`nullable`](./nullable/) | SQL-friendly nullable wrappers and the generic `Type[T]` |
@@ -185,11 +186,13 @@ func main() {
     // Set operations
     union := set1.Union(set2)
     intersection := set1.Intersection(set2)
-    difference := set1.Difference(set2)
-    
-    fmt.Printf("Union: %v\n", union.Sorted())
-    fmt.Printf("Intersection: %v\n", intersection.Sorted())
-    fmt.Printf("Difference: %v\n", difference.Sorted())
+    difference := set1.Difference(set2)                   // in set1, not in set2
+    symmetric := set1.SymmetricDifference(set2)           // in exactly one of both
+
+    fmt.Printf("Union: %v\n", union.Sorted())                        // [1 2 3 4 5 6 7 8]
+    fmt.Printf("Intersection: %v\n", intersection.Sorted())          // [4 5]
+    fmt.Printf("Difference: %v\n", difference.Sorted())              // [1 2 3]
+    fmt.Printf("SymmetricDifference: %v\n", symmetric.Sorted())      // [1 2 3 6 7 8]
 }
 ```
 

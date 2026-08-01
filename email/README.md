@@ -45,6 +45,16 @@ email.NormalizedAddressSet(a, b, c) // normalizes each entry
 
 Set semantics over `Address` values. Sorted iteration and JSON serialization included.
 
+Implements the abstract set interface of the Go 1.28 collections proposal
+([go.dev/issue/80590](https://go.dev/issue/80590)): `Insert`, `InsertAll`, `Delete`, `DeleteAll`,
+`DeleteFunc`, `All`, `ContainsAll`, `Equal`, `Union`, `Intersection`, `Difference`,
+`SymmetricDifference`, `Intersects` and the in-place `*With` variants.
+
+`AddressSet` keeps pointer-receiver `Add`, `AddSet`, `AddNormalized` and `AddAddressPart` methods
+alongside the value-receiver interface methods. Those four allocate the underlying map, so they
+work on a nil variable or struct field; the value-receiver `Insert` and `UnionWith` panic on a nil
+set like a nil map assignment.
+
 ## NullableAddress / NullableAddressList
 
 SQL/JSON-friendly cousins where empty string is the null sentinel.

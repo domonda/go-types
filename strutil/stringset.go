@@ -1,10 +1,13 @@
 package strutil
 
 import (
+	"iter"
 	"maps"
 	"slices"
 	"sort"
 	"strings"
+
+	"github.com/domonda/go-types/mapset"
 )
 
 // StringSet is a set of unique strings implemented as a map.
@@ -55,7 +58,15 @@ func (set StringSet) String() string {
 	return `["` + strings.Join(set.Sorted(), `", "`) + `"]`
 }
 
+// Len returns the number of strings in the set.
+// It is valid to call this method on a nil StringSet.
+func (set StringSet) Len() int {
+	return len(set)
+}
+
 // AddSlice adds all strings from the slice s to the set.
+//
+// Deprecated: use set.InsertAll(slices.Values(s)).
 func (set StringSet) AddSlice(s []string) {
 	for _, str := range s {
 		set[str] = struct{}{}
@@ -63,6 +74,8 @@ func (set StringSet) AddSlice(s []string) {
 }
 
 // AddSet adds all strings from the other set to this set.
+//
+// Deprecated: use [StringSet.UnionWith].
 func (set StringSet) AddSet(other StringSet) {
 	for str := range other {
 		set[str] = struct{}{}
@@ -70,19 +83,48 @@ func (set StringSet) AddSet(other StringSet) {
 }
 
 // Add adds str to the set.
+//
+// Deprecated: use [StringSet.Insert] which additionally reports
+// whether the set was changed.
 func (set StringSet) Add(str string) {
 	set[str] = struct{}{}
 }
 
+// Insert adds str to the set and reports whether the set was changed.
+// It panics if the set is nil and str is not already an element.
+func (set StringSet) Insert(str string) bool {
+	return mapset.Insert(set, str)
+}
+
+// InsertAll adds all strings yielded by seq to the set
+// and reports whether the set was changed.
+// It panics if the set is nil and seq yields a string
+// that is not already an element.
+func (set StringSet) InsertAll(seq iter.Seq[string]) bool {
+	return mapset.InsertAll(set, seq)
+}
+
+// All returns an iterator over the strings of the set in undefined order.
+// It is valid to call this method on a nil StringSet.
+func (set StringSet) All() iter.Seq[string] {
+	return mapset.All(set)
+}
+
 // Contains returns true if str is in the set.
+// It is valid to call this method on a nil StringSet.
 func (set StringSet) Contains(str string) bool {
-	_, has := set[str]
-	return has
+	return mapset.Contains(set, str)
 }
 
 // ContainsAny returns true if any of the provided strings are in the set.
 func (set StringSet) ContainsAny(strs ...string) bool {
 	return slices.ContainsFunc(strs, set.Contains)
+}
+
+// ContainsAll reports whether the set contains all strings yielded by seq.
+// It returns true for an empty sequence and is valid to call on a nil StringSet.
+func (set StringSet) ContainsAll(seq iter.Seq[string]) bool {
+	return mapset.ContainsAll(set, seq)
 }
 
 // StringContainsAnyOfSet returns true if the passed string
@@ -96,17 +138,35 @@ func (set StringSet) StringContainsAnyOfSet(str string) bool {
 	return false
 }
 
-// Delete removes str from the set.
-func (set StringSet) Delete(str string) {
-	delete(set, str)
+// Delete removes str from the set and reports whether the set was changed.
+// It is valid to call this method on a nil StringSet.
+func (set StringSet) Delete(str string) bool {
+	return mapset.Delete(set, str)
+}
+
+// DeleteAll removes all strings yielded by seq from the set
+// and reports whether the set was changed.
+// It is valid to call this method on a nil StringSet.
+func (set StringSet) DeleteAll(seq iter.Seq[string]) bool {
+	return mapset.DeleteAll(set, seq)
+}
+
+// DeleteFunc removes every string for which del returns true
+// and reports whether the set was changed.
+// It is valid to call this method on a nil StringSet.
+func (set StringSet) DeleteFunc(del func(string) bool) bool {
+	return mapset.DeleteFunc(set, del)
 }
 
 // Clear removes all strings from the set.
+// It is valid to call this method on a nil StringSet.
 func (set StringSet) Clear() {
 	clear(set)
 }
 
 // DeleteSlice removes all strings in the slice s from the set.
+//
+// Deprecated: use set.DeleteAll(slices.Values(s)).
 func (set StringSet) DeleteSlice(s []string) {
 	for _, str := range s {
 		delete(set, str)
@@ -114,6 +174,8 @@ func (set StringSet) DeleteSlice(s []string) {
 }
 
 // DeleteSet removes all strings in the other set from this set.
+//
+// Deprecated: use [StringSet.DifferenceWith].
 func (set StringSet) DeleteSet(other StringSet) {
 	for str := range other {
 		delete(set, str)
@@ -128,32 +190,64 @@ func (set StringSet) Clone() StringSet {
 	return maps.Clone(set)
 }
 
-// Diff returns a new StringSet containing strings that are in either set
-// but not in both (symmetric difference).
-func (set StringSet) Diff(other StringSet) StringSet {
-	diff := make(StringSet, len(set))
-	for str := range set {
-		if !other.Contains(str) {
-			diff.Add(str)
-		}
-	}
-	for str := range other {
-		if !set.Contains(str) {
-			diff.Add(str)
-		}
-	}
-	return diff
+// Union returns a new StringSet with all strings of set and other.
+func (set StringSet) Union(other StringSet) StringSet {
+	return mapset.Union(set, other)
+}
+
+// UnionWith adds all strings of other to set.
+// It panics if set is nil and other has a string
+// that is not already an element of set.
+func (set StringSet) UnionWith(other StringSet) {
+	mapset.UnionWith(set, other)
+}
+
+// Intersection returns a new StringSet with the strings
+// that are in both set and other.
+func (set StringSet) Intersection(other StringSet) StringSet {
+	return mapset.Intersection(set, other)
+}
+
+// IntersectionWith removes every string from set that is not also in other.
+// It is valid to call this method on a nil StringSet.
+func (set StringSet) IntersectionWith(other StringSet) {
+	mapset.IntersectionWith(set, other)
+}
+
+// Intersects reports whether set and other have at least one string in common.
+func (set StringSet) Intersects(other StringSet) bool {
+	return mapset.Intersects(set, other)
+}
+
+// Difference returns a new StringSet with the strings of set that are not in other.
+//
+// This replaces the former Diff method, which returned the symmetric
+// difference and is now [StringSet.SymmetricDifference].
+func (set StringSet) Difference(other StringSet) StringSet {
+	return mapset.Difference(set, other)
+}
+
+// DifferenceWith removes every string of other from set.
+// It is valid to call this method on a nil StringSet.
+func (set StringSet) DifferenceWith(other StringSet) {
+	mapset.DifferenceWith(set, other)
+}
+
+// SymmetricDifference returns a new StringSet containing strings
+// that are in either set but not in both.
+func (set StringSet) SymmetricDifference(other StringSet) StringSet {
+	return mapset.SymmetricDifference(set, other)
+}
+
+// SymmetricDifferenceWith replaces the strings of set with the strings
+// that are in exactly one of set and other.
+// It panics if set is nil and other has a string
+// that is not already an element of set.
+func (set StringSet) SymmetricDifferenceWith(other StringSet) {
+	mapset.SymmetricDifferenceWith(set, other)
 }
 
 // Equal returns true if set and other contain exactly the same strings.
 func (set StringSet) Equal(other StringSet) bool {
-	if len(set) != len(other) {
-		return false
-	}
-	for str := range set {
-		if !other.Contains(str) {
-			return false
-		}
-	}
-	return true
+	return mapset.Equal(set, other)
 }

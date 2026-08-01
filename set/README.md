@@ -8,6 +8,8 @@ import "github.com/domonda/go-types/set"
 
 For an opaque `Set[T]` struct with methods (union, intersection, difference, Sorted, JSON), see the root package `types.Set[T]` in `set.go`.
 
+> **Prefer [`mapset`](../mapset/) for new code.** It covers the same ground with the full set algebra and mirrors the `container/mapset` package proposed for Go 1.28, so it can be swapped for the standard library one with an import path change. This package predates it and is kept for its existing callers.
+
 ## API
 
 All functions are generic over `T cmp.Ordered`.
