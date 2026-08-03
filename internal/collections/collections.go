@@ -8,15 +8,25 @@
 // public API, so that compile-time assertions in the packages of this module
 // can prove that their container types implement them.
 //
-// Keep these declarations in sync with the proposal verbatim. They are the
+// Keep the method sets in sync with the proposal verbatim. They are the
 // specification the container types of this module are checked against.
+//
+// The proposal constrains the collection type parameter to the interface
+// itself, as in Collection[E any, C Collection[E, C]]. Such a self-referential
+// declaration is only accepted by the Go 1.26 type checker; Go 1.25, which
+// this module still targets, rejects it with "invalid recursive type". The
+// collection type parameter is therefore declared as any here. That is a
+// weaker constraint, but it does not weaken what these interfaces are used
+// for: every instantiation names a concrete type, and the compile-time
+// assertions still check the full method set. Restore the self-reference
+// once this module requires Go 1.26.
 package collections
 
 import "iter"
 
 // Collection models a collection C of elements E,
 // such as *hash.Map, *hash.Set, *ordered.Map, or set.Set.
-type Collection[E any, C Collection[E, C]] interface {
+type Collection[E, C any] interface {
 	Clear()
 	Clone() C
 	Contains(E) bool
@@ -30,7 +40,7 @@ type Collection[E any, C Collection[E, C]] interface {
 //
 // No type of this module implements Map; it is kept here as the reference
 // shape for any future key/value container type.
-type Map[K, V any, M Map[K, V, M]] interface {
+type Map[K, V, M any] interface {
 	Collection[K, M]
 
 	All() iter.Seq2[K, V]
@@ -47,7 +57,7 @@ type Map[K, V any, M Map[K, V, M]] interface {
 
 // Set models a set S of elements E,
 // such as *hash.Set, or set.Set.
-type Set[E any, S Set[E, S]] interface {
+type Set[E, S any] interface {
 	Collection[E, S]
 
 	All() iter.Seq[E]
