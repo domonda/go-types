@@ -15,7 +15,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version: 1.25
+          go-version: 1.26
       # Run the gosec version pinned in tools/go.mod (same as run-gosec.sh),
       # not the floating securego/gosec@master action, for reproducible scans.
       - name: Run Gosec

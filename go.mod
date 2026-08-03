@@ -1,6 +1,6 @@
 module github.com/domonda/go-types
 
-go 1.25.0
+go 1.26.0
 
 require (
 	github.com/domonda/go-errs v1.0.3

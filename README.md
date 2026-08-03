@@ -394,7 +394,7 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## Dependencies
 
-- Go 1.24.0 or later
+- Go 1.26.0 or later
 - Standard library packages
 - External dependencies are minimal and well-maintained
 
