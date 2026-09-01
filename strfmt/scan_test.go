@@ -3,6 +3,7 @@ package strfmt
 import (
 	"errors"
 	"reflect"
+	"strconv"
 	"testing"
 	"time"
 
@@ -583,40 +584,87 @@ func scanNilStringZeroes[T comparable](t *testing.T, config *ScanConfig, nonZero
 	}
 }
 
-// TestScanNilStringReachesTypeScanner pins which destinations still reach a
-// registered Scanner with a nil source string, because Scan resolves one
-// before dispatching. A string kind does, since only it can hold the source
-// string itself, while a kind that can hold nil never does. Getting this
-// wrong silently changes what a user's own Scanner is asked to scan.
-func TestScanNilStringReachesTypeScanner(t *testing.T) {
-	type stringKind string
+// nullableThing can represent null, so without a registered Scanner a nil
+// source string would be resolved by Scan with its SetNull method.
+type nullableThing struct{ Value string }
 
-	newConfig := func(called *string) *ScanConfig {
+func (n *nullableThing) SetNull()    { n.Value = "" }
+func (n nullableThing) IsNull() bool { return n.Value == "" }
+
+// TestScanTypeScannerPrecedence checks that a Scanner registered for a type
+// is asked before all built-in scanning logic, including the nil source
+// string handling. A registered Scanner owns its type completely, so it can
+// give a nil source string a meaning that differs from setting the
+// destination to nil, to null or to its zero value.
+func TestScanTypeScannerPrecedence(t *testing.T) {
+	newConfig := func(t reflect.Type, called *string, assign func(reflect.Value)) *ScanConfig {
 		config := NewScanConfig()
-		scanner := ScannerFunc(func(dest reflect.Value, str string, config *ScanConfig) error {
-			*called = str
-			dest.SetString("scanned:" + str)
+		config.SetTypeScanner(t, ScannerFunc(func(dest reflect.Value, str string, config *ScanConfig) error {
+			*called = "called with " + strconv.Quote(str)
+			assign(dest)
 			return nil
-		})
-		config.SetTypeScanner(reflect.TypeFor[stringKind](), scanner)
+		}))
 		return config
 	}
 
-	// A string kind reaches its scanner with the nil source string
-	var called string
-	config := newConfig(&called)
-	var dest stringKind = "prefilled"
-	assert.NoError(t, Scan(reflect.ValueOf(&dest).Elem(), "", config))
-	assert.Equal(t, "", called, "scanner is called with the nil source string")
-	assert.Equal(t, stringKind("scanned:"), dest)
-
-	// A pointer to it does not: the pointer is set to nil instead
-	called = "NOT CALLED"
-	config = newConfig(&called)
-	ptr := new(stringKind)
+	// Before the "kind that can hold nil is set to nil" handling
+	called := "NOT CALLED"
+	config := newConfig(reflect.TypeFor[*int](), &called, func(reflect.Value) {})
+	ptr := new(int)
 	assert.NoError(t, Scan(reflect.ValueOf(&ptr).Elem(), "", config))
-	assert.Nil(t, ptr, "a nilable kind is set to nil without asking the scanner")
-	assert.Equal(t, "NOT CALLED", called, "scanner is not called for a nilable destination")
+	assert.Equal(t, `called with ""`, called, "the scanner decides, not the nilable kind")
+	assert.NotNil(t, ptr, "the scanner left the pointer alone instead of it being set to nil")
+
+	// Before the "type with a SetNull method is set to null" handling
+	called = "NOT CALLED"
+	config = newConfig(reflect.TypeFor[nullableThing](), &called, func(dest reflect.Value) {
+		dest.Set(reflect.ValueOf(nullableThing{Value: "scanned"}))
+	})
+	thing := nullableThing{Value: "prefilled"}
+	assert.NoError(t, Scan(reflect.ValueOf(&thing).Elem(), "", config))
+	assert.Equal(t, `called with ""`, called, "the scanner decides, not the SetNull method")
+	assert.Equal(t, nullableThing{Value: "scanned"}, thing)
+
+	// Before the StrictEmptyStringParsing error for a non-optional type
+	called = "NOT CALLED"
+	config = newConfig(reflect.TypeFor[int](), &called, func(dest reflect.Value) { dest.SetInt(7) })
+	config.StrictEmptyStringParsing = true
+	i := 666
+	assert.NoError(t, Scan(reflect.ValueOf(&i).Elem(), "", config), "the scanner decides, not strict parsing")
+	assert.Equal(t, 7, i)
+}
+
+// TestScanNilStringToDefaultTypeScanners checks that the scanners this
+// package registers by default apply the same nil source string handling
+// that a destination type without a registered Scanner would get, now that
+// a registered Scanner is asked before that handling.
+func TestScanNilStringToDefaultTypeScanners(t *testing.T) {
+	for _, strict := range []bool{false, true} {
+		config := NewScanConfig()
+		config.StrictEmptyStringParsing = strict
+
+		for _, source := range config.NilStrings {
+			// time.Time and time.Duration can't represent "no value"
+			ti := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+			err := Scan(reflect.ValueOf(&ti).Elem(), source, config)
+			d := time.Hour
+			errDuration := Scan(reflect.ValueOf(&d).Elem(), source, config)
+			if strict {
+				assert.Error(t, err, "Scan(time.Time, %q) with strict parsing", source)
+				assert.Error(t, errDuration, "Scan(time.Duration, %q) with strict parsing", source)
+			} else {
+				assert.NoError(t, err, "Scan(time.Time, %q)", source)
+				assert.Zero(t, ti, "Scan(time.Time, %q)", source)
+				assert.NoError(t, errDuration, "Scan(time.Duration, %q)", source)
+				assert.Zero(t, d, "Scan(time.Duration, %q)", source)
+			}
+
+			// nullable.Time can, so it's null in both modes
+			nullTime := nullable.TimeFrom(time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC))
+			assert.NoError(t, Scan(reflect.ValueOf(&nullTime).Elem(), source, config), "Scan(nullable.Time, %q)", source)
+			assert.True(t, nullTime.IsNull(), "Scan(nullable.Time, %q) sets null", source)
+		}
+	}
 }
 
 // TestScanNilStringWithoutStrictEmptyStringParsing checks that a nil source

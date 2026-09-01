@@ -19,6 +19,10 @@ type nullSetter interface {
 
 // Scan source into dest using the given ScanConfig.
 //
+// A Scanner registered for the destination type in config.TypeScanners is
+// asked before all built-in scanning logic, including the nil source string
+// handling below, so that it owns its type completely.
+//
 // A source string that config.IsNil reports as nil, ignoring surrounding
 // whitespace, means "no value" like an empty cell of a CSV file or a
 // spreadsheet. A kind that can hold nil is set to nil, a nullable type
@@ -110,6 +114,16 @@ func scanValue(dest reflect.Value, source string, config *ScanConfig) error {
 // scanSettableValue scans source into the valid and settable dest without
 // restoring it if the scan fails, which scanValue does for it.
 func scanSettableValue(dest reflect.Value, source string, config *ScanConfig) error {
+	// A scanner registered for the destination type owns that type
+	// completely: it is asked before all built-in scanning logic,
+	// including the nil source string handling below, so that it can
+	// give a nil source string its own meaning. The scanners that this
+	// package registers by default apply the same nil source string
+	// handling themselves, see scanNilStringToNonOptional.
+	if scanner, ok := config.TypeScanners[dest.Type()]; ok {
+		return scanner.ScanString(dest, source, config)
+	}
+
 	trimmed := strutil.TrimSpace(source)
 
 	// A nil source string means "no value" like an empty cell of a CSV
@@ -152,12 +166,6 @@ func scanSettableValue(dest reflect.Value, source string, config *ScanConfig) er
 		default:
 			return fmt.Errorf("can't scan nil string %q into non-optional destination type %s with strict empty string parsing", source, dest.Type())
 		}
-	}
-
-	// A scanner registered for the destination type
-	// is used instead of the built-in scanning below
-	if scanner, ok := config.TypeScanners[dest.Type()]; ok {
-		return scanner.ScanString(dest, source, config)
 	}
 
 	if dest.Kind() == reflect.Pointer {

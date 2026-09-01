@@ -61,11 +61,14 @@ No version has been tagged yet, so everything below is unreleased. See
 
 ### Changed
 
-- **Breaking:** `strfmt.Scan` resolves a nil source string (as reported by
-  `ScanConfig.IsNil`, now compared with surrounding whitespace trimmed) before
-  dispatching to any scanning method, so that every destination type gets the
-  same handling. A `Scanner` registered in `ScanConfig.TypeScanners` is no
-  longer consulted first for a nil source string.
+- `strfmt.Scan` resolves a nil source string (as reported by `ScanConfig.IsNil`,
+  now compared with surrounding whitespace trimmed) before dispatching to a
+  `Scannable` or `encoding.TextUnmarshaler` destination, so that every type gets
+  the same handling instead of every scanning method repeating it. A `Scanner`
+  registered in `ScanConfig.TypeScanners` keeps taking precedence over all
+  built-in scanning logic, including this handling, so it can give a nil source
+  string a meaning of its own. The scanners registered by `NewScanConfig` apply
+  the standard handling themselves.
 - **Breaking:** with the default `StrictEmptyStringParsing == false`, scanning
   an empty or `"NULL"` cell into a number, a bool, `time.Time` or a
   `Scannable` type such as `money.Amount` assigns the zero value instead of

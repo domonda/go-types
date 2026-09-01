@@ -61,24 +61,22 @@ type ScanConfig struct {
 	// number zero, which can't be told apart from a scanned zero.
 	// A Scannable or encoding.TextUnmarshaler destination still gets
 	// asked, so it can give a nil source string a meaning instead of an
-	// error. A type whose only scanning method is a Scanner registered
-	// at TypeScanners is not asked unless its kind is string, because
-	// only the string kind can hold the source string itself.
+	// error, and so does a Scanner registered at TypeScanners, which is
+	// asked before any of this.
 	//
 	// If false, which is the default, the zero value of the destination
 	// type is assigned, which keeps a row with empty cells scannable
 	// into a column of any type.
 	StrictEmptyStringParsing bool `json:"strictEmptyStringParsing"`
 
-	// TypeScanners hold a Scanner per destination type that Scan uses
-	// instead of its built-in scanning logic, registered with
-	// SetTypeScanner. Scan resolves a nil source string before calling a
-	// scanner, so a scanner only receives one for a destination that Scan
-	// can't resolve on its own: a string kind, or a Scannable or
-	// encoding.TextUnmarshaler type with StrictEmptyStringParsing. A
-	// destination that can hold nil or be set to null never reaches a
-	// scanner with a nil source string, and neither does one of any other
-	// kind without strict parsing, see StrictEmptyStringParsing.
+	// TypeScanners hold a Scanner per destination type, registered with
+	// SetTypeScanner. Scan asks the Scanner of a destination type before
+	// all of its built-in scanning logic, including the nil source string
+	// handling, so a Scanner owns its type completely and can give a nil
+	// source string a meaning of its own. The scanners registered by
+	// NewScanConfig don't: they apply the same nil source string handling
+	// that a type without a registered Scanner gets,
+	// see StrictEmptyStringParsing.
 	TypeScanners map[reflect.Type]Scanner `json:"-"`
 
 	// ValidateFunc reports an invalid value as an error. Scan calls it
@@ -136,9 +134,10 @@ func (c *ScanConfig) initTypeScanners() {
 
 // SetTypeScanner registers a custom Scanner for the given reflect.Type,
 // replacing any previously registered scanner for that type.
-// The registered scanner is used instead of the built-in scanning logic
-// for a destination of that type, except for a nil source string that
-// Scan resolves on its own, see ScanConfig.StrictEmptyStringParsing.
+// The registered scanner takes precedence over all built-in scanning logic
+// for a destination of that type, including the handling of a nil source
+// string, which it therefore has to handle itself if the default of
+// ScanConfig.StrictEmptyStringParsing is not what it wants.
 func (c *ScanConfig) SetTypeScanner(t reflect.Type, s Scanner) {
 	c.TypeScanners[t] = s
 }
@@ -171,8 +170,30 @@ func (c *ScanConfig) ParseTime(str string) (t time.Time, ok bool) {
 	return time.Time{}, false
 }
 
+// scanNilStringToNonOptional applies the nil source string handling of Scan
+// to a destination type that can neither hold nil nor be set to null, like
+// time.Time or time.Duration, and reports whether it did.
+//
+// Scan asks a registered Scanner before its own nil source string handling,
+// so that a Scanner can give a nil source string its own meaning. The
+// scanners registered by this package don't, they apply the same handling
+// as a destination type without a registered Scanner would get.
+func scanNilStringToNonOptional(dest reflect.Value, str string, config *ScanConfig) (handled bool, err error) {
+	if !config.IsNil(strutil.TrimSpace(str)) {
+		return false, nil
+	}
+	if config.StrictEmptyStringParsing {
+		return true, fmt.Errorf("can't scan nil string %q into non-optional destination type %s with strict empty string parsing", str, dest.Type())
+	}
+	dest.SetZero()
+	return true, nil
+}
+
 // scanTimeString scans str as time.Time using the TimeFormats of the config.
 func scanTimeString(dest reflect.Value, str string, config *ScanConfig) error {
+	if handled, err := scanNilStringToNonOptional(dest, str, config); handled {
+		return err
+	}
 	t, ok := config.ParseTime(strutil.TrimSpace(str))
 	if !ok {
 		return fmt.Errorf("can't scan %q as time.Time", str)
@@ -185,6 +206,12 @@ func scanTimeString(dest reflect.Value, str string, config *ScanConfig) error {
 // of the config, which the UnmarshalText method of nullable.Time would
 // ignore in favor of the RFC3339 format alone.
 func scanNullableTimeString(dest reflect.Value, str string, config *ScanConfig) error {
+	// The zero nullable.Time is its null value, and unlike time.Time it can
+	// represent "no value", so a nil source string is never an error for it
+	if config.IsNil(strutil.TrimSpace(str)) {
+		dest.SetZero()
+		return nil
+	}
 	t, ok := config.ParseTime(strutil.TrimSpace(str))
 	if !ok {
 		return fmt.Errorf("can't scan %q as nullable.Time", str)
@@ -195,6 +222,9 @@ func scanNullableTimeString(dest reflect.Value, str string, config *ScanConfig) 
 
 // scanDurationString scans str as time.Duration.
 func scanDurationString(dest reflect.Value, str string, config *ScanConfig) error {
+	if handled, err := scanNilStringToNonOptional(dest, str, config); handled {
+		return err
+	}
 	trimmed := strutil.TrimSpace(str)
 	d, err := time.ParseDuration(trimmed)
 	if err != nil {
