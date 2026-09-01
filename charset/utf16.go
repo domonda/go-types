@@ -66,21 +66,33 @@ func DecodeUTF16(b []byte, byteOrder binary.ByteOrder) ([]byte, error) {
 		return nil, fmt.Errorf("odd length of UTF-16 string: %d", len(b))
 	}
 
-	// Check for BOM and remove it before decoding
-	if bom := BOMOfBytes(b); bom != NoBOM {
-		switch byteOrder {
-		case binary.LittleEndian:
-			if bom != BOMUTF16LE {
-				return nil, fmt.Errorf("expected %s BOM but got %s", BOMUTF16LE, bom)
+	// Check for BOM and remove it before decoding.
+	//
+	// byteOrder already says which UTF-16 BOM is expected, so match that one
+	// first. Only fall back to BOMOfBytes when the expected BOM is absent.
+	// Going through BOMOfBytes first would misread the valid UTF-16LE sequence
+	// FF FE 00 00 (BOM followed by U+0000) as the UTF-32LE BOM and reject it,
+	// even though the caller already resolved that ambiguity by passing
+	// binary.LittleEndian.
+	var expected BOM
+	switch byteOrder {
+	case binary.LittleEndian:
+		expected = BOMUTF16LE
+	case binary.BigEndian:
+		expected = BOMUTF16BE
+	}
+	switch {
+	case expected != NoBOM && bytes.HasPrefix(b, []byte(expected)):
+		b = b[len(expected):]
+	default:
+		// Only a BOM in b can make an unusable byteOrder fatal, BOM-less data
+		// decodes with any binary.ByteOrder including binary.NativeEndian.
+		if bom := BOMOfBytes(b); bom != NoBOM {
+			if expected == NoBOM {
+				return nil, fmt.Errorf("invalid binary.ByteOrder: %v", byteOrder)
 			}
-		case binary.BigEndian:
-			if bom != BOMUTF16BE {
-				return nil, fmt.Errorf("expected %s BOM but got %s", BOMUTF16BE, bom)
-			}
-		default:
-			return nil, fmt.Errorf("invalid binary.ByteOrder: %v", byteOrder)
+			return nil, fmt.Errorf("expected %s BOM but got %s", expected, bom)
 		}
-		b = b[len(bom):]
 	}
 
 	runes := decodeUTF16Runes(b, byteOrder)

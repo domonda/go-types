@@ -50,6 +50,22 @@ type Encoding interface {
 | `bom.Endian()`                                | `binary.LittleEndian`/`BigEndian` for UTF-16/32 BOMs. |
 | `bom.Decode(data)` / `bom.DecodeString(data)` | Decode using the BOM's encoding.                   |
 
+### UTF-16LE vs. UTF-32LE detection
+
+The UTF-16LE BOM (`FF FE`) is a prefix of the UTF-32LE BOM (`FF FE 00 00`), so
+`BOMOfBytes` / `BOMOfString` match the 4 byte BOMs before the 2 byte ones.
+
+These two cases are not distinguishable from the bytes alone: UTF-16LE text
+whose first character is U+0000 serializes to the same `FF FE 00 00` and is
+reported as `BOMUTF32LE`. Preferring the longer BOM is the conventional
+resolution — ICU, .NET and `file(1)` all do it — because a leading NUL is not
+plain text while real UTF-32LE data is. The Unicode standard lists the
+signatures in table 23-6 without saying how to resolve the overlap.
+
+The ambiguity only applies to *detection*. If the encoding is already known,
+skip detection and pass the known BOM to `bom.Decode` / `bom.DecodeString`,
+where `FF FE` can only mean UTF-16LE.
+
 ## UTF-16 / UTF-32 helpers
 
 Lower-level functions if you don't need the `Encoding` interface:

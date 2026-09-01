@@ -40,36 +40,55 @@ var (
 
 // BOMOfString returns the BOM found at the beginning of str,
 // or NoBOM if no byte order mark is present.
+//
+// See [BOMOfBytes] for the detection order and the
+// UTF-16LE/UTF-32LE ambiguity that comes with it.
 func BOMOfString(str string) BOM {
 	switch {
 	case strings.HasPrefix(str, string(BOMUTF8)):
 		return BOMUTF8
-	case strings.HasPrefix(str, string(BOMUTF16BE)):
-		return BOMUTF16BE
-	case strings.HasPrefix(str, string(BOMUTF16LE)):
-		return BOMUTF16LE
-	case strings.HasPrefix(str, string(BOMUTF32BE)):
-		return BOMUTF32BE
 	case strings.HasPrefix(str, string(BOMUTF32LE)):
 		return BOMUTF32LE
+	case strings.HasPrefix(str, string(BOMUTF32BE)):
+		return BOMUTF32BE
+	case strings.HasPrefix(str, string(BOMUTF16LE)):
+		return BOMUTF16LE
+	case strings.HasPrefix(str, string(BOMUTF16BE)):
+		return BOMUTF16BE
 	}
 	return NoBOM
 }
 
 // BOMOfBytes returns the BOM found at the beginning of b,
 // or NoBOM if no byte order mark is present.
+//
+// The 4 byte BOMs are checked before the 2 byte ones because the
+// UTF-16LE BOM (FF FE) is a prefix of the UTF-32LE BOM (FF FE 00 00).
+//
+// Caveat: those two are not distinguishable from the bytes alone.
+// UTF-16LE text whose first character is U+0000 also serializes to
+// FF FE 00 00 and is therefore reported as BOMUTF32LE. Preferring the
+// longer BOM is the conventional resolution, used by ICU and .NET among
+// others, because a leading NUL is not plain text while real UTF-32LE
+// data is. The Unicode standard lists the signatures in table 23-6 but
+// does not say how to resolve the overlap.
+//
+// The ambiguity only exists when detecting an unknown encoding.
+// Callers that already know the encoding should skip detection and pass
+// the known BOM to [BOM.Decode] or [BOM.DecodeString], where FF FE can
+// only mean UTF-16LE.
 func BOMOfBytes(b []byte) BOM {
 	switch {
 	case bytes.HasPrefix(b, bomUTF8):
 		return BOMUTF8
-	case bytes.HasPrefix(b, bomUTF16LE):
-		return BOMUTF16LE
-	case bytes.HasPrefix(b, bomUTF16BE):
-		return BOMUTF16BE
 	case bytes.HasPrefix(b, bomUTF32LE):
 		return BOMUTF32LE
 	case bytes.HasPrefix(b, bomUTF32BE):
 		return BOMUTF32BE
+	case bytes.HasPrefix(b, bomUTF16LE):
+		return BOMUTF16LE
+	case bytes.HasPrefix(b, bomUTF16BE):
+		return BOMUTF16BE
 	}
 	return NoBOM
 }
@@ -105,6 +124,26 @@ func DecodeStringWithBOM(b []byte) (string, error) {
 	return bom.DecodeString(data)
 }
 
+// trimExpectedBOM strips a leading bom from data and returns the rest.
+//
+// bom is what the caller already knows the encoding to be, so it is matched
+// before falling back to BOMOfBytes detection. That order matters for the
+// UTF-16LE/UTF-32LE overlap: the valid UTF-16LE sequence FF FE 00 00 (BOM
+// followed by U+0000) is indistinguishable from the UTF-32LE BOM, and
+// detection resolves it to UTF-32LE. A caller passing BOMUTF16LE has already
+// resolved that ambiguity and must not be second-guessed.
+//
+// Returns an error if data carries a different BOM than the expected one.
+func trimExpectedBOM(data []byte, bom BOM) ([]byte, error) {
+	if bom != NoBOM && bytes.HasPrefix(data, []byte(bom)) {
+		return data[len(bom):], nil
+	}
+	if dataBOM := BOMOfBytes(data); dataBOM != NoBOM && dataBOM != bom {
+		return nil, fmt.Errorf("wrong BOM in data: %v, expected: %v", []byte(dataBOM), []byte(bom))
+	}
+	return data, nil
+}
+
 // Encoding returns the Encoding corresponding to the BOM.
 // NoBOM and BOMUTF8 both map to the UTF-8 encoding.
 // Returns an error for unrecognised BOM values.
@@ -127,9 +166,9 @@ func (bom BOM) Encoding() (Encoding, error) {
 // An optional leading BOM in data is validated against bom and then stripped.
 // Returns an error if the BOM does not match or the encoding is unsupported.
 func (bom BOM) Decode(data []byte) ([]byte, error) {
-	dataBOM, data := SplitBOM(data)
-	if dataBOM != NoBOM && dataBOM != bom {
-		return nil, fmt.Errorf("wrong BOM in data: %v, expected: %v", []byte(dataBOM), []byte(bom))
+	data, err := trimExpectedBOM(data, bom)
+	if err != nil {
+		return nil, err
 	}
 
 	switch bom {
@@ -150,9 +189,9 @@ func (bom BOM) Decode(data []byte) ([]byte, error) {
 // An optional leading BOM in data is validated against bom and then stripped.
 // Returns an error if the BOM does not match or the encoding is unsupported.
 func (bom BOM) DecodeString(data []byte) (string, error) {
-	dataBOM, data := SplitBOM(data)
-	if dataBOM != NoBOM && dataBOM != bom {
-		return "", fmt.Errorf("wrong BOM in data: %v, expected: %v", []byte(dataBOM), []byte(bom))
+	data, err := trimExpectedBOM(data, bom)
+	if err != nil {
+		return "", err
 	}
 
 	switch bom {
