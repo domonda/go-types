@@ -22,7 +22,20 @@ func IsSpace(r rune) bool {
 // A legitimate '\ufffd' rune in the input is indistinguishable from
 // invalid UTF-8 at this layer and is treated as trimmable.
 func isTrimRune(r rune) bool {
+	// The zero-width runes and the BOM are the most common non-ASCII ones
+	// to trim and unicode.IsPrint needs a range table search to report them
+	switch r {
+	case '\u200b', '\u200c', '\u200d', '\u2060', '\ufeff':
+		return true
+	}
 	return r == utf8.RuneError || unicode.IsSpace(r) || !unicode.IsPrint(r)
+}
+
+// isTrimByte is the ASCII fast path of isTrimRune: every byte up to and
+// including the space is whitespace or a control character, and so is
+// the delete character. All other ASCII bytes are printable.
+func isTrimByte(c byte) bool {
+	return c <= ' ' || c == 0x7f
 }
 
 // TrimSpace returns a slice of the string s with all leading and trailing
@@ -30,7 +43,31 @@ func isTrimRune(r rune) bool {
 // (including zero-width characters and the BOM), and any byte that does
 // not decode as valid UTF-8.
 func TrimSpace[S ~string](s S) S {
-	return S(strings.TrimFunc(string(s), isTrimRune))
+	// Fast path for ASCII like the one of strings.TrimSpace, falling back
+	// to the rune based isTrimRune as soon as a non-ASCII byte is found.
+	// Decoding every leading and trailing rune to call isTrimRune through
+	// a function value is several times slower than these byte compares.
+	start := 0
+	for ; start < len(s); start++ {
+		c := s[start]
+		if c >= utf8.RuneSelf {
+			return S(strings.TrimFunc(string(s[start:]), isTrimRune))
+		}
+		if !isTrimByte(c) {
+			break
+		}
+	}
+	stop := len(s)
+	for ; stop > start; stop-- {
+		c := s[stop-1]
+		if c >= utf8.RuneSelf {
+			return S(strings.TrimFunc(string(s[start:stop]), isTrimRune))
+		}
+		if !isTrimByte(c) {
+			break
+		}
+	}
+	return s[start:stop]
 }
 
 // TrimSpaceBytes returns a slice of the bytes string s with all leading
@@ -38,7 +75,28 @@ func TrimSpace[S ~string](s S) S {
 // non-printable rune (including zero-width characters and the BOM), and
 // any byte that does not decode as valid UTF-8.
 func TrimSpaceBytes(s []byte) []byte {
-	return bytes.TrimFunc(s, isTrimRune)
+	// Fast path for ASCII, see TrimSpace
+	start := 0
+	for ; start < len(s); start++ {
+		c := s[start]
+		if c >= utf8.RuneSelf {
+			return bytes.TrimFunc(s[start:], isTrimRune)
+		}
+		if !isTrimByte(c) {
+			break
+		}
+	}
+	stop := len(s)
+	for ; stop > start; stop-- {
+		c := s[stop-1]
+		if c >= utf8.RuneSelf {
+			return bytes.TrimFunc(s[start:stop], isTrimRune)
+		}
+		if !isTrimByte(c) {
+			break
+		}
+	}
+	return s[start:stop]
 }
 
 // CutTrimSpace slices s around the first instance of sep,
