@@ -34,12 +34,31 @@ err := strfmt.Scan(dest, source, strfmt.DefaultScanConfig)
 
 Resolution order:
 
-1. Custom `Scanner` registered for `dest.Type()` in `config.TypeScanners`.
-2. `dest` is a nil pointer + source is a "nil string" → leave nil. Otherwise allocate and dereference.
-3. `dest` implements `Scannable` → `ScanString(source, validate)`.
-4. `dest` implements `encoding.TextUnmarshaler` → `UnmarshalText`.
-5. Built-in scalars: string, bool (via `IsTrue`/`IsFalse`), int/uint (decimal), float (via `float.Parse`).
-6. If `config.ValidateFunc` is set, run it on the final value.
+1. `dest` is not settable → error, except for a non-nil pointer without a registered `Scanner`, whose pointed
+   to value is scanned instead.
+2. Source is a "nil string" (compared with surrounding whitespace trimmed): a kind that can be nil is set to nil,
+   a type with a `SetNull()` method is set to null, a `string` without a scanning method of its own gets the source
+   string (and a registered `Scanner` for a string kind still gets it, step 3). For every other type
+   `config.StrictEmptyStringParsing` decides: `false` assigns the zero value, `true` passes it on to a
+   `Scannable` or `encoding.TextUnmarshaler` destination (steps 5 and 6, or step 3 when a `Scanner` is
+   registered for such a type as well, like `time.Time`) and errors for all the rest, including a type whose
+   only scanning method is a registered `Scanner` of a non-string kind, like `time.Duration`.
+   A destination set to nil, null or its zero value here is not passed to `ValidateFunc` — the absence of a
+   value is not a value. A `string` assigned the source string is validated like any other scanned value.
+3. Custom `Scanner` registered for `dest.Type()` in `config.TypeScanners`.
+4. `dest` is a pointer → allocate it if it is nil, then scan the pointed to value in place, recursively for
+   every level of indirection. An already allocated pointer keeps its identity and every field the scan
+   doesn't assign.
+5. `dest` implements `Scannable` → `ScanString(source, validate)`.
+6. `dest` implements `encoding.TextUnmarshaler` → `UnmarshalText`.
+7. Built-in scalars: string, bool (via `IsTrue`/`IsFalse`), int/uint (decimal, parsed with the bit size of the
+   destination type), float (via `float.Parse`, checked for overflow).
+8. If `config.ValidateFunc` is set, run it on a value scanned by step 7. Steps 3, 5 and 6 return before it —
+   a `Scannable` validates itself and is only told whether `ValidateFunc` is set.
+
+A failed scan never modifies `dest`. A scanning method can assign before it returns an error, and step 8 runs
+after step 7 has assigned, so `Scan` restores the previous value on failure — including the pointed to value of
+an already allocated pointer, and including a pointer it allocated in step 4, which is set back to nil.
 
 ### ScanConfig
 
@@ -48,6 +67,7 @@ type ScanConfig struct {
     TrueStrings, FalseStrings, NilStrings []string
     TimeFormats                           []string
     AcceptedMoneyAmountDecimals           []int
+    StrictEmptyStringParsing              bool
 
     TypeScanners map[reflect.Type]Scanner
     ValidateFunc func(any) error // nil disables validation
@@ -56,9 +76,9 @@ type ScanConfig struct {
 strfmt.NewScanConfig() // defaults below
 ```
 
-Defaults: `TrueStrings = {true, True, TRUE, yes, Yes, YES, 1}`, mirror for false, `NilStrings = {"", nil, <nil>, null, NULL}`, `TimeFormats` covers RFC 3339 nano/sec, `time.DateTime`, `time.DateOnly`, browser `datetime-local`. Money decimals `{0, 2, 4}`. `ValidateFunc = types.Validate`.
+Defaults: `TrueStrings = {true, True, TRUE, yes, Yes, YES, 1}`, mirror for false, `NilStrings = {"", nil, <nil>, null, NULL}`, `TimeFormats` covers RFC 3339 nano/sec, `time.DateTime`, `time.DateOnly`, browser `datetime-local`. Money decimals `{0, 2, 4}`. `StrictEmptyStringParsing = false` (a nil string scans as the zero value; set it to `true` to reject one for a non-optional type). `ValidateFunc = types.Validate`.
 
-Built-in type scanners cover `time.Time` (any registered layout) and `time.Duration`. Add more via `SetTypeScanner`.
+Built-in type scanners cover `time.Time` and `nullable.Time` (any registered layout) and `time.Duration` (a unit suffixed duration or plain nanoseconds). Add more via `SetTypeScanner`.
 
 ## Formatting
 
