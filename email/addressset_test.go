@@ -551,3 +551,25 @@ func TestAddressSet_ContainsAny(t *testing.T) {
 		t.Error("ContainsAny on a nil set = true, want false")
 	}
 }
+
+// TestAddressSet_Normalized_DoesNotAliasReceiver covers an aliasing bug an
+// adversarial review found: Normalized returned the receiver itself for an
+// empty set, so writing to the "normalized copy" wrote through to the original.
+// For a non-empty set it always returned a fresh map, which made the behaviour
+// inconsistent and unpredictable rather than merely surprising.
+func TestAddressSet_Normalized_DoesNotAliasReceiver(t *testing.T) {
+	empty := MakeAddressSet()
+	norm, err := empty.Normalized()
+	if err != nil {
+		t.Fatalf("Normalized returned %v", err)
+	}
+	norm.Add("x@example.com")
+	if empty.Len() != 0 {
+		t.Errorf("writing to Normalized() of an empty set changed the original to %v", empty.Sorted())
+	}
+
+	// A nil set stays nil, so it keeps meaning SQL NULL.
+	if got, err := AddressSet(nil).Normalized(); err != nil || got != nil {
+		t.Errorf("Normalized() of a nil set = %v, %v, want nil, nil", got, err)
+	}
+}

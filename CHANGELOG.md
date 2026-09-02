@@ -3,10 +3,13 @@
 All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
-No version has been tagged yet, so everything below is unreleased. See
-[TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut.
+No version has been tagged yet, so releases are dated rather than numbered.
+See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut, including
+picking the semver baseline.
 
 ## [Unreleased]
+
+## 2026-09-02
 
 ### Added
 
@@ -93,6 +96,12 @@ No version has been tagged yet, so everything below is unreleased. See
   escaped quote. An SQL `NULL` array element is an error now instead of the
   address `NULL`.
 
+  Two deliberate limits of that decoding: every element is trimmed, so a member
+  stored with leading or trailing whitespace (which `Validate` rejects anyway)
+  does not survive a `Value`/`Scan` round trip, and an element that is empty
+  after trimming is dropped. The trim is what keeps a hand-written literal like
+  `{ a@x.com , b@x.com }` working, which the previous decoder accepted.
+
 ### Changed
 
 - `strfmt.Scan` resolves a nil source string (as reported by `ScanConfig.IsNil`,
@@ -145,19 +154,24 @@ No version has been tagged yet, so everything below is unreleased. See
   `AsSortedSlice`/`Sorted`, which return a nil slice for an empty set.
   `email.AddressSet.Value` already got this right.
 
-  All set-map types now keep three states distinct, in both directions and
-  in both codecs:
+  The nil, empty and populated set are now three distinct wire values, in
+  both directions:
 
-  | Go value      | SQL              | JSON             |
-  |---------------|------------------|------------------|
-  | nil map       | `NULL`           | `null`           |
-  | empty map     | `{}`             | `[]`             |
-  | populated map | `{"a","b"}`      | `["a","b"]`      |
+  | Go value      | SQL         | JSON        | Types                          |
+  |---------------|-------------|-------------|--------------------------------|
+  | nil map       | `NULL`      | `null`      | SQL: `uu.IDSet`,               |
+  | empty map     | `{}`        | `[]`        | `email.AddressSet`.            |
+  | populated map | `{"a","b"}` | `["a","b"]` | JSON: `uu.IDSet`, `types.Set`. |
 
-  Marshalling and unmarshalling are symmetric, as are `Value` and `Scan`, so
-  every state round-trips. Note that `null`/`NULL` yields a nil map, which
-  panics when inserted into exactly like any nil Go map: nil-check before
-  `Insert`, or use the pointer-receiver `Add` where one exists.
+  Only the types listed have the codec in question. `email.AddressSet` and
+  `strutil.StringSet` declare no `MarshalJSON`, so `encoding/json` uses Go's
+  default map encoding for them (`{"a@example.com":{}}`) — unchanged by this
+  release, but do not assume the JSON column of the table above applies to
+  them. `types.Set` and `strutil.StringSet` have no SQL codec at all.
+
+  `null`/`NULL` yields a nil map, which panics when inserted into exactly
+  like any nil Go map: nil-check before `Insert`, or use the pointer-receiver
+  `Add` where one exists.
 - `email.AddressSet.String` returns `"<nil>"` for a nil set instead of the
   empty string, matching `types.Set.String`. An allocated empty set still
   renders as the empty string, so the two are now distinguishable in a log

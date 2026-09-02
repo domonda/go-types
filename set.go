@@ -291,6 +291,8 @@ func (set Set[T]) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON implements encoding/json.Unmarshaler.
 // It unmarshals a JSON array into the set, removing any duplicates.
+// It assigns a new set rather than modifying the existing map, so a map
+// shared with another variable is never rewritten.
 // JSON null assigns a nil set and the empty array an allocated empty
 // one, mirroring [Set.MarshalJSON]. A nil set panics when inserted
 // into, exactly like a nil Go map.
@@ -308,12 +310,12 @@ func (set *Set[T]) UnmarshalJSON(j []byte) error {
 	if err != nil {
 		return fmt.Errorf("can't unmarshall %T from JSON: %w", *set, err)
 	}
-	if *set == nil {
-		*set = NewSet(slice...)
-	} else {
-		set.Clear()
-		set.InsertAll(slices.Values(slice))
-	}
+	// Always a new set, never the caller's existing map. Clearing and
+	// refilling in place rewrote any other variable sharing that map:
+	// unmarshalling into a struct field assigned from a shared default
+	// set silently rewrote the default. uu.IDSet.UnmarshalJSON already
+	// assigned a new map; the two agree now.
+	*set = NewSet(slice...)
 	return nil
 }
 

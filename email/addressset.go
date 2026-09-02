@@ -353,9 +353,11 @@ func (set AddressSet) String() string {
 // Normalized returns a new AddressSet with all addresses normalized,
 // or the original set together with an error if any address is invalid.
 func (set AddressSet) Normalized() (AddressSet, error) {
-	if len(set) == 0 {
-		return set, nil
+	if set == nil {
+		return nil, nil
 	}
+	// An allocated empty set still gets its own map: returning the receiver
+	// made the "normalized copy" an alias, so writing to it wrote through.
 	normalized := make(AddressSet, len(set))
 	for addr := range set {
 		norm, err := addr.Normalized()

@@ -382,3 +382,29 @@ func TestSet_DeprecatedMutators(t *testing.T) {
 		}
 	})
 }
+
+// TestSet_UnmarshalJSON_DoesNotMutateSharedMap covers the aliasing bug an
+// adversarial review found: UnmarshalJSON used to clear and refill the
+// receiver's existing map when it was non-nil, so unmarshalling into a struct
+// field that had been assigned from a shared default set rewrote that default
+// for every other holder. With attacker-controlled JSON and a permission set
+// that is a privilege escalation, not just a surprise.
+func TestSet_UnmarshalJSON_DoesNotMutateSharedMap(t *testing.T) {
+	defaults := NewSet("read")
+	cfg := struct{ Perms Set[string] }{Perms: defaults}
+
+	if err := json.Unmarshal([]byte(`{"Perms":["admin"]}`), &cfg); err != nil {
+		t.Fatalf("Unmarshal returned %v", err)
+	}
+	if want := NewSet("read"); !defaults.Equal(want) {
+		t.Errorf("the shared default set became %v, want %v", defaults, want)
+	}
+	if want := NewSet("admin"); !cfg.Perms.Equal(want) {
+		t.Errorf("the unmarshalled field = %v, want %v", cfg.Perms, want)
+	}
+	// The field must be a different map, not the default with new contents.
+	defaults.Insert("write")
+	if cfg.Perms.Contains("write") {
+		t.Error("the unmarshalled field still aliases the default map")
+	}
+}
