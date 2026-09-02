@@ -52,8 +52,8 @@ Implements the abstract set interface of the Go 1.28 collections proposal
 
 `AddressSet` keeps pointer-receiver `Add`, `AddSet`, `AddNormalized` and `AddAddressPart` methods
 alongside the value-receiver interface methods. Those four allocate the underlying map, so they
-work on a nil variable or struct field; the value-receiver `Insert` and `UnionWith` panic on a nil
-set like a nil map assignment.
+work on a nil variable or struct field; the value-receiver `Insert`, `InsertAll`, `UnionWith` and
+`SymmetricDifferenceWith` panic on a nil set like a nil map assignment.
 
 ## NullableAddress / NullableAddressList
 

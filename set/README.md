@@ -8,7 +8,7 @@ import "github.com/domonda/go-types/set"
 
 For an opaque `Set[T]` struct with methods (union, intersection, difference, Sorted, JSON), see the root package `types.Set[T]` in `set.go`.
 
-> **Prefer [`mapset`](../mapset/) for new code.** It covers the same ground with the full set algebra and mirrors the `container/mapset` package proposed for Go 1.28, so it can be swapped for the standard library one with an import path change. This package predates it and is kept for its existing callers.
+> **Prefer [`mapset`](../mapset/) for new code.** It covers the full set algebra and mirrors the `container/mapset` package proposed for Go 1.28, so it can be swapped for the standard library one with an import path change. This package predates it and is kept for its existing callers. Two helpers here have no `mapset` counterpart: `Add(set, values...)` is nil-safe (it allocates and returns the map, where `mapset.Insert` panics on a nil set and takes a single element), and `ContainsAny` / `ContainsAll` are variadic, where `mapset` offers `Intersects` and `ContainsAll(x, iter.Seq[K])`.
 
 ## API
 

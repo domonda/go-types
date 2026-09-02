@@ -32,6 +32,19 @@ func TestNullableAddressList_Scan(t *testing.T) {
 		// elements. The padding is not part of the address.
 		{name: "padded elements", value: `{ a@example.com , b@example.com }`, want: "a@example.com, b@example.com"},
 		{name: "whitespace only array", value: `{ }`, want: ""},
+		// Regression cases for the array codec swap (nullable.SplitArray ->
+		// notnull.StringArray). Each behaves differently than before, so each
+		// is pinned rather than left to be discovered in production.
+		// A SQL NULL element used to become the address literally spelled NULL.
+		{name: "NULL element", value: `{NULL}`, wantErr: true},
+		// Quoted, it is the ordinary string "NULL", not a SQL NULL.
+		{name: "quoted NULL element", value: `{"NULL"}`, want: "NULL"},
+		// A trailing comma used to be accepted and yield one element.
+		{name: "trailing comma", value: `{a@example.com,}`, wantErr: true},
+		// Backslash escapes are unescaped now; before, both backslashes stayed.
+		{name: "escaped backslash", value: `{"a\\b@example.com"}`, want: `a\b@example.com`},
+		// A nested literal used to yield the inner braces as a single address.
+		{name: "nested array", value: `{{a@example.com}}`, wantErr: true},
 		// A non-array string is an already joined list, so it is taken as is.
 		{name: "plain string", value: "a@example.com, b@example.com", want: "a@example.com, b@example.com"},
 		{name: "bytes", value: []byte(`{"a@example.com"}`), want: "a@example.com"},

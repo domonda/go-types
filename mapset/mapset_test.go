@@ -396,3 +396,86 @@ func TestBoolSets(t *testing.T) {
 		t.Error("SymmetricDifferenceWith on a map[K]bool set stored false, want true")
 	}
 }
+
+// TestMixedRepresentations covers the independent VX/VY type parameters of
+// Union, Intersection, Difference, SymmetricDifference and UnionWith. Their
+// signatures allow mixing the map[K]struct{} and map[K]bool representations,
+// but every other test instantiates them homogeneously, and per-block coverage
+// cannot see an instantiation that is never compiled. Membership depends only
+// on the key, so mixing must work and the result must take the representation
+// of the left operand.
+//
+// Note the asymmetry this test pins by omission: IntersectionWith,
+// DifferenceWith and SymmetricDifferenceWith declare both operands as the same
+// M, and Intersects shares one V, so none of them compile with mixed
+// representations. Only UnionWith does.
+func TestMixedRepresentations(t *testing.T) {
+	structs := Of("a", "b")
+	bools := OfBool("b", "c")
+
+	var union map[string]struct{} = Union(structs, bools)
+	eq(t, sorted(union), "a", "b", "c")
+	var intersection map[string]struct{} = Intersection(structs, bools)
+	eq(t, sorted(intersection), "b")
+	var difference map[string]struct{} = Difference(structs, bools)
+	eq(t, sorted(difference), "a")
+	var symmetric map[string]struct{} = SymmetricDifference(structs, bools)
+	eq(t, sorted(symmetric), "a", "c")
+
+	// Reversed, so the bool set is the left operand whose representation wins.
+	var boolUnion map[string]bool = Union(bools, structs)
+	eq(t, sorted(boolUnion), "a", "b", "c")
+	for k, v := range boolUnion {
+		if !v {
+			t.Errorf("Union into a bool set stored false for %q, want true", k)
+		}
+	}
+
+	UnionWith(structs, bools)
+	eq(t, sorted(structs), "a", "b", "c")
+	// The argument must survive the in-place operation unchanged.
+	eq(t, sorted(bools), "b", "c")
+}
+
+// TestMixedNamedTypes covers the independent MX/MY of Intersects, which share
+// one representation V but allow two different named map types.
+func TestMixedNamedTypes(t *testing.T) {
+	named := namedSet{"a": {}, "b": {}}
+	plain := Of("b", "c")
+
+	if !Intersects(named, plain) {
+		t.Error("Intersects across named and plain map types = false, want true")
+	}
+	if Intersects(named, Of("z")) {
+		t.Error("Intersects of disjoint sets = true, want false")
+	}
+}
+
+// TestNilOperandsAllocate pins the package doc's promise that Union,
+// Intersection, Difference and SymmetricDifference "accept nil operands and
+// always return a newly allocated set". Every other nil-operand assertion goes
+// through sorted(), which renders a nil and an empty map identically, so a
+// short-circuit `return nil` for two empty operands would keep the suite green
+// and then panic on the caller's next Insert.
+func TestNilOperandsAllocate(t *testing.T) {
+	var nilSet map[string]struct{}
+
+	ops := map[string]func() map[string]struct{}{
+		"Union":               func() map[string]struct{} { return Union(nilSet, nilSet) },
+		"Intersection":        func() map[string]struct{} { return Intersection(nilSet, nilSet) },
+		"Difference":          func() map[string]struct{} { return Difference(nilSet, nilSet) },
+		"SymmetricDifference": func() map[string]struct{} { return SymmetricDifference(nilSet, nilSet) },
+	}
+	for name, op := range ops {
+		t.Run(name, func(t *testing.T) {
+			got := op()
+			if got == nil {
+				t.Fatalf("%s of two nil sets returned nil, want an allocated empty set", name)
+			}
+			// Writable is the property that actually matters to callers.
+			if !Insert(got, "a") {
+				t.Errorf("%s result did not accept an Insert", name)
+			}
+		})
+	}
+}

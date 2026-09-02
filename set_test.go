@@ -233,12 +233,23 @@ func TestSet_UnmarshalJSON(t *testing.T) {
 	})
 
 	t.Run("null", func(t *testing.T) {
-		set := NewSet(1)
-		if err := json.Unmarshal([]byte(`null`), &set); err != nil {
-			t.Fatalf("Unmarshal of null returned %v", err)
-		}
-		if !set.IsEmpty() {
-			t.Errorf("Unmarshal of null = %v, want empty", set)
+		// JSON null does NOT round-trip: MarshalJSON writes null for a nil set,
+		// but UnmarshalJSON never produces one back. The `*set = nil` branch
+		// has no return, so execution falls through to json.Unmarshal and the
+		// following `if *set == nil` re-allocates an empty set. IsNull is part
+		// of the public nullable.Nullable interface, so assert on that axis:
+		// IsEmpty alone is true for both a nil and an allocated empty set and
+		// would hide the dead assignment.
+		for _, set := range []Set[int]{NewSet(1), nil} {
+			if err := json.Unmarshal([]byte(`null`), &set); err != nil {
+				t.Fatalf("Unmarshal of null returned %v", err)
+			}
+			if !set.IsEmpty() {
+				t.Errorf("Unmarshal of null = %v, want empty", set)
+			}
+			if set.IsNull() {
+				t.Error("Unmarshal of null produced a nil set; if that was fixed, update this test and MarshalJSON's counterpart")
+			}
 		}
 	})
 

@@ -115,7 +115,9 @@ func (set AddressSet) Insert(addr Address) bool {
 // InsertAll adds all addresses yielded by seq to the set
 // and reports whether the set was changed.
 // It panics if the set is nil and seq yields an address
-// that is not already an element; use [AddressSet.AddSet] for a possibly nil set.
+// that is not already an element. There is no nil-safe sequence insert:
+// on a possibly nil set collect the sequence first and use
+// [AddressSet.AddSet], which takes an AddressSet rather than an iter.Seq.
 func (set AddressSet) InsertAll(seq iter.Seq[Address]) bool {
 	return mapset.InsertAll(set, seq)
 }

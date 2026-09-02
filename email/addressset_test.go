@@ -335,6 +335,19 @@ func TestAddressSet_ScanNonArray(t *testing.T) {
 		// elements. The padding is not part of the address.
 		{name: "padded elements", value: "{ a@example.com , b@example.com }", want: MakeAddressSet("a@example.com", "b@example.com")},
 		{name: "whitespace only array", value: "{ }", want: AddressSet{}},
+		// Regression cases for the array codec swap (nullable.SplitArray ->
+		// notnull.StringArray). Each behaves differently than before, so each
+		// is pinned rather than left to be discovered in production.
+		// A SQL NULL element used to become the address literally spelled NULL.
+		{name: "NULL element", value: "{NULL}", wantErr: true},
+		// Quoted, it is the ordinary string "NULL", not a SQL NULL.
+		{name: "quoted NULL element", value: `{"NULL"}`, want: MakeAddressSet("NULL")},
+		// A trailing comma used to be accepted and yield one element.
+		{name: "trailing comma", value: "{a@example.com,}", wantErr: true},
+		// Backslash escapes are unescaped now; before, both backslashes stayed.
+		{name: "escaped backslash", value: `{"a\\b@example.com"}`, want: MakeAddressSet(`a\b@example.com`)},
+		// A nested literal used to yield the inner braces as a single address.
+		{name: "nested array", value: "{{a@example.com}}", wantErr: true},
 		{name: "null", value: nil, want: nil},
 		{name: "empty string", value: "", wantErr: true},
 		{name: "invalid array", value: "{,}", wantErr: true},
@@ -433,7 +446,9 @@ func TestAddressSet_AddressListAndString(t *testing.T) {
 	if got, want := set.AddressList(), AddressList("a@example.com, b@example.com"); got != want {
 		t.Errorf("AddressList() = %s, want %s", got, want)
 	}
-	if got, want := set.String(), string(set.AddressList()); got != want {
+	// The literal, not string(set.AddressList()), which is what String
+	// returns verbatim; comparing the two checks the code against itself.
+	if got, want := set.String(), "a@example.com, b@example.com"; got != want {
 		t.Errorf("String() = %s, want %s", got, want)
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"maps"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/domonda/go-types/internal/collections"
@@ -179,12 +180,23 @@ func TestIDSet_Strings(t *testing.T) {
 }
 
 func TestIDSet_StringAndPrettyString(t *testing.T) {
+	// Built from the sorted ID strings rather than from AsSortedSlice(), so
+	// the assertion does not restate the implementation: String is literally
+	// "set" + AsSortedSlice().String(), and comparing against that would pass
+	// even if both regressed together.
+	ids := []string{testIDA.String(), testIDB.String()}
+	slices.Sort(ids)
+	want := "set[" + strings.Join(ids, ",") + "]"
+
 	set := MakeIDSet(testIDA, testIDB)
-	sorted := set.AsSortedSlice()
-	if got, want := set.String(), "set"+sorted.String(); got != want {
+	if got := set.String(); got != want {
 		t.Errorf("String() = %s, want %s", got, want)
 	}
-	if got, want := set.PrettyString(), sorted.PrettyString(); got != want {
+	// PrettyString deliberately drops the "set" prefix that String carries:
+	// it is s.AsSortedSlice().PrettyString(), so an IDSet and an IDSlice with
+	// the same IDs pretty-print identically. Only String round-trips through
+	// IDSetFromString, which strips that prefix.
+	if got, want := set.PrettyString(), "["+strings.Join(ids, ",")+"]"; got != want {
 		t.Errorf("PrettyString() = %s, want %s", got, want)
 	}
 	if got, want := IDSet(nil).String(), "set[]"; got != want {
@@ -204,11 +216,18 @@ func TestIDSet_GetOne(t *testing.T) {
 }
 
 func TestIDSet_AsSet(t *testing.T) {
-	// AsSet exists only to implement the IDs interface, so it must
-	// return the receiver itself rather than a copy.
+	// AsSet exists only to implement the IDs interface, so it must return the
+	// receiver itself rather than a copy. Assert aliasing, not equality:
+	// maps.Equal would also hold for maps.Clone(s), and callers like AddIDs
+	// store through the returned map.
 	set := MakeIDSet(testIDA)
-	if got := set.AsSet(); !maps.Equal(got, set) {
+	got := set.AsSet()
+	if !maps.Equal(got, set) {
 		t.Errorf("AsSet() = %s, want %s", got, set)
+	}
+	got.Insert(testIDB)
+	if !set.Contains(testIDB) {
+		t.Error("AsSet() returned a copy, want a view of the receiver")
 	}
 }
 
@@ -275,7 +294,11 @@ func TestIDSet_MarshalAndUnmarshalText(t *testing.T) {
 	if err != nil {
 		t.Fatalf("MarshalText returned %v", err)
 	}
-	if want := set.String(); string(text) != want {
+	// Compared against the literal, not against set.String(), which is what
+	// MarshalText returns verbatim.
+	ids := []string{testIDA.String(), testIDB.String()}
+	slices.Sort(ids)
+	if want := "set[" + strings.Join(ids, ",") + "]"; string(text) != want {
 		t.Errorf("MarshalText() = %s, want %s", text, want)
 	}
 

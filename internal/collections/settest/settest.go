@@ -12,7 +12,9 @@
 package settest
 
 import (
+	"fmt"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/domonda/go-types/internal/collections"
@@ -225,10 +227,32 @@ func Run[E comparable, S collections.Set[E, S]](t *testing.T, makeSet func(elems
 	})
 
 	t.Run("String", func(t *testing.T) {
-		// The format is type specific, but it must at least be callable
-		// on a nil set, since String is part of the abstract interface.
-		_ = makeSet(a, b).String()
-		_ = nilSet.String()
+		// The format is type specific, so this cannot assert an exact
+		// string. It can still assert more than "does not panic":
+		// the output has to be non-empty, deterministic across calls
+		// (the map iteration order must not leak into it), and it has
+		// to mention both elements.
+		set := makeSet(a, b)
+		got := set.String()
+		if got == "" {
+			t.Error("String() = empty, want a representation of the set")
+		}
+		if again := set.String(); again != got {
+			t.Errorf("String() is not deterministic: %q then %q", got, again)
+		}
+		for _, elem := range []E{a, b} {
+			if !strings.Contains(got, fmt.Sprint(elem)) {
+				t.Errorf("String() = %q, want it to mention %v", got, elem)
+			}
+		}
+		// String is part of the abstract interface, so a nil set must
+		// render rather than panic, and must not claim to hold an element.
+		// The empty rendering is NOT required to be non-empty: types whose
+		// String is a joined list (email.AddressSet) legitimately render the
+		// empty set as "", while others use "<nil>", "set[]" or "[]".
+		if strings.Contains(nilSet.String(), fmt.Sprint(a)) {
+			t.Errorf("String() of a nil set = %q, want no elements in it", nilSet.String())
+		}
 	})
 
 	t.Run("Union", func(t *testing.T) {

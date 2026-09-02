@@ -10,7 +10,7 @@ This package mirrors, function for function, the `container/mapset` package prop
 
 It is the shared implementation behind the set methods of `types.Set[T]`, `uu.IDSet`, `strutil.StringSet` and `email.AddressSet`, which together implement the abstract set interface of [go.dev/issue/80590](https://go.dev/issue/80590).
 
-All functions take a `~map[K]V` constraint, so they accept defined map types directly — no conversion needed — and the ones returning a set return that same defined type.
+Functions taking a set take a `~map[K]V` constraint, so they accept defined map types directly — no conversion needed — and the ones returning a set return that same defined type. Two caveats: `Of`, `OfBool`, `Collect` and `CollectBool` take no set and return the plain `map[K]struct{}` / `map[K]bool`, not a defined type; and `Equal`, `IntersectionWith`, `DifferenceWith` and `SymmetricDifferenceWith` declare both operands as the same `M`, so unlike `Union`, `Intersection`, `Difference`, `SymmetricDifference`, `Intersects` and `UnionWith` they do not accept two different map types. That split is faithful to upstream CL 724420.
 
 ## API
 

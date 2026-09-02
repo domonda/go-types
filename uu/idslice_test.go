@@ -188,11 +188,17 @@ func TestIDSliceMust(t *testing.T) {
 }
 
 func TestIDSlice_AsSlice(t *testing.T) {
-	// AsSlice exists only to implement the IDs interface, so it must
-	// return the receiver itself rather than a copy.
+	// AsSlice exists only to implement the IDs interface, so it must return
+	// the receiver itself rather than a copy. Assert aliasing the way
+	// TestIDSlice_Raw does: slices.Equal would hold for a copy too.
 	s := IDSlice{testIDA}
-	if got := s.AsSlice(); !slices.Equal(got, s) {
+	got := s.AsSlice()
+	if !slices.Equal(got, s) {
 		t.Errorf("AsSlice() = %s, want %s", got, s)
+	}
+	got[0] = testIDC
+	if s[0] != testIDC {
+		t.Error("AsSlice() returned a copy, want a view of the same backing array")
 	}
 }
 
@@ -246,9 +252,16 @@ func TestIDSlice_ForEach(t *testing.T) {
 }
 
 func TestIDSlice_PrettyString(t *testing.T) {
+	// Compared against the literal, not against s.String(): PrettyString is
+	// `return s.String()`, so comparing the two only checks the code against
+	// itself and would pass even if String regressed.
 	s := IDSlice{testIDA, testIDB}
-	if got, want := s.PrettyString(), s.String(); got != want {
+	want := "[" + testIDA.String() + "," + testIDB.String() + "]"
+	if got := s.PrettyString(); got != want {
 		t.Errorf("PrettyString() = %s, want %s", got, want)
+	}
+	if got := s.String(); got != want {
+		t.Errorf("String() = %s, want %s", got, want)
 	}
 }
 
@@ -389,7 +402,8 @@ func TestIDSlice_MarshalAndUnmarshalText(t *testing.T) {
 	if err != nil {
 		t.Fatalf("MarshalText returned %v", err)
 	}
-	if want := s.String(); string(text) != want {
+	// The literal, not s.String(), which is what MarshalText returns verbatim.
+	if want := "[" + testIDA.String() + "," + testIDB.String() + "]"; string(text) != want {
 		t.Errorf("MarshalText() = %s, want %s", text, want)
 	}
 
@@ -455,4 +469,25 @@ func TestIDSlice_UnmarshalJSON_Errors(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestIDSlice_AsSet(t *testing.T) {
+	// AsSet is the only behavioural line changed in idslice.go on this branch
+	// (AddSlice -> InsertAll). It is otherwise only reached transitively via
+	// MakeIDSet and IDSet.Scan, so the deduplication it must perform is
+	// asserted here directly.
+	got := IDSlice{testIDA, testIDB, testIDA}.AsSet()
+	if want := MakeIDSet(testIDA, testIDB); !got.Equal(want) {
+		t.Errorf("AsSet() = %s, want %s", got, want)
+	}
+	if got.Len() != 2 {
+		t.Errorf("AsSet() of a slice with a repeated ID has Len %d, want 2", got.Len())
+	}
+	// An empty slice yields an allocated empty set, not nil, so that the
+	// caller can Insert into the result without a nil-map panic.
+	empty := IDSlice(nil).AsSet()
+	if empty == nil || empty.Len() != 0 {
+		t.Errorf("AsSet() of a nil slice = %v, want an allocated empty set", empty)
+	}
+	empty.Insert(testIDA)
 }
