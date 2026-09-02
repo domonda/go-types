@@ -1,6 +1,7 @@
 package uu
 
 import (
+	"database/sql/driver"
 	"encoding/json"
 	"errors"
 	"maps"
@@ -404,10 +405,12 @@ func TestIDSet_MarshalAndUnmarshalJSON(t *testing.T) {
 	}
 	// The property the allocation exists for.
 	parsed.Insert(testIDA)
-	// An allocated empty set still marshals back to null, so the
-	// round trip is unaffected.
-	if data, err := json.Marshal(make(IDSet)); err != nil || string(data) != "null" {
-		t.Errorf("Marshal of an allocated empty set = %s, %v, want null", data, err)
+	// Only a nil set is null; an allocated empty set is the empty array.
+	// This is why JSON null does not round trip through a map-backed set:
+	// null unmarshals to an allocated empty set, which marshals to [].
+	// SQL does round trip, because Scan(nil) is allowed to yield a nil map.
+	if data, err := json.Marshal(make(IDSet)); err != nil || string(data) != "[]" {
+		t.Errorf("Marshal of an allocated empty set = %s, %v, want []", data, err)
 	}
 	// A nil receiver gets a freshly allocated map, not nil.
 	var fresh IDSet
@@ -497,4 +500,74 @@ func TestIDSet_AddIDs(t *testing.T) {
 	if want := MakeIDSet(testIDA, testIDB, testIDC); !set.Equal(want) {
 		t.Errorf("after AddIDs set = %s, want %s", set, want)
 	}
+}
+
+// TestIDSet_NullVsEmpty pins null and empty apart in both directions. Before,
+// Value and MarshalJSON went through AsSortedSlice, which is a nil IDSlice for
+// an empty set and therefore wrote SQL NULL / JSON null: an allocated empty set
+// was indistinguishable from a nil one, so storing an empty set wrote NULL to
+// the column.
+func TestIDSet_NullVsEmpty(t *testing.T) {
+	t.Run("SQL round trips all three states", func(t *testing.T) {
+		cases := []struct {
+			name  string
+			set   IDSet
+			value driver.Value
+		}{
+			{name: "nil is NULL", set: nil, value: nil},
+			{name: "empty is the empty array", set: make(IDSet), value: `{}`},
+			{name: "populated is an array", set: MakeIDSet(testIDA), value: `{"` + testIDA.String() + `"}`},
+		}
+		for _, tt := range cases {
+			t.Run(tt.name, func(t *testing.T) {
+				got, err := tt.set.Value()
+				if err != nil {
+					t.Fatalf("Value returned %v", err)
+				}
+				if got != tt.value {
+					t.Errorf("Value() = %#v, want %#v", got, tt.value)
+				}
+				// Scan must read it back to the state it came from,
+				// including nil for NULL: that is what makes NULL and
+				// the empty array distinguishable in a round trip.
+				var back IDSet
+				if err := back.Scan(got); err != nil {
+					t.Fatalf("Scan(%#v) returned %v", got, err)
+				}
+				if (back == nil) != (tt.set == nil) {
+					t.Errorf("Scan(Value()) nilness = %t, want %t", back == nil, tt.set == nil)
+				}
+				if !back.Equal(tt.set) {
+					t.Errorf("Scan(Value()) = %s, want %s", back, tt.set)
+				}
+			})
+		}
+	})
+
+	t.Run("JSON distinguishes them too", func(t *testing.T) {
+		for _, tt := range []struct {
+			set  IDSet
+			want string
+		}{
+			{set: nil, want: "null"},
+			{set: make(IDSet), want: "[]"},
+		} {
+			got, err := json.Marshal(tt.set)
+			if err != nil {
+				t.Fatalf("Marshal returned %v", err)
+			}
+			if string(got) != tt.want {
+				t.Errorf("Marshal(%v) = %s, want %s", tt.set, got, tt.want)
+			}
+		}
+		// The empty array does round trip through JSON; null does not,
+		// because UnmarshalJSON refuses to produce a nil map.
+		var s IDSet
+		if err := json.Unmarshal([]byte("[]"), &s); err != nil {
+			t.Fatalf("Unmarshal returned %v", err)
+		}
+		if s == nil || s.Len() != 0 {
+			t.Errorf("Unmarshal of [] = %v, want an allocated empty set", s)
+		}
+	})
 }

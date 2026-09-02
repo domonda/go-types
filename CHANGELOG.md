@@ -130,11 +130,20 @@ No version has been tagged yet, so everything below is unreleased. See
 - `types.Set.UnmarshalJSON` and `uu.IDSet.UnmarshalJSON` empty the set for
   JSON `null` instead of assigning nil. A nil map panics when a key is set,
   so the old behaviour crashed the next `Insert` on a freshly unmarshalled
-  set. An already allocated set is cleared in place rather than replaced, and
-  an allocated empty set still marshals back to `null`, so the round trip is
-  unchanged. `uu.IDSlice.UnmarshalJSON` still yields nil for `null`, because
-  a nil slice can be appended to; the asymmetry between the map and slice
-  types is deliberate.
+  set. An already allocated set is cleared in place rather than replaced.
+  `uu.IDSlice.UnmarshalJSON` still yields nil for `null`, because a nil slice
+  can be appended to; the asymmetry between the map and slice types is
+  deliberate. A consequence worth knowing: JSON `null` no longer round-trips
+  through a map-backed set (`null` unmarshals to an allocated empty set,
+  which marshals back as `[]`). SQL NULL does still round-trip, because
+  `Scan(nil)` is allowed to yield a nil map.
+- **Fixed:** `uu.IDSet.Value` wrote SQL `NULL` for an allocated empty set
+  instead of the empty array `{}`, so storing an empty set silently nulled
+  the column, and `uu.IDSet.MarshalJSON` wrote JSON `null` for it instead of
+  `[]`. Both went through `AsSortedSlice`, which is a nil `IDSlice` for an
+  empty set. `types.Set.MarshalJSON` had the same defect via `Sorted`. Only a
+  nil set is `NULL`/`null` now; an allocated empty set is `{}`/`[]`.
+  `email.AddressSet.Value` already got this right.
 - `email.AddressSet.String` returns `"<nil>"` for a nil set instead of the
   empty string, matching `types.Set.String`. An allocated empty set still
   renders as the empty string, so the two are now distinguishable in a log

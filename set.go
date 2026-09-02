@@ -280,6 +280,12 @@ func (set Set[T]) MarshalJSON() ([]byte, error) {
 	if set.IsNull() {
 		return []byte(`null`), nil
 	}
+	// Sorted returns a nil slice for an empty set, which marshals as null,
+	// so the empty array has to be written here to keep null and the empty
+	// array distinct.
+	if len(set) == 0 {
+		return []byte(`[]`), nil
+	}
 	return json.Marshal(set.Sorted())
 }
 

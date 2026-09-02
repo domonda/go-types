@@ -187,14 +187,14 @@ func TestSet_MarshalJSON(t *testing.T) {
 		t.Errorf("Marshal of a nil set = %s, want %s", got, want)
 	}
 
-	// An allocated empty set also marshals as null, because Sorted returns
-	// a nil slice for it. Pinned down here because MarshalJSON only checks
-	// IsNull and therefore looks like it would emit [] for this case.
+	// null and the empty array are distinct: only a nil set is null.
+	// Sorted returns a nil slice for an empty set, so MarshalJSON has to
+	// special-case it or an allocated empty set would also emit null.
 	got, err = json.Marshal(NewSet[int]())
 	if err != nil {
 		t.Fatalf("Marshal of an empty set returned %v", err)
 	}
-	if want := `null`; string(got) != want {
+	if want := `[]`; string(got) != want {
 		t.Errorf("Marshal of an empty set = %s, want %s", got, want)
 	}
 }

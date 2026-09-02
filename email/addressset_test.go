@@ -1,6 +1,7 @@
 package email
 
 import (
+	"database/sql/driver"
 	"reflect"
 	"slices"
 	"testing"
@@ -493,4 +494,44 @@ func TestAddressSet_DeprecatedMutators(t *testing.T) {
 			t.Errorf("after DeleteSet set = %s, want %s", set, want)
 		}
 	})
+}
+
+// TestAddressSet_NullVsEmpty pins null and empty apart for the SQL round trip,
+// the same contract uu.IDSet has. AddressSet.Value already got this right; the
+// test exists so a future refactor through Sorted() (which is nil for an empty
+// set, like uu.IDSet.AsSortedSlice was) cannot silently collapse an empty set
+// into NULL again.
+func TestAddressSet_NullVsEmpty(t *testing.T) {
+	cases := []struct {
+		name  string
+		set   AddressSet
+		value driver.Value
+	}{
+		{name: "nil is NULL", set: nil, value: nil},
+		{name: "empty is the empty array", set: MakeAddressSet(), value: "{}"},
+		{name: "populated is an array", set: MakeAddressSet("a@example.com"), value: `{"a@example.com"}`},
+	}
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := tt.set.Value()
+			if err != nil {
+				t.Fatalf("Value returned %v", err)
+			}
+			if got != tt.value {
+				t.Errorf("Value() = %#v, want %#v", got, tt.value)
+			}
+			var back AddressSet
+			if err := back.Scan(got); err != nil {
+				t.Fatalf("Scan(%#v) returned %v", got, err)
+			}
+			// Scan(nil) yields a nil map, which is what makes NULL and the
+			// empty array distinguishable across the round trip.
+			if (back == nil) != (tt.set == nil) {
+				t.Errorf("Scan(Value()) nilness = %t, want %t", back == nil, tt.set == nil)
+			}
+			if !back.Equal(tt.set) {
+				t.Errorf("Scan(Value()) = %s, want %s", back, tt.set)
+			}
+		})
+	}
 }

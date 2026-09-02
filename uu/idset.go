@@ -396,6 +396,13 @@ func (s IDSet) Value() (driver.Value, error) {
 	if s == nil {
 		return nil, nil
 	}
+	// AsSortedSlice returns a nil IDSlice for an empty set, whose Value is
+	// SQL NULL, so the empty array has to be written here: a nil set is
+	// NULL, an allocated empty set is the empty array, and Scan reads both
+	// back to the state they came from.
+	if len(s) == 0 {
+		return "{}", nil
+	}
 	return s.AsSortedSlice().Value()
 }
 
@@ -403,6 +410,12 @@ func (s IDSet) Value() (driver.Value, error) {
 func (s IDSet) MarshalJSON() ([]byte, error) {
 	if s == nil {
 		return []byte("null"), nil
+	}
+	// Same reason as in Value: AsSortedSlice is nil for an empty set and
+	// marshals as null, so the empty array has to be written here to keep
+	// JSON null and the empty array distinct.
+	if len(s) == 0 {
+		return []byte("[]"), nil
 	}
 	return s.AsSortedSlice().MarshalJSON()
 }
