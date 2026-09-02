@@ -41,8 +41,31 @@ func Test_SplitArray(t *testing.T) {
 	}
 }
 
+func Test_SplitArrayValues(t *testing.T) {
+	t.Run("empty slice for empty/null", func(t *testing.T) {
+		for _, in := range []string{"{}", "[]", "null", "NULL"} {
+			values, err := SplitArrayValues(in)
+			require.NoError(t, err, in)
+			assert.NotNil(t, values, "SplitArrayValues must never return nil on success")
+			assert.Empty(t, values, in)
+		}
+	})
+
+	t.Run("quoted elements are unquoted", func(t *testing.T) {
+		values, err := SplitArrayValues(`{a,"b,c","d\\e","f\"g"}`)
+		require.NoError(t, err)
+		assert.Equal(t, []string{`a`, `b,c`, `d\e`, `f"g`}, values)
+	})
+
+	t.Run("errors", func(t *testing.T) {
+		_, err := SplitArrayValues("abc")
+		assert.Error(t, err)
+	})
+}
+
 func Test_SQLArrayLiteral(t *testing.T) {
 	assert.Equal(t, "{}", SQLArrayLiteral(nil), "nil slice yields empty array, not NULL")
 	assert.Equal(t, "{}", SQLArrayLiteral([]string{}), "empty slice yields empty array")
 	assert.Equal(t, `{"a","b"}`, SQLArrayLiteral([]string{"a", "b"}))
+	assert.Equal(t, `{"a\\b"}`, SQLArrayLiteral([]string{`a\b`}), "a backslash must be escaped too")
 }

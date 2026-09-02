@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -8,7 +9,8 @@ import (
 )
 
 // SplitArray splits an SQL or JSON array into its top level elements.
-// Array elements that are quoted strings will not be unquoted.
+// Array elements that are quoted strings will not be unquoted,
+// use SplitArrayValues to get the values of quoted string elements.
 // Returns nil in case of an empty array ("{}" or "[]").
 // Passing "null" or "NULL" as array will return nil without an error.
 func SplitArray(array string) ([]string, error) {
@@ -40,7 +42,7 @@ func SplitArray(array string) ([]string, error) {
 		objectDepth  = 0
 		bracketDepth = 0
 		elemStart    = -1
-		lastRune     rune
+		escaped      bool
 		quoteRune    rune
 		elems        []string
 	)
@@ -100,7 +102,13 @@ func SplitArray(array string) ([]string, error) {
 			}
 
 		case inQuotedElem:
-			if r == quoteRune && (r != '"' || lastRune != '\\') {
+			switch {
+			case escaped:
+				// An escaped character can't end the element
+				escaped = false
+			case r == '\\' && quoteRune == '"':
+				escaped = true
+			case r == quoteRune:
 				elems = append(elems, inner[elemStart:i+1])
 				elemStart = -1
 				quoteRune = 0
@@ -117,8 +125,6 @@ func SplitArray(array string) ([]string, error) {
 				return nil, fmt.Errorf("invalid rune %q after array element in %q", r, array)
 			}
 		}
-
-		lastRune = r
 	}
 
 	if objectDepth != 0 {
@@ -136,6 +142,85 @@ func SplitArray(array string) ([]string, error) {
 	}
 
 	return elems, nil
+}
+
+// SplitArrayValues splits an SQL or JSON array into its top level elements
+// like SplitArray and returns the value of every element that is a
+// double quoted string with the quotes removed and the escape sequences
+// of the parsed array syntax undone.
+//
+// Elements that are not double quoted strings are returned unchanged,
+// like the objects of a JSON array of objects, or elements quoted with
+// single quotes, which are neither valid SQL nor valid JSON array syntax.
+//
+// An unquoted NULL element of an SQL array (null in a JSON array) is
+// returned as the string "NULL" ("null") and is indistinguishable from a
+// quoted "NULL" ("null") string element. Use SplitArray to tell them
+// apart, its elements correspond by index and a quoted element still has
+// its quotes there.
+func SplitArrayValues(array string) ([]string, error) {
+	elems, err := SplitArray(array)
+	if err != nil || elems == nil {
+		return nil, err
+	}
+	// SplitArray has validated the array syntax,
+	// so a leading '[' means JSON and a leading '{' SQL
+	jsonSyntax := array[0] == '['
+	for i, elem := range elems {
+		elems[i] = unquoteArrayElem(elem, jsonSyntax)
+	}
+	return elems, nil
+}
+
+// unquoteArrayElem returns the value of an array element that is a double
+// quoted string, or the element unchanged if it is not a quoted string.
+//
+// SQL and JSON string elements have to be unescaped differently:
+// a backslash in a PostgreSQL array literal escapes the following
+// character whatever it is, so `\n` are the two characters backslash
+// and n, while JSON interprets \n, \t, \uXXXX and friends.
+func unquoteArrayElem(elem string, jsonSyntax bool) string {
+	if len(elem) < 2 || elem[0] != '"' || elem[len(elem)-1] != '"' {
+		return elem
+	}
+	if jsonSyntax {
+		var s string
+		err := json.Unmarshal([]byte(elem), &s)
+		if err != nil {
+			// Return the invalid JSON string unchanged
+			// so it fails visibly downstream
+			// instead of half unescaping it
+			return elem
+		}
+		return s
+	}
+	return unescapeSQLArrayElem(elem[1 : len(elem)-1])
+}
+
+// unescapeSQLArrayElem undoes the backslash escaping within a quoted
+// PostgreSQL array element, where a backslash escapes the following
+// character whatever that character is.
+//
+// Implemented here instead of delegating to the vendored lib/pq parser
+// in internal/pq because that parser can only parse a complete
+// PostgreSQL array literal, not a single element, and neither the JSON
+// arrays nor the unquoted [a,b] form that SplitArray also accepts.
+// The escaping rule is the one of that parser, so SplitArrayValues and
+// notnull.StringArray.Scan decode the same PostgreSQL array literal
+// to the same values.
+func unescapeSQLArrayElem(elem string) string {
+	if !strings.Contains(elem, `\`) {
+		return elem
+	}
+	var b strings.Builder
+	b.Grow(len(elem))
+	for i := 0; i < len(elem); i++ {
+		if elem[i] == '\\' && i+1 < len(elem) {
+			i++
+		}
+		b.WriteByte(elem[i])
+	}
+	return b.String()
 }
 
 // SQLArrayLiteral joins the passed strings as an SQL array literal
@@ -160,6 +245,12 @@ func SQLArrayLiteral(s []string) string {
 	return b.String()
 }
 
+// escapeQuotedReplacer escapes the only two characters that are special
+// within a quoted PostgreSQL array element. A replacer is used instead of
+// two strings.ReplaceAll calls because it does a single left to right pass
+// and therefore can't escape the backslashes it has inserted itself.
+var escapeQuotedReplacer = strings.NewReplacer(`\`, `\\`, `"`, `\"`)
+
 func escapeQuoted(s string) string {
-	return strings.ReplaceAll(s, `"`, `\"`) // ?
+	return escapeQuotedReplacer.Replace(s)
 }
