@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/domonda/go-types"
-	"github.com/domonda/go-types/nullable"
 )
 
 // Compile-time check that AddressList implements types.NormalizableValidator[AddressList]
@@ -183,9 +182,11 @@ func (l *AddressList) Scan(value any) error {
 			return errors.New("can't scan empty string as email.AddressList")
 		}
 		if s[0] == '{' && s[len(s)-1] == '}' {
-			stringArray, err := nullable.SplitArray(s)
+			// Elements that are empty after the helper's trim are
+			// skipped by AddressListJoinStrings.
+			stringArray, err := scanAddressArray(s, "AddressList")
 			if err != nil {
-				return fmt.Errorf("can't scan SQL array string %q as email.AddressList because of: %w", s, err)
+				return err
 			}
 			*l = AddressListJoinStrings(stringArray...)
 			return nil

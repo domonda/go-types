@@ -162,9 +162,11 @@ func (n *NullableAddressList) Scan(value any) error {
 			return errors.New("can't scan empty string as email.NullableAddressList")
 		}
 		if s[0] == '{' && s[len(s)-1] == '}' {
-			stringArray, err := nullable.SplitArray(s)
+			// Elements that are empty after the helper's trim are
+			// skipped by the join.
+			stringArray, err := scanAddressArray(s, "NullableAddressList")
 			if err != nil {
-				return fmt.Errorf("can't scan SQL array string %q as email.NullableAddressList because of: %w", s, err)
+				return err
 			}
 			*n = NullableAddressListJoinStrings(stringArray...)
 			return nil

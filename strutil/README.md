@@ -88,12 +88,21 @@ Backed by an extensive rune-to-entity map (Greek letters, math symbols, currency
 
 ```go
 s := strutil.NewStringSet("a", "b", "c")
-s.AddSlice([]string{"d", "e"})
+s.InsertAll(slices.Values([]string{"d", "e"}))
 s.Sorted()                 // []string sorted asc
 s.String()                 // `["a", "b", "c", "d", "e"]`
 
 strutil.NewStringSetMergeSlices(s1, s2, s3) // union from multiple slices
 ```
+
+Implements the abstract set interface of the Go 1.28 collections proposal
+([go.dev/issue/80590](https://go.dev/issue/80590)): `Insert`, `InsertAll`, `Delete`, `DeleteAll`,
+`DeleteFunc`, `All`, `ContainsAll`, `Union`, `Intersection`, `Difference`, `SymmetricDifference`,
+`Intersects` and the in-place `*With` variants. `Difference` is asymmetric; the former `Diff`
+method is now `SymmetricDifference`.
+
+A nil `StringSet` is a valid empty set for reads and removals; `Insert` into one panics like a
+nil map assignment.
 
 ## StrMutex
 

@@ -3,10 +3,13 @@ package uu
 import (
 	"bytes"
 	"database/sql/driver"
+	"iter"
 	"maps"
+	"slices"
 	"sort"
 	"strings"
 
+	"github.com/domonda/go-types/mapset"
 	"github.com/domonda/go-types/strutil"
 )
 
@@ -36,7 +39,7 @@ func MakeIDSetFromStrings(strs []string) (IDSet, error) {
 		if err != nil {
 			return nil, err
 		}
-		s.Add(id)
+		s.Insert(id)
 	}
 	return s, nil
 }
@@ -78,14 +81,14 @@ func IDSetMust[T IDSource](vals ...T) IDSet {
 	}
 	s := make(IDSet, len(vals))
 	for _, val := range vals {
-		s.Add(IDMust(val))
+		s.Insert(IDMust(val))
 	}
 	return s
 }
 
 // String implements the fmt.Stringer interface.
 func (s IDSet) String() string {
-	return "set" + s.AsSortedSlice().String()
+	return "set" + s.Sorted().String()
 }
 
 // Strings returns a slice with all IDs converted to strings
@@ -104,9 +107,9 @@ func (s IDSet) Strings() []string {
 }
 
 // PrettyString implements the pretty.Stringer interface
-// using s.AsSortedSlice().PrettyString().
+// using s.Sorted().PrettyString().
 func (s IDSet) PrettyString() string {
-	return s.AsSortedSlice().PrettyString()
+	return s.Sorted().PrettyString()
 }
 
 // GetOne returns one ID in undefined order from the set
@@ -153,14 +156,25 @@ func (s IDSet) ForEach(callback func(ID) error) error {
 	return nil
 }
 
-// AsSortedSlice returns the IDs of the set as sorted IDSlice.
-func (s IDSet) AsSortedSlice() IDSlice {
+// Sorted returns the IDs of the set as a sorted IDSlice.
+// The other set types of this module call this method Sorted too.
+func (s IDSet) Sorted() IDSlice {
 	sl := s.AsSlice()
 	sl.Sort()
 	return sl
 }
 
+// AsSortedSlice returns the IDs of the set as a sorted IDSlice.
+//
+// Deprecated: use [IDSet.Sorted], which is what types.Set,
+// strutil.StringSet and email.AddressSet call it.
+func (s IDSet) AsSortedSlice() IDSlice {
+	return s.Sorted()
+}
+
 // AddSlice adds all IDs from s to the set.
+//
+// Deprecated: use set.InsertAll(slices.Values(s)).
 func (set IDSet) AddSlice(s IDSlice) {
 	for _, id := range s {
 		set[id] = struct{}{}
@@ -168,6 +182,8 @@ func (set IDSet) AddSlice(s IDSlice) {
 }
 
 // AddSet adds all IDs from other into the set.
+//
+// Deprecated: use [IDSet.UnionWith].
 func (s IDSet) AddSet(other IDSet) {
 	for id := range other {
 		s[id] = struct{}{}
@@ -175,6 +191,9 @@ func (s IDSet) AddSet(other IDSet) {
 }
 
 // AddIDs adds all IDs yielded by ids into the set.
+//
+// Deprecated: use set.InsertAll(slices.Values(ids.AsSlice())),
+// or [IDSet.UnionWith] with ids.AsSet().
 func (s IDSet) AddIDs(ids IDs) {
 	ids.ForEach(func(id ID) error {
 		s[id] = struct{}{}
@@ -183,31 +202,83 @@ func (s IDSet) AddIDs(ids IDs) {
 }
 
 // Add inserts id into the set.
+//
+// Deprecated: use [IDSet.Insert] which additionally reports
+// whether the set was changed.
 func (s IDSet) Add(id ID) {
 	s[id] = struct{}{}
+}
+
+// Insert adds id to the set and reports whether the set was changed.
+// It panics if the set is nil and id is not already an element.
+func (s IDSet) Insert(id ID) bool {
+	return mapset.Insert(s, id)
+}
+
+// InsertAll adds all IDs yielded by seq to the set
+// and reports whether the set was changed.
+// It panics if the set is nil and seq yields an ID
+// that is not already an element.
+func (s IDSet) InsertAll(seq iter.Seq[ID]) bool {
+	return mapset.InsertAll(s, seq)
+}
+
+// All returns an iterator over the IDs of the set in undefined order.
+// It is valid to call this method on a nil IDSet.
+func (s IDSet) All() iter.Seq[ID] {
+	return mapset.All(s)
 }
 
 // Contains returns true if the set contains the passed id.
 // It is valid to call this method on a nil IDSet.
 func (s IDSet) Contains(id ID) bool {
-	if s == nil {
-		return false
-	}
-	_, ok := s[id]
-	return ok
+	return mapset.Contains(s, id)
 }
 
-// Delete removes id from the set. It is a no-op if id is not present.
-func (s IDSet) Delete(id ID) {
-	delete(s, id)
+// ContainsAny returns true if any of the passed IDs are in the set.
+// It returns false for no IDs and is valid to call on a nil IDSet.
+//
+// Note that [IDSlice.ContainsAny] takes an IDSlice rather than variadic
+// IDs, because a slice of IDs is the natural argument there.
+func (s IDSet) ContainsAny(ids ...ID) bool {
+	return slices.ContainsFunc(ids, s.Contains)
+}
+
+// ContainsAll reports whether the set contains all IDs yielded by seq.
+// It returns true for an empty sequence and is valid to call on a nil IDSet.
+func (s IDSet) ContainsAll(seq iter.Seq[ID]) bool {
+	return mapset.ContainsAll(s, seq)
+}
+
+// Delete removes id from the set and reports whether the set was changed.
+// It is valid to call this method on a nil IDSet.
+func (s IDSet) Delete(id ID) bool {
+	return mapset.Delete(s, id)
+}
+
+// DeleteAll removes all IDs yielded by seq from the set
+// and reports whether the set was changed.
+// It is valid to call this method on a nil IDSet.
+func (s IDSet) DeleteAll(seq iter.Seq[ID]) bool {
+	return mapset.DeleteAll(s, seq)
+}
+
+// DeleteFunc removes every ID for which del returns true
+// and reports whether the set was changed.
+// It is valid to call this method on a nil IDSet.
+func (s IDSet) DeleteFunc(del func(ID) bool) bool {
+	return mapset.DeleteFunc(s, del)
 }
 
 // Clear removes all IDs from the set, leaving it empty.
+// It is valid to call this method on a nil IDSet.
 func (s IDSet) Clear() {
 	clear(s)
 }
 
 // DeleteSlice removes every ID in sl from the set.
+//
+// Deprecated: use set.DeleteAll(slices.Values(sl)).
 func (s IDSet) DeleteSlice(sl IDSlice) {
 	for _, id := range sl {
 		delete(s, id)
@@ -215,6 +286,8 @@ func (s IDSet) DeleteSlice(sl IDSlice) {
 }
 
 // DeleteSet removes every ID contained in other from the set.
+//
+// Deprecated: use [IDSet.DifferenceWith].
 func (s IDSet) DeleteSet(other IDSet) {
 	for id := range other {
 		delete(s, id)
@@ -229,34 +302,65 @@ func (s IDSet) Clone() IDSet {
 	return maps.Clone(s)
 }
 
-// Diff returns a new IDSet containing all IDs that are in s but not in other,
-// and all IDs that are in other but not in s (symmetric difference).
-func (s IDSet) Diff(other IDSet) IDSet {
-	diff := make(IDSet)
-	for id := range s {
-		if !other.Contains(id) {
-			diff.Add(id)
-		}
-	}
-	for id := range other {
-		if !s.Contains(id) {
-			diff.Add(id)
-		}
-	}
-	return diff
+// Union returns a new IDSet with all IDs of s and other.
+func (s IDSet) Union(other IDSet) IDSet {
+	return mapset.Union(s, other)
+}
+
+// UnionWith adds all IDs of other to s.
+// It panics if s is nil and other has an ID
+// that is not already an element of s.
+func (s IDSet) UnionWith(other IDSet) {
+	mapset.UnionWith(s, other)
+}
+
+// Intersection returns a new IDSet with the IDs that are in both s and other.
+func (s IDSet) Intersection(other IDSet) IDSet {
+	return mapset.Intersection(s, other)
+}
+
+// IntersectionWith removes every ID from s that is not also in other.
+// It is valid to call this method on a nil IDSet.
+func (s IDSet) IntersectionWith(other IDSet) {
+	mapset.IntersectionWith(s, other)
+}
+
+// Intersects reports whether s and other have at least one ID in common.
+func (s IDSet) Intersects(other IDSet) bool {
+	return mapset.Intersects(s, other)
+}
+
+// Difference returns a new IDSet with the IDs of s that are not in other.
+//
+// This replaces the former Diff method, which returned the symmetric
+// difference and is now [IDSet.SymmetricDifference].
+func (s IDSet) Difference(other IDSet) IDSet {
+	return mapset.Difference(s, other)
+}
+
+// DifferenceWith removes every ID of other from s.
+// It is valid to call this method on a nil IDSet.
+func (s IDSet) DifferenceWith(other IDSet) {
+	mapset.DifferenceWith(s, other)
+}
+
+// SymmetricDifference returns a new IDSet containing all IDs that are in s
+// but not in other, and all IDs that are in other but not in s.
+func (s IDSet) SymmetricDifference(other IDSet) IDSet {
+	return mapset.SymmetricDifference(s, other)
+}
+
+// SymmetricDifferenceWith replaces the IDs of s with the IDs
+// that are in exactly one of s and other.
+// It panics if s is nil and other has an ID
+// that is not already an element of s.
+func (s IDSet) SymmetricDifferenceWith(other IDSet) {
+	mapset.SymmetricDifferenceWith(s, other)
 }
 
 // Equal reports whether s and other contain exactly the same set of IDs.
 func (s IDSet) Equal(other IDSet) bool {
-	if len(s) != len(other) {
-		return false
-	}
-	for id := range s {
-		if !other.Contains(id) {
-			return false
-		}
-	}
-	return true
+	return mapset.Equal(s, other)
 }
 
 // Len returns the length of the IDSet.
@@ -314,7 +418,14 @@ func (s IDSet) Value() (driver.Value, error) {
 	if s == nil {
 		return nil, nil
 	}
-	return s.AsSortedSlice().Value()
+	// Sorted returns a nil IDSlice for an empty set, whose Value is
+	// SQL NULL, so the empty array has to be written here: a nil set is
+	// NULL, an allocated empty set is the empty array, and Scan reads both
+	// back to the state they came from.
+	if len(s) == 0 {
+		return "{}", nil
+	}
+	return s.Sorted().Value()
 }
 
 // MarshalJSON implements encoding/json.Marshaler
@@ -322,14 +433,27 @@ func (s IDSet) MarshalJSON() ([]byte, error) {
 	if s == nil {
 		return []byte("null"), nil
 	}
-	return s.AsSortedSlice().MarshalJSON()
+	// Same reason as in Value: Sorted is nil for an empty set and
+	// marshals as null, so the empty array has to be written here to keep
+	// JSON null and the empty array distinct.
+	if len(s) == 0 {
+		return []byte("[]"), nil
+	}
+	return s.Sorted().MarshalJSON()
 }
 
-// UnmarshalJSON implements encoding/json.Unmarshaler
-// Id does assign a new IDSet to *set instead of modifying the existing map,
-// so it can be used with uninitialized IDSet variable.
+// UnmarshalJSON implements encoding/json.Unmarshaler.
+// It assigns a new IDSet rather than modifying the existing map, so it
+// can be used with an uninitialized IDSet variable. JSON null assigns a
+// nil set and the empty array an allocated empty one, mirroring
+// [IDSet.MarshalJSON]. A nil set panics when inserted into, exactly like
+// a nil Go map.
 func (s *IDSet) UnmarshalJSON(data []byte) error {
 	if bytes.Equal(data, []byte("null")) {
+		// JSON null is the nil set, symmetric with MarshalJSON, and the
+		// empty array is the allocated empty set. Like the nil map that
+		// a SQL NULL scans to, the result must not be inserted into
+		// without a nil check.
 		*s = nil
 		return nil
 	}

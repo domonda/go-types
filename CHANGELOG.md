@@ -3,10 +3,13 @@
 All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
-No version has been tagged yet, so everything below is unreleased. See
-[TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut.
+No version has been tagged yet, so releases are dated rather than numbered.
+See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut, including
+picking the semver baseline.
 
 ## [Unreleased]
+
+## 2026-09-02
 
 ### Added
 
@@ -27,6 +30,32 @@ No version has been tagged yet, so everything below is unreleased. See
 - `strfmt.Scan` accepts a `time.Duration` without a unit suffix as plain
   nanoseconds, which is how a duration is represented by its underlying
   `int64` kind and how it is marshalled as JSON.
+
+- **`mapset` package** — set operations on `map[K]struct{}` and `map[K]bool`,
+  mirroring the `container/mapset` package proposed for Go 1.28
+  ([go.dev/issue/77052](https://go.dev/issue/77052), CL 724420) function for
+  function. It is the shared implementation behind the set methods of
+  `types.Set[T]`, `uu.IDSet`, `strutil.StringSet` and `email.AddressSet`, and
+  can be replaced by the standard library package with an import path change
+  once Go 1.28 ships.
+- The methods of the abstract set interface of the Go collections proposal
+  ([go.dev/issue/80590](https://go.dev/issue/80590)) on all four set types:
+  `All`, `ContainsAll`, `DeleteAll`, `DeleteFunc`, `Difference`,
+  `DifferenceWith`, `Insert`, `InsertAll`, `Intersection`, `IntersectionWith`,
+  `Intersects`, `SymmetricDifference`, `SymmetricDifferenceWith`, `Union` and
+  `UnionWith`. They now behave like the `container/set.Set` type planned for
+  Go 1.28, which is likewise represented as `map[E]struct{}`.
+- `strutil.StringSet.Len` and `email.AddressSet.Equal`, which were missing.
+- `ContainsAny` on `uu.IDSet` and `email.AddressSet`, `IsEmpty` on
+  `strutil.StringSet` and `Sorted` on `uu.IDSet`, so that all four set types
+  now offer `ContainsAny`, `ContainsAll`, `IsEmpty`, `Len` and `Sorted` under
+  the same names. `strutil.StringSet` still has no `IsNull`, being the one
+  set type that does not distinguish a nil from an empty set.
+- `internal/collections` holding the proposal's abstract interfaces, and
+  `internal/collections/settest` holding the abstract set specification as a
+  reusable test. Every set type is checked against that specification and by a
+  compile-time interface assertion, so a behaviour change in `mapset` is caught
+  at each type that delegates to it, not only in `mapset` itself.
 
 ### Fixed
 
@@ -58,6 +87,20 @@ No version has been tagged yet, so everything below is unreleased. See
   an unexported struct field. An addressable one is now formatted like an
   exported field, so a reflection driven caller walking a struct gets
   `2026-01-02T15:04:05Z` instead of a crash or `{0 63902963045 <nil>}`.
+- `email.AddressSet`, `email.AddressList` and `email.NullableAddressList` kept
+  the quotes of a quoted PostgreSQL array element, so scanning the `{"a@x.com"}`
+  literal that `AddressSet.Value` itself writes produced the address
+  `"a@x.com"` including the quote characters and `Value` did not survive `Scan`.
+  All three now decode the array with the same PostgreSQL array codec that
+  `Value` writes with, which also unescapes an element containing a comma or an
+  escaped quote. An SQL `NULL` array element is an error now instead of the
+  address `NULL`.
+
+  Two deliberate limits of that decoding: every element is trimmed, so a member
+  stored with leading or trailing whitespace (which `Validate` rejects anyway)
+  does not survive a `Value`/`Scan` round trip, and an element that is empty
+  after trimming is dropped. The trim is what keeps a hand-written literal like
+  `{ a@x.com , b@x.com }` working, which the previous decoder accepted.
 
 ### Changed
 
@@ -83,6 +126,100 @@ No version has been tagged yet, so everything below is unreleased. See
   `ScanConfig.ValidateFunc`, because the absence of a value is not a value to
   validate. A `string` destination assigned the source string is validated
   like any other scanned value.
+
+- **Breaking:** the minimum Go version is now 1.26.0, raised from 1.25.0, in
+  `go.mod` and `tools/go.mod`; CI builds, tests and gosec run on 1.26. This
+  lets `internal/collections` declare the abstract interfaces with the
+  self-referential constraint the collections proposal specifies, as in
+  `Collection[E any, C Collection[E, C]]`, which the Go 1.25 type checker
+  rejected with "invalid recursive type".
+- **Breaking:** `types.Set.Difference` now returns the asymmetric difference
+  (the elements of the receiver that are not in the argument), as specified by
+  the collections proposal. It previously returned the *symmetric* difference,
+  which is now `types.Set.SymmetricDifference`. This is the one change of this
+  release that does not produce a compile error — review any call site that
+  relies on the old meaning.
+- **Breaking:** `types.Set.ContainsAll` takes an `iter.Seq[T]` instead of
+  variadic values. Use `set.ContainsAll(slices.Values(vals))`.
+- `types.Set.UnmarshalJSON` had a dead branch: it assigned nil for JSON
+  `null` without returning, then fell through to `json.Unmarshal` and
+  re-allocated in the following nil check, so the assignment could never be
+  observed and `null` produced an allocated empty set. It now returns
+  directly, so `null` yields the nil set as its documentation implies.
+- **Fixed:** a set-map collapsed the nil and the empty set into the same
+  wire value. `uu.IDSet.Value` wrote SQL `NULL` for an allocated empty set
+  instead of the empty array `{}`, so storing an empty set silently nulled
+  the column; `uu.IDSet.MarshalJSON` wrote JSON `null` for it instead of `[]`;
+  and `types.Set.MarshalJSON` did the same. All three delegated to
+  `AsSortedSlice`/`Sorted`, which return a nil slice for an empty set.
+  `email.AddressSet.Value` already got this right.
+
+  The nil, empty and populated set are now three distinct wire values, in
+  both directions:
+
+  | Go value      | SQL         | JSON        | Types                          |
+  |---------------|-------------|-------------|--------------------------------|
+  | nil map       | `NULL`      | `null`      | SQL: `uu.IDSet`,               |
+  | empty map     | `{}`        | `[]`        | `email.AddressSet`.            |
+  | populated map | `{"a","b"}` | `["a","b"]` | JSON: `uu.IDSet`, `types.Set`. |
+
+  Only the types listed have the codec in question. `email.AddressSet` and
+  `strutil.StringSet` declare no `MarshalJSON`, so `encoding/json` uses Go's
+  default map encoding for them (`{"a@example.com":{}}`) — unchanged by this
+  release, but do not assume the JSON column of the table above applies to
+  them. `types.Set` and `strutil.StringSet` have no SQL codec at all.
+
+  `null`/`NULL` yields a nil map, which panics when inserted into exactly
+  like any nil Go map: nil-check before `Insert`, or use the pointer-receiver
+  `Add` where one exists.
+- `email.AddressSet.String` returns `"<nil>"` for a nil set instead of the
+  empty string, matching `types.Set.String`. An allocated empty set still
+  renders as the empty string, so the two are now distinguishable in a log
+  line. `email.AddressSet.AddressList` is unchanged and still returns the
+  joined list, which is empty for both.
+- **Breaking:** `Delete` now reports whether the set changed on all four set
+  types, so its signature goes from `Delete(E)` to `Delete(E) bool`. Existing
+  statement calls keep compiling unchanged, but three things do not:
+  an interface declaring `Delete(E)` is no longer satisfied by these types,
+  a method value typed `func(E)` no longer type checks, and neither does a
+  method expression such as `uu.IDSet.Delete` typed `func(uu.IDSet, uu.ID)`.
+  All three are compile errors, not silent behaviour changes.
+- Nil sets are documented as valid empty sets for every read and for removals.
+  `Insert`, `InsertAll`, `UnionWith` and `SymmetricDifferenceWith` panic on a
+  nil set, exactly like an assignment to a nil Go map.
+- `email.AddressSet` keeps its pointer-receiver `Add`, `AddSet`,
+  `AddNormalized` and `AddAddressPart` methods, which allocate the underlying
+  map and therefore work on a nil variable or struct field. They are the
+  nil-safe counterparts of the value-receiver `Insert` and `UnionWith` that the
+  abstract interface requires.
+
+### Deprecated
+
+Still present and working, scheduled for removal before `v1.0.0`:
+
+| Deprecated              | Replacement                               |
+|-------------------------|-------------------------------------------|
+| `Add(v)`¹               | `Insert(v) bool`                          |
+| `AddSlice(s)`           | `InsertAll(slices.Values(s))`             |
+| `AddSet(other)`¹        | `UnionWith(other)`                        |
+| `DeleteSlice(s)`        | `DeleteAll(slices.Values(s))`             |
+| `DeleteSet(other)`      | `DifferenceWith(other)`                   |
+| `IDSet.AddIDs(ids)`     | `InsertAll(slices.Values(ids.AsSlice()))` |
+| `IDSet.AsSortedSlice()` | `Sorted()`                                |
+
+¹ Neither is deprecated on `email.AddressSet`. Its pointer-receiver `Add` and
+`AddSet` allocate the underlying map, so they have different nil semantics than
+the value-receiver `Insert` and `UnionWith` and are kept as their nil-safe
+counterparts, see above.
+
+The `set` package is superseded by `mapset` for new code but is unchanged and
+not deprecated.
+
+### Removed
+
+- **Breaking:** `uu.IDSet.Diff` and `strutil.StringSet.Diff`, which returned the
+  symmetric difference. Use `SymmetricDifference` — or `Difference` if the
+  asymmetric difference was what was meant.
 
 ### Performance
 

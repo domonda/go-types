@@ -1,69 +1,12 @@
 package email
 
-import (
-	"net/mail"
-	"reflect"
-	"testing"
+import "testing"
 
-	"github.com/stretchr/testify/assert"
-)
-
-func TestStandardComparison(t *testing.T) {
-	validEmailAddresses := map[string]*mail.Address{
-		`"Unger, Erik" <u.erik@domonda.com>`:        {Name: "Unger, Erik", Address: "u.erik@domonda.com"},
-		`"Unger, Erik" <"Unger, Erik"@domonda.com>`: {Name: "Unger, Erik", Address: "Unger, Erik@domonda.com"},
-	}
-
-	for addr, expected := range validEmailAddresses {
-		t.Run(addr, func(t *testing.T) {
-			result, err := mail.ParseAddress(addr)
-			assert.NoError(t, err, "valid email address")
-			assert.Equal(t, expected, result, "expected: %s", expected)
-		})
-	}
-
-	for addr, expected := range validEmailAddresses {
-		t.Run(addr, func(t *testing.T) {
-			results, err := mail.ParseAddressList(addr)
-			assert.NoError(t, err, "valid email address")
-			assert.Len(t, results, 1, "list of one address")
-			assert.Equal(t, expected, results[0], "expected: %s", expected)
-		})
-	}
-}
-
-func TestAddressList_Split(t *testing.T) {
-	tests := []struct {
-		l       AddressList
-		want    []Address
-		wantErr bool
-	}{
-		{l: ``, want: nil},
-		{l: `<hello@example.com>,`, want: []Address{`hello@example.com`}},
-		{l: `<Hello@example.com>, World@example.com`, want: []Address{`hello@example.com`, `world@example.com`}},
-		// Partial result: parsable addresses are returned alongside the error.
-		{l: `alice@example.com, broken address, bob@example.com`, want: []Address{`alice@example.com`, `bob@example.com`}, wantErr: true},
-		{l: `@broken`, want: nil, wantErr: true},
-	}
-	for _, tt := range tests {
-		t.Run(string(tt.l), func(t *testing.T) {
-			got, err := tt.l.Split()
-			if (err != nil) != tt.wantErr {
-				t.Errorf("AddressList(%#v).Split() error = %v, wantErr %v", string(tt.l), err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("AddressList(%#v).Split() = %v, want %v", string(tt.l), got, tt.want)
-			}
-		})
-	}
-}
-
-func TestAddressList_Scan(t *testing.T) {
+func TestNullableAddressList_Scan(t *testing.T) {
 	tests := []struct {
 		name    string
 		value   any
-		want    AddressList
+		want    NullableAddressList
 		wantErr bool
 	}{
 		// The array branch reads a PostgreSQL text[] column. Its elements
@@ -105,25 +48,51 @@ func TestAddressList_Scan(t *testing.T) {
 		// A non-array string is an already joined list, so it is taken as is.
 		{name: "plain string", value: "a@example.com, b@example.com", want: "a@example.com, b@example.com"},
 		{name: "bytes", value: []byte(`{"a@example.com"}`), want: "a@example.com"},
-		// AddressList is the not-null type, so SQL NULL is an error here.
-		// NullableAddressList is what scans NULL into the empty list.
-		{name: "null", value: nil, wantErr: true},
+		// SQL NULL is the empty list, unlike the empty string which is
+		// rejected because it can only come from a non-NULL column.
+		{name: "null", value: nil, want: ""},
 		{name: "empty string", value: "", wantErr: true},
 		{name: "invalid array", value: `{,}`, wantErr: true},
 		{name: "unsupported type", value: 123, wantErr: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var l AddressList
-			err := l.Scan(tt.value)
+			var n NullableAddressList
+			err := n.Scan(tt.value)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("Scan() error = %v, wantErr %t", err, tt.wantErr)
 			}
 			if tt.wantErr {
 				return
 			}
-			if l != tt.want {
-				t.Errorf("Scan() = %q, want %q", l, tt.want)
+			if n != tt.want {
+				t.Errorf("Scan() = %q, want %q", n, tt.want)
+			}
+		})
+	}
+}
+
+func TestNullableAddressList_ScanValueRoundTrip(t *testing.T) {
+	// Value always writes the plain joined string, never an array, so a
+	// value written by this type has to scan back unchanged.
+	lists := []NullableAddressList{
+		"",
+		"a@example.com",
+		"a@example.com, b@example.com",
+		`"Doe, John" <john@example.com>, b@example.com`,
+	}
+	for _, want := range lists {
+		t.Run(string(want), func(t *testing.T) {
+			value, err := want.Value()
+			if err != nil {
+				t.Fatalf("Value returned %v", err)
+			}
+			var got NullableAddressList
+			if err := got.Scan(value); err != nil {
+				t.Fatalf("Scan(%v) returned %v", value, err)
+			}
+			if got != want {
+				t.Errorf("Scan(Value()) = %q, want %q", got, want)
 			}
 		})
 	}
