@@ -115,6 +115,122 @@ func TestSplitArray(t *testing.T) {
 			wantFields: []string{`'@example.com`, `service.wien@example.com`, `zaehler.wien@example.com`},
 		},
 
+		{
+			// The escaped quote is not the end of the element
+			name:       `{"a\"b"}`,
+			array:      `{"a\"b"}`,
+			wantFields: []string{`"a\"b"`},
+		},
+		{
+			// An escaped backslash does not escape the closing quote,
+			// this is what PostgreSQL outputs for the value `a\`
+			name:       `{"a\\"}`,
+			array:      `{"a\\"}`,
+			wantFields: []string{`"a\\"`},
+		},
+		{
+			name:       `{"a\\","b"}`,
+			array:      `{"a\\","b"}`,
+			wantFields: []string{`"a\\"`, `"b"`},
+		},
+
+		{
+			// A structural rune within a string value of a nested object
+			// is part of that value and must not end the element
+			name:       `[{"a":"}"},{"b":2}]`,
+			array:      `[{"a":"}"},{"b":2}]`,
+			wantFields: []string{`{"a":"}"}`, `{"b":2}`},
+		},
+		{
+			name:       `[{"a":"}x,y"}]`,
+			array:      `[{"a":"}x,y"}]`,
+			wantFields: []string{`{"a":"}x,y"}`},
+		},
+		{
+			// An escaped quote does not end that string value either
+			name:       `[{"a":"x\"}y"}]`,
+			array:      `[{"a":"x\"}y"}]`,
+			wantFields: []string{`{"a":"x\"}y"}`},
+		},
+		{
+			// Objects and arrays nested deeper than one level
+			name:       `[{"a":{"b":1}}]`,
+			array:      `[{"a":{"b":1}}]`,
+			wantFields: []string{`{"a":{"b":1}}`},
+		},
+		{
+			name:       `[[1,[2,3]],[4]]`,
+			array:      `[[1,[2,3]],[4]]`,
+			wantFields: []string{`[1,[2,3]]`, `[4]`},
+		},
+		{
+			// An unmatched '{' at the top level of an unquoted element
+			// stays literal text: PostgreSQL would have quoted the
+			// element, so this can only be a hand written literal
+			name:       `{in{o@example.com}`,
+			array:      `{in{o@example.com}`,
+			wantFields: []string{`in{o@example.com`},
+		},
+
+		{
+			// A backslash escapes the following character in an unquoted
+			// PostgreSQL element too, so the comma does not split here.
+			// SplitArray returns the element as written, SplitArrayValues
+			// undoes the escaping.
+			name:       `{a\,b}`,
+			array:      `{a\,b}`,
+			wantFields: []string{`a\,b`},
+		},
+		{
+			name:       `{a\}b}`,
+			array:      `{a\}b}`,
+			wantFields: []string{`a\}b`},
+		},
+		{
+			// Only for SQL: a backslash outside a quoted element is not
+			// JSON syntax, so it stays a literal character there
+			name:       `[a\,b]`,
+			array:      `[a\,b]`,
+			wantFields: []string{`a\`, `b`},
+		},
+
+		{
+			// A trailing comma announces an element that is not there,
+			// which is reported as an empty string instead of being
+			// dropped silently. PostgreSQL rejects the literal.
+			name:       `{a,}`,
+			array:      `{a,}`,
+			wantFields: []string{`a`, ``},
+		},
+		{
+			name:       `[1,2,]`,
+			array:      `[1,2,]`,
+			wantFields: []string{`1`, `2`, ``},
+		},
+		{
+			name:       `{"a",}`,
+			array:      `{"a",}`,
+			wantFields: []string{`"a"`, ``},
+		},
+		{
+			name:       `{a, }`,
+			array:      `{a, }`,
+			wantFields: []string{`a`, ``},
+		},
+
+		{
+			// Backslash escaping applies only to double quoted elements,
+			// a backslash in a single quoted element is a literal character
+			name:       `['a\','b']`,
+			array:      `['a\','b']`,
+			wantFields: []string{`'a\'`, `'b'`},
+		},
+		{
+			name:       `['a','b']`,
+			array:      `['a','b']`,
+			wantFields: []string{`'a'`, `'b'`},
+		},
+
 		// Invalid
 		{
 			name:    "empty",
@@ -151,6 +267,35 @@ func TestSplitArray(t *testing.T) {
 			array:   ` [a, b] `,
 			wantErr: true,
 		},
+		{
+			// The escape tracking must still report a genuinely
+			// unclosed quote, not only stop reporting the closed ones
+			name:    `{"abc}`,
+			array:   `{"abc}`,
+			wantErr: true,
+		},
+		{
+			// The backslash escapes the closing quote, so this element
+			// really is unclosed
+			name:    `{"a\"}`,
+			array:   `{"a\"}`,
+			wantErr: true,
+		},
+		{
+			// The other direction of the escape tracking: this used to
+			// split into the two elements `"a\\""` and `"b"`, and is
+			// the malformed literal error PostgreSQL reports for it now
+			name:    `{"a\\"","b"}`,
+			array:   `{"a\\"","b"}`,
+			wantErr: true,
+		},
+		{
+			// The string tracking within a nested object must still
+			// report a genuinely unclosed quote there
+			name:    `[{"a":"x}]`,
+			array:   `[{"a":"x}]`,
+			wantErr: true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -177,6 +322,11 @@ func TestSQLArrayLiteral(t *testing.T) {
 		{name: "one", s: []string{`one`}, want: `{"one"}`},
 		{name: "two", s: []string{`one`, `two`}, want: `{"one","two"}`},
 		{name: "quoted", s: []string{`Hello "World"`}, want: `{"Hello \"World\""}`},
+		// A backslash has to be escaped too, PostgreSQL reads {"a\b"}
+		// back as the value `ab` and would silently lose it otherwise.
+		{name: "backslash", s: []string{`a\b`}, want: `{"a\\b"}`},
+		{name: "trailing backslash", s: []string{`a\`}, want: `{"a\\"}`},
+		{name: "escaped quote", s: []string{`a\"b`}, want: `{"a\\\"b"}`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -189,6 +339,317 @@ func TestSQLArrayLiteral(t *testing.T) {
 				if val.(string) != got {
 					t.Errorf("pq.StringArray() = %v, SQLArrayLiteral() = %v", val, got)
 				}
+			}
+		})
+	}
+}
+
+// TestSQLArrayLiteralRoundTrip proves that every value survives being
+// written as an SQL array literal and read back again. SQLArrayLiteral
+// used to escape only '"' and not '\', which made PostgreSQL drop the
+// backslashes of a value on reading it back.
+func TestSQLArrayLiteralRoundTrip(t *testing.T) {
+	// Values that PostgreSQL has to quote and/or escape in its array
+	// output literal, plus values that are quote forcing for the writer
+	// only. The production data loss that motivated these tests came
+	// from elements containing '{' or '}'.
+	roundTripValues := []string{
+		`plain`,
+		``,
+		`a\b`,
+		`a\`,
+		`\`,
+		`\\`,
+		`a"b`,
+		`"quoted"`,
+		`"a,b"@example.com`, // valid RFC 5322 address with a quoted local part
+		`in{o@example.com`,  // the shape that got corrupted in production
+		`comma,separated`,
+		`{braces}`,
+		`  leading and trailing  `,
+		"tab\tand\nnewline",
+		`NULL`,
+		`日本語`,
+	}
+	literal := SQLArrayLiteral(roundTripValues)
+
+	t.Run("pq.StringArray.Value parity", func(t *testing.T) {
+		// The writer has to agree with the one of the vendored lib/pq
+		// for every value, not only for the simple ones, else the two
+		// codecs of this module would write different literals.
+		val, err := pq.StringArray(roundTripValues).Value()
+		if err != nil {
+			t.Fatalf("pq.StringArray.Value() error = %v", err)
+		}
+		if val.(string) != literal {
+			t.Errorf("SQLArrayLiteral() = %q, pq.StringArray.Value() = %q", literal, val)
+		}
+	})
+
+	t.Run("pq.StringArray.Scan", func(t *testing.T) {
+		// The vendored lib/pq parser implements the PostgreSQL array
+		// syntax and is what notnull.StringArray.Scan uses.
+		var scanned pq.StringArray
+		if err := scanned.Scan(literal); err != nil {
+			t.Fatalf("pq.StringArray.Scan(%q) error = %v", literal, err)
+		}
+		if !reflect.DeepEqual([]string(scanned), roundTripValues) {
+			t.Errorf("pq.StringArray.Scan(%q) = %#v, want %#v", literal, scanned, roundTripValues)
+		}
+	})
+
+	t.Run("SplitArrayValues", func(t *testing.T) {
+		values, err := SplitArrayValues(literal)
+		if err != nil {
+			t.Fatalf("SplitArrayValues(%q) error = %v", literal, err)
+		}
+		if !reflect.DeepEqual(values, roundTripValues) {
+			t.Errorf("SplitArrayValues(%q) = %#v, want %#v", literal, values, roundTripValues)
+		}
+	})
+}
+
+func TestSplitArrayValues(t *testing.T) {
+	tests := []struct {
+		name       string
+		array      string
+		wantValues []string
+		wantErr    bool
+	}{
+		{
+			name:       "null",
+			array:      `null`,
+			wantValues: nil,
+		},
+		{
+			name:       "empty",
+			array:      `{}`,
+			wantValues: nil,
+		},
+		{
+			name:       "unquoted SQL elements",
+			array:      `{a,b}`,
+			wantValues: []string{`a`, `b`},
+		},
+		{
+			// PostgreSQL quotes only the elements that need it,
+			// so a single array mixes both forms.
+			name:       "mixed quoted and unquoted SQL elements",
+			array:      `{a,"in{o@example.com",b}`,
+			wantValues: []string{`a`, `in{o@example.com`, `b`},
+		},
+		{
+			// A backslash escapes the following rune in an unquoted
+			// element wherever it sits, including its first position,
+			// which used to be read as ordinary text so that the
+			// escaped comma still split the element. Every case here
+			// was checked against PostgreSQL 16.
+			name:       "escaped comma opens an unquoted SQL element",
+			array:      `{\,b}`,
+			wantValues: []string{`,b`},
+		},
+		{
+			name:       "escaped backslash opens an unquoted SQL element",
+			array:      `{\\,b}`,
+			wantValues: []string{`\`, `b`},
+		},
+		{
+			name:       "escaped backslash as a whole unquoted element",
+			array:      `{x,\\,b}`,
+			wantValues: []string{`x`, `\`, `b`},
+		},
+		{
+			name:       "escaped comma within an unquoted SQL element",
+			array:      `{a\,b}`,
+			wantValues: []string{`a,b`},
+		},
+		{
+			// Leading space is skipped before the escape is seen
+			name:       "escaped comma after leading space",
+			array:      `{ \,b}`,
+			wantValues: []string{`,b`},
+		},
+		{
+			name:       "SQL quote escape",
+			array:      `{"\"a,b\"@example.com"}`,
+			wantValues: []string{`"a,b"@example.com`},
+		},
+		{
+			name:       "SQL backslash escape",
+			array:      `{"a\\b","a\\"}`,
+			wantValues: []string{`a\b`, `a\`},
+		},
+		{
+			// A backslash in a PostgreSQL array literal escapes the
+			// following character whatever it is, so this is not a
+			// newline but the letter n.
+			name:       "SQL backslash escapes any character",
+			array:      `{"a\nb"}`,
+			wantValues: []string{`anb`},
+		},
+		{
+			// JSON on the other hand interprets the escape sequences.
+			name:       "JSON escapes",
+			array:      `["a\nb", "a\tb", "ä", "a\\b", "a\"b"]`,
+			wantValues: []string{"a\nb", "a\tb", "ä", `a\b`, `a"b`},
+		},
+		{
+			name:       "JSON objects are not touched",
+			array:      `[{"a":1}, {"b":"x,y"}, "str", 3, null]`,
+			wantValues: []string{`{"a":1}`, `{"b":"x,y"}`, `str`, `3`, `null`},
+		},
+		{
+			// A brace in a string value of an object does not end the
+			// object, else the whole array fails to split
+			name:       "JSON object with a brace in a string value",
+			array:      `[{"a":"}x,y"}, "str"]`,
+			wantValues: []string{`{"a":"}x,y"}`, `str`},
+		},
+		{
+			// Neither valid SQL nor valid JSON array syntax,
+			// documented as being returned unchanged.
+			name:       "single quoted elements are not unquoted",
+			array:      `{'a','b'}`,
+			wantValues: []string{`'a'`, `'b'`},
+		},
+		{
+			// PostgreSQL 16 reads {a\,b} as the single value a,b: the
+			// backslash escaping is not limited to quoted elements. The
+			// vendored lib/pq parser gets this wrong and splits into the
+			// two elements `a\` and `b`.
+			name:       "unquoted SQL element escapes the delimiter",
+			array:      `{a\,b}`,
+			wantValues: []string{`a,b`},
+		},
+		{
+			name:       "unquoted SQL element escapes a brace",
+			array:      `{a\}b}`,
+			wantValues: []string{`a}b`},
+		},
+		{
+			name:       "unquoted SQL element escapes a backslash",
+			array:      `{a\\b}`,
+			wantValues: []string{`a\b`},
+		},
+		{
+			// A backslash escapes the single quote, so these are the two
+			// elements 'a' and 'b' for PostgreSQL as well
+			name:       "unquoted SQL element escapes a single quote",
+			array:      `{'a\','b'}`,
+			wantValues: []string{`'a'`, `'b'`},
+		},
+		{
+			// A JSON array is not unescaped outside a quoted string
+			name:       "unquoted JSON element keeps its backslash",
+			array:      `[a\,b]`,
+			wantValues: []string{`a\`, `b`},
+		},
+		{
+			name:       "trailing comma yields an empty last element",
+			array:      `{a,}`,
+			wantValues: []string{`a`, ``},
+		},
+		{
+			// Documented limitation: a SQL NULL element and the string
+			// "NULL" are the same value here, only SplitArray keeps
+			// the quotes that tell them apart.
+			name:       "SQL NULL is indistinguishable from the string NULL",
+			array:      `{a,NULL,"NULL"}`,
+			wantValues: []string{`a`, `NULL`, `NULL`},
+		},
+
+		{
+			// An element that is not a valid JSON string is an error:
+			// returning it unchanged would hand out the value with the
+			// quotes that SplitArrayValues exists to remove
+			name:    "invalid JSON escape",
+			array:   `["a\q"]`,
+			wantErr: true,
+		},
+		{
+			name:    "invalid JSON unicode escape",
+			array:   `["a\uZZZZ"]`,
+			wantErr: true,
+		},
+
+		{
+			name:    "not an array",
+			array:   `nope`,
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotValues, err := SplitArrayValues(tt.array)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("SplitArrayValues() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(gotValues, tt.wantValues) {
+				t.Errorf("SplitArrayValues() = %#v, want %#v", gotValues, tt.wantValues)
+			}
+		})
+	}
+}
+
+// TestUnquoteArrayElemDefensive covers the guards that SplitArray itself
+// can never trigger, because it only ever hands over an element whose
+// quotes are balanced. They exist so that a direct caller, or a future
+// change to the splitter, can't make the unquoting read past the end of
+// the element or drop a character.
+func TestUnquoteArrayElemDefensive(t *testing.T) {
+	tests := []struct {
+		name       string
+		elem       string
+		jsonSyntax bool
+		want       string
+		wantErr    bool
+	}{
+		{name: "too short", elem: `"`, want: `"`},
+		{name: "invalid JSON string", elem: `"a\q"`, jsonSyntax: true, wantErr: true},
+		{name: "unquoted SQL element is unescaped", elem: `a\,b`, want: `a,b`},
+		{name: "unquoted JSON element is not", elem: `a\,b`, jsonSyntax: true, want: `a\,b`},
+		{name: "empty", elem: ``, want: ``},
+		{name: "opening quote only", elem: `"a`, want: `"a`},
+		{name: "closing quote only", elem: `a"`, want: `a"`},
+		{name: "too short JSON", elem: `"`, jsonSyntax: true, want: `"`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := unquoteArrayElem(tt.elem, tt.jsonSyntax)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("unquoteArrayElem(%q, %v) error = %v, wantErr %v", tt.elem, tt.jsonSyntax, err, tt.wantErr)
+				return
+			}
+			if got != tt.want {
+				t.Errorf("unquoteArrayElem(%q, %v) = %q, want %q", tt.elem, tt.jsonSyntax, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestUnescapeSQLArrayElem(t *testing.T) {
+	tests := []struct {
+		name string
+		elem string
+		want string
+	}{
+		{name: "no escape", elem: `abc`, want: `abc`},
+		{name: "escaped quote", elem: `a\"b`, want: `a"b`},
+		{name: "escaped backslash", elem: `a\\b`, want: `a\b`},
+		{name: "escapes any character", elem: `a\nb`, want: `anb`},
+		// A trailing backslash can't reach here through SplitArray,
+		// which would have reported an unclosed quote for it, so this
+		// only pins that the guard keeps the last byte and doesn't read
+		// past the end.
+		{name: "trailing lone backslash", elem: `a\`, want: `a\`},
+		{name: "lone backslash", elem: `\`, want: `\`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := unescapeSQLArrayElem(tt.elem)
+			if got != tt.want {
+				t.Errorf("unescapeSQLArrayElem(%q) = %q, want %q", tt.elem, got, tt.want)
 			}
 		})
 	}

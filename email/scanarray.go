@@ -16,6 +16,13 @@ import (
 // is then trimmed, because a hand written literal may pad them with spaces;
 // callers skip the elements that are empty afterwards.
 //
+// notnull.SplitArrayValues decodes the same values from a PostgreSQL
+// literal and additionally accepts JSON arrays and the unquoted [a,b]
+// form. The pq parser is kept here because an email array is only ever
+// read from a PostgreSQL column, for which the stricter parser is the
+// right one: it rejects a NULL element or a multi dimensional array
+// instead of passing their text through as an address.
+//
 // typeName is the email type being scanned, used only in the error message.
 func scanAddressArray(literal, typeName string) ([]string, error) {
 	var array notnull.StringArray

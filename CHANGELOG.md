@@ -56,6 +56,22 @@ picking the semver baseline.
   reusable test. Every set type is checked against that specification and by a
   compile-time interface assertion, so a behaviour change in `mapset` is caught
   at each type that delegates to it, not only in `mapset` itself.
+- `nullable.SplitArrayValues` and `notnull.SplitArrayValues`, which split an
+  SQL or JSON array into its top level elements like `SplitArray` and return
+  the value of every double quoted string element with the quotes removed and
+  the escape sequences of the parsed syntax undone. `SplitArray` returns the
+  raw text of its elements, which is required for a JSON array of objects but
+  is the wrong thing for a string array, and because it was the only thing on
+  offer every known caller hand-rolled the unquoting and got it wrong. SQL and
+  JSON unescape differently — a backslash escapes the following character
+  whatever it is in a PostgreSQL array literal, while JSON interprets `\n`,
+  `\t` and `\uXXXX` — so the new functions unescape with the syntax they
+  parsed, and a PostgreSQL element is unescaped whether it is quoted or not.
+  Elements that are not double quoted strings, like the objects of a JSON array
+  of objects, are returned unchanged. A quoted element of a JSON array that is
+  not a valid JSON string is an error, because returning it unchanged would
+  hand out the value with the quotes these functions exist to remove, which is
+  not distinguishable from a value that really has them.
 
 ### Fixed
 
@@ -101,6 +117,63 @@ picking the semver baseline.
   does not survive a `Value`/`Scan` round trip, and an element that is empty
   after trimming is dropped. The trim is what keeps a hand-written literal like
   `{ a@x.com , b@x.com }` working, which the previous decoder accepted.
+- **Breaking:** `nullable.SQLArrayLiteral` and `notnull.SQLArrayLiteral` escaped
+  the quote but not the backslash of an element, so the literal `{"a\b"}`
+  written for the value `a\b` is read back by PostgreSQL as `ab`: a silent data
+  loss for every value containing a backslash. Both characters are escaped now,
+  and a test pins the literal to be byte identical to the one written by the
+  vendored `pq.StringArray.Value` and to round trip back through its parser. The
+  literal was additionally checked against a live PostgreSQL 16 during
+  development, which the test suite itself does not do, having no database.
+  Nothing about the changed output produces a compile error: review stored
+  literals, golden tests and anything comparing the output. A caller that pairs
+  `SQLArrayLiteral` with `SplitArray` and strips the quotes itself has to move
+  to `SplitArrayValues` now: the literal written for `a\b` is `{"a\\b"}`
+  instead of `{"a\b"}`, so stripping only the quotes yields `a\\b`. It fails
+  silently, which is the same trap that made this function worth fixing.
+- **Breaking:** `SplitArray` reported an unclosed quote for a quoted element
+  whose value ends with a backslash, like the `{"a\\"}` literal PostgreSQL
+  outputs for the value `a\`, because it took the escaped backslash before the
+  closing quote for an escape of that quote. Escape sequences are tracked now
+  instead of looking at the previous character only. The tracking cuts the other
+  way for a malformed literal that PostgreSQL never emits: `{"a\\"","b"}` used
+  to split into two elements and is an `invalid rune` error now, which is what
+  PostgreSQL reports for it too.
+- **Breaking:** the `SplitArray` functions honoured the backslash escaping of a
+  PostgreSQL array literal in a quoted element only, so the literal `{a\,b}`,
+  which PostgreSQL reads as the single value `a,b`, was split into the two
+  elements `a\` and `b`. A backslash escapes the following character in an
+  unquoted element too, verified against PostgreSQL 16, and is now undone by
+  `SplitArrayValues` for every element of an SQL array. Note that the vendored
+  `lib/pq` parser behind `StringArray.Scan` implements the escaping for quoted
+  elements only, so it still reads `{a\,b}` as two elements; `SplitArrayValues`
+  follows PostgreSQL, not `lib/pq`. A JSON array is unaffected, a backslash
+  outside a quoted string is not JSON syntax.
+- **Breaking:** the `SplitArray` functions dropped the last element of a literal
+  with a trailing comma: `{a,}` returned `{"a"}` and lost the element the comma
+  announced without reporting anything. That comma now yields an empty string as
+  last element. PostgreSQL rejects the literal outright, this parser is the
+  tolerant one and reports what it read rather than silently returning a shorter
+  array. An empty element between two commas, `{a,,b}`, stays an error.
+- The `SplitArray` functions counted the `{`, `[`, `}` and `]` of a nested
+  object or array without noticing that those runes can appear inside a string
+  value of it, so a JSON array of objects failed to split with a `has too many
+  '}'` error as soon as one of its string values contained a closing brace or
+  bracket, like `[{"a":"}"}]`. Nesting deeper than one level failed the same
+  way, because only the opening rune of an element was counted and never the
+  ones within it, so `[{"a":{"b":1}}]` and `[[1,[2]]]` were rejected too. Both
+  are tracked now, like the escapes of a quoted element. Every well-formed
+  literal that split before splits into the same elements; only malformed input
+  whose braces happened to balance out, like `[{a{b}]`, is an error now. An
+  unmatched `{` or `[` at the top level of an unquoted element stays literal
+  text, so a hand written `{in{o@example.com}` still parses.
+- The `SplitArray` functions could not tell the value of a quoted string
+  element, which is what `SplitArrayValues` was added for. Their documentation
+  now says so, and also that an unquoted `NULL` element of an SQL array (`null`
+  in a JSON array) is returned as the string `NULL` (`null`) and is
+  indistinguishable from a quoted `"NULL"` (`"null"`) element for
+  `SplitArrayValues`. `SplitArray` keeps the quotes that tell the two apart and
+  its elements correspond to those of `SplitArrayValues` by index.
 
 ### Changed
 
@@ -136,9 +209,9 @@ picking the semver baseline.
 - **Breaking:** `types.Set.Difference` now returns the asymmetric difference
   (the elements of the receiver that are not in the argument), as specified by
   the collections proposal. It previously returned the *symmetric* difference,
-  which is now `types.Set.SymmetricDifference`. This is the one change of this
-  release that does not produce a compile error — review any call site that
-  relies on the old meaning.
+  which is now `types.Set.SymmetricDifference`. Like the array literal and
+  parser changes above, this does not produce a compile error — review any
+  call site that relies on the old meaning.
 - **Breaking:** `types.Set.ContainsAll` takes an `iter.Seq[T]` instead of
   variadic values. Use `set.ContainsAll(slices.Values(vals))`.
 - `types.Set.UnmarshalJSON` had a dead branch: it assigned nil for JSON

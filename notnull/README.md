@@ -58,14 +58,18 @@ API includes the `strings`-style methods: `ToUpper`, `ToLower`, `Contains`, `Con
 ## Helpers
 
 ```go
-notnull.SplitArray("{a,b,c}")     // []string{"a","b","c"}
-notnull.SplitArray("{}")          // []string{} (non-nil)
-notnull.SplitArray("NULL")        // []string{} (non-nil)
-notnull.SQLArrayLiteral(nil)      // "{}"
-notnull.SQLArrayLiteral([]string{"a","b"}) // "{a,b}"
+notnull.SplitArray("{a,b,c}")              // []string{"a","b","c"}
+notnull.SplitArray("{}")                   // []string{} (non-nil)
+notnull.SplitArray("NULL")                 // []string{} (non-nil)
+notnull.SplitArray(`{a,"b,c"}`)            // []string{`a`, `"b,c"`} (still quoted)
+notnull.SplitArrayValues(`{a,"b,c"}`)      // []string{`a`, `b,c`} (unquoted)
+notnull.SQLArrayLiteral(nil)               // "{}"
+notnull.SQLArrayLiteral([]string{"a","b"}) // `{"a","b"}`
 ```
 
 `SplitArray` parses an SQL or JSON array literal into top-level elements (quoted strings are returned still quoted). Unlike the nullable version, `nil` collapses to an empty non-nil slice.
+
+`SplitArrayValues` splits the same literals but returns the value of a quoted string element, with the quotes removed and the escapes of the parsed syntax (SQL or JSON) undone. Use it whenever the elements are strings; elements that are not quoted strings, like the objects of a JSON array, are returned unchanged.
 
 `SQLArrayLiteral` always emits `'{}'` for empty input.
 

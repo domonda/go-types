@@ -106,7 +106,7 @@ The `driver.Valuer` output and `sql.Scanner` input both use the [PostgreSQL arra
 
 For non-nullable arrays where `nil` should serialize as `'{}'`/`[]`, see the sibling `notnull` package.
 
-Lower-level helpers: `SplitArray(s)` parses an SQL/JSON array literal into its top-level elements; `SQLArrayLiteral(s)` joins back. `null`/`NULL` decodes to a nil slice.
+Lower-level helpers: `SplitArray(s)` parses an SQL/JSON array literal into its top-level elements, leaving quoted string elements quoted; `SplitArrayValues(s)` does the same but returns the value of a quoted string element, unquoted and unescaped, which is what a string array wants; `SQLArrayLiteral(s)` joins back. `null`/`NULL` decodes to a nil slice.
 
 ## Related
 
