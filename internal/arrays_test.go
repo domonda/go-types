@@ -197,6 +197,14 @@ func TestSplitArray(t *testing.T) {
 			array:   `{"a\"}`,
 			wantErr: true,
 		},
+		{
+			// The other direction of the escape tracking: this used to
+			// split into the two elements `"a\\""` and `"b"`, and is
+			// the malformed literal error PostgreSQL reports for it now
+			name:    `{"a\\"","b"}`,
+			array:   `{"a\\"","b"}`,
+			wantErr: true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -187,9 +187,11 @@ func unquoteArrayElem(elem string, jsonSyntax bool) string {
 		var s string
 		err := json.Unmarshal([]byte(elem), &s)
 		if err != nil {
-			// Return the invalid JSON string unchanged
-			// so it fails visibly downstream
-			// instead of half unescaping it
+			// Return a syntactically invalid JSON string unchanged
+			// so it fails visibly downstream instead of being half
+			// unescaped. Note that json.Unmarshal accepts a lone
+			// surrogate and yields U+FFFD for it, so that one is
+			// not returned unchanged.
 			return elem
 		}
 		return s
@@ -206,8 +208,10 @@ func unquoteArrayElem(elem string, jsonSyntax bool) string {
 // PostgreSQL array literal, not a single element, and neither the JSON
 // arrays nor the unquoted [a,b] form that SplitArray also accepts.
 // The escaping rule is the one of that parser, so SplitArrayValues and
-// notnull.StringArray.Scan decode the same PostgreSQL array literal
-// to the same values.
+// notnull.StringArray.Scan unescape a quoted element identically. They
+// still differ on the literals that parser rejects and this one passes
+// through as text, like one with a NULL element or more than one
+// dimension.
 func unescapeSQLArrayElem(elem string) string {
 	if !strings.Contains(elem, `\`) {
 		return elem
