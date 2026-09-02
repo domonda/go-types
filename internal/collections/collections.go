@@ -1,8 +1,9 @@
 // Package collections reproduces the abstract collection interfaces
 // documented by the Go 1.28 collections proposal, https://go.dev/issue/80590.
 //
-// The proposal declares them unexported (_AbstractCollection, _AbstractMap,
-// _AbstractSet) purely as documentation of the shape that container types
+// The proposal declares them unexported (_AbstractCollection, _AbstractSet,
+// and _AbstractMap which is kept commented out below because no type of this
+// module implements it) purely as documentation of the shape that container types
 // like *hash.Map, *hash.Set, *ordered.Map and set.Set have in common.
 // They are reproduced here, exported within this module but not part of its
 // public API, so that compile-time assertions in the packages of this module
@@ -29,25 +30,26 @@ type Collection[E any, C Collection[E, C]] interface {
 	String() string
 }
 
-// Map models a mapping M from keys K to values V,
-// such as *hash.Map or *ordered.Map.
+// Map models a mapping M from keys K to values V, such as *hash.Map or
+// *ordered.Map. No type of this module implements it, so it is kept
+// commented out rather than declared: an interface with no compile-time
+// consumer cannot be checked against anything and only looks like a
+// contract. Restore it verbatim when a key/value container type is added.
 //
-// No type of this module implements Map; it is kept here as the reference
-// shape for any future key/value container type.
-type Map[K, V any, M Map[K, V, M]] interface {
-	Collection[K, M]
-
-	All() iter.Seq2[K, V]
-	At(K) V
-	Delete(K) (V, bool)
-	DeleteAll(iter.Seq[K]) bool
-	DeleteFunc(func(K, V) bool) bool
-	Get(K) (V, bool)
-	Keys() iter.Seq[K]
-	Set(K, V) (V, bool)
-	SetAll(iter.Seq2[K, V]) bool
-	Values() iter.Seq[V]
-}
+//	type Map[K, V any, M Map[K, V, M]] interface {
+//		Collection[K, M]
+//
+//		All() iter.Seq2[K, V]
+//		At(K) V
+//		Delete(K) (V, bool)
+//		DeleteAll(iter.Seq[K]) bool
+//		DeleteFunc(func(K, V) bool) bool
+//		Get(K) (V, bool)
+//		Keys() iter.Seq[K]
+//		Set(K, V) (V, bool)
+//		SetAll(iter.Seq2[K, V]) bool
+//		Values() iter.Seq[V]
+//	}
 
 // Set models a set S of elements E,
 // such as *hash.Set, or set.Set.

@@ -44,6 +44,29 @@ func main() {
 }
 ```
 
+## IDSet
+
+`IDSet` is a `map[ID]struct{}` set of IDs. `IDSlice` is the ordered `[]ID` counterpart;
+`AsSet` and `AsSlice` convert between them.
+
+Implements the abstract set interface of the Go 1.28 collections proposal
+([go.dev/issue/80590](https://go.dev/issue/80590)): `Insert`, `InsertAll`, `Delete`, `DeleteAll`,
+`DeleteFunc`, `All`, `ContainsAll`, `Union`, `Intersection`, `Difference`, `SymmetricDifference`,
+`Intersects` and the in-place `*With` variants. **`Difference` is asymmetric; the former `Diff`
+method was removed and is now `SymmetricDifference`.**
+
+A nil `IDSet` is a valid empty set for reads and removals; `Insert` into one panics like a nil
+map assignment. `Sorted` returns the IDs as a sorted `IDSlice` (the former `AsSortedSlice`,
+which is deprecated).
+
+`Value`/`Scan` and `MarshalJSON`/`UnmarshalJSON` keep three states distinct and round-trip each:
+
+| Go value      | SQL         | JSON        |
+|---------------|-------------|-------------|
+| nil map       | `NULL`      | `null`      |
+| empty map     | `{}`        | `[]`        |
+| populated map | `{"a","b"}` | `["a","b"]` |
+
 ## Documentation
 
 [Documentation](http://godoc.org/github.com/domonda/go-types/uu) is hosted at GoDoc project.

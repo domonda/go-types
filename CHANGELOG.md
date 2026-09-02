@@ -43,6 +43,11 @@ No version has been tagged yet, so everything below is unreleased. See
   `UnionWith`. They now behave like the `container/set.Set` type planned for
   Go 1.28, which is likewise represented as `map[E]struct{}`.
 - `strutil.StringSet.Len` and `email.AddressSet.Equal`, which were missing.
+- `ContainsAny` on `uu.IDSet` and `email.AddressSet`, `IsEmpty` on
+  `strutil.StringSet` and `Sorted` on `uu.IDSet`, so that all four set types
+  now offer `ContainsAny`, `ContainsAll`, `IsEmpty`, `Len` and `Sorted` under
+  the same names. `strutil.StringSet` still has no `IsNull`, being the one
+  set type that does not distinguish a nil from an empty set.
 - `internal/collections` holding the proposal's abstract interfaces, and
   `internal/collections/settest` holding the abstract set specification as a
   reusable test. Every set type is checked against that specification and by a
@@ -178,13 +183,15 @@ No version has been tagged yet, so everything below is unreleased. See
 
 Still present and working, scheduled for removal before `v1.0.0`:
 
-| Deprecated                             | Replacement                             |
-|----------------------------------------|-----------------------------------------|
-| `Add(v)`¹                              | `Insert(v) bool`                        |
-| `AddSlice(s)`                          | `InsertAll(slices.Values(s))`           |
-| `AddSet(other)`¹                       | `UnionWith(other)`                      |
-| `DeleteSlice(s)`                       | `DeleteAll(slices.Values(s))`           |
-| `DeleteSet(other)`                     | `DifferenceWith(other)`                 |
+| Deprecated              | Replacement                               |
+|-------------------------|-------------------------------------------|
+| `Add(v)`¹               | `Insert(v) bool`                          |
+| `AddSlice(s)`           | `InsertAll(slices.Values(s))`             |
+| `AddSet(other)`¹        | `UnionWith(other)`                        |
+| `DeleteSlice(s)`        | `DeleteAll(slices.Values(s))`             |
+| `DeleteSet(other)`      | `DifferenceWith(other)`                   |
+| `IDSet.AddIDs(ids)`     | `InsertAll(slices.Values(ids.AsSlice()))` |
+| `IDSet.AsSortedSlice()` | `Sorted()`                                |
 
 ¹ Neither is deprecated on `email.AddressSet`. Its pointer-receiver `Add` and
 `AddSet` allocate the underlying map, so they have different nil semantics than

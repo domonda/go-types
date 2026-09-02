@@ -569,3 +569,37 @@ func TestIDSet_NullVsEmpty(t *testing.T) {
 		}
 	})
 }
+
+func TestIDSet_ContainsAny(t *testing.T) {
+	set := MakeIDSet(testIDA, testIDB)
+	if !set.ContainsAny(testIDC, testIDB) {
+		t.Error("ContainsAny of an overlapping list = false, want true")
+	}
+	if set.ContainsAny(testIDC) {
+		t.Error("ContainsAny of a disjoint list = true, want false")
+	}
+	if set.ContainsAny() {
+		t.Error("ContainsAny() without IDs = true, want false")
+	}
+	if IDSet(nil).ContainsAny(testIDA) {
+		t.Error("ContainsAny on a nil set = true, want false")
+	}
+}
+
+func TestIDSet_Sorted(t *testing.T) {
+	// Sorted is the name the other three set types use; AsSortedSlice is
+	// the deprecated alias and must stay behaviour identical until removed.
+	set := MakeIDSet(testIDB, testIDA, testIDC)
+	got := set.Sorted()
+	want := IDSlice{testIDA, testIDB, testIDC}
+	want.Sort()
+	if !got.Equal(want) {
+		t.Errorf("Sorted() = %s, want %s", got, want)
+	}
+	if deprecated := set.AsSortedSlice(); !deprecated.Equal(got) {
+		t.Errorf("AsSortedSlice() = %s, want %s from Sorted()", deprecated, got)
+	}
+	if got := IDSet(nil).Sorted(); got != nil {
+		t.Errorf("Sorted() of a nil set = %s, want nil", got)
+	}
+}

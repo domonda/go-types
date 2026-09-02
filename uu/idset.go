@@ -5,6 +5,7 @@ import (
 	"database/sql/driver"
 	"iter"
 	"maps"
+	"slices"
 	"sort"
 	"strings"
 
@@ -87,7 +88,7 @@ func IDSetMust[T IDSource](vals ...T) IDSet {
 
 // String implements the fmt.Stringer interface.
 func (s IDSet) String() string {
-	return "set" + s.AsSortedSlice().String()
+	return "set" + s.Sorted().String()
 }
 
 // Strings returns a slice with all IDs converted to strings
@@ -106,9 +107,9 @@ func (s IDSet) Strings() []string {
 }
 
 // PrettyString implements the pretty.Stringer interface
-// using s.AsSortedSlice().PrettyString().
+// using s.Sorted().PrettyString().
 func (s IDSet) PrettyString() string {
-	return s.AsSortedSlice().PrettyString()
+	return s.Sorted().PrettyString()
 }
 
 // GetOne returns one ID in undefined order from the set
@@ -155,11 +156,20 @@ func (s IDSet) ForEach(callback func(ID) error) error {
 	return nil
 }
 
-// AsSortedSlice returns the IDs of the set as sorted IDSlice.
-func (s IDSet) AsSortedSlice() IDSlice {
+// Sorted returns the IDs of the set as a sorted IDSlice.
+// The other set types of this module call this method Sorted too.
+func (s IDSet) Sorted() IDSlice {
 	sl := s.AsSlice()
 	sl.Sort()
 	return sl
+}
+
+// AsSortedSlice returns the IDs of the set as a sorted IDSlice.
+//
+// Deprecated: use [IDSet.Sorted], which is what types.Set,
+// strutil.StringSet and email.AddressSet call it.
+func (s IDSet) AsSortedSlice() IDSlice {
+	return s.Sorted()
 }
 
 // AddSlice adds all IDs from s to the set.
@@ -181,6 +191,9 @@ func (s IDSet) AddSet(other IDSet) {
 }
 
 // AddIDs adds all IDs yielded by ids into the set.
+//
+// Deprecated: use set.InsertAll(slices.Values(ids.AsSlice())),
+// or [IDSet.UnionWith] with ids.AsSet().
 func (s IDSet) AddIDs(ids IDs) {
 	ids.ForEach(func(id ID) error {
 		s[id] = struct{}{}
@@ -220,6 +233,15 @@ func (s IDSet) All() iter.Seq[ID] {
 // It is valid to call this method on a nil IDSet.
 func (s IDSet) Contains(id ID) bool {
 	return mapset.Contains(s, id)
+}
+
+// ContainsAny returns true if any of the passed IDs are in the set.
+// It returns false for no IDs and is valid to call on a nil IDSet.
+//
+// Note that [IDSlice.ContainsAny] takes an IDSlice rather than variadic
+// IDs, because a slice of IDs is the natural argument there.
+func (s IDSet) ContainsAny(ids ...ID) bool {
+	return slices.ContainsFunc(ids, s.Contains)
 }
 
 // ContainsAll reports whether the set contains all IDs yielded by seq.
@@ -396,14 +418,14 @@ func (s IDSet) Value() (driver.Value, error) {
 	if s == nil {
 		return nil, nil
 	}
-	// AsSortedSlice returns a nil IDSlice for an empty set, whose Value is
+	// Sorted returns a nil IDSlice for an empty set, whose Value is
 	// SQL NULL, so the empty array has to be written here: a nil set is
 	// NULL, an allocated empty set is the empty array, and Scan reads both
 	// back to the state they came from.
 	if len(s) == 0 {
 		return "{}", nil
 	}
-	return s.AsSortedSlice().Value()
+	return s.Sorted().Value()
 }
 
 // MarshalJSON implements encoding/json.Marshaler
@@ -411,13 +433,13 @@ func (s IDSet) MarshalJSON() ([]byte, error) {
 	if s == nil {
 		return []byte("null"), nil
 	}
-	// Same reason as in Value: AsSortedSlice is nil for an empty set and
+	// Same reason as in Value: Sorted is nil for an empty set and
 	// marshals as null, so the empty array has to be written here to keep
 	// JSON null and the empty array distinct.
 	if len(s) == 0 {
 		return []byte("[]"), nil
 	}
-	return s.AsSortedSlice().MarshalJSON()
+	return s.Sorted().MarshalJSON()
 }
 
 // UnmarshalJSON implements encoding/json.Unmarshaler.

@@ -7,8 +7,6 @@ import (
 	"strings"
 
 	"github.com/domonda/go-types"
-	"github.com/domonda/go-types/notnull"
-	"github.com/domonda/go-types/strutil"
 )
 
 // Compile-time check that AddressList implements types.NormalizableValidator[AddressList]
@@ -184,18 +182,11 @@ func (l *AddressList) Scan(value any) error {
 			return errors.New("can't scan empty string as email.AddressList")
 		}
 		if s[0] == '{' && s[len(s)-1] == '}' {
-			// Decoded with the PostgreSQL array codec, so that the quotes
-			// and escapes of a text[] element don't end up in an address.
-			var stringArray notnull.StringArray
-			err := stringArray.Scan(s)
+			// Elements that are empty after the helper's trim are
+			// skipped by AddressListJoinStrings.
+			stringArray, err := scanAddressArray(s, "AddressList")
 			if err != nil {
-				return fmt.Errorf("can't scan SQL array string %q as email.AddressList because of: %w", s, err)
-			}
-			// A hand written array literal may pad its elements with
-			// spaces, which are never part of an address. Elements that
-			// are empty afterwards are skipped by AddressListJoinStrings.
-			for i, addr := range stringArray {
-				stringArray[i] = strutil.TrimSpace(addr)
+				return err
 			}
 			*l = AddressListJoinStrings(stringArray...)
 			return nil

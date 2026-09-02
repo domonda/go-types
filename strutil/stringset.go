@@ -64,6 +64,11 @@ func (set StringSet) Len() int {
 	return len(set)
 }
 
+// IsEmpty returns true if the set is empty or nil.
+func (set StringSet) IsEmpty() bool {
+	return len(set) == 0
+}
+
 // AddSlice adds all strings from the slice s to the set.
 //
 // Deprecated: use set.InsertAll(slices.Values(s)).

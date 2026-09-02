@@ -535,3 +535,19 @@ func TestAddressSet_NullVsEmpty(t *testing.T) {
 		})
 	}
 }
+
+func TestAddressSet_ContainsAny(t *testing.T) {
+	set := MakeAddressSet("a@example.com", "b@example.com")
+	if !set.ContainsAny("x@example.com", "b@example.com") {
+		t.Error("ContainsAny of an overlapping list = false, want true")
+	}
+	if set.ContainsAny("x@example.com") {
+		t.Error("ContainsAny of a disjoint list = true, want false")
+	}
+	if set.ContainsAny() {
+		t.Error("ContainsAny() without addresses = true, want false")
+	}
+	if AddressSet(nil).ContainsAny("a@example.com") {
+		t.Error("ContainsAny on a nil set = true, want false")
+	}
+}

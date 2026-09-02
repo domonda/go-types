@@ -5,6 +5,8 @@ Open issues and cleanup items before tagging `v1.0.0`. Grouped by what blocks a 
 ## Blockers for v1.0 (API or semantic)
 
 - [ ] **Tag `v1.0.0`.** No git tags exist yet. Pick semver baseline first.
+- [ ] **Remove `uu.IDSet.AsSortedSlice` and `uu.IDSet.AddIDs`,** both
+      deprecated in favour of `Sorted` and `InsertAll`/`UnionWith`.
 - [ ] **Remove the deprecated set methods.** `Add`, `AddSlice`, `AddSet`,
       `DeleteSlice` and `DeleteSet` on `types.Set`, `uu.IDSet` and
       `strutil.StringSet`, plus `DeleteSlice` and `DeleteSet` on

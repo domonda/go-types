@@ -6,13 +6,13 @@ import (
 	"fmt"
 	"iter"
 	"maps"
+	"slices"
 	"sort"
 	"unsafe"
 
 	"github.com/domonda/go-types"
 	"github.com/domonda/go-types/mapset"
 	"github.com/domonda/go-types/notnull"
-	"github.com/domonda/go-types/strutil"
 )
 
 // AddressSet is a set of unique email addresses.
@@ -88,6 +88,12 @@ func (set AddressSet) IsNull() bool {
 // It is valid to call this method on a nil AddressSet.
 func (set AddressSet) Contains(addr Address) bool {
 	return mapset.Contains(set, addr)
+}
+
+// ContainsAny returns true if any of the passed addresses are in the set.
+// It returns false for no addresses and is valid to call on a nil AddressSet.
+func (set AddressSet) ContainsAny(addrs ...Address) bool {
+	return slices.ContainsFunc(addrs, set.Contains)
 }
 
 // ContainsAll reports whether the set contains all addresses yielded by seq.
@@ -404,18 +410,14 @@ func (set *AddressSet) Scan(value any) error {
 			return errors.New("can't scan empty string as email.AddressSet")
 		}
 		if s[0] == '{' && s[len(s)-1] == '}' {
-			// Parsed with the same array codec that Value writes with,
-			// so that quoted and escaped elements round-trip.
-			var array notnull.StringArray
-			err := array.Scan(s)
+			array, err := scanAddressArray(s, "AddressSet")
 			if err != nil {
-				return fmt.Errorf("can't scan SQL array string %q as email.AddressSet because of: %w", s, err)
+				return err
 			}
 			*set = make(AddressSet, len(array))
 			for _, addr := range array {
-				// A hand written array literal may pad its elements
-				// with spaces, which are never part of an address.
-				addr = strutil.TrimSpace(addr)
+				// scanAddressArray trims, so an element that was only
+				// padding is empty here and is not a member.
 				if addr == "" {
 					continue
 				}

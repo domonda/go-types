@@ -177,3 +177,17 @@ func TestStringSet_DeprecatedMutators(t *testing.T) {
 		}
 	})
 }
+
+func TestStringSet_IsEmpty(t *testing.T) {
+	// StringSet has no IsNull, so unlike the other three set types it cannot
+	// distinguish a nil from an allocated empty set. IsEmpty is true for both.
+	if !StringSet(nil).IsEmpty() {
+		t.Error("IsEmpty() of a nil set = false, want true")
+	}
+	if !NewStringSet().IsEmpty() {
+		t.Error("IsEmpty() of an allocated empty set = false, want true")
+	}
+	if NewStringSet("a").IsEmpty() {
+		t.Error("IsEmpty() of a non-empty set = true, want false")
+	}
+}
