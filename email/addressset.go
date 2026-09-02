@@ -12,7 +12,7 @@ import (
 	"github.com/domonda/go-types"
 	"github.com/domonda/go-types/mapset"
 	"github.com/domonda/go-types/notnull"
-	"github.com/domonda/go-types/nullable"
+	"github.com/domonda/go-types/strutil"
 )
 
 // AddressSet is a set of unique email addresses.
@@ -394,13 +394,21 @@ func (set *AddressSet) Scan(value any) error {
 			return errors.New("can't scan empty string as email.AddressSet")
 		}
 		if s[0] == '{' && s[len(s)-1] == '}' {
-			array, err := nullable.SplitArray(s)
+			// Parsed with the same array codec that Value writes with,
+			// so that quoted and escaped elements round-trip.
+			var array notnull.StringArray
+			err := array.Scan(s)
 			if err != nil {
-				// fmt.Printf("ARRAY: %#v\n", s)
 				return fmt.Errorf("can't scan SQL array string %q as email.AddressSet because of: %w", s, err)
 			}
 			*set = make(AddressSet, len(array))
 			for _, addr := range array {
+				// A hand written array literal may pad its elements
+				// with spaces, which are never part of an address.
+				addr = strutil.TrimSpace(addr)
+				if addr == "" {
+					continue
+				}
 				set.Add(Address(addr))
 			}
 		} else {

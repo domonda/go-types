@@ -79,6 +79,14 @@ No version has been tagged yet, so everything below is unreleased. See
   an unexported struct field. An addressable one is now formatted like an
   exported field, so a reflection driven caller walking a struct gets
   `2026-01-02T15:04:05Z` instead of a crash or `{0 63902963045 <nil>}`.
+- `email.AddressSet`, `email.AddressList` and `email.NullableAddressList` kept
+  the quotes of a quoted PostgreSQL array element, so scanning the `{"a@x.com"}`
+  literal that `AddressSet.Value` itself writes produced the address
+  `"a@x.com"` including the quote characters and `Value` did not survive `Scan`.
+  All three now decode the array with the same PostgreSQL array codec that
+  `Value` writes with, which also unescapes an element containing a comma or an
+  escaped quote. An SQL `NULL` array element is an error now instead of the
+  address `NULL`.
 
 ### Changed
 

@@ -58,3 +58,57 @@ func TestAddressList_Split(t *testing.T) {
 		})
 	}
 }
+
+func TestAddressList_Scan(t *testing.T) {
+	tests := []struct {
+		name    string
+		value   any
+		want    AddressList
+		wantErr bool
+	}{
+		// The array branch reads a PostgreSQL text[] column. Its elements
+		// are quoted and escaped, so they have to be decoded rather than
+		// joined verbatim, otherwise the quotes end up inside an address.
+		{
+			name:  "quoted array elements",
+			value: `{"a@example.com","b@example.com"}`,
+			want:  "a@example.com, b@example.com",
+		},
+		{
+			name:  "quoted element with a comma and escaped quotes",
+			value: `{"\"Doe, John\" <john@example.com>","b@example.com"}`,
+			want:  `"Doe, John" <john@example.com>, b@example.com`,
+		},
+		{
+			name:  "unquoted array elements",
+			value: `{a@example.com,b@example.com}`,
+			want:  "a@example.com, b@example.com",
+		},
+		{name: "empty array", value: `{}`, want: ""},
+		// A hand written literal, unlike PostgreSQL output, may pad its
+		// elements. The padding is not part of the address.
+		{name: "padded elements", value: `{ a@example.com , b@example.com }`, want: "a@example.com, b@example.com"},
+		{name: "whitespace only array", value: `{ }`, want: ""},
+		// A non-array string is an already joined list, so it is taken as is.
+		{name: "plain string", value: "a@example.com, b@example.com", want: "a@example.com, b@example.com"},
+		{name: "bytes", value: []byte(`{"a@example.com"}`), want: "a@example.com"},
+		{name: "empty string", value: "", wantErr: true},
+		{name: "invalid array", value: `{,}`, wantErr: true},
+		{name: "unsupported type", value: 123, wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var l AddressList
+			err := l.Scan(tt.value)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("Scan() error = %v, wantErr %t", err, tt.wantErr)
+			}
+			if tt.wantErr {
+				return
+			}
+			if l != tt.want {
+				t.Errorf("Scan() = %q, want %q", l, tt.want)
+			}
+		})
+	}
+}
