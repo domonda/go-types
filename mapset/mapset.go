@@ -11,7 +11,7 @@
 // # Nil sets
 //
 // A nil set is a valid empty set for every operation that does not have to
-// store an element: Contains, ContainsAll, All, Len, Equal, Intersects,
+// store an element: Contains, ContainsAll, All, Equal, Intersects,
 // String, Delete, DeleteAll, DeleteFunc, IntersectionWith and DifferenceWith
 // all accept a nil set. Union, Intersection, Difference and
 // SymmetricDifference accept nil operands and always return a newly

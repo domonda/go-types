@@ -127,9 +127,13 @@ No version has been tagged yet, so everything below is unreleased. See
   relies on the old meaning.
 - **Breaking:** `types.Set.ContainsAll` takes an `iter.Seq[T]` instead of
   variadic values. Use `set.ContainsAll(slices.Values(vals))`.
-- `Delete` now reports whether the set changed on all four set types. Existing
-  statement calls keep compiling unchanged; only method values typed `func(E)`
-  break.
+- **Breaking:** `Delete` now reports whether the set changed on all four set
+  types, so its signature goes from `Delete(E)` to `Delete(E) bool`. Existing
+  statement calls keep compiling unchanged, but three things do not:
+  an interface declaring `Delete(E)` is no longer satisfied by these types,
+  a method value typed `func(E)` no longer type checks, and neither does a
+  method expression such as `uu.IDSet.Delete` typed `func(uu.IDSet, uu.ID)`.
+  All three are compile errors, not silent behaviour changes.
 - Nil sets are documented as valid empty sets for every read and for removals.
   `Insert`, `InsertAll`, `UnionWith` and `SymmetricDifferenceWith` panic on a
   nil set, exactly like an assignment to a nil Go map.
@@ -147,12 +151,14 @@ Still present and working, scheduled for removal before `v1.0.0`:
 |----------------------------------------|-----------------------------------------|
 | `Add(v)`¹                              | `Insert(v) bool`                        |
 | `AddSlice(s)`                          | `InsertAll(slices.Values(s))`           |
-| `AddSet(other)`                        | `UnionWith(other)`                      |
+| `AddSet(other)`¹                       | `UnionWith(other)`                      |
 | `DeleteSlice(s)`                       | `DeleteAll(slices.Values(s))`           |
 | `DeleteSet(other)`                     | `DifferenceWith(other)`                 |
 
-¹ Not deprecated on `email.AddressSet`, where `Add` has different nil semantics
-than `Insert`, see above.
+¹ Neither is deprecated on `email.AddressSet`. Its pointer-receiver `Add` and
+`AddSet` allocate the underlying map, so they have different nil semantics than
+the value-receiver `Insert` and `UnionWith` and are kept as their nil-safe
+counterparts, see above.
 
 The `set` package is superseded by `mapset` for new code but is unchanged and
 not deprecated.
