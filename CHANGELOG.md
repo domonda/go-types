@@ -56,6 +56,20 @@ picking the semver baseline.
   reusable test. Every set type is checked against that specification and by a
   compile-time interface assertion, so a behaviour change in `mapset` is caught
   at each type that delegates to it, not only in `mapset` itself.
+- `nullable.SplitArrayValues` and `notnull.SplitArrayValues`, which split an
+  SQL or JSON array into its top level elements like `SplitArray` and return
+  the value of every double quoted string element with the quotes removed and
+  the escape sequences of the parsed syntax undone. `SplitArray` returns the
+  raw text of its elements, which is required for a JSON array of objects but
+  is the wrong thing for a string array, and because it was the only thing on
+  offer every known caller hand-rolled the unquoting and got it wrong. SQL and
+  JSON unescape differently — a backslash escapes the following character
+  whatever it is in a PostgreSQL array literal, while JSON interprets `\n`,
+  `\t` and `\uXXXX` — so the new functions unescape with the syntax they
+  parsed. Elements that are not double quoted strings, like the objects of a
+  JSON array of objects, are returned unchanged, as is a quoted element of a
+  JSON array that is not a valid JSON string, so that it fails visibly
+  downstream instead of being half unescaped.
 
 ### Fixed
 
@@ -101,6 +115,29 @@ picking the semver baseline.
   does not survive a `Value`/`Scan` round trip, and an element that is empty
   after trimming is dropped. The trim is what keeps a hand-written literal like
   `{ a@x.com , b@x.com }` working, which the previous decoder accepted.
+- `nullable.SQLArrayLiteral` and `notnull.SQLArrayLiteral` escaped the quote
+  but not the backslash of an element, so the literal `{"a\b"}` written for
+  the value `a\b` is read back by PostgreSQL as `ab`: a silent data loss for
+  every value containing a backslash. Both characters are escaped now, and a
+  test pins the literal to be byte identical to the one written by the
+  vendored `pq.StringArray.Value` and to round trip back through its parser.
+  The literal was additionally checked against a live PostgreSQL 16 during
+  development, which the test suite itself does not do, having no database.
+- `SplitArray` reported an unclosed quote for a quoted element whose value ends
+  with a backslash, like the `{"a\\"}` literal PostgreSQL outputs for the
+  value `a\`, because it took the escaped backslash before the closing quote
+  for an escape of that quote. Escape sequences are tracked now instead of
+  looking at the previous character only. The tracking cuts the other way for
+  a malformed literal that PostgreSQL never emits: `{"a\\"","b"}` used to
+  split into two elements and is an `invalid rune` error now, which is what
+  PostgreSQL reports for it too.
+- The `SplitArray` functions could not tell the value of a quoted string
+  element, which is what `SplitArrayValues` was added for. Their documentation
+  now says so, and also that an unquoted `NULL` element of an SQL array (`null`
+  in a JSON array) is returned as the string `NULL` (`null`) and is
+  indistinguishable from a quoted `"NULL"` (`"null"`) element for
+  `SplitArrayValues`. `SplitArray` keeps the quotes that tell the two apart and
+  its elements correspond to those of `SplitArrayValues` by index.
 
 ### Changed
 
