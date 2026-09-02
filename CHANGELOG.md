@@ -123,6 +123,11 @@ picking the semver baseline.
   vendored `pq.StringArray.Value` and to round trip back through its parser.
   The literal was additionally checked against a live PostgreSQL 16 during
   development, which the test suite itself does not do, having no database.
+  A caller that pairs `SQLArrayLiteral` with `SplitArray` and strips the
+  quotes itself has to move to `SplitArrayValues` now: the literal written
+  for `a\b` is `{"a\\b"}` instead of `{"a\b"}`, so stripping only the
+  quotes yields `a\\b`. It fails silently, which is the same trap that
+  made this function worth fixing.
 - `SplitArray` reported an unclosed quote for a quoted element whose value ends
   with a backslash, like the `{"a\\"}` literal PostgreSQL outputs for the
   value `a\`, because it took the escaped backslash before the closing quote

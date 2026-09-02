@@ -211,7 +211,11 @@ func unquoteArrayElem(elem string, jsonSyntax bool) string {
 // notnull.StringArray.Scan unescape a quoted element identically. They
 // still differ on the literals that parser rejects and this one passes
 // through as text, like one with a NULL element or more than one
-// dimension.
+// dimension. Both of them differ from PostgreSQL itself for an unquoted
+// element, where a backslash is left as it is instead of escaping the
+// following character, and where trailing space is kept. PostgreSQL
+// quotes any element that needs either, so only a hand written literal
+// can tell the difference.
 func unescapeSQLArrayElem(elem string) string {
 	if !strings.Contains(elem, `\`) {
 		return elem
