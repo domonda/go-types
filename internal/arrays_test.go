@@ -135,6 +135,90 @@ func TestSplitArray(t *testing.T) {
 		},
 
 		{
+			// A structural rune within a string value of a nested object
+			// is part of that value and must not end the element
+			name:       `[{"a":"}"},{"b":2}]`,
+			array:      `[{"a":"}"},{"b":2}]`,
+			wantFields: []string{`{"a":"}"}`, `{"b":2}`},
+		},
+		{
+			name:       `[{"a":"}x,y"}]`,
+			array:      `[{"a":"}x,y"}]`,
+			wantFields: []string{`{"a":"}x,y"}`},
+		},
+		{
+			// An escaped quote does not end that string value either
+			name:       `[{"a":"x\"}y"}]`,
+			array:      `[{"a":"x\"}y"}]`,
+			wantFields: []string{`{"a":"x\"}y"}`},
+		},
+		{
+			// Objects and arrays nested deeper than one level
+			name:       `[{"a":{"b":1}}]`,
+			array:      `[{"a":{"b":1}}]`,
+			wantFields: []string{`{"a":{"b":1}}`},
+		},
+		{
+			name:       `[[1,[2,3]],[4]]`,
+			array:      `[[1,[2,3]],[4]]`,
+			wantFields: []string{`[1,[2,3]]`, `[4]`},
+		},
+		{
+			// An unmatched '{' at the top level of an unquoted element
+			// stays literal text: PostgreSQL would have quoted the
+			// element, so this can only be a hand written literal
+			name:       `{in{o@example.com}`,
+			array:      `{in{o@example.com}`,
+			wantFields: []string{`in{o@example.com`},
+		},
+
+		{
+			// A backslash escapes the following character in an unquoted
+			// PostgreSQL element too, so the comma does not split here.
+			// SplitArray returns the element as written, SplitArrayValues
+			// undoes the escaping.
+			name:       `{a\,b}`,
+			array:      `{a\,b}`,
+			wantFields: []string{`a\,b`},
+		},
+		{
+			name:       `{a\}b}`,
+			array:      `{a\}b}`,
+			wantFields: []string{`a\}b`},
+		},
+		{
+			// Only for SQL: a backslash outside a quoted element is not
+			// JSON syntax, so it stays a literal character there
+			name:       `[a\,b]`,
+			array:      `[a\,b]`,
+			wantFields: []string{`a\`, `b`},
+		},
+
+		{
+			// A trailing comma announces an element that is not there,
+			// which is reported as an empty string instead of being
+			// dropped silently. PostgreSQL rejects the literal.
+			name:       `{a,}`,
+			array:      `{a,}`,
+			wantFields: []string{`a`, ``},
+		},
+		{
+			name:       `[1,2,]`,
+			array:      `[1,2,]`,
+			wantFields: []string{`1`, `2`, ``},
+		},
+		{
+			name:       `{"a",}`,
+			array:      `{"a",}`,
+			wantFields: []string{`"a"`, ``},
+		},
+		{
+			name:       `{a, }`,
+			array:      `{a, }`,
+			wantFields: []string{`a`, ``},
+		},
+
+		{
 			// Backslash escaping applies only to double quoted elements,
 			// a backslash in a single quoted element is a literal character
 			name:       `['a\','b']`,
@@ -203,6 +287,13 @@ func TestSplitArray(t *testing.T) {
 			// the malformed literal error PostgreSQL reports for it now
 			name:    `{"a\\"","b"}`,
 			array:   `{"a\\"","b"}`,
+			wantErr: true,
+		},
+		{
+			// The string tracking within a nested object must still
+			// report a genuinely unclosed quote there
+			name:    `[{"a":"x}]`,
+			array:   `[{"a":"x}]`,
 			wantErr: true,
 		},
 	}
@@ -377,11 +468,55 @@ func TestSplitArrayValues(t *testing.T) {
 			wantValues: []string{`{"a":1}`, `{"b":"x,y"}`, `str`, `3`, `null`},
 		},
 		{
+			// A brace in a string value of an object does not end the
+			// object, else the whole array fails to split
+			name:       "JSON object with a brace in a string value",
+			array:      `[{"a":"}x,y"}, "str"]`,
+			wantValues: []string{`{"a":"}x,y"}`, `str`},
+		},
+		{
 			// Neither valid SQL nor valid JSON array syntax,
 			// documented as being returned unchanged.
 			name:       "single quoted elements are not unquoted",
 			array:      `{'a','b'}`,
 			wantValues: []string{`'a'`, `'b'`},
+		},
+		{
+			// PostgreSQL 16 reads {a\,b} as the single value a,b: the
+			// backslash escaping is not limited to quoted elements. The
+			// vendored lib/pq parser gets this wrong and splits into the
+			// two elements `a\` and `b`.
+			name:       "unquoted SQL element escapes the delimiter",
+			array:      `{a\,b}`,
+			wantValues: []string{`a,b`},
+		},
+		{
+			name:       "unquoted SQL element escapes a brace",
+			array:      `{a\}b}`,
+			wantValues: []string{`a}b`},
+		},
+		{
+			name:       "unquoted SQL element escapes a backslash",
+			array:      `{a\\b}`,
+			wantValues: []string{`a\b`},
+		},
+		{
+			// A backslash escapes the single quote, so these are the two
+			// elements 'a' and 'b' for PostgreSQL as well
+			name:       "unquoted SQL element escapes a single quote",
+			array:      `{'a\','b'}`,
+			wantValues: []string{`'a'`, `'b'`},
+		},
+		{
+			// A JSON array is not unescaped outside a quoted string
+			name:       "unquoted JSON element keeps its backslash",
+			array:      `[a\,b]`,
+			wantValues: []string{`a\`, `b`},
+		},
+		{
+			name:       "trailing comma yields an empty last element",
+			array:      `{a,}`,
+			wantValues: []string{`a`, ``},
 		},
 		{
 			// Documented limitation: a SQL NULL element and the string
@@ -393,12 +528,17 @@ func TestSplitArrayValues(t *testing.T) {
 		},
 
 		{
-			// An element that is not a valid JSON string is returned
-			// unchanged, quotes included, so that it fails visibly
-			// downstream instead of being half unescaped
-			name:       "invalid JSON escape",
-			array:      `["a\q"]`,
-			wantValues: []string{`"a\q"`},
+			// An element that is not a valid JSON string is an error:
+			// returning it unchanged would hand out the value with the
+			// quotes that SplitArrayValues exists to remove
+			name:    "invalid JSON escape",
+			array:   `["a\q"]`,
+			wantErr: true,
+		},
+		{
+			name:    "invalid JSON unicode escape",
+			array:   `["a\uZZZZ"]`,
+			wantErr: true,
 		},
 
 		{
@@ -432,8 +572,12 @@ func TestUnquoteArrayElemDefensive(t *testing.T) {
 		elem       string
 		jsonSyntax bool
 		want       string
+		wantErr    bool
 	}{
 		{name: "too short", elem: `"`, want: `"`},
+		{name: "invalid JSON string", elem: `"a\q"`, jsonSyntax: true, wantErr: true},
+		{name: "unquoted SQL element is unescaped", elem: `a\,b`, want: `a,b`},
+		{name: "unquoted JSON element is not", elem: `a\,b`, jsonSyntax: true, want: `a\,b`},
 		{name: "empty", elem: ``, want: ``},
 		{name: "opening quote only", elem: `"a`, want: `"a`},
 		{name: "closing quote only", elem: `a"`, want: `a"`},
@@ -441,7 +585,11 @@ func TestUnquoteArrayElemDefensive(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := unquoteArrayElem(tt.elem, tt.jsonSyntax)
+			got, err := unquoteArrayElem(tt.elem, tt.jsonSyntax)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("unquoteArrayElem(%q, %v) error = %v, wantErr %v", tt.elem, tt.jsonSyntax, err, tt.wantErr)
+				return
+			}
 			if got != tt.want {
 				t.Errorf("unquoteArrayElem(%q, %v) = %q, want %q", tt.elem, tt.jsonSyntax, got, tt.want)
 			}

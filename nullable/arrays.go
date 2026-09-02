@@ -12,6 +12,10 @@ import (
 //
 // An unquoted NULL element of an SQL array (null in a JSON array)
 // is returned as the unquoted string "NULL" ("null").
+//
+// A trailing comma announces an element that is not there and yields an
+// empty string as last element. PostgreSQL rejects such a literal, this
+// parser reports the announced element instead of dropping it silently.
 func SplitArray(array string) ([]string, error) {
 	return internal.SplitArray(array)
 }
@@ -23,8 +27,11 @@ func SplitArray(array string) ([]string, error) {
 // Returns nil in case of an empty array ("{}" or "[]").
 // Passing "null" or "NULL" as array will return nil without an error.
 //
-// Elements that are not double quoted strings are returned unchanged,
-// like the objects of a JSON array of objects.
+// A backslash escapes the following character in a PostgreSQL array
+// element whether it is quoted or not, so every element of an SQL array
+// is unescaped. In a JSON array only double quoted strings are, every
+// other element, like the objects of a JSON array of objects, is
+// returned unchanged.
 //
 // An unquoted NULL element of an SQL array (null in a JSON array) is
 // returned as the string "NULL" ("null") and is indistinguishable from a
@@ -32,10 +39,8 @@ func SplitArray(array string) ([]string, error) {
 // apart, its elements correspond by index and a quoted element still has
 // its quotes there.
 //
-// A quoted element of a JSON array that is not a valid JSON string, like
-// one with an invalid escape sequence, is returned unchanged with its
-// quotes, so that it fails visibly downstream instead of being half
-// unescaped.
+// Returns an error for a quoted element of a JSON array that is not a
+// valid JSON string, like one with an invalid escape sequence.
 func SplitArrayValues(array string) ([]string, error) {
 	return internal.SplitArrayValues(array)
 }
