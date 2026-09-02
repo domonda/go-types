@@ -127,6 +127,19 @@ No version has been tagged yet, so everything below is unreleased. See
   relies on the old meaning.
 - **Breaking:** `types.Set.ContainsAll` takes an `iter.Seq[T]` instead of
   variadic values. Use `set.ContainsAll(slices.Values(vals))`.
+- `types.Set.UnmarshalJSON` and `uu.IDSet.UnmarshalJSON` empty the set for
+  JSON `null` instead of assigning nil. A nil map panics when a key is set,
+  so the old behaviour crashed the next `Insert` on a freshly unmarshalled
+  set. An already allocated set is cleared in place rather than replaced, and
+  an allocated empty set still marshals back to `null`, so the round trip is
+  unchanged. `uu.IDSlice.UnmarshalJSON` still yields nil for `null`, because
+  a nil slice can be appended to; the asymmetry between the map and slice
+  types is deliberate.
+- `email.AddressSet.String` returns `"<nil>"` for a nil set instead of the
+  empty string, matching `types.Set.String`. An allocated empty set still
+  renders as the empty string, so the two are now distinguishable in a log
+  line. `email.AddressSet.AddressList` is unchanged and still returns the
+  joined list, which is empty for both.
 - **Breaking:** `Delete` now reports whether the set changed on all four set
   types, so its signature goes from `Delete(E)` to `Delete(E) bool`. Existing
   statement calls keep compiling unchanged, but three things do not:

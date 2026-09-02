@@ -491,3 +491,33 @@ func TestIDSlice_AsSet(t *testing.T) {
 	}
 	empty.Insert(testIDA)
 }
+
+// TestIDSlice_UnmarshalJSON_NullIsNil pins the slice half of the rule that
+// IDSet.UnmarshalJSON implements the other half of. JSON null yields a nil
+// IDSlice on purpose: a nil slice can be appended to, so nil costs the caller
+// nothing. A nil map cannot have a key set without panicking, which is why
+// IDSet.UnmarshalJSON allocates instead. Keeping both in one place makes the
+// asymmetry deliberate rather than an oversight.
+func TestIDSlice_UnmarshalJSON_NullIsNil(t *testing.T) {
+	s := IDSlice{testIDA}
+	if err := json.Unmarshal([]byte("null"), &s); err != nil {
+		t.Fatalf("Unmarshal of null returned %v", err)
+	}
+	if s != nil {
+		t.Errorf("Unmarshal of null = %v, want nil", s)
+	}
+	// The property that makes nil acceptable here.
+	s = append(s, testIDB)
+	if len(s) != 1 || s[0] != testIDB {
+		t.Errorf("append to the nil result = %v, want one element", s)
+	}
+
+	// The map counterpart must not have become nil for the same input.
+	set := MakeIDSet(testIDA)
+	if err := json.Unmarshal([]byte("null"), &set); err != nil {
+		t.Fatalf("Unmarshal of null into an IDSet returned %v", err)
+	}
+	if set == nil {
+		t.Error("IDSet.UnmarshalJSON(null) = nil, want an allocated empty set")
+	}
+}

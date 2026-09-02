@@ -389,11 +389,44 @@ func TestIDSet_MarshalAndUnmarshalJSON(t *testing.T) {
 	if string(data) != "null" {
 		t.Errorf("Marshal of a nil set = %s, want null", data)
 	}
+	// JSON null empties the set instead of setting it to nil: a nil map
+	// panics when a key is set, so a caller that unmarshals and then
+	// inserts would crash. IDSlice does return nil for null, because a
+	// nil slice can be appended to.
 	if err := json.Unmarshal([]byte("null"), &parsed); err != nil {
 		t.Fatalf("Unmarshal of null returned %v", err)
 	}
-	if parsed != nil {
-		t.Errorf("Unmarshal of null = %s, want nil", parsed)
+	if parsed == nil {
+		t.Error("Unmarshal of null = nil, want an allocated empty set")
+	}
+	if parsed.Len() != 0 {
+		t.Errorf("Unmarshal of null = %s, want empty", parsed)
+	}
+	// The property the allocation exists for.
+	parsed.Insert(testIDA)
+	// An allocated empty set still marshals back to null, so the
+	// round trip is unaffected.
+	if data, err := json.Marshal(make(IDSet)); err != nil || string(data) != "null" {
+		t.Errorf("Marshal of an allocated empty set = %s, %v, want null", data, err)
+	}
+	// A nil receiver gets a freshly allocated map, not nil.
+	var fresh IDSet
+	if err := json.Unmarshal([]byte("null"), &fresh); err != nil {
+		t.Fatalf("Unmarshal of null into a nil IDSet returned %v", err)
+	}
+	if fresh == nil {
+		t.Error("Unmarshal of null into a nil IDSet = nil, want an allocated empty set")
+	}
+	fresh.Insert(testIDA)
+
+	// An already allocated set is emptied in place rather than replaced.
+	existing := MakeIDSet(testIDA, testIDB)
+	alias := existing
+	if err := json.Unmarshal([]byte("null"), &existing); err != nil {
+		t.Fatalf("Unmarshal of null returned %v", err)
+	}
+	if existing.Len() != 0 || alias.Len() != 0 {
+		t.Errorf("Unmarshal of null left %s (alias %s), want both empty", existing, alias)
 	}
 
 	if err := parsed.UnmarshalJSON([]byte(`["not-an-uuid"]`)); err == nil {

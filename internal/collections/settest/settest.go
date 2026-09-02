@@ -245,13 +245,17 @@ func Run[E comparable, S collections.Set[E, S]](t *testing.T, makeSet func(elems
 				t.Errorf("String() = %q, want it to mention %v", got, elem)
 			}
 		}
-		// String is part of the abstract interface, so a nil set must
-		// render rather than panic, and must not claim to hold an element.
-		// The empty rendering is NOT required to be non-empty: types whose
-		// String is a joined list (email.AddressSet) legitimately render the
-		// empty set as "", while others use "<nil>", "set[]" or "[]".
-		if strings.Contains(nilSet.String(), fmt.Sprint(a)) {
-			t.Errorf("String() of a nil set = %q, want no elements in it", nilSet.String())
+		// String is part of the abstract interface, so a nil set must render
+		// rather than panic, must produce something rather than the empty
+		// string, and must not claim to hold an element. The concrete types
+		// spell it differently ("<nil>", "set[]", "[]") but all four print
+		// something, so a %s of a nil set is never mistaken for a blank field.
+		nilStr := nilSet.String()
+		if nilStr == "" {
+			t.Error("String() of a nil set = empty, want a distinguishable rendering")
+		}
+		if strings.Contains(nilStr, fmt.Sprint(a)) {
+			t.Errorf("String() of a nil set = %q, want no elements in it", nilStr)
 		}
 	})
 

@@ -453,6 +453,27 @@ func TestAddressSet_AddressListAndString(t *testing.T) {
 	}
 }
 
+// TestAddressSet_StringNilVsEmpty pins the three renderings apart. A nil and an
+// allocated empty set are both empty address lists, so before the nil case was
+// added they printed identically as "" and a %s in a log line could not tell a
+// missing field from an empty one. AddressList keeps returning the joined list
+// for both, since "" is what the empty list is.
+func TestAddressSet_StringNilVsEmpty(t *testing.T) {
+	if got, want := AddressSet(nil).String(), "<nil>"; got != want {
+		t.Errorf("String() of a nil set = %q, want %q", got, want)
+	}
+	if got, want := MakeAddressSet().String(), ""; got != want {
+		t.Errorf("String() of an allocated empty set = %q, want %q", got, want)
+	}
+	if got, want := MakeAddressSet("a@example.com").String(), "a@example.com"; got != want {
+		t.Errorf("String() = %q, want %q", got, want)
+	}
+	// AddressList is unchanged: it is the joined list for every set.
+	if got := AddressSet(nil).AddressList(); got != "" {
+		t.Errorf("AddressList() of a nil set = %q, want the empty list", got)
+	}
+}
+
 // TestAddressSet_DeprecatedMutators covers the pre-DeleteAll API that is kept
 // for compatibility. It must stay behaviour compatible with the new methods,
 // because callers mix both while migrating.

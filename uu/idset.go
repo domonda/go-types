@@ -407,12 +407,24 @@ func (s IDSet) MarshalJSON() ([]byte, error) {
 	return s.AsSortedSlice().MarshalJSON()
 }
 
-// UnmarshalJSON implements encoding/json.Unmarshaler
-// Id does assign a new IDSet to *set instead of modifying the existing map,
-// so it can be used with uninitialized IDSet variable.
+// UnmarshalJSON implements encoding/json.Unmarshaler.
+// It assigns a new IDSet for a JSON array, so it can be used with an
+// uninitialized IDSet variable, and empties an already allocated set
+// in place for JSON null. It never assigns nil: a nil map panics when
+// a key is set.
 func (s *IDSet) UnmarshalJSON(data []byte) error {
 	if bytes.Equal(data, []byte("null")) {
-		*s = nil
+		// JSON null empties the set rather than setting it to nil.
+		// A nil map panics when a key is set, so returning one here
+		// would crash the next Insert on a freshly unmarshalled set.
+		// [IDSlice.UnmarshalJSON] does return nil for null, because a
+		// nil slice can be appended to. An allocated empty set still
+		// marshals back to null.
+		if *s == nil {
+			*s = make(IDSet)
+		} else {
+			s.Clear()
+		}
 		return nil
 	}
 	var idSlice IDSlice

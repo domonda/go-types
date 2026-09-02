@@ -331,8 +331,16 @@ func (set AddressSet) AddressList() AddressList {
 }
 
 // String implements the fmt.Stringer interface returning
-// the sorted addresses joined as a comma separated list.
+// the sorted addresses joined as a comma separated list,
+// or "<nil>" for a nil set like [types.Set.String] does.
+//
+// An allocated empty set renders as the empty string, which is what the
+// empty address list is, so the nil rendering is what distinguishes the
+// two. Use [AddressSet.AddressList] to get the joined list unconditionally.
 func (set AddressSet) String() string {
+	if set == nil {
+		return "<nil>"
+	}
 	return string(set.AddressList())
 }
 
