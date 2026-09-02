@@ -83,6 +83,10 @@ func SplitArray(array string) ([]string, error) {
 				}
 			default:
 				elemStart = i
+				// A backslash escapes the following rune here as well as
+				// within the element, else {\,b} would be split at a
+				// comma that PostgreSQL reads as part of the value
+				escaped = r == '\\' && isSQL
 				state = inElem
 			}
 

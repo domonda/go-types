@@ -439,6 +439,37 @@ func TestSplitArrayValues(t *testing.T) {
 			wantValues: []string{`a`, `in{o@example.com`, `b`},
 		},
 		{
+			// A backslash escapes the following rune in an unquoted
+			// element wherever it sits, including its first position,
+			// which used to be read as ordinary text so that the
+			// escaped comma still split the element. Every case here
+			// was checked against PostgreSQL 16.
+			name:       "escaped comma opens an unquoted SQL element",
+			array:      `{\,b}`,
+			wantValues: []string{`,b`},
+		},
+		{
+			name:       "escaped backslash opens an unquoted SQL element",
+			array:      `{\\,b}`,
+			wantValues: []string{`\`, `b`},
+		},
+		{
+			name:       "escaped backslash as a whole unquoted element",
+			array:      `{x,\\,b}`,
+			wantValues: []string{`x`, `\`, `b`},
+		},
+		{
+			name:       "escaped comma within an unquoted SQL element",
+			array:      `{a\,b}`,
+			wantValues: []string{`a,b`},
+		},
+		{
+			// Leading space is skipped before the escape is seen
+			name:       "escaped comma after leading space",
+			array:      `{ \,b}`,
+			wantValues: []string{`,b`},
+		},
+		{
 			name:       "SQL quote escape",
 			array:      `{"\"a,b\"@example.com"}`,
 			wantValues: []string{`"a,b"@example.com`},
