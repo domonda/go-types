@@ -232,45 +232,42 @@ func TestSet_UnmarshalJSON(t *testing.T) {
 		}
 	})
 
-	t.Run("null empties the set instead of nilling it", func(t *testing.T) {
-		// A nil map panics when a key is set, so unmarshalling null must
-		// never leave a nil map behind: the next Insert would crash. This
-		// is the opposite of a slice, where nil is the right answer for
-		// null because a nil slice can be appended to.
-		//
-		// Asserted on the IsNull axis, not IsEmpty: IsEmpty is true for
-		// both a nil and an allocated empty set and would not catch a
-		// regression to nil.
-		for _, name := range []string{"nil receiver", "allocated receiver"} {
-			t.Run(name, func(t *testing.T) {
-				set := Set[int](nil)
-				if name == "allocated receiver" {
-					set = NewSet(1, 2)
+	t.Run("null is the nil set, [] is the empty set", func(t *testing.T) {
+		// Unmarshalling mirrors MarshalJSON exactly: null <-> nil,
+		// [] <-> allocated empty. A nil result panics when inserted
+		// into, like the nil map a SQL NULL scans to, so callers must
+		// nil-check before Insert.
+		for _, tt := range []struct {
+			json    string
+			wantNil bool
+		}{
+			{json: `null`, wantNil: true},
+			{json: `[]`, wantNil: false},
+		} {
+			t.Run(tt.json, func(t *testing.T) {
+				// Both a nil and an already allocated receiver must end
+				// up in the same state, so the result never depends on
+				// what the variable happened to hold before.
+				for _, set := range []Set[int]{nil, NewSet(1, 2)} {
+					if err := json.Unmarshal([]byte(tt.json), &set); err != nil {
+						t.Fatalf("Unmarshal returned %v", err)
+					}
+					if set.IsNull() != tt.wantNil {
+						t.Errorf("Unmarshal of %s: IsNull() = %t, want %t", tt.json, set.IsNull(), tt.wantNil)
+					}
+					if !set.IsEmpty() {
+						t.Errorf("Unmarshal of %s = %v, want empty", tt.json, set)
+					}
+					// Round trip: it must marshal back to what it came from.
+					got, err := json.Marshal(set)
+					if err != nil {
+						t.Fatalf("Marshal returned %v", err)
+					}
+					if string(got) != tt.json {
+						t.Errorf("Marshal(Unmarshal(%s)) = %s, want %s", tt.json, got, tt.json)
+					}
 				}
-				if err := json.Unmarshal([]byte(`null`), &set); err != nil {
-					t.Fatalf("Unmarshal of null returned %v", err)
-				}
-				if set.IsNull() {
-					t.Fatal("Unmarshal of null produced a nil set, want an allocated empty one")
-				}
-				if !set.IsEmpty() {
-					t.Errorf("Unmarshal of null = %v, want empty", set)
-				}
-				// The property the allocation exists for.
-				set.Insert(1)
 			})
-		}
-	})
-
-	t.Run("null empties an allocated set in place", func(t *testing.T) {
-		// Emptied, not replaced, so another holder of the same map sees it.
-		set := NewSet(1, 2)
-		alias := set
-		if err := json.Unmarshal([]byte(`null`), &set); err != nil {
-			t.Fatalf("Unmarshal of null returned %v", err)
-		}
-		if alias.Len() != 0 {
-			t.Errorf("Unmarshal of null replaced the map instead of clearing it: alias still holds %v", alias)
 		}
 	})
 

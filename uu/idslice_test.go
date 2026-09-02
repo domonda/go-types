@@ -492,32 +492,49 @@ func TestIDSlice_AsSet(t *testing.T) {
 	empty.Insert(testIDA)
 }
 
-// TestIDSlice_UnmarshalJSON_NullIsNil pins the slice half of the rule that
-// IDSet.UnmarshalJSON implements the other half of. JSON null yields a nil
-// IDSlice on purpose: a nil slice can be appended to, so nil costs the caller
-// nothing. A nil map cannot have a key set without panicking, which is why
-// IDSet.UnmarshalJSON allocates instead. Keeping both in one place makes the
-// asymmetry deliberate rather than an oversight.
-func TestIDSlice_UnmarshalJSON_NullIsNil(t *testing.T) {
-	s := IDSlice{testIDA}
-	if err := json.Unmarshal([]byte("null"), &s); err != nil {
-		t.Fatalf("Unmarshal of null returned %v", err)
-	}
-	if s != nil {
-		t.Errorf("Unmarshal of null = %v, want nil", s)
-	}
-	// The property that makes nil acceptable here.
-	s = append(s, testIDB)
-	if len(s) != 1 || s[0] != testIDB {
-		t.Errorf("append to the nil result = %v, want one element", s)
-	}
+// TestIDSlice_JSONNullVsEmpty pins the null-versus-empty rule that IDSlice and
+// IDSet now share: JSON null is the nil value and the empty array is the
+// allocated empty one, in both directions. The two used to differ (the map
+// refused to unmarshal to nil, to avoid a panic on the next Insert); they were
+// unified so that marshalling and unmarshalling are symmetric for both. The nil
+// map still panics when inserted into, exactly like the nil map a SQL NULL
+// scans to, so callers nil-check either way.
+func TestIDSlice_JSONNullVsEmpty(t *testing.T) {
+	t.Run("IDSlice", func(t *testing.T) {
+		var s IDSlice
+		if err := json.Unmarshal([]byte("null"), &s); err != nil {
+			t.Fatalf("Unmarshal of null returned %v", err)
+		}
+		if s != nil {
+			t.Errorf("Unmarshal of null = %v, want nil", s)
+		}
+		// A nil slice can be appended to, unlike a nil map.
+		s = append(s, testIDB)
+		if len(s) != 1 || s[0] != testIDB {
+			t.Errorf("append to the nil result = %v, want one element", s)
+		}
 
-	// The map counterpart must not have become nil for the same input.
-	set := MakeIDSet(testIDA)
-	if err := json.Unmarshal([]byte("null"), &set); err != nil {
-		t.Fatalf("Unmarshal of null into an IDSet returned %v", err)
-	}
-	if set == nil {
-		t.Error("IDSet.UnmarshalJSON(null) = nil, want an allocated empty set")
-	}
+		if err := json.Unmarshal([]byte("[]"), &s); err != nil {
+			t.Fatalf("Unmarshal of [] returned %v", err)
+		}
+		if s == nil || len(s) != 0 {
+			t.Errorf("Unmarshal of [] = %v, want an allocated empty slice", s)
+		}
+	})
+
+	t.Run("IDSet matches", func(t *testing.T) {
+		var set IDSet
+		if err := json.Unmarshal([]byte("null"), &set); err != nil {
+			t.Fatalf("Unmarshal of null returned %v", err)
+		}
+		if set != nil {
+			t.Errorf("IDSet.UnmarshalJSON(null) = %s, want nil", set)
+		}
+		if err := json.Unmarshal([]byte("[]"), &set); err != nil {
+			t.Fatalf("Unmarshal of [] returned %v", err)
+		}
+		if set == nil || set.Len() != 0 {
+			t.Errorf("IDSet.UnmarshalJSON([]) = %v, want an allocated empty set", set)
+		}
+	})
 }

@@ -127,23 +127,32 @@ No version has been tagged yet, so everything below is unreleased. See
   relies on the old meaning.
 - **Breaking:** `types.Set.ContainsAll` takes an `iter.Seq[T]` instead of
   variadic values. Use `set.ContainsAll(slices.Values(vals))`.
-- `types.Set.UnmarshalJSON` and `uu.IDSet.UnmarshalJSON` empty the set for
-  JSON `null` instead of assigning nil. A nil map panics when a key is set,
-  so the old behaviour crashed the next `Insert` on a freshly unmarshalled
-  set. An already allocated set is cleared in place rather than replaced.
-  `uu.IDSlice.UnmarshalJSON` still yields nil for `null`, because a nil slice
-  can be appended to; the asymmetry between the map and slice types is
-  deliberate. A consequence worth knowing: JSON `null` no longer round-trips
-  through a map-backed set (`null` unmarshals to an allocated empty set,
-  which marshals back as `[]`). SQL NULL does still round-trip, because
-  `Scan(nil)` is allowed to yield a nil map.
-- **Fixed:** `uu.IDSet.Value` wrote SQL `NULL` for an allocated empty set
+- `types.Set.UnmarshalJSON` had a dead branch: it assigned nil for JSON
+  `null` without returning, then fell through to `json.Unmarshal` and
+  re-allocated in the following nil check, so the assignment could never be
+  observed and `null` produced an allocated empty set. It now returns
+  directly, so `null` yields the nil set as its documentation implies.
+- **Fixed:** a set-map collapsed the nil and the empty set into the same
+  wire value. `uu.IDSet.Value` wrote SQL `NULL` for an allocated empty set
   instead of the empty array `{}`, so storing an empty set silently nulled
-  the column, and `uu.IDSet.MarshalJSON` wrote JSON `null` for it instead of
-  `[]`. Both went through `AsSortedSlice`, which is a nil `IDSlice` for an
-  empty set. `types.Set.MarshalJSON` had the same defect via `Sorted`. Only a
-  nil set is `NULL`/`null` now; an allocated empty set is `{}`/`[]`.
+  the column; `uu.IDSet.MarshalJSON` wrote JSON `null` for it instead of `[]`;
+  and `types.Set.MarshalJSON` did the same. All three delegated to
+  `AsSortedSlice`/`Sorted`, which return a nil slice for an empty set.
   `email.AddressSet.Value` already got this right.
+
+  All set-map types now keep three states distinct, in both directions and
+  in both codecs:
+
+  | Go value      | SQL              | JSON             |
+  |---------------|------------------|------------------|
+  | nil map       | `NULL`           | `null`           |
+  | empty map     | `{}`             | `[]`             |
+  | populated map | `{"a","b"}`      | `["a","b"]`      |
+
+  Marshalling and unmarshalling are symmetric, as are `Value` and `Scan`, so
+  every state round-trips. Note that `null`/`NULL` yields a nil map, which
+  panics when inserted into exactly like any nil Go map: nil-check before
+  `Insert`, or use the pointer-receiver `Add` where one exists.
 - `email.AddressSet.String` returns `"<nil>"` for a nil set instead of the
   empty string, matching `types.Set.String`. An allocated empty set still
   renders as the empty string, so the two are now distinguishable in a log

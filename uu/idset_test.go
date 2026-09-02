@@ -390,46 +390,34 @@ func TestIDSet_MarshalAndUnmarshalJSON(t *testing.T) {
 	if string(data) != "null" {
 		t.Errorf("Marshal of a nil set = %s, want null", data)
 	}
-	// JSON null empties the set instead of setting it to nil: a nil map
-	// panics when a key is set, so a caller that unmarshals and then
-	// inserts would crash. IDSlice does return nil for null, because a
-	// nil slice can be appended to.
-	if err := json.Unmarshal([]byte("null"), &parsed); err != nil {
-		t.Fatalf("Unmarshal of null returned %v", err)
-	}
-	if parsed == nil {
-		t.Error("Unmarshal of null = nil, want an allocated empty set")
-	}
-	if parsed.Len() != 0 {
-		t.Errorf("Unmarshal of null = %s, want empty", parsed)
-	}
-	// The property the allocation exists for.
-	parsed.Insert(testIDA)
-	// Only a nil set is null; an allocated empty set is the empty array.
-	// This is why JSON null does not round trip through a map-backed set:
-	// null unmarshals to an allocated empty set, which marshals to [].
-	// SQL does round trip, because Scan(nil) is allowed to yield a nil map.
-	if data, err := json.Marshal(make(IDSet)); err != nil || string(data) != "[]" {
-		t.Errorf("Marshal of an allocated empty set = %s, %v, want []", data, err)
-	}
-	// A nil receiver gets a freshly allocated map, not nil.
-	var fresh IDSet
-	if err := json.Unmarshal([]byte("null"), &fresh); err != nil {
-		t.Fatalf("Unmarshal of null into a nil IDSet returned %v", err)
-	}
-	if fresh == nil {
-		t.Error("Unmarshal of null into a nil IDSet = nil, want an allocated empty set")
-	}
-	fresh.Insert(testIDA)
-
-	// An already allocated set is emptied in place rather than replaced.
-	existing := MakeIDSet(testIDA, testIDB)
-	alias := existing
-	if err := json.Unmarshal([]byte("null"), &existing); err != nil {
-		t.Fatalf("Unmarshal of null returned %v", err)
-	}
-	if existing.Len() != 0 || alias.Len() != 0 {
-		t.Errorf("Unmarshal of null left %s (alias %s), want both empty", existing, alias)
+	// JSON null is the nil set and the empty array the allocated empty one,
+	// mirroring MarshalJSON exactly. A nil result panics when inserted into,
+	// like the nil map a SQL NULL scans to, so callers must nil-check first.
+	// IDSlice.UnmarshalJSON uses the same null <-> nil rule.
+	for _, tt := range []struct {
+		json    string
+		wantNil bool
+	}{
+		{json: "null", wantNil: true},
+		{json: "[]", wantNil: false},
+	} {
+		// Both a nil and an already allocated receiver must land in the same
+		// state, so the result never depends on what the variable held before.
+		for _, receiver := range []IDSet{nil, MakeIDSet(testIDA, testIDB)} {
+			if err := json.Unmarshal([]byte(tt.json), &receiver); err != nil {
+				t.Fatalf("Unmarshal of %s returned %v", tt.json, err)
+			}
+			if (receiver == nil) != tt.wantNil {
+				t.Errorf("Unmarshal of %s: nil = %t, want %t", tt.json, receiver == nil, tt.wantNil)
+			}
+			if receiver.Len() != 0 {
+				t.Errorf("Unmarshal of %s = %s, want empty", tt.json, receiver)
+			}
+			// Round trip: it must marshal back to what it came from.
+			if got, err := json.Marshal(receiver); err != nil || string(got) != tt.json {
+				t.Errorf("Marshal(Unmarshal(%s)) = %s, %v, want %s", tt.json, got, err, tt.json)
+			}
+		}
 	}
 
 	if err := parsed.UnmarshalJSON([]byte(`["not-an-uuid"]`)); err == nil {
@@ -560,14 +548,24 @@ func TestIDSet_NullVsEmpty(t *testing.T) {
 				t.Errorf("Marshal(%v) = %s, want %s", tt.set, got, tt.want)
 			}
 		}
-		// The empty array does round trip through JSON; null does not,
-		// because UnmarshalJSON refuses to produce a nil map.
-		var s IDSet
-		if err := json.Unmarshal([]byte("[]"), &s); err != nil {
-			t.Fatalf("Unmarshal returned %v", err)
-		}
-		if s == nil || s.Len() != 0 {
-			t.Errorf("Unmarshal of [] = %v, want an allocated empty set", s)
+		// Both round trip, because UnmarshalJSON mirrors MarshalJSON.
+		for _, tt := range []struct {
+			json    string
+			wantNil bool
+		}{
+			{json: "null", wantNil: true},
+			{json: "[]", wantNil: false},
+		} {
+			var s IDSet
+			if err := json.Unmarshal([]byte(tt.json), &s); err != nil {
+				t.Fatalf("Unmarshal of %s returned %v", tt.json, err)
+			}
+			if (s == nil) != tt.wantNil {
+				t.Errorf("Unmarshal of %s: nil = %t, want %t", tt.json, s == nil, tt.wantNil)
+			}
+			if s.Len() != 0 {
+				t.Errorf("Unmarshal of %s = %s, want empty", tt.json, s)
+			}
 		}
 	})
 }

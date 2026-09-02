@@ -421,23 +421,18 @@ func (s IDSet) MarshalJSON() ([]byte, error) {
 }
 
 // UnmarshalJSON implements encoding/json.Unmarshaler.
-// It assigns a new IDSet for a JSON array, so it can be used with an
-// uninitialized IDSet variable, and empties an already allocated set
-// in place for JSON null. It never assigns nil: a nil map panics when
-// a key is set.
+// It assigns a new IDSet rather than modifying the existing map, so it
+// can be used with an uninitialized IDSet variable. JSON null assigns a
+// nil set and the empty array an allocated empty one, mirroring
+// [IDSet.MarshalJSON]. A nil set panics when inserted into, exactly like
+// a nil Go map.
 func (s *IDSet) UnmarshalJSON(data []byte) error {
 	if bytes.Equal(data, []byte("null")) {
-		// JSON null empties the set rather than setting it to nil.
-		// A nil map panics when a key is set, so returning one here
-		// would crash the next Insert on a freshly unmarshalled set.
-		// [IDSlice.UnmarshalJSON] does return nil for null, because a
-		// nil slice can be appended to. An allocated empty set still
-		// marshals back to null.
-		if *s == nil {
-			*s = make(IDSet)
-		} else {
-			s.Clear()
-		}
+		// JSON null is the nil set, symmetric with MarshalJSON, and the
+		// empty array is the allocated empty set. Like the nil map that
+		// a SQL NULL scans to, the result must not be inserted into
+		// without a nil check.
+		*s = nil
 		return nil
 	}
 	var idSlice IDSlice
