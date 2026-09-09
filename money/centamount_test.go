@@ -128,13 +128,13 @@ func TestCentAmount_conversionBoundaries(t *testing.T) {
 	// from both sides or an off-by-one would go unnoticed.
 	const maxCents = CentAmount(maxDecimalAmountCoefficient)
 
-	assert.Equal(t, MakeDecimalAmount(int64(maxCents), 2), maxCents.DecimalAmount())
-	assert.Equal(t, MakeDecimalAmount(-int64(maxCents), 2), (-maxCents).DecimalAmount())
+	assert.Equal(t, NewDecimalAmount(int64(maxCents), 2), maxCents.DecimalAmount())
+	assert.Equal(t, NewDecimalAmount(-int64(maxCents), 2), (-maxCents).DecimalAmount())
 	assert.True(t, (maxCents + 1).DecimalAmount().IsInf(1))
 	assert.True(t, (-maxCents - 1).DecimalAmount().IsInf(-1))
 
 	// The matching DecimalAmount -> CentAmount edge must succeed
-	cents, err := MakeDecimalAmount(int64(maxCents), 2).CentAmount(RoundHalfAwayFromZero)
+	cents, err := NewDecimalAmount(int64(maxCents), 2).CentAmount(RoundHalfAwayFromZero)
 	require.NoError(t, err)
 	assert.Equal(t, maxCents, cents)
 }
@@ -257,8 +257,8 @@ func TestCentAmount_Amount(t *testing.T) {
 }
 
 func TestCentAmount_DecimalAmount(t *testing.T) {
-	assert.Equal(t, MakeDecimalAmount(12345, 2), CentAmount(12345).DecimalAmount())
-	assert.Equal(t, MakeDecimalAmount(-1, 2), CentAmount(-1).DecimalAmount())
+	assert.Equal(t, NewDecimalAmount(12345, 2), CentAmount(12345).DecimalAmount())
+	assert.Equal(t, NewDecimalAmount(-1, 2), CentAmount(-1).DecimalAmount())
 	assert.Equal(t, "123.45", CentAmount(12345).DecimalAmount().String())
 
 	// Beyond the DecimalAmount coefficient range the conversion
@@ -421,24 +421,24 @@ func TestCentAmount_SplitProportionally(t *testing.T) {
 }
 
 func TestCentAmount_pointerHelpers(t *testing.T) {
-	assert.Equal(t, CentAmount(123), *NewCentAmount(123))
+	assert.Equal(t, CentAmount(123), *new(CentAmount(123)))
 	assert.Equal(t, CentAmount(123), *CentAmount(123).Ptr())
 
 	assert.Equal(t, CentAmount(9), CentAmountFromPtr(nil, 9))
-	assert.Equal(t, CentAmount(123), CentAmountFromPtr(NewCentAmount(123), 9))
+	assert.Equal(t, CentAmount(123), CentAmountFromPtr(new(CentAmount(123)), 9))
 
 	var nilPtr *CentAmount
 	assert.Equal(t, "n/a", nilPtr.StringOr("n/a"))
-	assert.Equal(t, "1.23", NewCentAmount(123).StringOr("n/a"))
+	assert.Equal(t, "1.23", new(CentAmount(123)).StringOr("n/a"))
 	assert.Equal(t, int64(9), nilPtr.CentsOr(9))
-	assert.Equal(t, int64(123), NewCentAmount(123).CentsOr(9))
+	assert.Equal(t, int64(123), new(CentAmount(123)).CentsOr(9))
 	assert.Equal(t, CentAmount(9), nilPtr.CentAmountOr(9))
-	assert.Equal(t, CentAmount(123), NewCentAmount(123).CentAmountOr(9))
+	assert.Equal(t, CentAmount(123), new(CentAmount(123)).CentAmountOr(9))
 
 	assert.True(t, nilPtr.Equal(nil))
-	assert.False(t, nilPtr.Equal(NewCentAmount(0)))
-	assert.True(t, NewCentAmount(123).Equal(NewCentAmount(123)))
-	assert.False(t, NewCentAmount(123).Equal(NewCentAmount(124)))
+	assert.False(t, nilPtr.Equal(new(CentAmount(0))))
+	assert.True(t, new(CentAmount(123)).Equal(new(CentAmount(123))))
+	assert.False(t, new(CentAmount(123)).Equal(new(CentAmount(124))))
 }
 
 func TestCentAmount_ScanString(t *testing.T) {
@@ -468,7 +468,7 @@ func TestCentAmount_JSON(t *testing.T) {
 func TestNullableCentAmount(t *testing.T) {
 	assert.True(t, NullableCentAmountFromPtr(nil).IsNull())
 	assert.Equal(t, CentAmount(123), NullableCentAmountFrom(123).Get())
-	assert.Equal(t, CentAmount(123), NullableCentAmountFromPtr(NewCentAmount(123)).Get())
+	assert.Equal(t, CentAmount(123), NullableCentAmountFromPtr(new(CentAmount(123))).Get())
 }
 
 func TestCentAmount_SplitEqually_noSignFlip(t *testing.T) {

@@ -28,10 +28,15 @@ picking the semver baseline.
 
 ### Changed
 
-- `money.NewDecimalAmount(coefficient, scale)` is renamed to
-  `money.MakeDecimalAmount`, and `NewDecimalAmount` now returns a
-  `*DecimalAmount` so every `New*` constructor in the package returns a pointer
-  like `NewAmount`, `NewCentAmount` and `NewRate` do.
+- Removed `money.NewAmount`, `money.NewRate` and `money.NewDecimalAmount`'s
+  pointer form. They only allocated a pointer to a converted value, which
+  Go 1.26's `new(expr)` expresses inline: `new(money.Amount(1.23))` and
+  `new(money.NewDecimalAmount(1999, 2))`. `AmountFromPtr`/`RateFromPtr` and the
+  `Ptr` methods are unchanged.
+  `money.NewDecimalAmount(coefficient, scale)` keeps its name and still returns
+  a `DecimalAmount` value. The package convention is now uniform: a `New*`
+  function does real work and returns a value. The two `New*Parser` functions
+  keep returning pointers because their `Parse` methods have pointer receivers.
 - `money.Amount.GoString` now returns a Go source representation
   (`money.Amount(0.5)`) instead of a bare number, and uses enough fractional
   digits for the exact decimal expansion of every `float64`. The previous

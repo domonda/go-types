@@ -11,19 +11,19 @@ import (
 )
 
 func TestCurrencyDecimalAmount_String(t *testing.T) {
-	ca := CurrencyDecimalAmountEUR(MakeDecimalAmount(123456, 2))
+	ca := CurrencyDecimalAmountEUR(NewDecimalAmount(123456, 2))
 	assert.Equal(t, "EUR 1234.56", ca.String())
 
 	// The amount's own scale is preserved, unlike CurrencyAmount which forces 2.
-	assert.Equal(t, "EUR 1234.5678", CurrencyDecimalAmountEUR(MakeDecimalAmount(12345678, 4)).String())
-	assert.Equal(t, "JPY 1000", CurrencyDecimalAmountJPY(MakeDecimalAmount(1000, 0)).String())
+	assert.Equal(t, "EUR 1234.5678", CurrencyDecimalAmountEUR(NewDecimalAmount(12345678, 4)).String())
+	assert.Equal(t, "JPY 1000", CurrencyDecimalAmountJPY(NewDecimalAmount(1000, 0)).String())
 
 	// Empty currency omits the code.
-	assert.Equal(t, "1234.56", NewCurrencyDecimalAmount("", MakeDecimalAmount(123456, 2)).String())
+	assert.Equal(t, "1234.56", NewCurrencyDecimalAmount("", NewDecimalAmount(123456, 2)).String())
 }
 
 func TestCurrencyDecimalAmount_constructors(t *testing.T) {
-	amount := MakeDecimalAmount(100, 2)
+	amount := NewDecimalAmount(100, 2)
 	assert.Equal(t, Currency("USD"), CurrencyDecimalAmountUSD(amount).Currency)
 	assert.Equal(t, Currency("EUR"), CurrencyDecimalAmountEUR(amount).Currency)
 	assert.Equal(t, Currency("CHF"), CurrencyDecimalAmountCHF(amount).Currency)
@@ -33,7 +33,7 @@ func TestCurrencyDecimalAmount_constructors(t *testing.T) {
 }
 
 func TestCurrencyDecimalAmount_Format(t *testing.T) {
-	ca := CurrencyDecimalAmountEUR(MakeDecimalAmount(123456789, 2)) // 1234567.89
+	ca := CurrencyDecimalAmountEUR(NewDecimalAmount(123456789, 2)) // 1234567.89
 	assert.Equal(t, "EUR 1,234,567.89", ca.FormatSep(true, ',', '.'))
 	assert.Equal(t, "1.234.567,89 EUR", ca.FormatSep(false, '.', ','))
 }
@@ -71,13 +71,13 @@ func TestParseCurrencyDecimalAmount_acceptedDecimals(t *testing.T) {
 }
 
 func TestCurrencyDecimalAmount_GoString(t *testing.T) {
-	ca := CurrencyDecimalAmountEUR(MakeDecimalAmount(123456, 2))
-	assert.Equal(t, "{Currency: \"EUR\", Amount: money.MakeDecimalAmount(123456, 2)}", ca.GoString())
-	assert.Equal(t, "{Currency: \"EUR\", Amount: money.MakeDecimalAmount(123456, 2)}", fmt.Sprintf("%#v", ca))
+	ca := CurrencyDecimalAmountEUR(NewDecimalAmount(123456, 2))
+	assert.Equal(t, "{Currency: \"EUR\", Amount: money.NewDecimalAmount(123456, 2)}", ca.GoString())
+	assert.Equal(t, "{Currency: \"EUR\", Amount: money.NewDecimalAmount(123456, 2)}", fmt.Sprintf("%#v", ca))
 }
 
 func TestCurrencyDecimalAmount_SQL(t *testing.T) {
-	ca := CurrencyDecimalAmountEUR(MakeDecimalAmount(123456, 2))
+	ca := CurrencyDecimalAmountEUR(NewDecimalAmount(123456, 2))
 	v, err := ca.Value()
 	require.NoError(t, err)
 	assert.Equal(t, "EUR 1234.56", v)
@@ -100,7 +100,7 @@ func TestCurrencyDecimalAmount_SQL(t *testing.T) {
 }
 
 func TestCurrencyDecimalAmount_JSON(t *testing.T) {
-	ca := CurrencyDecimalAmountEUR(MakeDecimalAmount(99999, 2))
+	ca := CurrencyDecimalAmountEUR(NewDecimalAmount(99999, 2))
 	data, err := json.Marshal(ca)
 	require.NoError(t, err)
 	assert.JSONEq(t, `{"Currency":"EUR","Amount":999.99}`, string(data))
@@ -111,7 +111,7 @@ func TestCurrencyDecimalAmount_JSON(t *testing.T) {
 }
 
 func TestCurrencyDecimalAmount_CurrencyAmount(t *testing.T) {
-	ca := CurrencyDecimalAmountEUR(MakeDecimalAmount(123456, 2))
+	ca := CurrencyDecimalAmountEUR(NewDecimalAmount(123456, 2))
 	fa := ca.CurrencyAmount()
 	assert.Equal(t, Currency("EUR"), fa.Currency)
 	assert.InDelta(t, 1234.56, float64(fa.Amount), 1e-9)

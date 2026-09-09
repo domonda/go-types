@@ -30,7 +30,7 @@ func TestDecimalAmount_packing(t *testing.T) {
 		{minDecimalAmountCoefficient, 18},
 	}
 	for _, c := range cases {
-		a := MakeDecimalAmount(c.coeff, c.scale)
+		a := NewDecimalAmount(c.coeff, c.scale)
 		assert.Equal(t, c.coeff, a.Coefficient(), "coefficient for %d/%d", c.coeff, c.scale)
 		assert.Equal(t, c.scale, a.Scale(), "scale for %d/%d", c.coeff, c.scale)
 	}
@@ -44,11 +44,11 @@ func TestDecimalAmount_zeroValue(t *testing.T) {
 	assert.Equal(t, "0", a.String())
 }
 
-func TestMakeDecimalAmount_panics(t *testing.T) {
-	assert.Panics(t, func() { MakeDecimalAmount(1, -1) })
-	assert.Panics(t, func() { MakeDecimalAmount(1, MaxDecimalAmountScale+1) })
-	assert.Panics(t, func() { MakeDecimalAmount(maxDecimalAmountCoefficient+1, 0) })
-	assert.Panics(t, func() { MakeDecimalAmount(minDecimalAmountCoefficient-1, 0) })
+func TestNewDecimalAmount_panics(t *testing.T) {
+	assert.Panics(t, func() { NewDecimalAmount(1, -1) })
+	assert.Panics(t, func() { NewDecimalAmount(1, MaxDecimalAmountScale+1) })
+	assert.Panics(t, func() { NewDecimalAmount(maxDecimalAmountCoefficient+1, 0) })
+	assert.Panics(t, func() { NewDecimalAmount(minDecimalAmountCoefficient-1, 0) })
 }
 
 func TestParseDecimalAmount(t *testing.T) {
@@ -133,14 +133,14 @@ func TestParseDecimalAmount_nonFinite(t *testing.T) {
 
 func TestDecimalAmount_String(t *testing.T) {
 	cases := map[string]DecimalAmount{
-		"0":        MakeDecimalAmount(0, 0),
-		"0.00":     MakeDecimalAmount(0, 2),
-		"1234.56":  MakeDecimalAmount(123456, 2),
-		"-1234.56": MakeDecimalAmount(-123456, 2),
-		"0.005":    MakeDecimalAmount(5, 3),
-		"-0.005":   MakeDecimalAmount(-5, 3),
-		"1.50":     MakeDecimalAmount(150, 2),
-		"1000":     MakeDecimalAmount(1000, 0),
+		"0":        NewDecimalAmount(0, 0),
+		"0.00":     NewDecimalAmount(0, 2),
+		"1234.56":  NewDecimalAmount(123456, 2),
+		"-1234.56": NewDecimalAmount(-123456, 2),
+		"0.005":    NewDecimalAmount(5, 3),
+		"-0.005":   NewDecimalAmount(-5, 3),
+		"1.50":     NewDecimalAmount(150, 2),
+		"1000":     NewDecimalAmount(1000, 0),
 	}
 	for want, a := range cases {
 		assert.Equal(t, want, a.String(), "String of coeff=%d scale=%d", a.Coefficient(), a.Scale())
@@ -148,8 +148,8 @@ func TestDecimalAmount_String(t *testing.T) {
 }
 
 func TestDecimalAmount_GoString(t *testing.T) {
-	assert.Equal(t, "money.MakeDecimalAmount(123456, 2)", MakeDecimalAmount(123456, 2).GoString())
-	assert.Equal(t, "money.MakeDecimalAmount(123456, 2)", fmt.Sprintf("%#v", MakeDecimalAmount(123456, 2)))
+	assert.Equal(t, "money.NewDecimalAmount(123456, 2)", NewDecimalAmount(123456, 2).GoString())
+	assert.Equal(t, "money.NewDecimalAmount(123456, 2)", fmt.Sprintf("%#v", NewDecimalAmount(123456, 2)))
 	// Non-finite sentinels produce constructor-call source (round-trips as Go).
 	assert.Equal(t, "money.DecimalAmountNaN()", DecimalAmountNaN().GoString())
 	assert.Equal(t, "money.DecimalAmountInf(-1)", DecimalAmountInf(-1).GoString())
@@ -175,7 +175,7 @@ func TestRoundingMode_String(t *testing.T) {
 }
 
 func TestDecimalAmount_FormatSep(t *testing.T) {
-	a := MakeDecimalAmount(123456789, 2) // 1234567.89
+	a := NewDecimalAmount(123456789, 2) // 1234567.89
 	assert.Equal(t, "1234567.89", a.FormatSep(0, '.'))
 	assert.Equal(t, "1,234,567.89", a.FormatSep(',', '.'))
 	assert.Equal(t, "1.234.567,89", a.FormatSep('.', ','))
@@ -185,7 +185,7 @@ func TestDecimalAmount_FormatSep(t *testing.T) {
 }
 
 func TestDecimalAmount_Format(t *testing.T) {
-	a := MakeDecimalAmount(123456, 2) // 1234.56
+	a := NewDecimalAmount(123456, 2) // 1234.56
 	cases := map[string]string{
 		"%s":     "1234.56",
 		"%v":     "1234.56",
@@ -211,31 +211,31 @@ func TestDecimalAmount_Format(t *testing.T) {
 	// Unknown verb reports the type.
 	assert.Equal(t, "%!x(money.DecimalAmount=1234.56)", fmt.Sprintf("%x", a))
 	// Formatting must not panic even for the largest value at high precision.
-	big := MakeDecimalAmount(maxDecimalAmountCoefficient, 0)
+	big := NewDecimalAmount(maxDecimalAmountCoefficient, 0)
 	assert.NotPanics(t, func() { _ = fmt.Sprintf("%.18f", big) })
 }
 
 func TestDecimalAmount_CmpEqual(t *testing.T) {
 	// Same value, different scale.
-	a := MakeDecimalAmount(150, 2) // 1.50
-	b := MakeDecimalAmount(15, 1)  // 1.5
+	a := NewDecimalAmount(150, 2) // 1.50
+	b := NewDecimalAmount(15, 1)  // 1.5
 	assert.NotEqual(t, a, b, "different packed representation")
 	assert.True(t, a.Equal(b), "equal value")
 	assert.Equal(t, 0, a.Cmp(b))
 
-	assert.Equal(t, -1, MakeDecimalAmount(149, 2).Cmp(b))
-	assert.Equal(t, +1, MakeDecimalAmount(151, 2).Cmp(b))
-	assert.Equal(t, -1, MakeDecimalAmount(-1, 0).Cmp(MakeDecimalAmount(1, 0)))
+	assert.Equal(t, -1, NewDecimalAmount(149, 2).Cmp(b))
+	assert.Equal(t, +1, NewDecimalAmount(151, 2).Cmp(b))
+	assert.Equal(t, -1, NewDecimalAmount(-1, 0).Cmp(NewDecimalAmount(1, 0)))
 	// Equal scale, differing coefficients exercise both fast-path branches.
-	assert.Equal(t, +1, MakeDecimalAmount(200, 2).Cmp(MakeDecimalAmount(100, 2)))
-	assert.Equal(t, -1, MakeDecimalAmount(100, 2).Cmp(MakeDecimalAmount(200, 2)))
+	assert.Equal(t, +1, NewDecimalAmount(200, 2).Cmp(NewDecimalAmount(100, 2)))
+	assert.Equal(t, -1, NewDecimalAmount(100, 2).Cmp(NewDecimalAmount(200, 2)))
 	// Large cross-scale comparison must not overflow.
-	assert.Equal(t, +1, MakeDecimalAmount(maxDecimalAmountCoefficient, 0).Cmp(MakeDecimalAmount(1, 18)))
+	assert.Equal(t, +1, NewDecimalAmount(maxDecimalAmountCoefficient, 0).Cmp(NewDecimalAmount(1, 18)))
 }
 
 func TestDecimalAmount_AddSub(t *testing.T) {
-	a := MakeDecimalAmount(123, 2)  // 1.23
-	b := MakeDecimalAmount(4567, 4) // 0.4567
+	a := NewDecimalAmount(123, 2)  // 1.23
+	b := NewDecimalAmount(4567, 4) // 0.4567
 	sum := a.Add(b)
 	assert.Equal(t, "1.6867", sum.String())
 	assert.Equal(t, 4, sum.Scale())
@@ -244,12 +244,12 @@ func TestDecimalAmount_AddSub(t *testing.T) {
 	assert.Equal(t, "0.7733", diff.String())
 
 	// Adding opposite values yields zero at the larger scale.
-	z := MakeDecimalAmount(5, 2).Add(MakeDecimalAmount(-5, 2))
+	z := NewDecimalAmount(5, 2).Add(NewDecimalAmount(-5, 2))
 	assert.True(t, z.IsZero())
 
 	// Overflow of the integer part yields +Inf (or -Inf for negative operands).
-	assert.True(t, MakeDecimalAmount(maxDecimalAmountCoefficient, 0).Add(MakeDecimalAmount(maxDecimalAmountCoefficient, 0)).IsInf(1))
-	assert.True(t, MakeDecimalAmount(minDecimalAmountCoefficient, 0).Add(MakeDecimalAmount(minDecimalAmountCoefficient, 0)).IsInf(-1))
+	assert.True(t, NewDecimalAmount(maxDecimalAmountCoefficient, 0).Add(NewDecimalAmount(maxDecimalAmountCoefficient, 0)).IsInf(1))
+	assert.True(t, NewDecimalAmount(minDecimalAmountCoefficient, 0).Add(NewDecimalAmount(minDecimalAmountCoefficient, 0)).IsInf(-1))
 }
 
 // TestDecimalAmount_AddScaleMismatch guards the regression where aligning a
@@ -257,17 +257,17 @@ func TestDecimalAmount_AddSub(t *testing.T) {
 func TestDecimalAmount_AddScaleMismatch(t *testing.T) {
 	// x + 0 is identity even when the zero carries a large scale (used to
 	// return +Inf because 2.5 is not representable at scale 18).
-	x := MakeDecimalAmount(25, 1) // 2.5
-	sum := x.Add(MakeDecimalAmount(0, 18))
+	x := NewDecimalAmount(25, 1) // 2.5
+	sum := x.Add(NewDecimalAmount(0, 18))
 	assert.True(t, sum.IsFinite(), "x + 0 must stay finite")
 	assert.True(t, x.Equal(sum), "x + 0 must equal x, got %s", sum)
 
 	// Near-cancellation of large opposite-sign operands yields the small sum.
-	got := MakeDecimalAmount(28823037615171175, 0).Add(MakeDecimalAmount(-288230376151711743, 1))
+	got := NewDecimalAmount(28823037615171175, 0).Add(NewDecimalAmount(-288230376151711743, 1))
 	assert.Equal(t, "0.7", got.String())
 
 	// Sub inherits the fix.
-	assert.True(t, x.Equal(x.Sub(MakeDecimalAmount(0, 18))))
+	assert.True(t, x.Equal(x.Sub(NewDecimalAmount(0, 18))))
 }
 
 // TestDecimalAmount_AddOracle fuzzes Add against a big.Rat reference, including
@@ -275,7 +275,7 @@ func TestDecimalAmount_AddScaleMismatch(t *testing.T) {
 func TestDecimalAmount_AddOracle(t *testing.T) {
 	rng := rand.New(rand.NewSource(2))
 	randDec := func() DecimalAmount {
-		return MakeDecimalAmount(rng.Int63n(2*maxDecimalAmountCoefficient+1)-maxDecimalAmountCoefficient, rng.Intn(MaxDecimalAmountScale+1))
+		return NewDecimalAmount(rng.Int63n(2*maxDecimalAmountCoefficient+1)-maxDecimalAmountCoefficient, rng.Intn(MaxDecimalAmountScale+1))
 	}
 	toRat := func(d DecimalAmount) *big.Rat {
 		r := new(big.Rat).SetInt64(d.Coefficient())
@@ -316,7 +316,7 @@ func TestDecimalAmount_MulDivOracle(t *testing.T) {
 		if rng.Intn(2) == 0 {
 			coeff = rng.Int63n(20001) - 10000
 		}
-		return MakeDecimalAmount(coeff, rng.Intn(MaxDecimalAmountScale+1))
+		return NewDecimalAmount(coeff, rng.Intn(MaxDecimalAmountScale+1))
 	}
 	toRat := func(d DecimalAmount) *big.Rat {
 		r := new(big.Rat).SetInt64(d.Coefficient())
@@ -382,23 +382,23 @@ func TestDecimalAmount_ScanStringValidate(t *testing.T) {
 }
 
 func TestDecimalAmount_MulInt(t *testing.T) {
-	a := MakeDecimalAmount(199, 2) // 1.99
+	a := NewDecimalAmount(199, 2) // 1.99
 	assert.Equal(t, "5.97", a.MulInt(3).String())
 	assert.Equal(t, "-3.98", a.MulInt(-2).String())
 	assert.Equal(t, "0.00", a.MulInt(0).String())
-	assert.True(t, MakeDecimalAmount(maxDecimalAmountCoefficient, 0).MulInt(2).IsInf(1))
+	assert.True(t, NewDecimalAmount(maxDecimalAmountCoefficient, 0).MulInt(2).IsInf(1))
 
 	// MulInt64 takes the wider int64 and MulInt delegates to it.
 	assert.Equal(t, "5.97", a.MulInt64(3).String())
 	assert.Equal(t, a.MulInt(3), a.MulInt64(3))
-	assert.True(t, MakeDecimalAmount(maxDecimalAmountCoefficient, 0).MulInt64(2).IsInf(1))
-	assert.True(t, MakeDecimalAmount(minDecimalAmountCoefficient, 0).MulInt(2).IsInf(-1))
+	assert.True(t, NewDecimalAmount(maxDecimalAmountCoefficient, 0).MulInt64(2).IsInf(1))
+	assert.True(t, NewDecimalAmount(minDecimalAmountCoefficient, 0).MulInt(2).IsInf(-1))
 
 	// A coefficient overflow with exact trailing zeros reduces the scale
 	// instead of overflowing to Inf.
 	assert.Equal(t,
-		MakeDecimalAmount(maxDecimalAmountCoefficient, 0),
-		MakeDecimalAmount(maxDecimalAmountCoefficient, 2).MulInt(100))
+		NewDecimalAmount(maxDecimalAmountCoefficient, 0),
+		NewDecimalAmount(maxDecimalAmountCoefficient, 2).MulInt(100))
 }
 
 func TestDecimalAmount_Mul(t *testing.T) {
@@ -408,13 +408,13 @@ func TestDecimalAmount_Mul(t *testing.T) {
 	}{
 		// The exact product keeps the full precision: the result scale is the
 		// sum of the operand scales.
-		{MakeDecimalAmount(150, 2), MakeDecimalAmount(150, 2), "2.2500"},     // 1.50 * 1.50
-		{MakeDecimalAmount(10, 1), MakeDecimalAmount(10, 1), "1.00"},         // 1.0 * 1.0
-		{MakeDecimalAmount(3, 0), MakeDecimalAmount(4, 0), "12"},             // 3 * 4
-		{MakeDecimalAmount(-2, 0), MakeDecimalAmount(150, 2), "-3.00"},       // -2 * 1.50
-		{MakeDecimalAmount(100, 2), MakeDecimalAmount(119, 2), "1.1900"},     // 1.00 * 1.19
-		{MakeDecimalAmount(11, 1), MakeDecimalAmount(11, 1), "1.21"},         // 1.1 * 1.1 stays exact
-		{MakeDecimalAmount(105, 4), MakeDecimalAmount(105, 4), "0.00011025"}, // 0.0105²
+		{NewDecimalAmount(150, 2), NewDecimalAmount(150, 2), "2.2500"},     // 1.50 * 1.50
+		{NewDecimalAmount(10, 1), NewDecimalAmount(10, 1), "1.00"},         // 1.0 * 1.0
+		{NewDecimalAmount(3, 0), NewDecimalAmount(4, 0), "12"},             // 3 * 4
+		{NewDecimalAmount(-2, 0), NewDecimalAmount(150, 2), "-3.00"},       // -2 * 1.50
+		{NewDecimalAmount(100, 2), NewDecimalAmount(119, 2), "1.1900"},     // 1.00 * 1.19
+		{NewDecimalAmount(11, 1), NewDecimalAmount(11, 1), "1.21"},         // 1.1 * 1.1 stays exact
+		{NewDecimalAmount(105, 4), NewDecimalAmount(105, 4), "0.00011025"}, // 0.0105²
 	}
 	for _, c := range cases {
 		got := c.a.Mul(c.b, RoundHalfAwayFromZero)
@@ -426,20 +426,20 @@ func TestDecimalAmount_Mul(t *testing.T) {
 	// coefficient at scale 18 exceeds the coefficient range: the scale is
 	// reduced by stripping exact trailing zeros, losing no data.
 	// 5.000000000 * 5.000000000 = 25 with 16 remaining zero decimals.
-	x := MakeDecimalAmount(5_000_000_000, 9)
+	x := NewDecimalAmount(5_000_000_000, 9)
 	assert.Equal(t, "25.0000000000000000", x.Mul(x, RoundHalfAwayFromZero).String())
 	assert.Equal(t, 16, x.Mul(x, RoundHalfAwayFromZero).Scale())
 
 	// A product needing more than the representable precision is rounded with
 	// the given mode at the largest scale that fits (this is the only case
 	// where Mul rounds): 0.111111111111111111 * 0.5 has 19 decimal places.
-	y := MakeDecimalAmount(111_111_111_111_111_111, 18)
-	assert.Equal(t, "0.055555555555555556", y.Mul(MakeDecimalAmount(5, 1), RoundHalfAwayFromZero).String())
-	assert.Equal(t, "0.055555555555555555", y.Mul(MakeDecimalAmount(5, 1), RoundDown).String())
+	y := NewDecimalAmount(111_111_111_111_111_111, 18)
+	assert.Equal(t, "0.055555555555555556", y.Mul(NewDecimalAmount(5, 1), RoundHalfAwayFromZero).String())
+	assert.Equal(t, "0.055555555555555555", y.Mul(NewDecimalAmount(5, 1), RoundDown).String())
 
 	// Overflow yields ±Inf by the product sign.
-	assert.True(t, MakeDecimalAmount(maxDecimalAmountCoefficient, 0).Mul(MakeDecimalAmount(maxDecimalAmountCoefficient, 0), RoundHalfAwayFromZero).IsInf(1))
-	assert.True(t, MakeDecimalAmount(minDecimalAmountCoefficient, 0).Mul(MakeDecimalAmount(maxDecimalAmountCoefficient, 0), RoundHalfAwayFromZero).IsInf(-1))
+	assert.True(t, NewDecimalAmount(maxDecimalAmountCoefficient, 0).Mul(NewDecimalAmount(maxDecimalAmountCoefficient, 0), RoundHalfAwayFromZero).IsInf(1))
+	assert.True(t, NewDecimalAmount(minDecimalAmountCoefficient, 0).Mul(NewDecimalAmount(maxDecimalAmountCoefficient, 0), RoundHalfAwayFromZero).IsInf(-1))
 }
 
 func TestDecimalAmount_Div(t *testing.T) {
@@ -449,16 +449,16 @@ func TestDecimalAmount_Div(t *testing.T) {
 	}{
 		// Terminating quotients are exact, with trailing zeros stripped down
 		// to (at least) the preferred scale a.Scale()-b.Scale().
-		{MakeDecimalAmount(1000, 2), MakeDecimalAmount(400, 2), "2.5"},           // 10.00 / 4.00
-		{MakeDecimalAmount(1000, 2), MakeDecimalAmount(500, 2), "2"},             // 10.00 / 5.00
-		{MakeDecimalAmount(1000, 2), MakeDecimalAmount(5, 0), "2.00"},            // 10.00 / 5 keeps the preferred 2 decimals
-		{MakeDecimalAmount(1000, 3), MakeDecimalAmount(8, 0), "0.125"},           // 1.000 / 8
-		{MakeDecimalAmount(100, 2), MakeDecimalAmount(8, 0), "0.125"},            // 1.00 / 8 extends beyond the preferred scale
-		{MakeDecimalAmount(1, 0), MakeDecimalAmount(3, 5), "33333.333333333333"}, // 1 / 0.00003
+		{NewDecimalAmount(1000, 2), NewDecimalAmount(400, 2), "2.5"},           // 10.00 / 4.00
+		{NewDecimalAmount(1000, 2), NewDecimalAmount(500, 2), "2"},             // 10.00 / 5.00
+		{NewDecimalAmount(1000, 2), NewDecimalAmount(5, 0), "2.00"},            // 10.00 / 5 keeps the preferred 2 decimals
+		{NewDecimalAmount(1000, 3), NewDecimalAmount(8, 0), "0.125"},           // 1.000 / 8
+		{NewDecimalAmount(100, 2), NewDecimalAmount(8, 0), "0.125"},            // 1.00 / 8 extends beyond the preferred scale
+		{NewDecimalAmount(1, 0), NewDecimalAmount(3, 5), "33333.333333333333"}, // 1 / 0.00003
 		// Non-terminating quotients are rounded at the largest representable scale.
-		{MakeDecimalAmount(1000, 2), MakeDecimalAmount(3, 0), "3.3333333333333333"},   // 10.00 / 3
-		{MakeDecimalAmount(10, 0), MakeDecimalAmount(3, 0), "3.3333333333333333"},     // 10 / 3
-		{MakeDecimalAmount(-1000, 2), MakeDecimalAmount(3, 0), "-3.3333333333333333"}, // -10.00 / 3
+		{NewDecimalAmount(1000, 2), NewDecimalAmount(3, 0), "3.3333333333333333"},   // 10.00 / 3
+		{NewDecimalAmount(10, 0), NewDecimalAmount(3, 0), "3.3333333333333333"},     // 10 / 3
+		{NewDecimalAmount(-1000, 2), NewDecimalAmount(3, 0), "-3.3333333333333333"}, // -10.00 / 3
 	}
 	for _, c := range cases {
 		got := c.a.Div(c.b, RoundHalfAwayFromZero)
@@ -466,13 +466,13 @@ func TestDecimalAmount_Div(t *testing.T) {
 	}
 
 	// Division by zero yields ±Inf, and 0/0 yields NaN.
-	assert.True(t, MakeDecimalAmount(1, 0).Div(MakeDecimalAmount(0, 2), RoundHalfAwayFromZero).IsInf(1))
-	assert.True(t, MakeDecimalAmount(-1, 0).Div(MakeDecimalAmount(0, 2), RoundHalfAwayFromZero).IsInf(-1))
-	assert.True(t, MakeDecimalAmount(0, 0).Div(MakeDecimalAmount(0, 2), RoundHalfAwayFromZero).IsNaN())
+	assert.True(t, NewDecimalAmount(1, 0).Div(NewDecimalAmount(0, 2), RoundHalfAwayFromZero).IsInf(1))
+	assert.True(t, NewDecimalAmount(-1, 0).Div(NewDecimalAmount(0, 2), RoundHalfAwayFromZero).IsInf(-1))
+	assert.True(t, NewDecimalAmount(0, 0).Div(NewDecimalAmount(0, 2), RoundHalfAwayFromZero).IsNaN())
 
 	// A quotient whose integer part overflows the coefficient range yields ±Inf.
-	huge := MakeDecimalAmount(maxDecimalAmountCoefficient, 0)
-	tiny := MakeDecimalAmount(1, 18)
+	huge := NewDecimalAmount(maxDecimalAmountCoefficient, 0)
+	tiny := NewDecimalAmount(1, 18)
 	assert.True(t, huge.Div(tiny, RoundHalfAwayFromZero).IsInf(1))
 	assert.True(t, huge.Neg().Div(tiny, RoundHalfAwayFromZero).IsInf(-1))
 }
@@ -481,15 +481,15 @@ func TestDecimalAmount_MulDivRoundingModes(t *testing.T) {
 	// Mul and Div round only when the exact result needs more precision than
 	// representable. 1/3 fills all 17 significant digits, so the mode decides
 	// the last digit.
-	assert.Equal(t, "0.33333333333333333", MakeDecimalAmount(100, 2).Div(MakeDecimalAmount(3, 0), RoundDown).String())
-	assert.Equal(t, "0.33333333333333334", MakeDecimalAmount(100, 2).Div(MakeDecimalAmount(3, 0), RoundUp).String())
+	assert.Equal(t, "0.33333333333333333", NewDecimalAmount(100, 2).Div(NewDecimalAmount(3, 0), RoundDown).String())
+	assert.Equal(t, "0.33333333333333334", NewDecimalAmount(100, 2).Div(NewDecimalAmount(3, 0), RoundUp).String())
 
 	// 0.111111111111111111 / 2 = 0.0555555555555555555 needs 19 decimal
 	// places, one more than representable, so the dropped digit 5 is an exact
 	// tie. The truncated quotient ...555 is odd, so RoundHalfToEven rounds up.
 	tie := func(sign int64, mode RoundingMode) string {
-		return MakeDecimalAmount(sign*111_111_111_111_111_111, 18).
-			Div(MakeDecimalAmount(2, 0), mode).String()
+		return NewDecimalAmount(sign*111_111_111_111_111_111, 18).
+			Div(NewDecimalAmount(2, 0), mode).String()
 	}
 	const down, up = "0.055555555555555555", "0.055555555555555556"
 	assert.Equal(t, up, tie(1, RoundHalfAwayFromZero))
@@ -517,36 +517,36 @@ func TestDecimalAmount_Rounding(t *testing.T) {
 		decimals int
 		want     string
 	}{
-		{MakeDecimalAmount(12345, 3), 2, "12.35"}, // 12.345 -> 12.35 (half away)
-		{MakeDecimalAmount(12344, 3), 2, "12.34"},
-		{MakeDecimalAmount(-12345, 3), 2, "-12.35"},
-		{MakeDecimalAmount(125, 2), 1, "1.3"},    // 1.25 -> 1.3 (half away from zero)
-		{MakeDecimalAmount(150, 2), 4, "1.5000"}, // padding
-		{MakeDecimalAmount(19, 1), 0, "2"},       // 1.9 -> 2
-		{MakeDecimalAmount(-15, 1), 0, "-2"},     // -1.5 -> -2 (half away)
+		{NewDecimalAmount(12345, 3), 2, "12.35"}, // 12.345 -> 12.35 (half away)
+		{NewDecimalAmount(12344, 3), 2, "12.34"},
+		{NewDecimalAmount(-12345, 3), 2, "-12.35"},
+		{NewDecimalAmount(125, 2), 1, "1.3"},    // 1.25 -> 1.3 (half away from zero)
+		{NewDecimalAmount(150, 2), 4, "1.5000"}, // padding
+		{NewDecimalAmount(19, 1), 0, "2"},       // 1.9 -> 2
+		{NewDecimalAmount(-15, 1), 0, "-2"},     // -1.5 -> -2 (half away)
 	}
 	for _, c := range cases {
 		got := c.in.RoundToDecimals(c.decimals, RoundHalfAwayFromZero).String()
 		assert.Equal(t, c.want, got, "%s round to %d", c.in, c.decimals)
 	}
-	assert.Equal(t, "1.25", MakeDecimalAmount(12500, 4).RoundToCents(RoundHalfAwayFromZero).String())
-	assert.Equal(t, "2", MakeDecimalAmount(150, 2).RoundToInt(RoundHalfAwayFromZero).String())
+	assert.Equal(t, "1.25", NewDecimalAmount(12500, 4).RoundToCents(RoundHalfAwayFromZero).String())
+	assert.Equal(t, "2", NewDecimalAmount(150, 2).RoundToInt(RoundHalfAwayFromZero).String())
 
 	// RoundToDecimals honors the rounding mode.
-	assert.Equal(t, "12.34", MakeDecimalAmount(12345, 3).RoundToDecimals(2, RoundHalfToEven).String()) // 12.345 -> 12.34 (even)
-	assert.Equal(t, "12.35", MakeDecimalAmount(12350, 3).RoundToDecimals(2, RoundUp).String())
-	assert.Equal(t, "12.34", MakeDecimalAmount(12345, 3).RoundToDecimals(2, RoundDown).String())
-	assert.Equal(t, "-12.35", MakeDecimalAmount(-12341, 3).RoundToDecimals(2, RoundFloor).String())
+	assert.Equal(t, "12.34", NewDecimalAmount(12345, 3).RoundToDecimals(2, RoundHalfToEven).String()) // 12.345 -> 12.34 (even)
+	assert.Equal(t, "12.35", NewDecimalAmount(12350, 3).RoundToDecimals(2, RoundUp).String())
+	assert.Equal(t, "12.34", NewDecimalAmount(12345, 3).RoundToDecimals(2, RoundDown).String())
+	assert.Equal(t, "-12.35", NewDecimalAmount(-12341, 3).RoundToDecimals(2, RoundFloor).String())
 }
 
 func TestDecimalAmount_FloatAndAmount(t *testing.T) {
-	a := MakeDecimalAmount(123456, 2)
+	a := NewDecimalAmount(123456, 2)
 	assert.InDelta(t, 1234.56, a.Float(), 1e-9)
 	assert.InDelta(t, 1234.56, float64(a.Amount()), 1e-9)
 }
 
 func TestDecimalAmount_JSON(t *testing.T) {
-	a := MakeDecimalAmount(123456, 2)
+	a := NewDecimalAmount(123456, 2)
 	data, err := json.Marshal(a)
 	require.NoError(t, err)
 	assert.Equal(t, "1234.56", string(data)) // unquoted number
@@ -571,11 +571,11 @@ func TestDecimalAmount_JSON(t *testing.T) {
 	assert.Equal(t, "1.23", got.String())
 
 	// null and "" decode to zero.
-	got = MakeDecimalAmount(1, 0)
+	got = NewDecimalAmount(1, 0)
 	require.NoError(t, json.Unmarshal([]byte("null"), &got))
 	assert.True(t, got.IsZero())
 
-	got = MakeDecimalAmount(1, 0)
+	got = NewDecimalAmount(1, 0)
 	require.NoError(t, json.Unmarshal([]byte(`""`), &got))
 	assert.True(t, got.IsZero())
 
@@ -583,13 +583,13 @@ func TestDecimalAmount_JSON(t *testing.T) {
 	type wrap struct {
 		Price DecimalAmount `json:"price"`
 	}
-	b, err := json.Marshal(wrap{Price: MakeDecimalAmount(99999, 2)})
+	b, err := json.Marshal(wrap{Price: NewDecimalAmount(99999, 2)})
 	require.NoError(t, err)
 	assert.JSONEq(t, `{"price":999.99}`, string(b))
 }
 
 func TestDecimalAmount_Text(t *testing.T) {
-	a := MakeDecimalAmount(-5, 3)
+	a := NewDecimalAmount(-5, 3)
 	text, err := a.MarshalText()
 	require.NoError(t, err)
 	assert.Equal(t, "-0.005", string(text))
@@ -598,18 +598,18 @@ func TestDecimalAmount_Text(t *testing.T) {
 	require.NoError(t, got.UnmarshalText(text))
 	assert.Equal(t, a, got)
 
-	got = MakeDecimalAmount(1, 0)
+	got = NewDecimalAmount(1, 0)
 	require.NoError(t, got.UnmarshalText(nil))
 	assert.True(t, got.IsZero())
 }
 
 func TestDecimalAmount_Binary(t *testing.T) {
 	for _, a := range []DecimalAmount{
-		MakeDecimalAmount(0, 0),
-		MakeDecimalAmount(123456, 2),
-		MakeDecimalAmount(-123456, 2),
-		MakeDecimalAmount(maxDecimalAmountCoefficient, 18),
-		MakeDecimalAmount(minDecimalAmountCoefficient, 18),
+		NewDecimalAmount(0, 0),
+		NewDecimalAmount(123456, 2),
+		NewDecimalAmount(-123456, 2),
+		NewDecimalAmount(maxDecimalAmountCoefficient, 18),
+		NewDecimalAmount(minDecimalAmountCoefficient, 18),
 	} {
 		data, err := a.MarshalBinary()
 		require.NoError(t, err)
@@ -633,7 +633,7 @@ func TestDecimalAmount_Binary(t *testing.T) {
 }
 
 func TestDecimalAmount_SQL(t *testing.T) {
-	a := MakeDecimalAmount(123456, 2)
+	a := NewDecimalAmount(123456, 2)
 	v, err := a.Value()
 	require.NoError(t, err)
 	assert.Equal(t, "1234.56", v)
@@ -663,7 +663,7 @@ func TestDecimalAmount_SQL(t *testing.T) {
 
 func TestNullableDecimalAmount(t *testing.T) {
 	// Non-null round-trips through JSON as a number.
-	n := MakeDecimalAmount(123456, 2).Nullable()
+	n := NewDecimalAmount(123456, 2).Nullable()
 	data, err := json.Marshal(n)
 	require.NoError(t, err)
 	assert.Equal(t, "1234.56", string(data))
@@ -676,7 +676,7 @@ func TestNullableDecimalAmount(t *testing.T) {
 
 	// FromPtr with nil is null.
 	assert.True(t, NullableDecimalAmountFromPtr(nil).IsNull())
-	a := MakeDecimalAmount(1, 0)
+	a := NewDecimalAmount(1, 0)
 	assert.True(t, NullableDecimalAmountFromPtr(&a).IsNotNull())
 
 	// SQL Value/Scan through the nullable wrapper.
@@ -702,10 +702,10 @@ func TestDecimalAmount_ScanString(t *testing.T) {
 
 func TestDecimalAmountFrom(t *testing.T) {
 	// Integers convert exactly with scale 0.
-	assert.Equal(t, MakeDecimalAmount(42, 0), DecimalAmountFrom(42))
-	assert.Equal(t, MakeDecimalAmount(-42, 0), DecimalAmountFrom(int8(-42)))
-	assert.Equal(t, MakeDecimalAmount(65535, 0), DecimalAmountFrom(uint16(65535)))
-	assert.Equal(t, MakeDecimalAmount(maxDecimalAmountCoefficient, 0), DecimalAmountFrom(int64(maxDecimalAmountCoefficient)))
+	assert.Equal(t, NewDecimalAmount(42, 0), DecimalAmountFrom(42))
+	assert.Equal(t, NewDecimalAmount(-42, 0), DecimalAmountFrom(int8(-42)))
+	assert.Equal(t, NewDecimalAmount(65535, 0), DecimalAmountFrom(uint16(65535)))
+	assert.Equal(t, NewDecimalAmount(maxDecimalAmountCoefficient, 0), DecimalAmountFrom(int64(maxDecimalAmountCoefficient)))
 	// An integer outside the coefficient range maps to ±Inf instead of panicking.
 	assert.True(t, DecimalAmountFrom(int64(math.MaxInt64)).IsInf(1))
 	assert.True(t, DecimalAmountFrom(int64(math.MinInt64)).IsInf(-1))
@@ -733,9 +733,9 @@ func TestDecimalAmountFrom(t *testing.T) {
 // a token the standard library re-parses as the same number.
 func TestDecimalAmount_MarshalJSONValidNumber(t *testing.T) {
 	for _, a := range []DecimalAmount{
-		MakeDecimalAmount(0, 0),
-		MakeDecimalAmount(-5, 3),
-		MakeDecimalAmount(maxDecimalAmountCoefficient, 2),
+		NewDecimalAmount(0, 0),
+		NewDecimalAmount(-5, 3),
+		NewDecimalAmount(maxDecimalAmountCoefficient, 2),
 	} {
 		data, err := json.Marshal(a)
 		require.NoError(t, err)
@@ -858,13 +858,13 @@ func TestDecimalAmount_CmpInt128(t *testing.T) {
 		a, b DecimalAmount
 		want int
 	}{
-		{MakeDecimalAmount(150, 2), MakeDecimalAmount(15, 1), 0},    // 1.50 == 1.5
-		{MakeDecimalAmount(151, 2), MakeDecimalAmount(15, 1), 1},    // 1.51 > 1.5
-		{MakeDecimalAmount(-151, 2), MakeDecimalAmount(-15, 1), -1}, // -1.51 < -1.5
-		{MakeDecimalAmount(-1, 0), MakeDecimalAmount(1, 5), -1},     // negative < positive
-		{MakeDecimalAmount(0, 0), MakeDecimalAmount(0, 8), 0},       // zeros equal across scales
-		{MakeDecimalAmount(maxDecimalAmountCoefficient, 0), MakeDecimalAmount(1, 18), 1},
-		{MakeDecimalAmount(minDecimalAmountCoefficient, 0), MakeDecimalAmount(-1, 18), -1},
+		{NewDecimalAmount(150, 2), NewDecimalAmount(15, 1), 0},    // 1.50 == 1.5
+		{NewDecimalAmount(151, 2), NewDecimalAmount(15, 1), 1},    // 1.51 > 1.5
+		{NewDecimalAmount(-151, 2), NewDecimalAmount(-15, 1), -1}, // -1.51 < -1.5
+		{NewDecimalAmount(-1, 0), NewDecimalAmount(1, 5), -1},     // negative < positive
+		{NewDecimalAmount(0, 0), NewDecimalAmount(0, 8), 0},       // zeros equal across scales
+		{NewDecimalAmount(maxDecimalAmountCoefficient, 0), NewDecimalAmount(1, 18), 1},
+		{NewDecimalAmount(minDecimalAmountCoefficient, 0), NewDecimalAmount(-1, 18), -1},
 	}
 	for _, c := range cases {
 		assert.Equal(t, c.want, c.a.Cmp(c.b), "%s cmp %s", c.a, c.b)
@@ -876,7 +876,7 @@ func TestDecimalAmount_sentinels(t *testing.T) {
 	nan := DecimalAmountNaN()
 	posInf := DecimalAmountInf(1)
 	negInf := DecimalAmountInf(-1)
-	fin := MakeDecimalAmount(150, 2)
+	fin := NewDecimalAmount(150, 2)
 
 	// Predicates.
 	for _, s := range []DecimalAmount{nan, posInf, negInf} {
@@ -923,7 +923,7 @@ func TestDecimalAmount_sentinels(t *testing.T) {
 	assert.True(t, posInf.Add(fin).IsInf(1))
 	assert.True(t, posInf.Add(negInf).IsNaN()) // +Inf + -Inf
 	assert.True(t, nan.Add(fin).IsNaN())
-	assert.True(t, posInf.Mul(MakeDecimalAmount(0, 0), RoundHalfAwayFromZero).IsNaN()) // Inf * 0
+	assert.True(t, posInf.Mul(NewDecimalAmount(0, 0), RoundHalfAwayFromZero).IsNaN()) // Inf * 0
 	assert.True(t, nan.Mul(fin, RoundHalfAwayFromZero).IsNaN())
 	assert.True(t, posInf.Mul(negInf, RoundHalfAwayFromZero).IsInf(-1)) // +Inf * -Inf
 	assert.True(t, negInf.Mul(fin, RoundHalfAwayFromZero).IsInf(-1))    // -Inf * positive finite
@@ -979,8 +979,8 @@ func TestDecimalAmount_sentinels(t *testing.T) {
 func TestDecimalAmount_accessors(t *testing.T) {
 	assert.Equal(t, "42", DecimalAmountFrom(42).String())
 
-	pos := MakeDecimalAmount(150, 2)
-	neg := MakeDecimalAmount(-150, 2)
+	pos := NewDecimalAmount(150, 2)
+	neg := NewDecimalAmount(-150, 2)
 	zero := DecimalAmount{}
 
 	assert.Equal(t, +1, pos.Sign())
@@ -1004,7 +1004,7 @@ func TestDecimalAmount_accessors(t *testing.T) {
 }
 
 func TestDecimalAmount_AmountInterop(t *testing.T) {
-	d := MakeDecimalAmount(123456, 2)
+	d := NewDecimalAmount(123456, 2)
 	assert.InDelta(t, 1234.56, float64(d.Amount()), 1e-9)
 
 	// DecimalAmountFrom converts an Amount via its shortest exact decimal;
@@ -1024,7 +1024,7 @@ func TestDecimalAmount_AmountInterop(t *testing.T) {
 }
 
 func TestDecimalAmount_RateInterop(t *testing.T) {
-	price := MakeDecimalAmount(10000, 2) // 100.00
+	price := NewDecimalAmount(10000, 2) // 100.00
 
 	// The result is the shortest decimal that round-trips the float64
 	// product exactly; round to the final precision explicitly at the end.
@@ -1032,11 +1032,11 @@ func TestDecimalAmount_RateInterop(t *testing.T) {
 	assert.Equal(t, "119.00", product.RoundToCents(RoundHalfAwayFromZero).String())
 	// A float64 product carrying binary noise keeps that noise until rounded:
 	// 0.10 * 3 in float64 is 0.30000000000000004.
-	noisy := MakeDecimalAmount(10, 2).MultipliedByRate(Rate(3))
+	noisy := NewDecimalAmount(10, 2).MultipliedByRate(Rate(3))
 	assert.Equal(t, "0.30000000000000004", noisy.String())
 	assert.Equal(t, "0.30", noisy.RoundToCents(RoundHalfAwayFromZero).String())
 	// Reverse: 119.00 / 1.19 -> 100.00 after rounding to cents.
-	assert.Equal(t, "100.00", MakeDecimalAmount(11900, 2).DividedByRate(Rate(1.19)).RoundToCents(RoundHalfAwayFromZero).String())
+	assert.Equal(t, "100.00", NewDecimalAmount(11900, 2).DividedByRate(Rate(1.19)).RoundToCents(RoundHalfAwayFromZero).String())
 	// 19% of 100.00 -> 19.00 (exact in float64, shortest representation "19").
 	assert.Equal(t, "19.00", price.Percentage(19).RoundToCents(RoundHalfAwayFromZero).String())
 	// An exact float64 product converts without any rounding needed.
@@ -1052,14 +1052,14 @@ func TestDecimalAmount_CentAmount(t *testing.T) {
 		rounding RoundingMode
 		expected CentAmount
 	}{
-		{MakeDecimalAmount(12345, 2), RoundHalfAwayFromZero, 12345},
-		{MakeDecimalAmount(123, 0), RoundHalfAwayFromZero, 12300},
-		{MakeDecimalAmount(1235, 1), RoundHalfAwayFromZero, 12350},
-		{MakeDecimalAmount(123455, 3), RoundHalfAwayFromZero, 12346},
-		{MakeDecimalAmount(123455, 3), RoundHalfToEven, 12346},
-		{MakeDecimalAmount(123465, 3), RoundHalfToEven, 12346},
-		{MakeDecimalAmount(123455, 3), RoundDown, 12345},
-		{MakeDecimalAmount(-123455, 3), RoundHalfAwayFromZero, -12346},
+		{NewDecimalAmount(12345, 2), RoundHalfAwayFromZero, 12345},
+		{NewDecimalAmount(123, 0), RoundHalfAwayFromZero, 12300},
+		{NewDecimalAmount(1235, 1), RoundHalfAwayFromZero, 12350},
+		{NewDecimalAmount(123455, 3), RoundHalfAwayFromZero, 12346},
+		{NewDecimalAmount(123455, 3), RoundHalfToEven, 12346},
+		{NewDecimalAmount(123465, 3), RoundHalfToEven, 12346},
+		{NewDecimalAmount(123455, 3), RoundDown, 12345},
+		{NewDecimalAmount(-123455, 3), RoundHalfAwayFromZero, -12346},
 	}
 	for _, test := range tests {
 		t.Run(test.decimal.String(), func(t *testing.T) {
@@ -1075,7 +1075,7 @@ func TestDecimalAmount_CentAmount(t *testing.T) {
 		DecimalAmountNaN(),
 		DecimalAmountInf(1),
 		DecimalAmountInf(-1),
-		MakeDecimalAmount(maxDecimalAmountCoefficient, 0),
+		NewDecimalAmount(maxDecimalAmountCoefficient, 0),
 	} {
 		t.Run(decimal.String(), func(t *testing.T) {
 			_, err := decimal.CentAmount(RoundHalfAwayFromZero)

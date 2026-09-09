@@ -49,12 +49,6 @@ func ParseAmount(str string, acceptedDecimals ...int) (Amount, error) {
 	return 0, fmt.Errorf("parsing %q returned %d decimals wich is not in accepted list of %v", str, decimals, acceptedDecimals)
 }
 
-// NewAmount returns a pointer to an Amount
-// with the passed value.
-func NewAmount(value float64) *Amount {
-	return new(Amount(value))
-}
-
 // AmountFromPtr dereferences ptr or returns defaultVal if it is nil.
 // See also Amount.Ptr.
 func AmountFromPtr(ptr *Amount, defaultVal Amount) Amount {

@@ -18,7 +18,7 @@ type NullableAmount = nullable.Type[Amount]
 | Function / Method                                  | Description                                        |
 |----------------------------------------------------|----------------------------------------------------|
 | `ParseAmount(str, decimals...)`                    | Locale-aware parse via `float.ParseDetails`. Optional decimal allowlist. |
-| `NewAmount(v)` / `AmountFromPtr`                   | Pointer round-trip helpers.                        |
+| `AmountFromPtr(ptr, def)` / `a.Ptr()`              | Pointer round-trip helpers.                        |
 | `a.Cents()`                                        | Rounded to integer cents (`int64`).                |
 | `a.CentAmount(mode)`                               | Exact whole cents with a `RoundingMode`.           |
 | `a.WithinOneCent(b)`                               | True if `abs(a - b)` ≤ 0.01.                       |
@@ -48,8 +48,7 @@ Implements `fmt.Stringer`, `fmt.GoStringer`, `fmt.Formatter`, `driver.Valuer`, `
 
 | Function / Method                                  | Description                                        |
 |----------------------------------------------------|----------------------------------------------------|
-| `MakeDecimalAmount(coeff, scale)`                  | From integer coefficient and scale (panics if out of range). |
-| `NewDecimalAmount(coeff, scale)`                   | Same, as a pointer (`New*` returns a pointer, like `NewAmount`). |
+| `NewDecimalAmount(coeff, scale)`                   | From integer coefficient and scale (panics if out of range). |
 | `ParseDecimalAmount(str, decimals...)`             | Exact locale-aware parse (no `float64` round-trip). Reads `NaN`/`Inf`/`Infinity`. |
 | `DecimalAmountFrom(v)`                             | Generic conversion from integer types (exact, scale 0) and float types incl. `Amount`/`Rate` (shortest exact decimal of the float value). |
 | `DecimalAmountNaN()` / `DecimalAmountInf(sign)`    | Non-finite constructors.                           |
@@ -64,6 +63,8 @@ Implements `fmt.Stringer`, `fmt.GoStringer`, `fmt.Formatter`, `driver.Valuer`, `
 | `a.Float()` / `a.Amount()`                         | Back to `float64` / `Amount` (may lose precision). |
 | `a.String()` / `a.FormatSep(thousands, decimal)`   | Exact rendering; `fmt` verbs via `fmt.Formatter` (`%v %s %q %f %d`, flags). |
 
+Constructor convention across the package: a `New*` function does real work and returns a **value** (`NewDecimalAmount` validates the scale, `NewCurrencyAmount` composes a pair). There are no `New*` functions that merely allocate a pointer to a converted value — since Go 1.26 `new(money.Amount(1.23))` and `new(money.NewDecimalAmount(1999, 2))` do that inline. `NewAmountParser` and `NewCurrencyAmountParser` still return pointers because their `Parse` methods have pointer receivers, so `*AmountParser` is what implements `strfmt.Parser`.
+
 `RoundingMode`: `RoundHalfAwayFromZero` (zero value / default), `RoundHalfToEven`, `RoundHalfUp`, `RoundHalfDown`, `RoundDown`, `RoundUp`, `RoundFloor`, `RoundCeil`.
 
 ### Calculate exactly, round once at the end
@@ -71,9 +72,9 @@ Implements `fmt.Stringer`, `fmt.GoStringer`, `fmt.Formatter`, `driver.Valuer`, `
 Arithmetic results carry the scale that holds the full precision of the result: `Add`/`Sub` use the larger operand scale, `Mul` the sum of the operand scales, and `Div` extends the scale as far as needed (up to the 18-place maximum for non-terminating quotients). So a chain of calculations loses no data along the way — round to the final precision (typically 2 decimal places for cents, or 4 in accounting) exactly once, at the end:
 
 ```go
-price := money.MakeDecimalAmount(1999, 2) // 19.99 per unit
+price := money.NewDecimalAmount(1999, 2) // 19.99 per unit
 qty := money.DecimalAmountFrom(7)
-vatFactor := money.MakeDecimalAmount(119, 2) // 1.19 → 19% VAT
+vatFactor := money.NewDecimalAmount(119, 2) // 1.19 → 19% VAT
 
 net := price.Mul(qty, money.RoundHalfAwayFromZero)   // 139.93   (scale 2, exact)
 gross := net.Mul(vatFactor, money.RoundHalfAwayFromZero) // 166.5167 (scale 4, exact)
@@ -101,7 +102,7 @@ Whole cents (hundredths of a currency unit) as `int64` — the exact integer cou
 | Function / Method                                  | Description                                        |
 |----------------------------------------------------|----------------------------------------------------|
 | `ParseCentAmount(str, mode, decimals...)`          | Exact locale-aware parse via `ParseDecimalAmount`, applying `mode` beyond 2 decimals. `NaN`/`Inf` are errors. |
-| `NewCentAmount(v)` / `CentAmountFromPtr`           | Pointer round-trip helpers.                        |
+| `CentAmountFromPtr(ptr, def)` / `c.Ptr()`          | Pointer round-trip helpers.                        |
 | `c.Cents()`                                        | The raw cent count (`int64`).                      |
 | `c.Amount()` / `a.CentAmount(mode)`                | Convert to/from the `float64` `Amount`.            |
 | `c.DecimalAmount()` / `d.CentAmount(mode)`         | Convert to/from `DecimalAmount` (scale 2).         |

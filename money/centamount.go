@@ -150,13 +150,6 @@ func compareCutFractionToHalf(cut string) (halfCmp int, nonZero bool) {
 	}
 }
 
-// NewCentAmount returns a pointer to a CentAmount
-// with the passed value.
-func NewCentAmount(value int64) *CentAmount {
-	c := CentAmount(value)
-	return &c
-}
-
 // CentAmountFromPtr dereferences ptr or returns defaultVal if it is nil.
 // See also CentAmount.Ptr.
 func CentAmountFromPtr(ptr *CentAmount, defaultVal CentAmount) CentAmount {
