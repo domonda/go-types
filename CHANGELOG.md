@@ -9,6 +9,23 @@ picking the semver baseline.
 
 ## [Unreleased]
 
+### Added
+
+- `money.CentAmount`, an `int64` money type counting whole cents, as the exact
+  integer counterpart of the `float64` `money.Amount` for the common two
+  decimal places case. It has no NaN or infinite states, so the valid range is
+  `MinCentAmount` to `MaxCentAmount`, where `MinCentAmount` is one above
+  `math.MinInt64` to keep negation total.
+  Comes with `NullableCentAmount`, `ParseCentAmount(str, mode, decimals...)`,
+  and conversions in both directions: `CentAmount.Amount`,
+  `Amount.CentAmount(mode)`, `CentAmount.DecimalAmount` and
+  `DecimalAmount.CentAmount(mode)`.
+  `CentAmount.SplitEqually` and `CentAmount.SplitProportionally` apportion
+  exactly: the parts sum to the initial amount, and no part is more than one
+  cent from its fair share or carries the opposite sign. This diverges
+  deliberately from the `Amount` splits, which hand the whole rounding
+  difference to the last part.
+
 ### Changed
 
 - `money.Amount.GoString` now returns a Go source representation

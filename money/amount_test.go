@@ -386,3 +386,24 @@ func exactDecimalExpansion(f float64) string {
 	exact := new(big.Rat).SetFloat64(f).FloatString(1074)
 	return strings.TrimRight(strings.TrimRight(exact, "0"), ".")
 }
+
+func TestAmount_CentAmount(t *testing.T) {
+	// The rounding mode is applied to the shortest decimal representation
+	// of the float, not to float64(a)*100, so a decimal literal rounds the
+	// way the literal reads. Amount(0.145)*100 is 14.499999999999998 and
+	// would round to 14 the naive way.
+	assert.Equal(t, CentAmount(12345), Amount(123.45).CentAmount(RoundHalfAwayFromZero))
+	assert.Equal(t, CentAmount(-12345), Amount(-123.45).CentAmount(RoundHalfAwayFromZero))
+	assert.Equal(t, CentAmount(12346), Amount(123.456).CentAmount(RoundHalfAwayFromZero))
+	assert.Equal(t, CentAmount(1), Amount(0.005).CentAmount(RoundHalfAwayFromZero))
+	assert.Equal(t, CentAmount(15), Amount(0.145).CentAmount(RoundHalfAwayFromZero))
+	assert.Equal(t, CentAmount(14), Amount(0.145).CentAmount(RoundDown))
+	assert.Equal(t, CentAmount(14), Amount(0.145).CentAmount(RoundHalfToEven))
+
+	// Non-finite amounts have no CentAmount representation,
+	// but must not produce a platform dependent int64.
+	assert.Equal(t, CentAmount(0), Amount(math.NaN()).CentAmount(RoundHalfAwayFromZero))
+	assert.Equal(t, MaxCentAmount, Amount(math.Inf(1)).CentAmount(RoundHalfAwayFromZero))
+	assert.Equal(t, MinCentAmount, Amount(math.Inf(-1)).CentAmount(RoundHalfAwayFromZero))
+	assert.Equal(t, MaxCentAmount, Amount(1e30).CentAmount(RoundHalfAwayFromZero))
+}

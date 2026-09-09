@@ -1045,3 +1045,41 @@ func TestDecimalAmount_RateInterop(t *testing.T) {
 	// Dividing by a zero rate yields +Inf instead of panicking.
 	assert.True(t, price.DividedByRate(Rate(0)).IsInf(1))
 }
+
+func TestDecimalAmount_CentAmount(t *testing.T) {
+	tests := []struct {
+		decimal  DecimalAmount
+		rounding RoundingMode
+		expected CentAmount
+	}{
+		{NewDecimalAmount(12345, 2), RoundHalfAwayFromZero, 12345},
+		{NewDecimalAmount(123, 0), RoundHalfAwayFromZero, 12300},
+		{NewDecimalAmount(1235, 1), RoundHalfAwayFromZero, 12350},
+		{NewDecimalAmount(123455, 3), RoundHalfAwayFromZero, 12346},
+		{NewDecimalAmount(123455, 3), RoundHalfToEven, 12346},
+		{NewDecimalAmount(123465, 3), RoundHalfToEven, 12346},
+		{NewDecimalAmount(123455, 3), RoundDown, 12345},
+		{NewDecimalAmount(-123455, 3), RoundHalfAwayFromZero, -12346},
+	}
+	for _, test := range tests {
+		t.Run(test.decimal.String(), func(t *testing.T) {
+			cents, err := test.decimal.CentAmount(test.rounding)
+			require.NoError(t, err)
+			assert.Equal(t, test.expected, cents)
+		})
+	}
+
+	// Non-finite and out of range values must fail loud
+	// because CentAmount can't represent them.
+	for _, decimal := range []DecimalAmount{
+		DecimalAmountNaN(),
+		DecimalAmountInf(1),
+		DecimalAmountInf(-1),
+		NewDecimalAmount(maxDecimalAmountCoefficient, 0),
+	} {
+		t.Run(decimal.String(), func(t *testing.T) {
+			_, err := decimal.CentAmount(RoundHalfAwayFromZero)
+			assert.Error(t, err)
+		})
+	}
+}

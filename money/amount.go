@@ -88,9 +88,37 @@ func (a *Amount) ScanString(source string, validate bool) error {
 	return nil
 }
 
-// Cents returns the amount rounded to cents
+// Cents returns the amount rounded to cents.
+// The result is undefined for infinite and NaN amounts,
+// see Amount.CentAmount for a conversion that handles them.
 func (a Amount) Cents() int64 {
 	return int64(math.Round(float64(a) * 100))
+}
+
+// CentAmount returns the amount rounded to whole cents
+// with the passed rounding mode as CentAmount.
+//
+// The rounding is applied to the shortest decimal representation
+// of the float64 value instead of multiplying by 100 first, so
+// Amount(0.145) rounds to the 15 cents of the decimal literal
+// rather than to the 14 cents of its binary representation.
+//
+// A NaN amount maps to zero and an amount outside of the
+// CentAmount range is clamped to MinCentAmount or MaxCentAmount,
+// because CentAmount has no non-finite states.
+func (a Amount) CentAmount(rounding RoundingMode) CentAmount {
+	cents := DecimalAmountFrom(a).RoundToCents(rounding)
+	if !cents.IsFinite() {
+		switch {
+		case cents.IsNaN():
+			return 0
+		case cents.Signbit():
+			return MinCentAmount
+		default:
+			return MaxCentAmount
+		}
+	}
+	return CentAmount(cents.Coefficient())
 }
 
 // DecimalAmount converts the float64 Amount to an exact fixed-point

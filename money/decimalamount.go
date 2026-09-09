@@ -447,6 +447,19 @@ func (a DecimalAmount) Amount() Amount {
 	return Amount(a.Float())
 }
 
+// CentAmount returns the amount rounded to whole cents with the given
+// rounding mode as CentAmount. It returns an error for a non-finite amount
+// and for an amount whose cent representation overflows the DecimalAmount
+// coefficient range of roughly ±2.88×10^17 cents,
+// because CentAmount has no non-finite states.
+func (a DecimalAmount) CentAmount(rounding RoundingMode) (CentAmount, error) {
+	cents := a.RoundToCents(rounding)
+	if !cents.IsFinite() {
+		return 0, fmt.Errorf("can't convert money.DecimalAmount %s to money.CentAmount", a)
+	}
+	return CentAmount(cents.Coefficient()), nil
+}
+
 // Sign returns -1 if the amount is negative, +1 if positive and 0 if zero.
 // -Inf returns -1, +Inf returns +1 and NaN returns 0.
 func (a DecimalAmount) Sign() int {
