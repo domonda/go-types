@@ -48,7 +48,7 @@ Implements `fmt.Stringer`, `fmt.GoStringer`, `fmt.Formatter`, `driver.Valuer`, `
 
 | Function / Method                                  | Description                                        |
 |----------------------------------------------------|----------------------------------------------------|
-| `DecimalAmountFromCoefficient(coeff, scale)`       | From integer coefficient and scale (panics if out of range). |
+| `MakeDecimalAmount(coeff, scale)`                  | From integer coefficient and scale (panics if out of range). |
 | `NewDecimalAmount(coeff, scale)`                   | Same, as a pointer (`New*` returns a pointer, like `NewAmount`). |
 | `ParseDecimalAmount(str, decimals...)`             | Exact locale-aware parse (no `float64` round-trip). Reads `NaN`/`Inf`/`Infinity`. |
 | `DecimalAmountFrom(v)`                             | Generic conversion from integer types (exact, scale 0) and float types incl. `Amount`/`Rate` (shortest exact decimal of the float value). |
@@ -71,9 +71,9 @@ Implements `fmt.Stringer`, `fmt.GoStringer`, `fmt.Formatter`, `driver.Valuer`, `
 Arithmetic results carry the scale that holds the full precision of the result: `Add`/`Sub` use the larger operand scale, `Mul` the sum of the operand scales, and `Div` extends the scale as far as needed (up to the 18-place maximum for non-terminating quotients). So a chain of calculations loses no data along the way — round to the final precision (typically 2 decimal places for cents, or 4 in accounting) exactly once, at the end:
 
 ```go
-price := money.DecimalAmountFromCoefficient(1999, 2) // 19.99 per unit
+price := money.MakeDecimalAmount(1999, 2) // 19.99 per unit
 qty := money.DecimalAmountFrom(7)
-vatFactor := money.DecimalAmountFromCoefficient(119, 2) // 1.19 → 19% VAT
+vatFactor := money.MakeDecimalAmount(119, 2) // 1.19 → 19% VAT
 
 net := price.Mul(qty, money.RoundHalfAwayFromZero)   // 139.93   (scale 2, exact)
 gross := net.Mul(vatFactor, money.RoundHalfAwayFromZero) // 166.5167 (scale 4, exact)

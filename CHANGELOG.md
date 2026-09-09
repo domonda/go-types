@@ -29,7 +29,7 @@ picking the semver baseline.
 ### Changed
 
 - `money.NewDecimalAmount(coefficient, scale)` is renamed to
-  `money.DecimalAmountFromCoefficient`, and `NewDecimalAmount` now returns a
+  `money.MakeDecimalAmount`, and `NewDecimalAmount` now returns a
   `*DecimalAmount` so every `New*` constructor in the package returns a pointer
   like `NewAmount`, `NewCentAmount` and `NewRate` do.
 - `money.Amount.GoString` now returns a Go source representation

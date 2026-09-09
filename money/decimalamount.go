@@ -202,22 +202,22 @@ func packDecimalAmount(coefficient int64, scale int) DecimalAmount {
 	return DecimalAmount{packed: coefficient<<scaleBits | int64(scale)}
 }
 
-// DecimalAmountFromCoefficient returns a DecimalAmount equal to coefficient × 10^-scale.
+// MakeDecimalAmount returns a DecimalAmount equal to coefficient × 10^-scale.
 // It panics if scale is not in [0, MaxDecimalAmountScale] or if coefficient is
 // outside the representable range of roughly ±2.88×10^17.
-func DecimalAmountFromCoefficient(coefficient int64, scale int) DecimalAmount {
+func MakeDecimalAmount(coefficient int64, scale int) DecimalAmount {
 	if scale < 0 || scale > MaxDecimalAmountScale {
-		panic(fmt.Sprintf("money.DecimalAmountFromCoefficient scale %d out of range [0, %d]", scale, MaxDecimalAmountScale))
+		panic(fmt.Sprintf("money.MakeDecimalAmount scale %d out of range [0, %d]", scale, MaxDecimalAmountScale))
 	}
 	return packDecimalAmount(coefficient, scale)
 }
 
 // NewDecimalAmount returns a pointer to a DecimalAmount
 // equal to coefficient × 10^-scale.
-// It panics under the same conditions as DecimalAmountFromCoefficient.
+// It panics under the same conditions as MakeDecimalAmount.
 // See also DecimalAmount.Ptr.
 func NewDecimalAmount(coefficient int64, scale int) *DecimalAmount {
-	a := DecimalAmountFromCoefficient(coefficient, scale)
+	a := MakeDecimalAmount(coefficient, scale)
 	return &a
 }
 
@@ -574,7 +574,7 @@ func (a DecimalAmount) orderRank() int {
 
 // Equal reports whether a and b represent the same value, ignoring scale.
 // It differs from the == operator, which compares the packed representation:
-// DecimalAmountFromCoefficient(150, 2) == DecimalAmountFromCoefficient(15, 1) is false, while their
+// MakeDecimalAmount(150, 2) == MakeDecimalAmount(15, 1) is false, while their
 // Equal is true.
 func (a DecimalAmount) Equal(b DecimalAmount) bool {
 	return a.Cmp(b) == 0
@@ -866,7 +866,7 @@ func (a DecimalAmount) GoString() string {
 	case a.IsInf(-1):
 		return "money.DecimalAmountInf(-1)"
 	default:
-		return fmt.Sprintf("money.DecimalAmountFromCoefficient(%d, %d)", a.Coefficient(), a.Scale())
+		return fmt.Sprintf("money.MakeDecimalAmount(%d, %d)", a.Coefficient(), a.Scale())
 	}
 }
 

@@ -128,13 +128,13 @@ func TestCentAmount_conversionBoundaries(t *testing.T) {
 	// from both sides or an off-by-one would go unnoticed.
 	const maxCents = CentAmount(maxDecimalAmountCoefficient)
 
-	assert.Equal(t, DecimalAmountFromCoefficient(int64(maxCents), 2), maxCents.DecimalAmount())
-	assert.Equal(t, DecimalAmountFromCoefficient(-int64(maxCents), 2), (-maxCents).DecimalAmount())
+	assert.Equal(t, MakeDecimalAmount(int64(maxCents), 2), maxCents.DecimalAmount())
+	assert.Equal(t, MakeDecimalAmount(-int64(maxCents), 2), (-maxCents).DecimalAmount())
 	assert.True(t, (maxCents + 1).DecimalAmount().IsInf(1))
 	assert.True(t, (-maxCents - 1).DecimalAmount().IsInf(-1))
 
 	// The matching DecimalAmount -> CentAmount edge must succeed
-	cents, err := DecimalAmountFromCoefficient(int64(maxCents), 2).CentAmount(RoundHalfAwayFromZero)
+	cents, err := MakeDecimalAmount(int64(maxCents), 2).CentAmount(RoundHalfAwayFromZero)
 	require.NoError(t, err)
 	assert.Equal(t, maxCents, cents)
 }
@@ -257,8 +257,8 @@ func TestCentAmount_Amount(t *testing.T) {
 }
 
 func TestCentAmount_DecimalAmount(t *testing.T) {
-	assert.Equal(t, DecimalAmountFromCoefficient(12345, 2), CentAmount(12345).DecimalAmount())
-	assert.Equal(t, DecimalAmountFromCoefficient(-1, 2), CentAmount(-1).DecimalAmount())
+	assert.Equal(t, MakeDecimalAmount(12345, 2), CentAmount(12345).DecimalAmount())
+	assert.Equal(t, MakeDecimalAmount(-1, 2), CentAmount(-1).DecimalAmount())
 	assert.Equal(t, "123.45", CentAmount(12345).DecimalAmount().String())
 
 	// Beyond the DecimalAmount coefficient range the conversion
