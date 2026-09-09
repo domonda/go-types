@@ -217,9 +217,8 @@ func DecimalAmountFromCoefficient(coefficient int64, scale int) DecimalAmount {
 // It panics under the same conditions as DecimalAmountFromCoefficient.
 // See also DecimalAmount.Ptr.
 func NewDecimalAmount(coefficient int64, scale int) *DecimalAmount {
-	a := new(DecimalAmount)
-	*a = DecimalAmountFromCoefficient(coefficient, scale)
-	return a
+	a := DecimalAmountFromCoefficient(coefficient, scale)
+	return &a
 }
 
 // DecimalAmountConvertible lists the types DecimalAmountFrom converts from:
