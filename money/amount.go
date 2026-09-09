@@ -5,6 +5,7 @@ import (
 	"math"
 	"math/big"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/domonda/go-types/float"
@@ -48,14 +49,6 @@ func ParseAmount(str string, acceptedDecimals ...int) (Amount, error) {
 	return 0, fmt.Errorf("parsing %q returned %d decimals wich is not in accepted list of %v", str, decimals, acceptedDecimals)
 }
 
-// NewAmount returns a pointer to an Amount
-// with the passed value.
-func NewAmount(value float64) *Amount {
-	a := new(Amount)
-	*a = Amount(value)
-	return a
-}
-
 // AmountFromPtr dereferences ptr or returns defaultVal if it is nil.
 // See also Amount.Ptr.
 func AmountFromPtr(ptr *Amount, defaultVal Amount) Amount {
@@ -88,9 +81,49 @@ func (a *Amount) ScanString(source string, validate bool) error {
 	return nil
 }
 
-// Cents returns the amount rounded to cents
+// Cents returns the amount rounded to cents.
+// The result is undefined for infinite and NaN amounts,
+// see Amount.CentAmount for a conversion that handles them.
 func (a Amount) Cents() int64 {
 	return int64(math.Round(float64(a) * 100))
+}
+
+// CentAmount returns the amount rounded to whole cents
+// with the passed rounding mode as CentAmount.
+//
+// The rounding is applied to the shortest decimal representation
+// of the float64 value instead of multiplying by 100 first, so
+// Amount(0.145) rounds to the 15 cents of the decimal literal
+// rather than to the 14 cents of its binary representation.
+//
+// A NaN amount maps to zero and an amount outside of the
+// CentAmount range is clamped to MinCentAmount or MaxCentAmount,
+// because CentAmount has no non-finite states.
+func (a Amount) CentAmount(rounding RoundingMode) CentAmount {
+	f := float64(a)
+	if math.IsNaN(f) {
+		return 0
+	}
+	if math.IsInf(f, 0) {
+		if math.Signbit(f) {
+			return MinCentAmount
+		}
+		return MaxCentAmount
+	}
+	// FormatFloat with 'f' and precision -1 is the shortest decimal that
+	// round-trips to f, written without an exponent, so its digits are the
+	// decimal representation to round. Going through a DecimalAmount instead
+	// would cap the result at its narrower coefficient range.
+	digits := strconv.FormatFloat(math.Abs(f), 'f', -1, 64)
+	intDigits, fracDigits, _ := strings.Cut(digits, ".")
+	cents, ok := centsFromDecimalDigits(intDigits, fracDigits, math.Signbit(f), rounding)
+	if !ok {
+		if math.Signbit(f) {
+			return MinCentAmount
+		}
+		return MaxCentAmount
+	}
+	return cents
 }
 
 // DecimalAmount converts the float64 Amount to an exact fixed-point
@@ -165,16 +198,33 @@ func (a Amount) String() string {
 	// return b.String()
 }
 
-// GoString returns the amount as string
-// in full float64 precision for debugging
+// GoString returns the Go source representation of the amount for debugging.
+// The float literal is the exact decimal expansion of the float64 value,
+// so it always parses back to the identical amount.
+// GoString implements the fmt.GoStringer interface.
 func (a Amount) GoString() string {
-	return strings.TrimRight(
+	switch {
+	case a.IsNaN():
+		return "money.Amount(math.NaN())"
+	case a.IsInf():
+		if a.Signbit() {
+			return "money.Amount(math.Inf(-1))"
+		}
+		return "money.Amount(math.Inf(1))"
+	case a == 0 && a.Signbit():
+		// The Go literal -0 is the untyped constant zero, so negative zero
+		// needs a constructor to survive the round-trip through Go source.
+		return "money.Amount(math.Copysign(0, -1))"
+	}
+	// 1074 fractional digits are always enough for the exact decimal
+	// expansion of a float64 because the smallest subnormal is 2^-1074.
+	return "money.Amount(" + strings.TrimRight(
 		strings.TrimRight(
-			fmt.Sprintf("%.200f", float64(a)),
+			fmt.Sprintf("%.1074f", float64(a)),
 			"0", // remove trailing zeros
 		),
 		".", // remove trailing dot
-	)
+	) + ")"
 }
 
 // StringOr returns ptr.String() or defaultVal if ptr is nil.

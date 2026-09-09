@@ -79,7 +79,9 @@ The main package provides core utilities and type definitions:
 - **ParseAddress**: Flexible email address parsing
 
 #### `money` - Financial Data Types
-- **Amount**: Money amount with decimal precision handling
+- **Amount**: `float64` money amount with locale-aware parsing and formatting
+- **DecimalAmount**: Exact fixed-point money amount packed into an `int64`
+- **CentAmount**: Whole cents as `int64`, the exact integer counterpart of `Amount`
 - **Currency**: Currency codes and information
 - **CurrencyAmount**: Combined currency and amount
 - **Rate**: Exchange rate handling

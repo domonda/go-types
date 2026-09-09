@@ -1,11 +1,16 @@
 package money
 
 import (
+	"fmt"
 	"math"
+	"math/big"
 	"math/rand"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 var amountTable2Decimals = map[string]Amount{
@@ -301,19 +306,104 @@ func equalInclNaN(a, b float64) bool {
 }
 
 func TestAmount_GoString(t *testing.T) {
+	// The Go source representation must compile back to the same
+	// value, so the float literal keeps the full float64 precision
+	// and the non-finite values use their math package constructors.
 	tests := []struct {
-		a Amount
-		s string
+		amount   Amount
+		expected string
 	}{
-		{a: 0, s: "0"},
-		{a: -0, s: "0"},
-		{a: 0.001, s: "0.001000000000000000020816681711721685132943093776702880859375"},
-		{a: 0.001000000000000000020816681711721685132943093776702880859375, s: "0.001000000000000000020816681711721685132943093776702880859375"},
-		{a: -100000.99, s: "-100000.990000000005238689482212066650390625"},
+		{0, "money.Amount(0)"},
+		{5, "money.Amount(5)"},
+		{-5, "money.Amount(-5)"},
+		{0.5, "money.Amount(0.5)"},
+		{123.45, "money.Amount(123.4500000000000028421709430404007434844970703125)"},
+		{Amount(math.NaN()), "money.Amount(math.NaN())"},
+		{Amount(math.Inf(1)), "money.Amount(math.Inf(1))"},
+		{Amount(math.Inf(-1)), "money.Amount(math.Inf(-1))"},
+		// The Go literal -0 is the untyped constant zero, so a bare "-0"
+		// would silently turn negative zero into positive zero.
+		{Amount(math.Copysign(0, -1)), "money.Amount(math.Copysign(0, -1))"},
+		// Carried over from the pre-existing test of the old bare-number
+		// format, which this change replaces
+		{0.001, "money.Amount(0.001000000000000000020816681711721685132943093776702880859375)"},
+		{0.001000000000000000020816681711721685132943093776702880859375, "money.Amount(0.001000000000000000020816681711721685132943093776702880859375)"},
+		{-100000.99, "money.Amount(-100000.990000000005238689482212066650390625)"},
+
+		// Subnormals and other tiny values need far more than the
+		// 200 decimal places that used to silently round them to zero
+		{math.SmallestNonzeroFloat64, "money.Amount(" + exactDecimalExpansion(math.SmallestNonzeroFloat64) + ")"},
+		{1e-250, "money.Amount(" + exactDecimalExpansion(1e-250) + ")"},
 	}
-	for _, tt := range tests {
-		if got := tt.a.GoString(); got != tt.s {
-			t.Errorf("Amount.GoString() = %v, want %v", got, tt.s)
+	for _, test := range tests {
+		t.Run(test.expected, func(t *testing.T) {
+			assert.Equal(t, test.expected, test.amount.GoString())
+			assert.Equal(t, test.expected, fmt.Sprintf("%#v", test.amount))
+		})
+	}
+}
+
+func TestAmount_GoString_fullPrecision(t *testing.T) {
+	// The defining property of the full precision representation:
+	// the printed literal must parse back to the identical float64,
+	// for the extremes of the float64 range as well as for random values.
+	amounts := []Amount{
+		0,
+		Amount(math.Copysign(0, -1)),
+		math.SmallestNonzeroFloat64,
+		-math.SmallestNonzeroFloat64,
+		math.MaxFloat64,
+		-math.MaxFloat64,
+		1e-250,
+		2.5e-300,
+		Amount(math.Float64frombits(1)),  // smallest subnormal
+		Amount(math.Float64frombits(42)), // arbitrary subnormal
+	}
+	r := rand.New(rand.NewSource(9371))
+	for range 1000 {
+		amounts = append(amounts, Amount(r.NormFloat64()*math.Pow10(r.Intn(600)-300)))
+	}
+	for _, amount := range amounts {
+		literal := strings.TrimSuffix(strings.TrimPrefix(amount.GoString(), "money.Amount("), ")")
+		if strings.HasPrefix(literal, "math.") {
+			// Negative zero and the non-finite values can't be written as a
+			// float literal at all, so they carry a constructor instead and
+			// are pinned by their exact string in TestAmount_GoString.
+			continue
 		}
+		parsed, err := strconv.ParseFloat(literal, 64)
+		require.NoError(t, err, "GoString of %g must be a parsable float literal", float64(amount))
+		assert.Equal(t, float64(amount), parsed, "GoString of %g lost precision", float64(amount))
+		// float64 equality treats -0 and +0 as equal, so the sign bit
+		// needs its own assertion to catch a lost negative zero.
+		assert.Equal(t, amount.Signbit(), math.Signbit(parsed), "GoString of %g lost the sign bit", float64(amount))
 	}
+}
+
+// exactDecimalExpansion returns the exact decimal value of f
+// computed independently of Amount.GoString via math/big.
+func exactDecimalExpansion(f float64) string {
+	exact := new(big.Rat).SetFloat64(f).FloatString(1074)
+	return strings.TrimRight(strings.TrimRight(exact, "0"), ".")
+}
+
+func TestAmount_CentAmount(t *testing.T) {
+	// The rounding mode is applied to the shortest decimal representation
+	// of the float, not to float64(a)*100, so a decimal literal rounds the
+	// way the literal reads. Amount(0.145)*100 is 14.499999999999998 and
+	// would round to 14 the naive way.
+	assert.Equal(t, CentAmount(12345), Amount(123.45).CentAmount(RoundHalfAwayFromZero))
+	assert.Equal(t, CentAmount(-12345), Amount(-123.45).CentAmount(RoundHalfAwayFromZero))
+	assert.Equal(t, CentAmount(12346), Amount(123.456).CentAmount(RoundHalfAwayFromZero))
+	assert.Equal(t, CentAmount(1), Amount(0.005).CentAmount(RoundHalfAwayFromZero))
+	assert.Equal(t, CentAmount(15), Amount(0.145).CentAmount(RoundHalfAwayFromZero))
+	assert.Equal(t, CentAmount(14), Amount(0.145).CentAmount(RoundDown))
+	assert.Equal(t, CentAmount(14), Amount(0.145).CentAmount(RoundHalfToEven))
+
+	// Non-finite amounts have no CentAmount representation,
+	// but must not produce a platform dependent int64.
+	assert.Equal(t, CentAmount(0), Amount(math.NaN()).CentAmount(RoundHalfAwayFromZero))
+	assert.Equal(t, MaxCentAmount, Amount(math.Inf(1)).CentAmount(RoundHalfAwayFromZero))
+	assert.Equal(t, MinCentAmount, Amount(math.Inf(-1)).CentAmount(RoundHalfAwayFromZero))
+	assert.Equal(t, MaxCentAmount, Amount(1e30).CentAmount(RoundHalfAwayFromZero))
 }

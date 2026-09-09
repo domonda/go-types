@@ -378,19 +378,9 @@ func ParseDecimalAmount(str string, acceptedDecimals ...int) (DecimalAmount, err
 	if len(acceptedDecimals) > 0 && !slices.Contains(acceptedDecimals, decimals) {
 		return DecimalAmount{}, fmt.Errorf("parsing %q returned %d decimals which is not in the accepted list %v", str, decimals, acceptedDecimals)
 	}
-	// The coefficient is exactly the sequence of all digit runes of str:
-	// float.ParseDetails only accepts digits, sign, separators and the
-	// exponent runes 'eE' (rejected above). Separators carry no digits, so
-	// concatenating every digit reconstructs the coefficient, and decimals
-	// (from ParseDetails) is the matching scale.
-	var b strings.Builder
-	b.Grow(len(str))
-	for _, r := range str {
-		if r >= '0' && r <= '9' {
-			b.WriteByte(byte(r))
-		}
-	}
-	coefficient, err := strconv.ParseInt(b.String(), 10, 64)
+	// The coefficient is exactly the sequence of all digit runes of str
+	// and decimals (from ParseDetails) is the matching scale.
+	coefficient, err := strconv.ParseInt(decimalDigitsOf(str), 10, 64)
 	if err != nil {
 		return DecimalAmount{}, fmt.Errorf("money.DecimalAmount value %q is too large: %w", str, err)
 	}
@@ -445,6 +435,48 @@ func (a DecimalAmount) Float() float64 {
 // which may lose precision. See Float.
 func (a DecimalAmount) Amount() Amount {
 	return Amount(a.Float())
+}
+
+// CentAmount returns the amount rounded to whole cents with the given
+// rounding mode as CentAmount. It returns an error for a non-finite amount and
+// for an amount outside of the CentAmount range, because CentAmount has no
+// non-finite states.
+//
+// The cents are computed from the coefficient and scale directly instead of
+// through RoundToCents, whose scale 2 result would have to fit the narrower
+// DecimalAmount coefficient range. So the whole CentAmount range is reachable:
+// NewDecimalAmount(30_000_000_000_000_000, 0) converts to 3e18 cents.
+func (a DecimalAmount) CentAmount(rounding RoundingMode) (CentAmount, error) {
+	if !a.IsFinite() {
+		return 0, fmt.Errorf("can't convert non-finite money.DecimalAmount %s to money.CentAmount", a)
+	}
+	coefficient, scale := a.Coefficient(), a.Scale()
+	negative := coefficient < 0
+	magnitude := abs64(coefficient)
+	switch {
+	case scale < 2:
+		// Padding to cents is the only direction that can leave the range
+		hi, lo := bits.Mul64(magnitude, pow10u(2-scale))
+		if hi != 0 {
+			return 0, fmt.Errorf("money.DecimalAmount %s overflows money.CentAmount", a)
+		}
+		magnitude = lo
+	case scale > 2:
+		divisor := pow10u(scale - 2)
+		quotient, remainder := magnitude/divisor, magnitude%divisor
+		if roundUpMagnitude(rounding, quotient, remainder, divisor, negative) {
+			quotient++
+		}
+		magnitude = quotient
+	}
+	if magnitude > uint64(MaxCentAmount) {
+		return 0, fmt.Errorf("money.DecimalAmount %s overflows money.CentAmount", a)
+	}
+	cents := CentAmount(magnitude) //#nosec G115 -- bounded by the check above
+	if negative {
+		cents = -cents
+	}
+	return cents, nil
 }
 
 // Sign returns -1 if the amount is negative, +1 if positive and 0 if zero.
@@ -1465,6 +1497,21 @@ func div128by64(hi, lo, d uint64) (quoHi, quoLo, rem uint64) {
 	}
 	quoLo, rem = bits.Div64(hi, lo, d) // hi < d now, so no quotient overflow
 	return quoHi, quoLo, rem
+}
+
+// decimalDigitsOf returns the sequence of all digit runes of str.
+// float.ParseDetails only accepts digits, sign, separators and the exponent
+// runes 'eE', and separators carry no digits, so for a string it accepted the
+// digits alone reconstruct the number's significand.
+func decimalDigitsOf(str string) string {
+	var b strings.Builder
+	b.Grow(len(str))
+	for _, r := range str {
+		if r >= '0' && r <= '9' {
+			b.WriteByte(byte(r))
+		}
+	}
+	return b.String()
 }
 
 // roundUpMagnitude reports whether the truncated quotient magnitude quo (with

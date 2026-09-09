@@ -1,6 +1,6 @@
 # money
 
-Monetary amounts (float64 and exact fixed-point), ISO 4217 currency codes, currency+amount pairs, and conversion rates — with locale-aware parsing/formatting and SQL/JSON integration.
+Monetary amounts (float64, integer cents and exact fixed-point), ISO 4217 currency codes, currency+amount pairs, and conversion rates — with locale-aware parsing/formatting and SQL/JSON integration.
 
 ```
 import "github.com/domonda/go-types/money"
@@ -18,14 +18,16 @@ type NullableAmount = nullable.Type[Amount]
 | Function / Method                                  | Description                                        |
 |----------------------------------------------------|----------------------------------------------------|
 | `ParseAmount(str, decimals...)`                    | Locale-aware parse via `float.ParseDetails`. Optional decimal allowlist. |
-| `NewAmount(v)` / `AmountFromPtr`                   | Pointer round-trip helpers.                        |
+| `AmountFromPtr(ptr, def)` / `a.Ptr()`              | Pointer round-trip helpers.                        |
 | `a.Cents()`                                        | Rounded to integer cents (`int64`).                |
+| `a.CentAmount(mode)`                               | Exact whole cents with a `RoundingMode`.           |
 | `a.WithinOneCent(b)`                               | True if `abs(a - b)` ≤ 0.01.                       |
 | `a.RoundToInt()` / `RoundToCents()` / `RoundToDecimals(n)` | Rounding helpers.                                  |
 | `a.FormatSep(...)`                                 | Wraps `float.Format` for locale output.            |
 | `a.Valid()`                                        | Not NaN, not Inf.                                  |
 | `a.Ptr()`                                          | Pointer to a copy of the value.                    |
 | `a.ScanString(src, validate)`                      | Assign from string, validating only if asked.      |
+| `a.GoString()`                                     | Exact Go source literal, e.g. `money.Amount(0.5)`. |
 
 `NullableAmount` is `nullable.Type[Amount]`. Constructors `NullableAmountFrom(v)` and `NullableAmountFromPtr(*Amount)`.
 
@@ -61,6 +63,8 @@ Implements `fmt.Stringer`, `fmt.GoStringer`, `fmt.Formatter`, `driver.Valuer`, `
 | `a.Float()` / `a.Amount()`                         | Back to `float64` / `Amount` (may lose precision). |
 | `a.String()` / `a.FormatSep(thousands, decimal)`   | Exact rendering; `fmt` verbs via `fmt.Formatter` (`%v %s %q %f %d`, flags). |
 
+Constructor convention across the package: a `New*` function does real work and returns a **value** (`NewDecimalAmount` validates the scale, `NewCurrencyAmount` composes a pair). There are no `New*` functions that merely allocate a pointer to a converted value — since Go 1.26 `new(money.Amount(1.23))` and `new(money.NewDecimalAmount(1999, 2))` do that inline. `NewAmountParser` and `NewCurrencyAmountParser` still return pointers because their `Parse` methods have pointer receivers, so `*AmountParser` is what implements `strfmt.Parser`.
+
 `RoundingMode`: `RoundHalfAwayFromZero` (zero value / default), `RoundHalfToEven`, `RoundHalfUp`, `RoundHalfDown`, `RoundDown`, `RoundUp`, `RoundFloor`, `RoundCeil`.
 
 ### Calculate exactly, round once at the end
@@ -85,6 +89,41 @@ account := perMonth.RoundToDecimals(4, money.RoundHalfToEven) // 13.8764
 Had every step been rounded to cents instead, the monthly amount would come out as `166.52 / 12 → 13.88` here, but chains of such intermediate roundings drift by whole cents; keeping full precision until the final rounding avoids that. The float-based `MultipliedByRate`/`DividedByRate`/`Percentage` follow the same pattern: they return the exact shortest decimal of the `float64` result (e.g. `0.10 × Rate(3)` → `0.30000000000000004`) for you to round once at the end.
 
 `NullableDecimalAmount` is `nullable.Type[DecimalAmount]`. Wrap a value with `a.Nullable()` or a pointer with `NullableDecimalAmountFromPtr(*DecimalAmount)` (nil → null).
+
+## CentAmount
+
+```go
+type CentAmount int64
+type NullableCentAmount = nullable.Type[CentAmount]
+```
+
+Whole cents (hundredths of a currency unit) as `int64` — the exact integer counterpart of the `float64`-based `Amount` for the common two decimal places case. Every value from `MinCentAmount` to `MaxCentAmount` is a valid amount; there are no NaN or infinite states. `MinCentAmount` is one above `math.MinInt64` so negating a valid amount can never overflow, the same trick the `DecimalAmount` coefficient range uses.
+
+| Function / Method                                  | Description                                        |
+|----------------------------------------------------|----------------------------------------------------|
+| `ParseCentAmount(str, mode, decimals...)`          | Exact locale-aware parse straight from the decimal digits, applying `mode` beyond 2 decimals. `NaN`/`Inf` are errors. |
+| `CentAmountFromPtr(ptr, def)` / `c.Ptr()`          | Pointer round-trip helpers.                        |
+| `c.Cents()`                                        | The raw cent count (`int64`).                      |
+| `c.Amount()` / `a.CentAmount(mode)`                | Convert to/from the `float64` `Amount`.            |
+| `c.DecimalAmount()` / `d.CentAmount(mode)`         | Convert to/from `DecimalAmount` (scale 2).         |
+| `c.RoundToInt()`                                   | Round to whole currency units (multiple of 100).   |
+| `c.WithinOneCent(b)`                               | True if `abs(c - b)` ≤ 1 cent.                     |
+| `c.String()` / `c.FormatSep(thousands, decimal)`   | Exact rendering with always 2 decimal places.      |
+| `c.Sign()` / `IsZero()` / `Signbit()` / `Abs()` / `Copysign(s)` | Sign helpers.                          |
+| `c.MultipliedByRate(r)` / `DividedByRate(r)` / `Percentage(p)` | Apply a `float64` `Rate`, rounded back to cents. |
+| `c.SplitEqually(n)` / `SplitProportionally(w)`     | Exact integer splits whose parts sum up to the initial amount. |
+
+`ParseCentAmount` and `Amount.CentAmount(mode)` work on the decimal digits directly rather than through a `DecimalAmount`, so they cover the **full** `CentAmount` range — the `DecimalAmount` coefficient stops at `2^58-1`, which is 32× narrower. That is what makes `ParseCentAmount(c.String(), mode)` round-trip every valid `CentAmount`, and it also means `ParseCentAmount` accepts any number of decimal places (the extra ones only feed the rounding) rather than inheriting the 18-place `DecimalAmount` scale cap.
+
+Conversions from a value that has no cent representation never produce a platform-dependent result. `DecimalAmount.CentAmount(mode)` is the only one that returns an error — for non-finite amounts and for amounts beyond the `DecimalAmount` coefficient range. `Amount.CentAmount(mode)` maps NaN to zero and clamps to `MinCentAmount`/`MaxCentAmount` instead, as do `MultipliedByRate`/`DividedByRate`/`Percentage`; `CentAmount.DecimalAmount()` saturates to ±Inf like every other `DecimalAmount` overflow.
+
+`Amount.CentAmount(mode)` rounds the *shortest decimal representation* of the float rather than `float64(a) * 100`, so `Amount(0.145).CentAmount(RoundHalfAwayFromZero)` is 15 cents — what the literal reads — not the 14 cents that multiplying first would give.
+
+`SplitEqually` and `SplitProportionally` are exact: the parts always sum up to the initial amount, and no part is ever more than one cent away from its fair share or carries a sign opposite to the split amount. `SplitEqually` hands the indivisible cents to the last parts; `SplitProportionally` hands them to the largest truncated fractions (the largest remainder method), uses only the weight magnitudes, and computes the shares in 128-bit integer arithmetic so `amount × weight` cannot overflow; if the weight magnitudes themselves sum past `uint64` it falls back to exact `big.Int` arithmetic rather than rescaling the weights, which would skew their ratios. This is a deliberate divergence from the `float64` `Amount` splits, which give the whole rounding difference to the last part.
+
+JSON uses the plain cent count (`12345`), not the decimal `String` form (`"123.45"`) — the value *is* a cent count, and a fractional JSON number is rejected rather than silently rounded. Unlike `Amount` and `DecimalAmount`, a JSON *string* (`"123.45"`) is rejected too, so swapping a field's type to `CentAmount` is a breaking wire change. SQL works through the native `int64` handling of `database/sql`, like `Amount` does for `float64`.
+
+`NullableCentAmount` is `nullable.Type[CentAmount]`. Constructors `NullableCentAmountFrom(v)` and `NullableCentAmountFromPtr(*CentAmount)` (nil → null).
 
 ## Currency
 

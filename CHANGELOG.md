@@ -9,6 +9,43 @@ picking the semver baseline.
 
 ## [Unreleased]
 
+### Added
+
+- `money.CentAmount`, an `int64` money type counting whole cents, as the exact
+  integer counterpart of the `float64` `money.Amount` for the common two
+  decimal places case. It has no NaN or infinite states, so the valid range is
+  `MinCentAmount` to `MaxCentAmount`, where `MinCentAmount` is one above
+  `math.MinInt64` to keep negation total.
+  Comes with `NullableCentAmount`, `ParseCentAmount(str, mode, decimals...)`,
+  and conversions in both directions: `CentAmount.Amount`,
+  `Amount.CentAmount(mode)`, `CentAmount.DecimalAmount` and
+  `DecimalAmount.CentAmount(mode)`.
+  `CentAmount.SplitEqually` and `CentAmount.SplitProportionally` apportion
+  exactly: the parts sum to the initial amount, and no part is more than one
+  cent from its fair share or carries the opposite sign. This diverges
+  deliberately from the `Amount` splits, which hand the whole rounding
+  difference to the last part.
+
+### Changed
+
+- Removed `money.NewAmount`, `money.NewRate` and `money.NewDecimalAmount`'s
+  pointer form. They only allocated a pointer to a converted value, which
+  Go 1.26's `new(expr)` expresses inline: `new(money.Amount(1.23))` and
+  `new(money.NewDecimalAmount(1999, 2))`. `AmountFromPtr`/`RateFromPtr` and the
+  `Ptr` methods are unchanged.
+  `money.NewDecimalAmount(coefficient, scale)` keeps its name and still returns
+  a `DecimalAmount` value. The package convention is now uniform: a `New*`
+  function does real work and returns a value. The two `New*Parser` functions
+  keep returning pointers because their `Parse` methods have pointer receivers.
+- `money.Amount.GoString` now returns a Go source representation
+  (`money.Amount(0.5)`) instead of a bare number, and uses enough fractional
+  digits for the exact decimal expansion of every `float64`. The previous
+  200-digit format silently printed subnormals and any value below roughly
+  `1e-200` as `0`. Non-finite values and negative zero render as
+  `money.Amount(math.NaN())`, `money.Amount(math.Inf(1))` and
+  `money.Amount(math.Copysign(0, -1))` so the output always parses back to the
+  identical amount.
+
 ## 2026-09-02
 
 ### Added
