@@ -9,6 +9,17 @@ picking the semver baseline.
 
 ## [Unreleased]
 
+### Changed
+
+- `money.Amount.GoString` now returns a Go source representation
+  (`money.Amount(0.5)`) instead of a bare number, and uses enough fractional
+  digits for the exact decimal expansion of every `float64`. The previous
+  200-digit format silently printed subnormals and any value below roughly
+  `1e-200` as `0`. Non-finite values and negative zero render as
+  `money.Amount(math.NaN())`, `money.Amount(math.Inf(1))` and
+  `money.Amount(math.Copysign(0, -1))` so the output always parses back to the
+  identical amount.
+
 ## 2026-09-02
 
 ### Added

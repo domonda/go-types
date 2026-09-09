@@ -165,16 +165,33 @@ func (a Amount) String() string {
 	// return b.String()
 }
 
-// GoString returns the amount as string
-// in full float64 precision for debugging
+// GoString returns the Go source representation of the amount for debugging.
+// The float literal is the exact decimal expansion of the float64 value,
+// so it always parses back to the identical amount.
+// GoString implements the fmt.GoStringer interface.
 func (a Amount) GoString() string {
-	return strings.TrimRight(
+	switch {
+	case a.IsNaN():
+		return "money.Amount(math.NaN())"
+	case a.IsInf():
+		if a.Signbit() {
+			return "money.Amount(math.Inf(-1))"
+		}
+		return "money.Amount(math.Inf(1))"
+	case a == 0 && a.Signbit():
+		// The Go literal -0 is the untyped constant zero, so negative zero
+		// needs a constructor to survive the round-trip through Go source.
+		return "money.Amount(math.Copysign(0, -1))"
+	}
+	// 1074 fractional digits are always enough for the exact decimal
+	// expansion of a float64 because the smallest subnormal is 2^-1074.
+	return "money.Amount(" + strings.TrimRight(
 		strings.TrimRight(
-			fmt.Sprintf("%.200f", float64(a)),
+			fmt.Sprintf("%.1074f", float64(a)),
 			"0", // remove trailing zeros
 		),
 		".", // remove trailing dot
-	)
+	) + ")"
 }
 
 // StringOr returns ptr.String() or defaultVal if ptr is nil.
