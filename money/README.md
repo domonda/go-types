@@ -20,12 +20,14 @@ type NullableAmount = nullable.Type[Amount]
 | `ParseAmount(str, decimals...)`                    | Locale-aware parse via `float.ParseDetails`. Optional decimal allowlist. |
 | `NewAmount(v)` / `AmountFromPtr`                   | Pointer round-trip helpers.                        |
 | `a.Cents()`                                        | Rounded to integer cents (`int64`).                |
+| `a.CentAmount(mode)`                               | Exact whole cents with a `RoundingMode`.           |
 | `a.WithinOneCent(b)`                               | True if `abs(a - b)` ≤ 0.01.                       |
 | `a.RoundToInt()` / `RoundToCents()` / `RoundToDecimals(n)` | Rounding helpers.                                  |
 | `a.FormatSep(...)`                                 | Wraps `float.Format` for locale output.            |
 | `a.Valid()`                                        | Not NaN, not Inf.                                  |
 | `a.Ptr()`                                          | Pointer to a copy of the value.                    |
 | `a.ScanString(src, validate)`                      | Assign from string, validating only if asked.      |
+| `a.GoString()`                                     | Exact Go source literal, e.g. `money.Amount(0.5)`. |
 
 `NullableAmount` is `nullable.Type[Amount]`. Constructors `NullableAmountFrom(v)` and `NullableAmountFromPtr(*Amount)`.
 
