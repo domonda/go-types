@@ -48,7 +48,8 @@ Implements `fmt.Stringer`, `fmt.GoStringer`, `fmt.Formatter`, `driver.Valuer`, `
 
 | Function / Method                                  | Description                                        |
 |----------------------------------------------------|----------------------------------------------------|
-| `NewDecimalAmount(coeff, scale)`                   | From integer coefficient and scale (panics if out of range). |
+| `DecimalAmountFromCoefficient(coeff, scale)`       | From integer coefficient and scale (panics if out of range). |
+| `NewDecimalAmount(coeff, scale)`                   | Same, as a pointer (`New*` returns a pointer, like `NewAmount`). |
 | `ParseDecimalAmount(str, decimals...)`             | Exact locale-aware parse (no `float64` round-trip). Reads `NaN`/`Inf`/`Infinity`. |
 | `DecimalAmountFrom(v)`                             | Generic conversion from integer types (exact, scale 0) and float types incl. `Amount`/`Rate` (shortest exact decimal of the float value). |
 | `DecimalAmountNaN()` / `DecimalAmountInf(sign)`    | Non-finite constructors.                           |
@@ -70,9 +71,9 @@ Implements `fmt.Stringer`, `fmt.GoStringer`, `fmt.Formatter`, `driver.Valuer`, `
 Arithmetic results carry the scale that holds the full precision of the result: `Add`/`Sub` use the larger operand scale, `Mul` the sum of the operand scales, and `Div` extends the scale as far as needed (up to the 18-place maximum for non-terminating quotients). So a chain of calculations loses no data along the way — round to the final precision (typically 2 decimal places for cents, or 4 in accounting) exactly once, at the end:
 
 ```go
-price := money.NewDecimalAmount(1999, 2) // 19.99 per unit
+price := money.DecimalAmountFromCoefficient(1999, 2) // 19.99 per unit
 qty := money.DecimalAmountFrom(7)
-vatFactor := money.NewDecimalAmount(119, 2) // 1.19 → 19% VAT
+vatFactor := money.DecimalAmountFromCoefficient(119, 2) // 1.19 → 19% VAT
 
 net := price.Mul(qty, money.RoundHalfAwayFromZero)   // 139.93   (scale 2, exact)
 gross := net.Mul(vatFactor, money.RoundHalfAwayFromZero) // 166.5167 (scale 4, exact)
@@ -111,11 +112,13 @@ Whole cents (hundredths of a currency unit) as `int64` — the exact integer cou
 | `c.MultipliedByRate(r)` / `DividedByRate(r)` / `Percentage(p)` | Apply a `float64` `Rate`, rounded back to cents. |
 | `c.SplitEqually(n)` / `SplitProportionally(w)`     | Exact integer splits whose parts sum up to the initial amount. |
 
-Conversions from a value that has no cent representation never produce a platform-dependent result. `DecimalAmount.CentAmount(mode)` is the only one that can fail, and it returns an error — for non-finite amounts and for amounts beyond the `DecimalAmount` coefficient range. The float-based `Amount.CentAmount(mode)` maps NaN to zero and clamps to `MinCentAmount`/`MaxCentAmount` instead, as do `MultipliedByRate`/`DividedByRate`/`Percentage`; `CentAmount.DecimalAmount()` saturates to ±Inf like every other `DecimalAmount` overflow.
+`ParseCentAmount` and `Amount.CentAmount(mode)` work on the decimal digits directly rather than through a `DecimalAmount`, so they cover the **full** `CentAmount` range — the `DecimalAmount` coefficient stops at `2^58-1`, which is 32× narrower. That is what makes `ParseCentAmount(c.String(), mode)` round-trip every valid `CentAmount`, and it also means `ParseCentAmount` accepts any number of decimal places (the extra ones only feed the rounding) rather than inheriting the 18-place `DecimalAmount` scale cap.
+
+Conversions from a value that has no cent representation never produce a platform-dependent result. `DecimalAmount.CentAmount(mode)` is the only one that returns an error — for non-finite amounts and for amounts beyond the `DecimalAmount` coefficient range. `Amount.CentAmount(mode)` maps NaN to zero and clamps to `MinCentAmount`/`MaxCentAmount` instead, as do `MultipliedByRate`/`DividedByRate`/`Percentage`; `CentAmount.DecimalAmount()` saturates to ±Inf like every other `DecimalAmount` overflow.
 
 `Amount.CentAmount(mode)` rounds the *shortest decimal representation* of the float rather than `float64(a) * 100`, so `Amount(0.145).CentAmount(RoundHalfAwayFromZero)` is 15 cents — what the literal reads — not the 14 cents that multiplying first would give.
 
-`SplitEqually` and `SplitProportionally` are exact: the parts always sum up to the initial amount, and no part is ever more than one cent away from its fair share or carries a sign opposite to the split amount. `SplitEqually` hands the indivisible cents to the last parts; `SplitProportionally` hands them to the largest truncated fractions (the largest remainder method), uses only the weight magnitudes, and computes the shares in 128-bit integer arithmetic so `amount × weight` cannot overflow. This is a deliberate divergence from the `float64` `Amount` splits, which give the whole rounding difference to the last part.
+`SplitEqually` and `SplitProportionally` are exact: the parts always sum up to the initial amount, and no part is ever more than one cent away from its fair share or carries a sign opposite to the split amount. `SplitEqually` hands the indivisible cents to the last parts; `SplitProportionally` hands them to the largest truncated fractions (the largest remainder method), uses only the weight magnitudes, and computes the shares in 128-bit integer arithmetic so `amount × weight` cannot overflow; if the weight magnitudes themselves sum past `uint64` it falls back to exact `big.Int` arithmetic rather than rescaling the weights, which would skew their ratios. This is a deliberate divergence from the `float64` `Amount` splits, which give the whole rounding difference to the last part.
 
 JSON uses the plain cent count (`12345`), not the decimal `String` form (`"123.45"`) — the value *is* a cent count, and a fractional JSON number is rejected rather than silently rounded. Unlike `Amount` and `DecimalAmount`, a JSON *string* (`"123.45"`) is rejected too, so swapping a field's type to `CentAmount` is a breaking wire change. SQL works through the native `int64` handling of `database/sql`, like `Amount` does for `float64`.
 

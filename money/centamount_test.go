@@ -4,7 +4,7 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"math"
-	"strconv"
+	"math/big"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -83,11 +83,37 @@ func TestParseCentAmount(t *testing.T) {
 		}
 	})
 
-	t.Run("overflow after successful parse", func(t *testing.T) {
-		// Parses as a scale 0 DecimalAmount but the scale 2
-		// cent representation overflows the coefficient range.
-		_, err := ParseCentAmount(strconv.FormatInt(maxDecimalAmountCoefficient, 10), RoundHalfAwayFromZero)
+	t.Run("beyond the CentAmount range", func(t *testing.T) {
+		// Only the CentAmount range itself may reject, not the narrower
+		// DecimalAmount coefficient range that parsing used to borrow.
+		_, err := ParseCentAmount("92233720368547758.08", RoundHalfAwayFromZero)
 		assert.Error(t, err)
+		_, err = ParseCentAmount("-92233720368547758.09", RoundHalfAwayFromZero)
+		assert.Error(t, err)
+
+		// A cent count the DecimalAmount coefficient cannot hold but
+		// CentAmount can: 3e17 cents is above maxDecimalAmountCoefficient
+		// and well below MaxCentAmount.
+		cents, err := ParseCentAmount("3000000000000000.00", RoundHalfAwayFromZero)
+		require.NoError(t, err)
+		assert.Equal(t, CentAmount(300_000_000_000_000_000), cents)
+		assert.Greater(t, int64(cents), int64(maxDecimalAmountCoefficient))
+	})
+
+	t.Run("more decimals than DecimalAmount can scale", func(t *testing.T) {
+		// The 18 decimal place cap is a DecimalAmount limit; extra decimals
+		// only feed the rounding here.
+		cents, err := ParseCentAmount("1.0000000000000000000000000", RoundHalfAwayFromZero)
+		require.NoError(t, err)
+		assert.Equal(t, CentAmount(100), cents)
+
+		cents, err = ParseCentAmount("0.005000000000000000000000001", RoundHalfAwayFromZero)
+		require.NoError(t, err)
+		assert.Equal(t, CentAmount(1), cents, "just above half must round up")
+
+		cents, err = ParseCentAmount("0.004999999999999999999999999", RoundHalfAwayFromZero)
+		require.NoError(t, err)
+		assert.Equal(t, CentAmount(0), cents, "just below half must round down")
 	})
 }
 
@@ -102,13 +128,13 @@ func TestCentAmount_conversionBoundaries(t *testing.T) {
 	// from both sides or an off-by-one would go unnoticed.
 	const maxCents = CentAmount(maxDecimalAmountCoefficient)
 
-	assert.Equal(t, NewDecimalAmount(int64(maxCents), 2), maxCents.DecimalAmount())
-	assert.Equal(t, NewDecimalAmount(-int64(maxCents), 2), (-maxCents).DecimalAmount())
+	assert.Equal(t, DecimalAmountFromCoefficient(int64(maxCents), 2), maxCents.DecimalAmount())
+	assert.Equal(t, DecimalAmountFromCoefficient(-int64(maxCents), 2), (-maxCents).DecimalAmount())
 	assert.True(t, (maxCents + 1).DecimalAmount().IsInf(1))
 	assert.True(t, (-maxCents - 1).DecimalAmount().IsInf(-1))
 
 	// The matching DecimalAmount -> CentAmount edge must succeed
-	cents, err := NewDecimalAmount(int64(maxCents), 2).CentAmount(RoundHalfAwayFromZero)
+	cents, err := DecimalAmountFromCoefficient(int64(maxCents), 2).CentAmount(RoundHalfAwayFromZero)
 	require.NoError(t, err)
 	assert.Equal(t, maxCents, cents)
 }
@@ -231,8 +257,8 @@ func TestCentAmount_Amount(t *testing.T) {
 }
 
 func TestCentAmount_DecimalAmount(t *testing.T) {
-	assert.Equal(t, NewDecimalAmount(12345, 2), CentAmount(12345).DecimalAmount())
-	assert.Equal(t, NewDecimalAmount(-1, 2), CentAmount(-1).DecimalAmount())
+	assert.Equal(t, DecimalAmountFromCoefficient(12345, 2), CentAmount(12345).DecimalAmount())
+	assert.Equal(t, DecimalAmountFromCoefficient(-1, 2), CentAmount(-1).DecimalAmount())
 	assert.Equal(t, "123.45", CentAmount(12345).DecimalAmount().String())
 
 	// Beyond the DecimalAmount coefficient range the conversion
@@ -553,4 +579,57 @@ func TestCentAmount_SQLParameter(t *testing.T) {
 	value, err = driver.DefaultParameterConverter.ConvertValue(MinCentAmount)
 	require.NoError(t, err)
 	assert.Equal(t, int64(MinCentAmount), value)
+}
+
+func TestCentAmount_stringRoundTripsFullRange(t *testing.T) {
+	// Routing parsing through DecimalAmount capped it at the DecimalAmount
+	// coefficient range, so ParseCentAmount(c.String()) failed for everything
+	// above roughly 2.88e15 currency units, including MaxCentAmount itself.
+	for _, amount := range []CentAmount{
+		MinCentAmount, MinCentAmount + 1, -1_000_000_000_000_000_000, -12345, -1, 0,
+		1, 12345, 1_000_000_000_000_000_000, MaxCentAmount - 1, MaxCentAmount,
+		CentAmount(maxDecimalAmountCoefficient), CentAmount(maxDecimalAmountCoefficient) + 1,
+	} {
+		parsed, err := ParseCentAmount(amount.String(), RoundHalfAwayFromZero)
+		require.NoError(t, err, "parsing %s", amount)
+		assert.Equal(t, amount, parsed, "round-trip of %s", amount)
+	}
+}
+
+func TestAmount_CentAmount_largeFiniteAmounts(t *testing.T) {
+	// Amount(3e15) is an ordinary finite float whose cent count fits
+	// CentAmount; it used to saturate to MaxCentAmount because the
+	// intermediate DecimalAmount overflowed at scale 2.
+	assert.Equal(t, CentAmount(300_000_000_000_000_000), Amount(3e15).CentAmount(RoundHalfAwayFromZero))
+	assert.Equal(t, CentAmount(-300_000_000_000_000_000), Amount(-3e15).CentAmount(RoundHalfAwayFromZero))
+	assert.Equal(t, CentAmount(1_000_000_000_000_000_000), Amount(1e16).CentAmount(RoundHalfAwayFromZero))
+
+	// Only values genuinely beyond the range may clamp
+	assert.Equal(t, MaxCentAmount, Amount(1e30).CentAmount(RoundHalfAwayFromZero))
+	assert.Equal(t, MinCentAmount, Amount(-1e30).CentAmount(RoundHalfAwayFromZero))
+}
+
+func TestCentAmount_SplitProportionally_hugeWeightFairness(t *testing.T) {
+	// Right-shifting each weight to make their sum fit uint64 changed their
+	// ratios and pushed a part more than a cent off its exact share. The
+	// big.Int fallback keeps every part within one cent.
+	weights := []CentAmount{7937857609592500785, 8248106595770569066, 3007080212677340397}
+	parts := MaxCentAmount.SplitProportionally(weights)
+
+	total := new(big.Int)
+	for _, weight := range weights {
+		total.Add(total, big.NewInt(int64(weight)))
+	}
+	var sum CentAmount
+	for i, part := range parts {
+		exact := new(big.Rat).SetFrac(
+			new(big.Int).Mul(big.NewInt(int64(MaxCentAmount)), big.NewInt(int64(weights[i]))),
+			total,
+		)
+		diff := new(big.Rat).Sub(new(big.Rat).SetInt64(int64(part)), exact)
+		assert.LessOrEqual(t, diff.Abs(diff).Cmp(big.NewRat(1, 1)), 0,
+			"part %d is more than one cent from its exact share", i)
+		sum += part
+	}
+	assert.Equal(t, MaxCentAmount, sum)
 }

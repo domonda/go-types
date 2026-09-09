@@ -2,14 +2,17 @@ package money
 
 import (
 	"cmp"
+	"errors"
 	"fmt"
 	"math"
+	"math/big"
 	"math/bits"
 	"slices"
 	"strconv"
 	"strings"
 	"unicode/utf8"
 
+	"github.com/domonda/go-types/float"
 	"github.com/domonda/go-types/nullable"
 )
 
@@ -52,17 +55,99 @@ func NullableCentAmountFromPtr(ptr *CentAmount) NullableCentAmount {
 
 // ParseCentAmount parses a decimal amount from str and returns it as whole
 // cents, using the passed rounding mode if str has more than two decimal places.
-// If no acceptedDecimals are passed, then any decimal digit count up to
-// the maximum DecimalAmount scale is accepted.
-// Unlike ParseAmount the parsing is exact without a float64 round-trip,
-// and NaN or infinity are returned as error because CentAmount
+// If no acceptedDecimals are passed, then any decimal digit count is accepted.
+//
+// Unlike ParseAmount the parsing is exact without a float64 round-trip, and
+// unlike ParseDecimalAmount it covers the full CentAmount range instead of the
+// narrower DecimalAmount coefficient range, so ParseCentAmount(c.String())
+// round-trips every valid CentAmount.
+//
+// NaN and infinity are returned as error because CentAmount
 // has no non-finite states.
 func ParseCentAmount(str string, rounding RoundingMode, acceptedDecimals ...int) (CentAmount, error) {
-	amount, err := ParseDecimalAmount(str, acceptedDecimals...)
+	f, _, _, decimals, err := float.ParseDetails(str)
 	if err != nil {
 		return 0, err
 	}
-	return amount.CentAmount(rounding)
+	if math.IsNaN(f) || math.IsInf(f, 0) {
+		return 0, fmt.Errorf("can't parse %q as money.CentAmount which has no non-finite values", str)
+	}
+	if strings.ContainsAny(str, "eE") {
+		return 0, fmt.Errorf("scientific notation is not supported for money.CentAmount: %q", str)
+	}
+	if len(acceptedDecimals) > 0 && !slices.Contains(acceptedDecimals, decimals) {
+		return 0, fmt.Errorf("parsing %q returned %d decimals which is not in the accepted list %v", str, decimals, acceptedDecimals)
+	}
+	digits := decimalDigitsOf(str)
+	cents, ok := centsFromDecimalDigits(digits[:len(digits)-decimals], digits[len(digits)-decimals:], strings.ContainsRune(str, '-'), rounding)
+	if !ok {
+		return 0, fmt.Errorf("money.CentAmount value %q does not fit the range from %d to %d cents", str, int64(MinCentAmount), int64(MaxCentAmount))
+	}
+	return cents, nil
+}
+
+// centsFromDecimalDigits assembles whole cents from the digits of a decimal
+// number, given as its integer digits and its fractional digits without any
+// separator or sign. Digits beyond the second decimal place only decide the
+// rounding. The result is exact over the whole CentAmount range because it
+// never materializes the number as a float64 or as a DecimalAmount, whose
+// coefficient range is narrower than CentAmount.
+// ok is false if the value does not fit the CentAmount range.
+func centsFromDecimalDigits(intDigits, fracDigits string, negative bool, rounding RoundingMode) (cents CentAmount, ok bool) {
+	// The cent magnitude reads as the integer digits followed by exactly two
+	// fractional digits, so padding or cutting the fraction to two digits and
+	// concatenating is the same as multiplying the integer part by 100.
+	var cut string
+	switch {
+	case len(fracDigits) < 2:
+		fracDigits += "00"[len(fracDigits):]
+	case len(fracDigits) > 2:
+		cut, fracDigits = fracDigits[2:], fracDigits[:2]
+	}
+	magnitude, err := strconv.ParseUint(strings.TrimLeft(intDigits+fracDigits, "0"), 10, 64)
+	if err != nil {
+		// An empty string means all digits were zeros, anything else overflows
+		if errors.Is(err, strconv.ErrSyntax) {
+			magnitude = 0
+		} else {
+			return 0, false
+		}
+	}
+	if magnitude > uint64(MaxCentAmount) {
+		return 0, false
+	}
+	if halfCmp, nonZero := compareCutFractionToHalf(cut); nonZero {
+		if roundAwayFromZero(rounding, negative, magnitude&1 == 1, halfCmp) {
+			magnitude++
+			if magnitude > uint64(MaxCentAmount) {
+				return 0, false
+			}
+		}
+	}
+	cents = CentAmount(magnitude)
+	if negative {
+		cents = -cents
+	}
+	return cents, true
+}
+
+// compareCutFractionToHalf compares the decimal fraction 0.<cut> to one half,
+// returning -1 below, 0 exactly half and +1 above, plus whether it is non-zero
+// at all. Comparing the digits directly keeps the tie detection exact for any
+// number of cut digits, which a uint64 remainder could not.
+func compareCutFractionToHalf(cut string) (halfCmp int, nonZero bool) {
+	cut = strings.TrimRight(cut, "0")
+	if cut == "" {
+		return 0, false
+	}
+	switch {
+	case cut[0] < '5':
+		return -1, true
+	case cut[0] > '5' || len(cut) > 1:
+		return +1, true
+	default:
+		return 0, true // exactly one half
+	}
 }
 
 // NewCentAmount returns a pointer to a CentAmount
@@ -362,23 +447,47 @@ func (c CentAmount) SplitProportionally(weights []CentAmount) []CentAmount {
 	if count == 1 {
 		return []CentAmount{c} // Don't introduce rounding errors
 	}
-	totalWeight, shift := sumWeightMagnitudes(weights)
+	totalWeight, fits := sumWeightMagnitudes(weights)
 	result := make([]CentAmount, count)
-	if totalWeight == 0 {
+	if fits && totalWeight == 0 {
 		result[count-1] = c
 		return result
 	}
 	magnitude := abs64(int64(c))
 	parts := make([]uint64, count)
-	remainders := make([]uint64, count)
 	var allocated uint64
-	for i, weight := range weights {
-		// Exact 128 bit magnitude*weight/totalWeight.
-		// bits.Div64 can't overflow because every shifted weight magnitude is
-		// less or equal totalWeight, so the quotient is less or equal magnitude.
-		hi, lo := bits.Mul64(magnitude, abs64(int64(weight))>>shift)
-		parts[i], remainders[i] = bits.Div64(hi, lo, totalWeight)
-		allocated += parts[i]
+	// byLargestRemainder orders two parts by their truncated fraction, descending
+	var byLargestRemainder func(x, y int) int
+	if fits {
+		remainders := make([]uint64, count)
+		for i, weight := range weights {
+			// Exact 128 bit magnitude*weight/totalWeight.
+			// bits.Div64 can't overflow because every weight magnitude is less
+			// or equal totalWeight, so the quotient is less or equal magnitude.
+			hi, lo := bits.Mul64(magnitude, abs64(int64(weight)))
+			parts[i], remainders[i] = bits.Div64(hi, lo, totalWeight)
+			allocated += parts[i]
+		}
+		byLargestRemainder = func(x, y int) int { return cmp.Compare(remainders[y], remainders[x]) }
+	} else {
+		// The weight magnitudes sum past uint64, which needs more than the 128
+		// bits above. Scaling the weights down instead would change their
+		// ratios and break the one cent bound, so fall back to exact big.Int
+		// arithmetic. Unreachable for any real money amount: it takes two
+		// weights near the CentAmount range limit to get here.
+		total := new(big.Int)
+		for _, weight := range weights {
+			total.Add(total, new(big.Int).SetUint64(abs64(int64(weight))))
+		}
+		bigMagnitude := new(big.Int).SetUint64(magnitude)
+		remainders := make([]*big.Int, count)
+		for i, weight := range weights {
+			product := new(big.Int).Mul(bigMagnitude, new(big.Int).SetUint64(abs64(int64(weight))))
+			quotient, remainder := new(big.Int).QuoRem(product, total, new(big.Int))
+			parts[i], remainders[i] = quotient.Uint64(), remainder
+			allocated += parts[i]
+		}
+		byLargestRemainder = func(x, y int) int { return remainders[y].Cmp(remainders[x]) }
 	}
 	// Every truncated quotient lost less than one cent, so the undistributed
 	// rest is smaller than count and goes to the largest remainders.
@@ -387,9 +496,7 @@ func (c CentAmount) SplitProportionally(weights []CentAmount) []CentAmount {
 		for i := range order {
 			order[i] = i
 		}
-		slices.SortStableFunc(order, func(x, y int) int {
-			return cmp.Compare(remainders[y], remainders[x])
-		})
+		slices.SortStableFunc(order, byLargestRemainder)
 		for _, i := range order[:rest] {
 			parts[i]++
 		}
@@ -400,26 +507,18 @@ func (c CentAmount) SplitProportionally(weights []CentAmount) []CentAmount {
 	return result
 }
 
-// sumWeightMagnitudes returns the sum of the weight magnitudes together with
-// the number of bits every magnitude has to be shifted right for the sum to
-// fit into an uint64. It only happens for weight magnitudes summing up to
-// more than 2^64, which is far beyond any real money amount, and it truncates
-// the smallest weights towards zero rather than scaling them exactly. Without it the sum would wrap silently:
-// a wrap to zero would route the whole amount to the last result element and
-// a small wrapped sum would make bits.Div64 panic with an integer overflow.
-func sumWeightMagnitudes(weights []CentAmount) (total uint64, shift uint) {
-	for {
-		var hi, lo uint64
-		for _, weight := range weights {
-			var carry uint64
-			lo, carry = bits.Add64(lo, abs64(int64(weight))>>shift, 0)
-			hi += carry
-		}
-		if hi == 0 {
-			return lo, shift
-		}
-		shift++
+// sumWeightMagnitudes returns the sum of the weight magnitudes and whether it
+// fits into an uint64. A plain uint64 accumulation would wrap silently: a wrap
+// to zero routes the whole amount to the last result element and a small
+// wrapped sum makes bits.Div64 panic with an integer overflow.
+func sumWeightMagnitudes(weights []CentAmount) (total uint64, fits bool) {
+	var hi uint64
+	for _, weight := range weights {
+		var carry uint64
+		total, carry = bits.Add64(total, abs64(int64(weight)), 0)
+		hi += carry
 	}
+	return total, hi == 0
 }
 
 // centAmountFromFloat returns f rounded to whole cents half away from zero.

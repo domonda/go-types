@@ -202,14 +202,24 @@ func packDecimalAmount(coefficient int64, scale int) DecimalAmount {
 	return DecimalAmount{packed: coefficient<<scaleBits | int64(scale)}
 }
 
-// NewDecimalAmount returns a DecimalAmount equal to coefficient × 10^-scale.
+// DecimalAmountFromCoefficient returns a DecimalAmount equal to coefficient × 10^-scale.
 // It panics if scale is not in [0, MaxDecimalAmountScale] or if coefficient is
 // outside the representable range of roughly ±2.88×10^17.
-func NewDecimalAmount(coefficient int64, scale int) DecimalAmount {
+func DecimalAmountFromCoefficient(coefficient int64, scale int) DecimalAmount {
 	if scale < 0 || scale > MaxDecimalAmountScale {
-		panic(fmt.Sprintf("money.NewDecimalAmount scale %d out of range [0, %d]", scale, MaxDecimalAmountScale))
+		panic(fmt.Sprintf("money.DecimalAmountFromCoefficient scale %d out of range [0, %d]", scale, MaxDecimalAmountScale))
 	}
 	return packDecimalAmount(coefficient, scale)
+}
+
+// NewDecimalAmount returns a pointer to a DecimalAmount
+// equal to coefficient × 10^-scale.
+// It panics under the same conditions as DecimalAmountFromCoefficient.
+// See also DecimalAmount.Ptr.
+func NewDecimalAmount(coefficient int64, scale int) *DecimalAmount {
+	a := new(DecimalAmount)
+	*a = DecimalAmountFromCoefficient(coefficient, scale)
+	return a
 }
 
 // DecimalAmountConvertible lists the types DecimalAmountFrom converts from:
@@ -378,19 +388,9 @@ func ParseDecimalAmount(str string, acceptedDecimals ...int) (DecimalAmount, err
 	if len(acceptedDecimals) > 0 && !slices.Contains(acceptedDecimals, decimals) {
 		return DecimalAmount{}, fmt.Errorf("parsing %q returned %d decimals which is not in the accepted list %v", str, decimals, acceptedDecimals)
 	}
-	// The coefficient is exactly the sequence of all digit runes of str:
-	// float.ParseDetails only accepts digits, sign, separators and the
-	// exponent runes 'eE' (rejected above). Separators carry no digits, so
-	// concatenating every digit reconstructs the coefficient, and decimals
-	// (from ParseDetails) is the matching scale.
-	var b strings.Builder
-	b.Grow(len(str))
-	for _, r := range str {
-		if r >= '0' && r <= '9' {
-			b.WriteByte(byte(r))
-		}
-	}
-	coefficient, err := strconv.ParseInt(b.String(), 10, 64)
+	// The coefficient is exactly the sequence of all digit runes of str
+	// and decimals (from ParseDetails) is the matching scale.
+	coefficient, err := strconv.ParseInt(decimalDigitsOf(str), 10, 64)
 	if err != nil {
 		return DecimalAmount{}, fmt.Errorf("money.DecimalAmount value %q is too large: %w", str, err)
 	}
@@ -575,7 +575,7 @@ func (a DecimalAmount) orderRank() int {
 
 // Equal reports whether a and b represent the same value, ignoring scale.
 // It differs from the == operator, which compares the packed representation:
-// NewDecimalAmount(150, 2) == NewDecimalAmount(15, 1) is false, while their
+// DecimalAmountFromCoefficient(150, 2) == DecimalAmountFromCoefficient(15, 1) is false, while their
 // Equal is true.
 func (a DecimalAmount) Equal(b DecimalAmount) bool {
 	return a.Cmp(b) == 0
@@ -867,7 +867,7 @@ func (a DecimalAmount) GoString() string {
 	case a.IsInf(-1):
 		return "money.DecimalAmountInf(-1)"
 	default:
-		return fmt.Sprintf("money.NewDecimalAmount(%d, %d)", a.Coefficient(), a.Scale())
+		return fmt.Sprintf("money.DecimalAmountFromCoefficient(%d, %d)", a.Coefficient(), a.Scale())
 	}
 }
 
@@ -1478,6 +1478,21 @@ func div128by64(hi, lo, d uint64) (quoHi, quoLo, rem uint64) {
 	}
 	quoLo, rem = bits.Div64(hi, lo, d) // hi < d now, so no quotient overflow
 	return quoHi, quoLo, rem
+}
+
+// decimalDigitsOf returns the sequence of all digit runes of str.
+// float.ParseDetails only accepts digits, sign, separators and the exponent
+// runes 'eE', and separators carry no digits, so for a string it accepted the
+// digits alone reconstruct the number's significand.
+func decimalDigitsOf(str string) string {
+	var b strings.Builder
+	b.Grow(len(str))
+	for _, r := range str {
+		if r >= '0' && r <= '9' {
+			b.WriteByte(byte(r))
+		}
+	}
+	return b.String()
 }
 
 // roundUpMagnitude reports whether the truncated quotient magnitude quo (with

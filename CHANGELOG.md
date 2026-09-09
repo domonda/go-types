@@ -28,6 +28,10 @@ picking the semver baseline.
 
 ### Changed
 
+- `money.NewDecimalAmount(coefficient, scale)` is renamed to
+  `money.DecimalAmountFromCoefficient`, and `NewDecimalAmount` now returns a
+  `*DecimalAmount` so every `New*` constructor in the package returns a pointer
+  like `NewAmount`, `NewCentAmount` and `NewRate` do.
 - `money.Amount.GoString` now returns a Go source representation
   (`money.Amount(0.5)`) instead of a bare number, and uses enough fractional
   digits for the exact decimal expansion of every `float64`. The previous

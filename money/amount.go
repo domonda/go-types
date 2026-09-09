@@ -5,6 +5,7 @@ import (
 	"math"
 	"math/big"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/domonda/go-types/float"
@@ -51,9 +52,7 @@ func ParseAmount(str string, acceptedDecimals ...int) (Amount, error) {
 // NewAmount returns a pointer to an Amount
 // with the passed value.
 func NewAmount(value float64) *Amount {
-	a := new(Amount)
-	*a = Amount(value)
-	return a
+	return new(Amount(value))
 }
 
 // AmountFromPtr dereferences ptr or returns defaultVal if it is nil.
@@ -107,18 +106,30 @@ func (a Amount) Cents() int64 {
 // CentAmount range is clamped to MinCentAmount or MaxCentAmount,
 // because CentAmount has no non-finite states.
 func (a Amount) CentAmount(rounding RoundingMode) CentAmount {
-	cents := DecimalAmountFrom(a).RoundToCents(rounding)
-	if !cents.IsFinite() {
-		switch {
-		case cents.IsNaN():
-			return 0
-		case cents.Signbit():
-			return MinCentAmount
-		default:
-			return MaxCentAmount
-		}
+	f := float64(a)
+	if math.IsNaN(f) {
+		return 0
 	}
-	return CentAmount(cents.Coefficient())
+	if math.IsInf(f, 0) {
+		if math.Signbit(f) {
+			return MinCentAmount
+		}
+		return MaxCentAmount
+	}
+	// FormatFloat with 'f' and precision -1 is the shortest decimal that
+	// round-trips to f, written without an exponent, so its digits are the
+	// decimal representation to round. Going through a DecimalAmount instead
+	// would cap the result at its narrower coefficient range.
+	digits := strconv.FormatFloat(math.Abs(f), 'f', -1, 64)
+	intDigits, fracDigits, _ := strings.Cut(digits, ".")
+	cents, ok := centsFromDecimalDigits(intDigits, fracDigits, math.Signbit(f), rounding)
+	if !ok {
+		if math.Signbit(f) {
+			return MinCentAmount
+		}
+		return MaxCentAmount
+	}
+	return cents
 }
 
 // DecimalAmount converts the float64 Amount to an exact fixed-point
