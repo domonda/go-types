@@ -104,17 +104,16 @@ func centsFromDecimalDigits(intDigits, fracDigits string, negative bool, roundin
 	case len(fracDigits) > 2:
 		cut, fracDigits = fracDigits[2:], fracDigits[:2]
 	}
-	magnitude, err := strconv.ParseUint(strings.TrimLeft(intDigits+fracDigits, "0"), 10, 64)
+	// Parsing with bitSize 63 caps the result at 2^63-1, which is exactly
+	// MaxCentAmount, so anything out of range is rejected here rather than
+	// silently wrapping the conversion below.
+	magnitude, err := strconv.ParseUint(strings.TrimLeft(intDigits+fracDigits, "0"), 10, 63)
 	if err != nil {
-		// An empty string means all digits were zeros, anything else overflows
-		if errors.Is(err, strconv.ErrSyntax) {
-			magnitude = 0
-		} else {
+		// An empty string means all digits were zeros, anything else is out of range
+		if !errors.Is(err, strconv.ErrSyntax) {
 			return 0, false
 		}
-	}
-	if magnitude > uint64(MaxCentAmount) {
-		return 0, false
+		magnitude = 0
 	}
 	if halfCmp, nonZero := compareCutFractionToHalf(cut); nonZero {
 		if roundAwayFromZero(rounding, negative, magnitude&1 == 1, halfCmp) {
@@ -124,7 +123,7 @@ func centsFromDecimalDigits(intDigits, fracDigits string, negative bool, roundin
 			}
 		}
 	}
-	cents = CentAmount(magnitude)
+	cents = CentAmount(magnitude) //#nosec G115 -- bounded by ParseUint bitSize 63 and the check above
 	if negative {
 		cents = -cents
 	}
@@ -208,9 +207,11 @@ func (c CentAmount) WithinOneCent(b CentAmount) bool {
 	if c < b {
 		c, b = b, c
 	}
-	// The difference of two int64 can overflow int64 but never uint64,
-	// so a plain c-b would wrap and report the most distant amounts as equal.
-	return uint64(c)-uint64(b) <= 1
+	// The difference of two int64 can overflow int64 but never uint64, so a
+	// plain c-b would wrap and report the most distant amounts as equal.
+	// c >= b holds after the swap, so the two's complement difference is the
+	// true magnitude of the difference.
+	return uint64(c)-uint64(b) <= 1 //#nosec G115 -- deliberate two's complement reinterpretation, c >= b
 }
 
 // RoundToInt returns the amount rounded to whole currency units,
@@ -483,7 +484,8 @@ func (c CentAmount) SplitProportionally(weights []CentAmount) []CentAmount {
 	}
 	// Every truncated quotient lost less than one cent, so the undistributed
 	// rest is smaller than count and goes to the largest remainders.
-	if rest := int(magnitude - allocated); rest > 0 {
+	rest := int(magnitude - allocated) //#nosec G115 -- provably below count, see above
+	if rest > 0 {
 		order := make([]int, count)
 		for i := range order {
 			order[i] = i
@@ -494,7 +496,8 @@ func (c CentAmount) SplitProportionally(weights []CentAmount) []CentAmount {
 		}
 	}
 	for i, part := range parts {
-		result[i] = CentAmount(part).Copysign(c)
+		// Each part is at most magnitude, which came from a CentAmount
+		result[i] = CentAmount(part).Copysign(c) //#nosec G115 -- part <= magnitude <= MaxCentAmount
 	}
 	return result
 }

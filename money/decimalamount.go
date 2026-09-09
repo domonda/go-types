@@ -438,16 +438,45 @@ func (a DecimalAmount) Amount() Amount {
 }
 
 // CentAmount returns the amount rounded to whole cents with the given
-// rounding mode as CentAmount. It returns an error for a non-finite amount
-// and for an amount whose cent representation overflows the DecimalAmount
-// coefficient range of roughly ±2.88×10^17 cents,
-// because CentAmount has no non-finite states.
+// rounding mode as CentAmount. It returns an error for a non-finite amount and
+// for an amount outside of the CentAmount range, because CentAmount has no
+// non-finite states.
+//
+// The cents are computed from the coefficient and scale directly instead of
+// through RoundToCents, whose scale 2 result would have to fit the narrower
+// DecimalAmount coefficient range. So the whole CentAmount range is reachable:
+// NewDecimalAmount(30_000_000_000_000_000, 0) converts to 3e18 cents.
 func (a DecimalAmount) CentAmount(rounding RoundingMode) (CentAmount, error) {
-	cents := a.RoundToCents(rounding)
-	if !cents.IsFinite() {
-		return 0, fmt.Errorf("can't convert money.DecimalAmount %s to money.CentAmount", a)
+	if !a.IsFinite() {
+		return 0, fmt.Errorf("can't convert non-finite money.DecimalAmount %s to money.CentAmount", a)
 	}
-	return CentAmount(cents.Coefficient()), nil
+	coefficient, scale := a.Coefficient(), a.Scale()
+	negative := coefficient < 0
+	magnitude := abs64(coefficient)
+	switch {
+	case scale < 2:
+		// Padding to cents is the only direction that can leave the range
+		hi, lo := bits.Mul64(magnitude, pow10u(2-scale))
+		if hi != 0 {
+			return 0, fmt.Errorf("money.DecimalAmount %s overflows money.CentAmount", a)
+		}
+		magnitude = lo
+	case scale > 2:
+		divisor := pow10u(scale - 2)
+		quotient, remainder := magnitude/divisor, magnitude%divisor
+		if roundUpMagnitude(rounding, quotient, remainder, divisor, negative) {
+			quotient++
+		}
+		magnitude = quotient
+	}
+	if magnitude > uint64(MaxCentAmount) {
+		return 0, fmt.Errorf("money.DecimalAmount %s overflows money.CentAmount", a)
+	}
+	cents := CentAmount(magnitude) //#nosec G115 -- bounded by the check above
+	if negative {
+		cents = -cents
+	}
+	return cents, nil
 }
 
 // Sign returns -1 if the amount is negative, +1 if positive and 0 if zero.

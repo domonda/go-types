@@ -101,7 +101,7 @@ Whole cents (hundredths of a currency unit) as `int64` — the exact integer cou
 
 | Function / Method                                  | Description                                        |
 |----------------------------------------------------|----------------------------------------------------|
-| `ParseCentAmount(str, mode, decimals...)`          | Exact locale-aware parse via `ParseDecimalAmount`, applying `mode` beyond 2 decimals. `NaN`/`Inf` are errors. |
+| `ParseCentAmount(str, mode, decimals...)`          | Exact locale-aware parse straight from the decimal digits, applying `mode` beyond 2 decimals. `NaN`/`Inf` are errors. |
 | `CentAmountFromPtr(ptr, def)` / `c.Ptr()`          | Pointer round-trip helpers.                        |
 | `c.Cents()`                                        | The raw cent count (`int64`).                      |
 | `c.Amount()` / `a.CentAmount(mode)`                | Convert to/from the `float64` `Amount`.            |

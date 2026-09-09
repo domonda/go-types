@@ -64,8 +64,8 @@ func TestParseCentAmount(t *testing.T) {
 	t.Run("rounding mode is honored", func(t *testing.T) {
 		// The mode has to reach the cent conversion, so the same source
 		// string must produce different cents per mode.
-		// Every RoundingMode the package defines must survive the
-		// ParseDecimalAmount -> CentAmount hand-off, not just the default.
+		// Every RoundingMode the package defines must reach the direct
+		// decimal-digit conversion, not just the default.
 		modes := map[RoundingMode]CentAmount{
 			RoundHalfAwayFromZero: 1,
 			RoundHalfToEven:       0,
@@ -632,4 +632,26 @@ func TestCentAmount_SplitProportionally_hugeWeightFairness(t *testing.T) {
 		sum += part
 	}
 	assert.Equal(t, MaxCentAmount, sum)
+}
+
+func TestDecimalAmount_CentAmount_fullRange(t *testing.T) {
+	// Rounding through RoundToCents forced the scale 2 result into the
+	// narrower DecimalAmount coefficient range, so conversions failed well
+	// before the CentAmount range was exhausted.
+	cents, err := NewDecimalAmount(30_000_000_000_000_000, 0).CentAmount(RoundHalfAwayFromZero)
+	require.NoError(t, err)
+	assert.Equal(t, CentAmount(3_000_000_000_000_000_000), cents)
+
+	cents, err = NewDecimalAmount(-30_000_000_000_000_000, 0).CentAmount(RoundHalfAwayFromZero)
+	require.NoError(t, err)
+	assert.Equal(t, CentAmount(-3_000_000_000_000_000_000), cents)
+
+	// The largest amount that still fits: MaxCentAmount cents at scale 2
+	cents, err = NewDecimalAmount(maxDecimalAmountCoefficient, 2).CentAmount(RoundHalfAwayFromZero)
+	require.NoError(t, err)
+	assert.Equal(t, CentAmount(maxDecimalAmountCoefficient), cents)
+
+	// Only genuinely unrepresentable values may fail
+	_, err = NewDecimalAmount(maxDecimalAmountCoefficient, 0).CentAmount(RoundHalfAwayFromZero)
+	assert.Error(t, err, "2.88e17 currency units is 2.88e19 cents, beyond MaxCentAmount")
 }
