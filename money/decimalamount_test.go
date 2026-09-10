@@ -105,10 +105,13 @@ func TestParseDecimalAmount_acceptedDecimals(t *testing.T) {
 func TestParseDecimalAmount_errors(t *testing.T) {
 	for _, s := range []string{
 		"",
-		"1.5e3",                 // scientific notation rejected
 		"1.1234567890123456789", // 19 decimals > MaxDecimalAmountScale
 		"999999999999999999",    // 18 nines ~1e18 exceeds coefficient range
 		"abc",
+		"1e-19",                   // exponent pushes the scale past MaxDecimalAmountScale
+		"1e18",                    // exponent pushes the coefficient out of range
+		"1e",                      // exponent marker without digits
+		"1e999999999999999999999", // exponent too large for an int
 	} {
 		_, err := ParseDecimalAmount(s)
 		assert.Error(t, err, "expected error parsing %q", s)
@@ -560,16 +563,6 @@ func TestDecimalAmount_JSON(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(`"1234.56"`), &got))
 	assert.Equal(t, "1234.56", got.String())
 
-	// A quoted string carrying JSON escape sequences must be decoded through
-	// the standard library, not by stripping the outer quotes. The token here
-	// spells the digit 1 as a Unicode escape (u+0031); a conformant encoder
-	// may emit that and it must still decode to 1.23. byte(92) is the
-	// backslash, written numerically so the source carries no literal escape.
-	got = DecimalAmount{}
-	escaped := string([]byte{'"', byte(92), 'u', '0', '0', '3', '1', '.', '2', '3', '"'})
-	require.NoError(t, json.Unmarshal([]byte(escaped), &got))
-	assert.Equal(t, "1.23", got.String())
-
 	// null and "" decode to zero.
 	got = NewDecimalAmount(1, 0)
 	require.NoError(t, json.Unmarshal([]byte("null"), &got))
@@ -579,13 +572,9 @@ func TestDecimalAmount_JSON(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(`""`), &got))
 	assert.True(t, got.IsZero())
 
-	// Round-trip inside a struct.
-	type wrap struct {
-		Price DecimalAmount `json:"price"`
-	}
-	b, err := json.Marshal(wrap{Price: NewDecimalAmount(99999, 2)})
-	require.NoError(t, err)
-	assert.JSONEq(t, `{"price":999.99}`, string(b))
+	// Escape-sequence decoding and the struct round-trip are covered by
+	// TestDecimalAmount_UnmarshalJSONAcceptedForms and
+	// TestDecimalAmount_JSONRoundTripInStruct.
 }
 
 func TestDecimalAmount_Text(t *testing.T) {
@@ -639,26 +628,12 @@ func TestDecimalAmount_SQL(t *testing.T) {
 	assert.Equal(t, "1234.56", v)
 	assert.IsType(t, driver.Value(""), v)
 
-	cases := []struct {
-		src  any
-		want string
-	}{
-		{"1234.56", "1234.56"},
-		{[]byte("1.234,56"), "1234.56"},
-		{int64(42), "42"},
-		{float64(12.5), "12.5"},
-	}
-	for _, c := range cases {
-		var got DecimalAmount
-		require.NoError(t, got.Scan(c.src), "scan %#v", c.src)
-		assert.Equal(t, c.want, got.String(), "scan %#v", c.src)
-	}
-
+	// A driver may hand a numeric column over in a locale-specific spelling;
+	// the remaining driver.Value types are covered by
+	// TestDecimalAmount_ScanSQLTypes.
 	var got DecimalAmount
-	assert.Error(t, got.Scan(true))
-	// An int64 outside the coefficient range is rejected rather than silently
-	// truncated (the coefficient must round-trip Neg/Abs).
-	assert.Error(t, got.Scan(int64(math.MaxInt64)))
+	require.NoError(t, got.Scan([]byte("1.234,56")))
+	assert.Equal(t, "1234.56", got.String())
 }
 
 func TestNullableDecimalAmount(t *testing.T) {
@@ -1082,4 +1057,551 @@ func TestDecimalAmount_CentAmount(t *testing.T) {
 			assert.Error(t, err)
 		})
 	}
+}
+
+// decimalAmountRoundTripValues returns a set of DecimalAmounts that covers every
+// scale, both signs, the coefficient limits and the non-finite states, plus a
+// deterministic random sample. It is the input for the round-trip tests below.
+func decimalAmountRoundTripValues() []DecimalAmount {
+	values := []DecimalAmount{
+		DecimalAmountNaN(),
+		DecimalAmountInf(1),
+		DecimalAmountInf(-1),
+	}
+	coefficients := []int64{
+		0, 1, -1, 5, 9, 10, 99, 100, 123, 1000, 1234, 100000, 999999,
+		123456789, maxDecimalAmountCoefficient, minDecimalAmountCoefficient,
+	}
+	for scale := 0; scale <= MaxDecimalAmountScale; scale++ {
+		for _, coeff := range coefficients {
+			values = append(values, NewDecimalAmount(coeff, scale))
+		}
+	}
+	rng := rand.New(rand.NewSource(20240614))
+	for range 5000 {
+		coeff := rng.Int63n(maxDecimalAmountCoefficient)
+		if rng.Intn(2) == 0 {
+			coeff = -coeff
+		}
+		values = append(values, NewDecimalAmount(coeff, rng.Intn(MaxDecimalAmountScale+1)))
+	}
+	return values
+}
+
+// TestDecimalAmount_JSONRoundTripComplete is the round-trip guarantee callers
+// depend on when a DecimalAmount travels through a JSON API: decoding what
+// MarshalJSON produced must restore the identical value AND scale, because the
+// scale is part of the amount's meaning ("1.50" is a cent-precise price, "1.5"
+// is not). Comparing the packed structs rather than using Equal is deliberate:
+// Equal ignores the scale, so it would not catch a lost trailing zero.
+func TestDecimalAmount_JSONRoundTripComplete(t *testing.T) {
+	for _, want := range decimalAmountRoundTripValues() {
+		data, err := json.Marshal(want)
+		require.NoError(t, err, "marshal %#v", want)
+		require.True(t, json.Valid(data), "marshal %#v produced invalid JSON %q", want, data)
+
+		var got DecimalAmount
+		require.NoError(t, json.Unmarshal(data, &got), "unmarshal %q", data)
+		require.Equal(t, want, got, "JSON round-trip of %q", data)
+
+		// Re-marshalling must be byte-identical, so a value can survive any
+		// number of hops through JSON without drifting.
+		again, err := json.Marshal(got)
+		require.NoError(t, err)
+		require.Equal(t, string(data), string(again), "re-marshal of %q", data)
+
+		// The quoted string form of the same value must decode identically,
+		// so producers may send either a JSON number or a JSON string.
+		quoted, err := json.Marshal(want.String())
+		require.NoError(t, err)
+		got = DecimalAmount{}
+		require.NoError(t, json.Unmarshal(quoted, &got), "unmarshal %q", quoted)
+		require.Equal(t, want, got, "JSON round-trip of %q", quoted)
+	}
+}
+
+// TestDecimalAmount_JSONRoundTripInStruct guards the round trip through the
+// struct field path, where encoding/json wraps the value differently than for a
+// top-level document.
+func TestDecimalAmount_JSONRoundTripInStruct(t *testing.T) {
+	type wrap struct {
+		Price    DecimalAmount         `json:"price"`
+		Discount NullableDecimalAmount `json:"discount"`
+		Fee      NullableDecimalAmount `json:"fee"`
+	}
+	want := wrap{
+		Price:    NewDecimalAmount(99999, 2),
+		Discount: NewDecimalAmount(-150, 3).Nullable(),
+	}
+	data, err := json.Marshal(want)
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"price":999.99,"discount":-0.150,"fee":null}`, string(data))
+
+	var got wrap
+	require.NoError(t, json.Unmarshal(data, &got))
+	assert.Equal(t, want, got)
+	assert.True(t, got.Fee.IsNull())
+}
+
+// TestDecimalAmount_UnmarshalJSONAcceptedForms documents which encodings from
+// foreign producers are accepted. The exponent forms matter because Go's own
+// encoding/json emits them for float64 values outside 1e-6..1e21, and JavaScript
+// producers emit them for small numbers, so rejecting them would break interop
+// with services that model amounts as floats.
+func TestDecimalAmount_UnmarshalJSONAcceptedForms(t *testing.T) {
+	cases := []struct {
+		json string
+		want DecimalAmount
+	}{
+		// Plain JSON numbers.
+		{`1234.56`, NewDecimalAmount(123456, 2)},
+		{`-1234.56`, NewDecimalAmount(-123456, 2)},
+		{`0`, NewDecimalAmount(0, 0)},
+		{`0.00`, NewDecimalAmount(0, 2)},
+		{`1000`, NewDecimalAmount(1000, 0)},
+		// Exponent forms, applied exactly by shifting the scale.
+		{`1e3`, NewDecimalAmount(1000, 0)},
+		{`1.5e2`, NewDecimalAmount(150, 0)},
+		{`1.5E+2`, NewDecimalAmount(150, 0)},
+		{`-2e-2`, NewDecimalAmount(-2, 2)},
+		{`1e-18`, NewDecimalAmount(1, 18)},
+		{`10e-19`, NewDecimalAmount(1, 18)}, // trailing zero absorbs the extra scale
+		// JSON strings, decoded to a Go string first and then parsed, which is
+		// why locale separators and the non-finite tokens work here but not for
+		// a bare JSON number.
+		{`"1234.56"`, NewDecimalAmount(123456, 2)},
+		{`"1.234,56"`, NewDecimalAmount(123456, 2)},
+		{`"1,234.56"`, NewDecimalAmount(123456, 2)},
+		{`"-0.005"`, NewDecimalAmount(-5, 3)},
+		{`"1.5e2"`, NewDecimalAmount(150, 0)},
+		{`"NaN"`, DecimalAmountNaN()},
+		{`"Inf"`, DecimalAmountInf(1)},
+		{`"-Inf"`, DecimalAmountInf(-1)},
+		{`"Infinity"`, DecimalAmountInf(1)},
+		{`"-Infinity"`, DecimalAmountInf(-1)},
+		// Absent values decode to zero rather than failing.
+		{`null`, DecimalAmount{}},
+		{`""`, DecimalAmount{}},
+	}
+	for _, c := range cases {
+		got := NewDecimalAmount(7, 1) // non-zero, so a no-op decode would fail
+		require.NoError(t, json.Unmarshal([]byte(c.json), &got), "unmarshal %s", c.json)
+		assert.Equal(t, c.want, got, "unmarshal %s", c.json)
+	}
+
+	// A conformant encoder may escape any character, so the quoted form has to
+	// go through the standard library rather than just dropping the quotes.
+	// This spells the leading 1 of "1.23" as 1, written numerically so the
+	// Go source itself carries no escape.
+	var got DecimalAmount
+	escaped := string([]byte{'"', byte(92), 'u', '0', '0', '3', '1', '.', '2', '3', '"'})
+	require.NoError(t, json.Unmarshal([]byte(escaped), &got))
+	assert.Equal(t, NewDecimalAmount(123, 2), got)
+}
+
+// TestDecimalAmount_UnmarshalJSONErrors keeps unrepresentable or malformed input
+// loud instead of silently decoding to zero, which would look like a legitimate
+// amount to every caller downstream.
+func TestDecimalAmount_UnmarshalJSONErrors(t *testing.T) {
+	for _, s := range []string{
+		`true`,
+		`[]`,
+		`{}`,
+		`"abc"`,
+		`1e18`,                  // exceeds the coefficient range
+		`1e-19`,                 // exceeds MaxDecimalAmountScale
+		`1.1234567890123456789`, // 19 decimals
+		`999999999999999999`,    // 18 nines exceed the coefficient range
+	} {
+		got := NewDecimalAmount(7, 1)
+		assert.Error(t, json.Unmarshal([]byte(s), &got), "expected error unmarshalling %s", s)
+	}
+}
+
+// TestParseDecimalAmount_scientificNotation pins the exponent handling to exact
+// coefficient/scale results: the exponent shifts the scale instead of going
+// through a float64, so no precision is lost on the way.
+func TestParseDecimalAmount_scientificNotation(t *testing.T) {
+	cases := []struct {
+		str   string
+		coeff int64
+		scale int
+	}{
+		{"1e3", 1000, 0},
+		{"1E3", 1000, 0},
+		{"1e0", 1, 0},
+		{"1.5e2", 150, 0},
+		{"1.5e1", 15, 0},
+		{"1.5e0", 15, 1},
+		{"1.5e-2", 15, 3},
+		{"-1.5e-2", -15, 3},
+		{"2.88230376151711743e17", maxDecimalAmountCoefficient, 0},
+		{"1e17", 100000000000000000, 0},
+		{"1e-18", 1, 18},
+		{"100e-20", 1, 18}, // trailing zeros absorb the excess scale
+		// A zero has no precision for the exponent to shift, so it keeps the
+		// decimal places written in the mantissa. Anything else would make
+		// ParseDecimalAmount("0e-30", 2) reject a zero that "0.00" accepts.
+		{"0e-30", 0, 0},
+		{"0e30", 0, 0},
+		{"0.00e-30", 0, 2},
+		// The exponent applies on top of the locale-aware separator detection.
+		{"1.234,56e1", 123456, 1},
+	}
+	for _, c := range cases {
+		a, err := ParseDecimalAmount(c.str)
+		require.NoError(t, err, "ParseDecimalAmount(%q)", c.str)
+		assert.Equal(t, c.coeff, a.Coefficient(), "coefficient of %q", c.str)
+		assert.Equal(t, c.scale, a.Scale(), "scale of %q", c.str)
+	}
+
+	// acceptedDecimals is checked against the scale of the result, not against
+	// the decimals written in the mantissa.
+	a, err := ParseDecimalAmount("1.5e1", 0)
+	require.NoError(t, err)
+	assert.Equal(t, "15", a.String())
+	_, err = ParseDecimalAmount("1.5e1", 1)
+	assert.Error(t, err)
+
+	// Exponent forms that float.ParseDetails would accept but whose digits
+	// cannot be attributed to the coefficient must fail rather than parse to
+	// something arbitrary.
+	for _, s := range []string{"1e1e1", "1 e3", "1e+1e2"} {
+		_, err := ParseDecimalAmount(s)
+		assert.Error(t, err, "expected error parsing %q", s)
+	}
+}
+
+// TestDecimalAmount_SQLRoundTripComplete is the database counterpart of the JSON
+// round trip: what Value writes must Scan back with the identical value and
+// scale, for finite and non-finite amounts alike.
+func TestDecimalAmount_SQLRoundTripComplete(t *testing.T) {
+	for _, want := range decimalAmountRoundTripValues() {
+		v, err := want.Value()
+		require.NoError(t, err, "Value of %#v", want)
+		require.IsType(t, "", v, "Value of %#v must be a string", want)
+
+		var got DecimalAmount
+		require.NoError(t, got.Scan(v), "scan %v", v)
+		require.Equal(t, want, got, "SQL round-trip of %v", v)
+
+		// Drivers hand text columns over as []byte just as often as string.
+		got = DecimalAmount{}
+		require.NoError(t, got.Scan([]byte(v.(string))), "scan []byte %v", v)
+		require.Equal(t, want, got, "SQL round-trip of []byte %v", v)
+	}
+}
+
+// TestDecimalAmount_ScanSQLTypes covers the driver.Value types a numeric column
+// can arrive as. numeric/decimal comes back as string or []byte, an integer
+// column as int64 and float8/real as float64, and all of them must land on the
+// same amount.
+func TestDecimalAmount_ScanSQLTypes(t *testing.T) {
+	cases := []struct {
+		src  any
+		want DecimalAmount
+	}{
+		// numeric/decimal as text.
+		{"1234.56", NewDecimalAmount(123456, 2)},
+		{[]byte("1234.56"), NewDecimalAmount(123456, 2)},
+		{"-0.005", NewDecimalAmount(-5, 3)},
+		{"1234.5600", NewDecimalAmount(12345600, 4)}, // numeric keeps its scale
+		// float8 text output uses scientific notation for small magnitudes.
+		{"1.5e-5", NewDecimalAmount(15, 6)},
+		{[]byte("1.5e-5"), NewDecimalAmount(15, 6)},
+		// integer columns.
+		{int64(42), NewDecimalAmount(42, 0)},
+		{int64(-42), NewDecimalAmount(-42, 0)},
+		{int64(0), NewDecimalAmount(0, 0)},
+		{int64(maxDecimalAmountCoefficient), NewDecimalAmount(maxDecimalAmountCoefficient, 0)},
+		// float8/real columns, converted through the shortest exact decimal so
+		// no binary noise leaks into the scale.
+		{float64(12.5), NewDecimalAmount(125, 1)},
+		{float64(0.1), NewDecimalAmount(1, 1)},
+		{float64(-1234.56), NewDecimalAmount(-123456, 2)},
+		{float64(0), NewDecimalAmount(0, 0)},
+		{math.Inf(1), DecimalAmountInf(1)},
+		{math.Inf(-1), DecimalAmountInf(-1)},
+		// PostgreSQL numeric spells its non-finite values out in full.
+		{"NaN", DecimalAmountNaN()},
+		{"Infinity", DecimalAmountInf(1)},
+		{"-Infinity", DecimalAmountInf(-1)},
+	}
+	for _, c := range cases {
+		var got DecimalAmount
+		require.NoError(t, got.Scan(c.src), "scan %#v", c.src)
+		assert.Equal(t, c.want, got, "scan %#v", c.src)
+	}
+
+	var nan DecimalAmount
+	require.NoError(t, nan.Scan(math.NaN()))
+	assert.True(t, nan.IsNaN())
+
+	// A float8 needing more than MaxDecimalAmountScale digits is rounded rather
+	// than rejected, because float8 carries no exact decimal beyond that anyway.
+	var rounded DecimalAmount
+	require.NoError(t, rounded.Scan(1e-19))
+	// Pin the scale, not just the zero-ness: IsZero cannot tell scale 0 from
+	// scale 18, and the scale is what Value writes back to the column.
+	assert.Equal(t, NewDecimalAmount(0, MaxDecimalAmountScale), rounded)
+
+	// Values that cannot be represented must fail loud instead of saturating to
+	// infinity, which would be written back to the database as "Infinity".
+	var got DecimalAmount
+	assert.Error(t, got.Scan(true))
+	assert.Error(t, got.Scan(nil))
+	assert.Error(t, got.Scan(int64(math.MaxInt64)))
+	assert.Error(t, got.Scan(1e30))
+	assert.Error(t, got.Scan(-1e30))
+}
+
+// TestParseDecimalAmount_exponentRejections covers the rejection paths of the
+// exponent handling that the accepted-form tests never reach. Each input here
+// is either unrepresentable or ambiguous, and a wrongly parsed amount is money
+// silently gained or lost, so every one of them must fail loud.
+func TestParseDecimalAmount_exponentRejections(t *testing.T) {
+	for _, s := range []string{
+		"1e1001",               // exponent beyond the ±1000 bound accepted by splitDecimalExponent
+		"1e-1001",              // same bound on the negative side
+		"-1e18",                // negative-scale folding overflows the coefficient range
+		"10e-20",               // stripping the single trailing zero still leaves scale 19
+		"12345678901234567890", // 20 digits overflow the int64 coefficient parse
+		"e5",                   // an 'e' without a preceding digit is not an exponent
+		"E5",                   // same for the upper case spelling
+		"1.e5",                 // the '.' before the 'e' makes the exponent unattributable
+	} {
+		_, err := ParseDecimalAmount(s)
+		assert.Error(t, err, "expected error parsing %q", s)
+	}
+}
+
+// TestParseDecimalAmount_exponentFormVariants pins the spellings that SQL and
+// JSON producers actually emit around an exponent: surrounding whitespace from
+// padded text columns, an explicit '+' sign, a zero exponent, and the long
+// "+Infinity" literal. They must parse to the same amounts as their canonical
+// forms instead of being rejected as malformed.
+func TestParseDecimalAmount_exponentFormVariants(t *testing.T) {
+	cases := []struct {
+		str   string
+		coeff int64
+		scale int
+	}{
+		{" 1e3 ", 1000, 0},    // whitespace padding around the whole literal
+		{"1e+3", 1000, 0},     // explicit positive exponent sign
+		{"1E+3", 1000, 0},     // upper case with sign
+		{"1e-0", 1, 0},        // a zero exponent leaves the scale untouched
+		{"1e07", 10000000, 0}, // leading zero in the exponent digits
+		{"-0e-30", 0, 0},      // negative zero keeps the mantissa scale like +0
+	}
+	for _, c := range cases {
+		a, err := ParseDecimalAmount(c.str)
+		require.NoError(t, err, "ParseDecimalAmount(%q)", c.str)
+		assert.Equal(t, c.coeff, a.Coefficient(), "coefficient of %q", c.str)
+		assert.Equal(t, c.scale, a.Scale(), "scale of %q", c.str)
+	}
+
+	// Value emits "Infinity" for +Inf, but PostgreSQL also accepts and may
+	// return the "+Infinity" spelling, so it has to read back as +Inf.
+	a, err := ParseDecimalAmount("+Infinity")
+	require.NoError(t, err)
+	assert.True(t, a.IsInf(1))
+}
+
+// TestDecimalAmount_UnmarshalJSONMalformedString exercises the direct
+// UnmarshalJSON entry point with byte slices that encoding/json would have
+// rejected before ever calling it. Hand-rolled decoders and streaming parsers do
+// call it directly, and a malformed token must return an error instead of
+// leaving the destination half-written.
+func TestDecimalAmount_UnmarshalJSONMalformedString(t *testing.T) {
+	for _, data := range []string{
+		`"1.2`,     // unterminated string
+		`"\q"`,     // invalid escape sequence
+		"\"\x00\"", // control character that JSON forbids unescaped
+	} {
+		got := NewDecimalAmount(7, 1)
+		err := got.UnmarshalJSON([]byte(data))
+		assert.Error(t, err, "expected error unmarshalling %s", data)
+		// A failed decode must not clobber the destination, otherwise a
+		// partially decoded document would leave a wrong amount behind.
+		assert.Equal(t, NewDecimalAmount(7, 1), got, "destination changed by failed unmarshal of %s", data)
+	}
+}
+
+// TestDecimalAmount_ScanRejects covers the Scan rejections that the type-matrix
+// test does not reach. Scan is the boundary where database content becomes a
+// Go value, so unparseable text and out-of-range integers must surface as
+// errors rather than as a zero or a saturated amount that would later be
+// written back to the database as a legitimate number.
+func TestDecimalAmount_ScanRejects(t *testing.T) {
+	for _, src := range []any{
+		"abc",                  // a text column that does not hold a number
+		[]byte("not a number"), // the same as []byte
+		"1e-19",                // exceeds MaxDecimalAmountScale
+		int64(math.MinInt64),   // below the coefficient range
+		int64(math.MaxInt64),   // above the coefficient range
+	} {
+		got := NewDecimalAmount(7, 1)
+		assert.Error(t, got.Scan(src), "expected error scanning %#v", src)
+		assert.Equal(t, NewDecimalAmount(7, 1), got, "destination changed by failed scan of %#v", src)
+	}
+}
+
+// TestDecimalAmount_ScanFloatRange pins the float64 range boundary introduced
+// with the out-of-range rejection: a float8 column value just above the
+// coefficient range must error instead of silently becoming +Inf, which would
+// be written back as the literal "Infinity" and corrupt the column.
+func TestDecimalAmount_ScanFloatRange(t *testing.T) {
+	var got DecimalAmount
+	require.NoError(t, got.Scan(1e17))
+	assert.Equal(t, "100000000000000000", got.String())
+
+	// maxDecimalAmountCoefficient is ~2.88e17, so 2.9e17 is the first round
+	// magnitude beyond it.
+	assert.Error(t, got.Scan(2.9e17))
+	assert.Error(t, got.Scan(-2.9e17))
+
+	// ±Inf and NaN are genuine float8 values and must pass through instead of
+	// being reported as out of range.
+	require.NoError(t, got.Scan(math.Inf(1)))
+	assert.True(t, got.IsInf(1))
+	require.NoError(t, got.Scan(math.Inf(-1)))
+	assert.True(t, got.IsInf(-1))
+}
+
+// TestParseDecimalAmount_exponentWhitespace pins the exponent grammar to the
+// one JSON and PostgreSQL actually use: marker, optional sign, digits. Padding
+// around the whole literal is fine (a CSV cell or a text column may carry it),
+// but a space next to the exponent digits is a typo, and a typo that silently
+// parses to a number is money invented out of whitespace. "1 e3" was already
+// rejected; these are the mirror-image spellings.
+func TestParseDecimalAmount_exponentWhitespace(t *testing.T) {
+	for _, s := range []string{"1e 3", "1e\t3", "1e  -3", "1.5e 2", "1e 2"} {
+		_, err := ParseDecimalAmount(s)
+		assert.Error(t, err, "expected error parsing %q", s)
+	}
+
+	// Padding around the whole number stays acceptable.
+	for _, s := range []string{" 1e3 ", "\t1.5e2\n", "  -2e-2  "} {
+		_, err := ParseDecimalAmount(s)
+		assert.NoError(t, err, "expected %q to parse", s)
+	}
+}
+
+// TestParseDecimalAmount_mantissaDecimalLimit documents the one asymmetry in the
+// exponent handling: the mantissa's own decimal places are capped at
+// MaxDecimalAmountScale before the exponent is applied, so a representable value
+// written with a long mantissa and a positive exponent is still rejected. The
+// trailing-zero direction is rescued, the leading-zero direction is not.
+func TestParseDecimalAmount_mantissaDecimalLimit(t *testing.T) {
+	// 10e-19 == 1e-18: the redundant trailing zero is stripped and it parses.
+	a, err := ParseDecimalAmount("10e-19")
+	require.NoError(t, err)
+	assert.Equal(t, NewDecimalAmount(1, MaxDecimalAmountScale), a)
+
+	// 0.0000000000000000001e1 == 1e-18 too, but the mantissa carries 19 decimal
+	// places, which is rejected before the exponent is ever applied.
+	_, err = ParseDecimalAmount("0.0000000000000000001e1")
+	assert.Error(t, err)
+}
+
+// TestParseDecimalAmount_redundantTrailingZeros covers the exponent forms that
+// arbitrary-precision decimal serializers emit. Java's BigDecimal.toString and
+// friends preserve the unscaled value's trailing zeros, so the same amount
+// arrives as "1000000000000000000e-18" rather than "1". Those digits are
+// redundant precision, not value, and rejecting them would fail on real JSON
+// payloads from services that model money with BigDecimal.
+func TestParseDecimalAmount_redundantTrailingZeros(t *testing.T) {
+	cases := []struct {
+		str  string
+		want string // exact decimal value, scale-insensitive comparison below
+	}{
+		{"1000000000000000000e-18", "1"},
+		{"10000000000000000000e-19", "1"},
+		{"100000000000000000000000e-23", "1"},
+		{"1000000000000000000e-1", "100000000000000000"},
+		{"8.47149059147532060E+3", "8471.4905914753206"},
+		{"2.882303761517117430E+17", "288230376151711743"},
+		{"28823037615171174300e-20", "0.288230376151711743"},
+	}
+	for _, c := range cases {
+		got, err := ParseDecimalAmount(c.str)
+		require.NoError(t, err, "ParseDecimalAmount(%q)", c.str)
+		want, err := ParseDecimalAmount(c.want)
+		require.NoError(t, err)
+		// Equal compares by value across scales, which is the point here: the
+		// stripped zeros must not have changed the amount.
+		assert.True(t, want.Equal(got), "%q parsed to %s, want %s", c.str, got, want)
+	}
+
+	// The stripping must never touch a trailing zero that carries scale: a
+	// price of 1.50 is cent-precise and must not become 1.5.
+	for _, c := range []struct {
+		str   string
+		coeff int64
+		scale int
+	}{
+		{"1.50", 150, 2},
+		{"1.500", 1500, 3},
+		{"1.0", 10, 1},
+		{"100e-2", 100, 2},
+		{"1000", 1000, 0},
+	} {
+		got, err := ParseDecimalAmount(c.str)
+		require.NoError(t, err, "ParseDecimalAmount(%q)", c.str)
+		assert.Equal(t, c.coeff, got.Coefficient(), "coefficient of %q", c.str)
+		assert.Equal(t, c.scale, got.Scale(), "scale of %q", c.str)
+	}
+
+	// A value that no amount of stripping can rescue is still an error.
+	for _, s := range []string{"28823037615171175e1", "999999999999999999", "1e18"} {
+		_, err := ParseDecimalAmount(s)
+		assert.Error(t, err, "expected error parsing %q", s)
+	}
+}
+
+// TestParseDecimalAmount_invisibleTrailingRunes guards against the exponent form
+// being stricter than the plain form about invisible characters. A BOM or a
+// zero-width space on the end of a field is routine in CSV and spreadsheet
+// exports, and float.ParseDetails already tolerates it, so "1e5<BOM>" must
+// parse exactly like "15<BOM>" does rather than failing on the exponent.
+func TestParseDecimalAmount_invisibleTrailingRunes(t *testing.T) {
+	for _, invisible := range []string{"\ufeff", "\u200b"} {
+		plain, err := ParseDecimalAmount("15" + invisible)
+		require.NoError(t, err, "plain form with %q", invisible)
+		assert.Equal(t, NewDecimalAmount(15, 0), plain)
+
+		exp, err := ParseDecimalAmount("1.5e1" + invisible)
+		require.NoError(t, err, "exponent form with %q", invisible)
+		assert.True(t, plain.Equal(exp), "exponent form with %q gave %s", invisible, exp)
+	}
+}
+
+// TestParseDecimalAmount_zeroKeepsMantissaScale pins that an exponent cannot
+// inflate the scale of a zero. A caller validating cent amounts with
+// acceptedDecimals{2} has to accept a zero written as "0.00e-30" and reject
+// nothing that "0.00" would pass.
+func TestParseDecimalAmount_zeroKeepsMantissaScale(t *testing.T) {
+	for _, c := range []struct {
+		str   string
+		scale int
+	}{
+		{"0", 0},
+		{"0e-1000", 0},
+		{"0e1000", 0},
+		{"-0e-1000", 0},
+		{"0.00", 2},
+		{"0.00e-1000", 2},
+		{"0.00e5", 2},
+	} {
+		got, err := ParseDecimalAmount(c.str)
+		require.NoError(t, err, "ParseDecimalAmount(%q)", c.str)
+		assert.True(t, got.IsZero(), "%q should be zero", c.str)
+		assert.Equal(t, c.scale, got.Scale(), "scale of %q", c.str)
+	}
+
+	// acceptedDecimals therefore behaves the same for every spelling of zero.
+	_, err := ParseDecimalAmount("0.00e-30", 2)
+	assert.NoError(t, err)
+	_, err = ParseDecimalAmount("0e-30", 0)
+	assert.NoError(t, err)
 }

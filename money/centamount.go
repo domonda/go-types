@@ -14,6 +14,7 @@ import (
 
 	"github.com/domonda/go-types/float"
 	"github.com/domonda/go-types/nullable"
+	"github.com/domonda/go-types/strutil"
 )
 
 // CentAmount adds money related methods to int64
@@ -64,22 +65,55 @@ func NullableCentAmountFromPtr(ptr *CentAmount) NullableCentAmount {
 //
 // NaN and infinity are returned as error because CentAmount
 // has no non-finite states.
+//
+// Scientific notation like "1.5e2" is accepted, matching ParseDecimalAmount, so
+// the JSON and PostgreSQL float8 exponent forms scan into a CentAmount too. The
+// exponent moves the split between the integer and the fractional digits rather
+// than going through a float64, so the result stays exact and digits shifted
+// past the second decimal place still only decide the rounding.
+// If acceptedDecimals are passed they are matched against the decimal places of
+// the value after the exponent is applied, so "1.5e2" has 0 of them.
 func ParseCentAmount(str string, rounding RoundingMode, acceptedDecimals ...int) (CentAmount, error) {
-	f, _, _, decimals, err := float.ParseDetails(str)
+	str = strutil.TrimSpace(str)
+	// The exponent has to be split off before parsing because the digits are
+	// taken from the mantissa alone and because a negative exponent sign must
+	// not be mistaken for the sign of the value.
+	mantissa, exponent, err := splitDecimalExponent(str, "money.CentAmount")
 	if err != nil {
 		return 0, err
+	}
+	f, _, _, decimals, err := float.ParseDetails(mantissa)
+	if err != nil {
+		return 0, err
+	}
+	if strings.ContainsAny(mantissa, "eE") {
+		// float.ParseDetails accepts exponent forms that splitDecimalExponent
+		// does not recognize, like "1e1e1" or "1 e3". Their digits would end up
+		// in the amount, so reject them instead of parsing them wrongly.
+		return 0, fmt.Errorf("money.CentAmount value %q has a malformed exponent", str)
 	}
 	if math.IsNaN(f) || math.IsInf(f, 0) {
 		return 0, fmt.Errorf("can't parse %q as money.CentAmount which has no non-finite values", str)
 	}
-	if strings.ContainsAny(str, "eE") {
-		return 0, fmt.Errorf("scientific notation is not supported for money.CentAmount: %q", str)
+	// The exponent shifts the decimal point, which is the same as moving the
+	// split point through the digit string, padding with zeros when it moves
+	// past either end.
+	digits := decimalDigitsOf(mantissa)
+	decimals -= exponent
+	switch {
+	case decimals < 0:
+		// The point moved right past the last digit: append the missing zeros.
+		digits += strings.Repeat("0", -decimals)
+		decimals = 0
+	case decimals > len(digits):
+		// The point moved left past the first digit: prepend leading zeros so
+		// the split below still has an integer part to cut.
+		digits = strings.Repeat("0", decimals-len(digits)) + digits
 	}
 	if len(acceptedDecimals) > 0 && !slices.Contains(acceptedDecimals, decimals) {
 		return 0, fmt.Errorf("parsing %q returned %d decimals which is not in the accepted list %v", str, decimals, acceptedDecimals)
 	}
-	digits := decimalDigitsOf(str)
-	cents, ok := centsFromDecimalDigits(digits[:len(digits)-decimals], digits[len(digits)-decimals:], strings.ContainsRune(str, '-'), rounding)
+	cents, ok := centsFromDecimalDigits(digits[:len(digits)-decimals], digits[len(digits)-decimals:], strings.ContainsRune(mantissa, '-'), rounding)
 	if !ok {
 		return 0, fmt.Errorf("money.CentAmount value %q does not fit the range from %d to %d cents", str, int64(MinCentAmount), int64(MaxCentAmount))
 	}
