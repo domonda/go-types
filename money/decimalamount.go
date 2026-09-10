@@ -18,6 +18,7 @@ import (
 
 	"github.com/domonda/go-types/float"
 	"github.com/domonda/go-types/nullable"
+	"github.com/domonda/go-types/strutil"
 )
 
 // Implemented interfaces
@@ -142,6 +143,12 @@ const (
 	// that Neg and Abs never overflow a valid value.
 	maxDecimalAmountCoefficient = 1<<(63-scaleBits) - 1 // 2^58 - 1
 	minDecimalAmountCoefficient = -maxDecimalAmountCoefficient
+
+	// maxDecimalAmountDigits is the number of decimal digits of
+	// maxDecimalAmountCoefficient (288230376151711743). A digit string longer
+	// than this can never fit the coefficient, which is what the parser uses to
+	// decide when a trailing zero has to be stripped.
+	maxDecimalAmountDigits = 18
 )
 
 // pow5[i] == 5^i for i in 0..MaxDecimalAmountScale (5^18 < 2^42), used by the
@@ -346,22 +353,65 @@ func (a DecimalAmount) IsInf(sign int) bool {
 // 1000. Pass acceptedDecimals to reject such ambiguous inputs.
 //
 // The tokens "NaN", "Inf"/"+Inf"/"Infinity" and "-Inf"/"-Infinity" parse to the
-// corresponding non-finite values. Scientific notation is rejected. If
-// acceptedDecimals is non-empty, the number of decimal places must be one of the
-// listed values. An error is returned if the value needs more than
-// MaxDecimalAmountScale decimal places or does not fit the coefficient range.
+// corresponding non-finite values.
+//
+// Scientific notation like "1.5e2" is accepted and applied exactly by shifting
+// the scale, because JSON numbers and PostgreSQL float8 output may use it.
+// Redundant trailing zeros of the mantissa are dropped when, and only when, the
+// value would otherwise not fit, so the BigDecimal-style "1000000000000000000e-18"
+// parses as 1 while "1.50" keeps its cent precision. What has to be in range is
+// the value: "1e-19" is rejected because it needs 19 decimal places, while
+// "10e-19" (== 1e-18) is accepted. A zero keeps the decimal places written in
+// its mantissa, since an exponent cannot add precision to it.
+//
+// The mantissa's own decimal places are capped at MaxDecimalAmountScale before
+// the exponent is applied, so "0.0000000000000000001e1" is rejected even though
+// it equals the representable 1e-18.
+//
+// Whitespace is only allowed around the whole number, not between the exponent
+// marker and its digits.
+//
+// If acceptedDecimals is non-empty, the number of decimal places of the result
+// must be one of the listed values. Note that this differs from ParseAmount,
+// which matches against the decimal places written in the string: for "1.5e2"
+// ParseDecimalAmount accepts 0 and ParseAmount accepts 1.
+//
+// An error is returned if the value needs more than MaxDecimalAmountScale
+// decimal places or does not fit the coefficient range.
 func ParseDecimalAmount(str string, acceptedDecimals ...int) (DecimalAmount, error) {
+	// Trim once here so that no later step has to cope with padding. This uses
+	// the same trimming as float.ParseDetails, which also strips the BOM and
+	// zero-width runes that CSV and spreadsheet exports carry, so the exponent
+	// form is no stricter about them than the plain form. It also keeps the
+	// exponent grammar strict: after trimming, any remaining space next to the
+	// exponent digits is a syntax error rather than padding, which makes
+	// "1e 2" invalid just like "1 e2" already is.
+	str = strutil.TrimSpace(str)
 	// The long "Infinity" spellings are not recognized by float.ParseDetails but
 	// are the PostgreSQL numeric literals emitted by Value.
-	switch strings.TrimSpace(str) {
+	switch str {
 	case "Infinity", "+Infinity":
 		return decimalInf(false), nil
 	case "-Infinity":
 		return decimalInf(true), nil
 	}
-	f, _, _, decimals, err := float.ParseDetails(str)
+	// The exponent has to be split off before parsing because the coefficient is
+	// built from all digit runes of the mantissa, which must not include the
+	// exponent digits, and because a negative exponent sign must not be mistaken
+	// for the sign of the value.
+	mantissa, exponent, err := splitDecimalExponent(str, "money.DecimalAmount")
 	if err != nil {
 		return DecimalAmount{}, err
+	}
+	f, _, _, decimals, err := float.ParseDetails(mantissa)
+	if err != nil {
+		return DecimalAmount{}, err
+	}
+	if strings.ContainsAny(mantissa, "eE") {
+		// float.ParseDetails accepts exponent forms that splitDecimalExponent
+		// does not recognize, like "1e1e1" or "1 e3". Their digits would end up
+		// in the coefficient, so reject them instead of parsing them wrongly.
+		return DecimalAmount{}, fmt.Errorf("money.DecimalAmount value %q has a malformed exponent", str)
 	}
 	if math.IsNaN(f) {
 		return DecimalAmountNaN(), nil
@@ -369,28 +419,102 @@ func ParseDecimalAmount(str string, acceptedDecimals ...int) (DecimalAmount, err
 	if math.IsInf(f, 0) {
 		return decimalInf(math.Signbit(f)), nil
 	}
-	if strings.ContainsAny(str, "eE") {
-		return DecimalAmount{}, fmt.Errorf("scientific notation is not supported for money.DecimalAmount: %q", str)
-	}
 	if decimals > MaxDecimalAmountScale {
 		return DecimalAmount{}, fmt.Errorf("money.DecimalAmount supports at most %d decimal places but %q has %d", MaxDecimalAmountScale, str, decimals)
 	}
-	if len(acceptedDecimals) > 0 && !slices.Contains(acceptedDecimals, decimals) {
-		return DecimalAmount{}, fmt.Errorf("parsing %q returned %d decimals which is not in the accepted list %v", str, decimals, acceptedDecimals)
-	}
-	// The coefficient is exactly the sequence of all digit runes of str
+	// The coefficient is exactly the sequence of all digit runes of the mantissa
 	// and decimals (from ParseDetails) is the matching scale.
-	coefficient, err := strconv.ParseInt(decimalDigitsOf(str), 10, 64)
+	// Leading zeros carry no value, so the significant digits are what has to
+	// fit the coefficient.
+	digits := strings.TrimLeft(decimalDigitsOf(mantissa), "0")
+	// value == digits · 10^-decimals · 10^exponent
+	scale := decimals - exponent
+	if digits == "" {
+		// A zero carries no precision, so an exponent cannot add any: keep the
+		// decimal places actually written in the mantissa. Otherwise "0e-1000"
+		// would land at MaxDecimalAmountScale and fail an acceptedDecimals
+		// check that the identical "0" passes.
+		digits, scale = "0", decimals
+	}
+	// Dropping a trailing zero and decrementing the scale is exactly
+	// value-preserving, so it is the way to bring an otherwise unrepresentable
+	// value into range. Arbitrary-precision decimal serializers (Java's
+	// BigDecimal among them) preserve the unscaled value's trailing zeros and
+	// emit forms like "1000000000000000000e-18", which is just 1. Strip only
+	// while the significant digits cannot fit, so a meaningful trailing zero
+	// keeps its scale: "1.50" must stay coefficient 150 at scale 2.
+	for len(digits) > maxDecimalAmountDigits && strings.HasSuffix(digits, "0") {
+		digits = digits[:len(digits)-1]
+		scale--
+	}
+	coefficient, err := strconv.ParseInt(digits, 10, 64)
 	if err != nil {
 		return DecimalAmount{}, fmt.Errorf("money.DecimalAmount value %q is too large: %w", str, err)
 	}
-	if strings.ContainsRune(str, '-') {
+	if strings.ContainsRune(mantissa, '-') {
 		coefficient = -coefficient
+	}
+	// The same stripping again, now that the coefficient is known numerically.
+	// A digit count within maxDecimalAmountDigits can still exceed the 59-bit
+	// coefficient range, and the scale can still be too large.
+	for coefficient != 0 && coefficient%10 == 0 &&
+		(scale > MaxDecimalAmountScale ||
+			coefficient < minDecimalAmountCoefficient ||
+			coefficient > maxDecimalAmountCoefficient) {
+		coefficient /= 10
+		scale--
+	}
+	if scale > MaxDecimalAmountScale {
+		return DecimalAmount{}, fmt.Errorf("money.DecimalAmount supports at most %d decimal places but %q needs %d", MaxDecimalAmountScale, str, scale)
+	}
+	// A negative scale is folded into the coefficient, which may overflow.
+	for ; scale < 0; scale++ {
+		if coefficient < minDecimalAmountCoefficient/10 || coefficient > maxDecimalAmountCoefficient/10 {
+			return DecimalAmount{}, fmt.Errorf("money.DecimalAmount value %q does not fit the representable range", str)
+		}
+		coefficient *= 10
 	}
 	if coefficient < minDecimalAmountCoefficient || coefficient > maxDecimalAmountCoefficient {
 		return DecimalAmount{}, fmt.Errorf("money.DecimalAmount value %q does not fit the representable range", str)
 	}
-	return packDecimalAmount(coefficient, decimals), nil
+	if len(acceptedDecimals) > 0 && !slices.Contains(acceptedDecimals, scale) {
+		return DecimalAmount{}, fmt.Errorf("parsing %q returned %d decimals which is not in the accepted list %v", str, scale, acceptedDecimals)
+	}
+	return packDecimalAmount(coefficient, scale), nil
+}
+
+// maxDecimalExponent bounds the scientific-notation exponent accepted by
+// ParseDecimalAmount, keeping the scale arithmetic trivially in int range.
+// Any exponent this large is far outside the representable value range anyway,
+// since the coefficient holds under 18 significant digits.
+const maxDecimalExponent = 1000
+
+// splitDecimalExponent splits an optional scientific-notation suffix ('e' or 'E'
+// followed by an optionally signed decimal integer) off str and returns the
+// mantissa and the exponent value. A str without such a suffix is returned
+// unchanged with a zero exponent. str is expected to be trimmed already, so
+// whitespace next to the exponent digits is rejected rather than ignored.
+// typeName names the money type in the error messages, since both
+// ParseDecimalAmount and ParseCentAmount share this helper.
+func splitDecimalExponent(str, typeName string) (mantissa string, exponent int, err error) {
+	i := strings.LastIndexAny(str, "eE")
+	// Only an 'e' directly after a digit marks an exponent. Without this check
+	// any word containing an 'e' would be reported as a bad exponent instead of
+	// getting the number parser's own error message.
+	if i <= 0 || str[i-1] < '0' || str[i-1] > '9' {
+		return str, 0, nil
+	}
+	// The strconv error is not wrapped: it would quote the exponent substring a
+	// second time on top of the %q below, and the input is untrusted and may be
+	// arbitrarily long.
+	exponent, err = strconv.Atoi(str[i+1:])
+	if err != nil {
+		return "", 0, fmt.Errorf("%s value %q has an invalid exponent", typeName, str)
+	}
+	if exponent < -maxDecimalExponent || exponent > maxDecimalExponent {
+		return "", 0, fmt.Errorf("%s value %q has an exponent outside ±%d", typeName, str, maxDecimalExponent)
+	}
+	return str[:i], exponent, nil
 }
 
 // Coefficient returns the unscaled integer value; the finite amount equals
@@ -986,6 +1110,15 @@ func (a DecimalAmount) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON implements json.Unmarshaler and accepts a JSON number, a quoted
 // decimal string, or null. null and "" are decoded as zero.
+//
+// A JSON number is parsed exactly from its digits, including the exponent form
+// ("1.5e2") that encoders emit for float64 values outside 1e-6..1e21. A quoted
+// string is first decoded as a Go string so escape sequences are resolved, then
+// parsed with ParseDecimalAmount, which also accepts the non-finite tokens and
+// locale-specific separators.
+//
+// Every value produced by MarshalJSON decodes back to the identical
+// coefficient and scale.
 func (a *DecimalAmount) UnmarshalJSON(data []byte) error {
 	s := string(data)
 	if s == "null" {
@@ -1071,9 +1204,19 @@ func (a *DecimalAmount) UnmarshalBinary(data []byte) error {
 }
 
 // Value implements the database/sql/driver.Valuer interface, returning the
-// exact decimal string so it can be stored in a SQL numeric/decimal column
-// without precision loss. Non-finite values use the PostgreSQL numeric literals
-// "NaN", "Infinity" and "-Infinity"; Scan and ParseDecimalAmount read them back.
+// exact decimal string.
+//
+// A string is the most widely compatible driver.Value for this type: the
+// database receives the plain decimal literal and coerces it to whatever the
+// target column is, so the same value works for numeric/decimal and for
+// float8/real (and for text columns). Returning a float64 instead would cap the
+// precision at ~17 significant digits and lose the scale, which defeats the
+// point of an exact type on a numeric column; returning []byte risks being
+// treated as bytea by some drivers.
+//
+// Non-finite values use the spellings "NaN", "Infinity" and "-Infinity", which
+// both float8 and numeric accept as input (numeric accepts the infinities since
+// PostgreSQL 14). Scan and ParseDecimalAmount read all of them back.
 func (a DecimalAmount) Value() (driver.Value, error) {
 	if !a.IsFinite() {
 		switch {
@@ -1088,10 +1231,22 @@ func (a DecimalAmount) Value() (driver.Value, error) {
 	return a.String(), nil
 }
 
-// Scan implements the database/sql.Scanner interface and accepts string,
-// []byte, int64 and float64. A float64 is converted via its shortest exact
-// decimal representation, or rounded to MaxDecimalAmountScale if that needs
-// more fractional digits.
+// Scan implements the database/sql.Scanner interface, covering every numeric
+// driver.Value a SQL driver can deliver:
+//
+//   - string and []byte, as returned for numeric/decimal columns, parsed
+//     exactly with ParseDecimalAmount (including the "NaN"/"Infinity" literals
+//     and the exponent form float8 uses in its text output)
+//   - int64, as returned for integer columns
+//   - float64, as returned for float8/real columns, converted via its shortest
+//     exact decimal representation
+//
+// A float64 too large for the coefficient is rejected rather than silently
+// saturated to ±Inf, matching the int64 case. Underflow is not symmetric: a
+// float64 needing more than MaxDecimalAmountScale fractional digits is rounded
+// to that scale, so a tiny nonzero value like 1e-300 scans as zero without an
+// error. float8 carries no exact decimal that small, and rejecting it would
+// make a column of near-zero rounding noise unreadable.
 func (a *DecimalAmount) Scan(value any) error {
 	switch x := value.(type) {
 	case string:
@@ -1105,10 +1260,13 @@ func (a *DecimalAmount) Scan(value any) error {
 		*a = packDecimalAmount(x, 0)
 		return nil
 	case float64:
-		// Use the shortest exact decimal when it fits; a value needing more
-		// than MaxDecimalAmountScale fractional digits is rounded to that scale
-		// rather than rejected.
-		*a = decimalFromFloatShortest(x, 64)
+		scanned := decimalFromFloatShortest(x, 64)
+		// decimalFromFloatShortest reports overflow as ±Inf, but a finite column
+		// value must not silently turn into infinity.
+		if !scanned.IsFinite() && !math.IsInf(x, 0) && !math.IsNaN(x) {
+			return fmt.Errorf("float64 %v is out of range for money.DecimalAmount", x)
+		}
+		*a = scanned
 		return nil
 	default:
 		return fmt.Errorf("can't scan value of type %T as money.DecimalAmount", value)

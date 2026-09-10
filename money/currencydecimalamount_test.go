@@ -123,3 +123,27 @@ func TestCurrencyDecimalAmount_ScanString(t *testing.T) {
 	assert.Equal(t, Currency("EUR"), ca.Currency)
 	assert.Equal(t, "1234.56", ca.Amount.String())
 }
+
+// TestParseCurrencyDecimalAmount_scientificNotation guards the currency split
+// against exponent literals. The currency is split off by scanning for
+// separator runes, so an 'e'/'E' inside the number must not be mistaken for
+// part of the currency code in either position.
+func TestParseCurrencyDecimalAmount_scientificNotation(t *testing.T) {
+	for _, c := range []struct {
+		str   string
+		cur   Currency
+		coeff int64
+		scale int
+	}{
+		{"EUR 1.5e2", EUR, 150, 0},
+		{"1.5e2 EUR", EUR, 150, 0},
+		{"USD 1e-3", USD, 1, 3},
+		{"CHF -2e-2", CHF, -2, 2},
+	} {
+		got, err := ParseCurrencyDecimalAmount(c.str)
+		require.NoError(t, err, "ParseCurrencyDecimalAmount(%q)", c.str)
+		assert.Equal(t, c.cur, got.Currency, "currency of %q", c.str)
+		assert.Equal(t, c.coeff, got.Amount.Coefficient(), "coefficient of %q", c.str)
+		assert.Equal(t, c.scale, got.Amount.Scale(), "scale of %q", c.str)
+	}
+}

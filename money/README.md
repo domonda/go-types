@@ -49,7 +49,7 @@ Implements `fmt.Stringer`, `fmt.GoStringer`, `fmt.Formatter`, `driver.Valuer`, `
 | Function / Method                                  | Description                                        |
 |----------------------------------------------------|----------------------------------------------------|
 | `NewDecimalAmount(coeff, scale)`                   | From integer coefficient and scale (panics if out of range). |
-| `ParseDecimalAmount(str, decimals...)`             | Exact locale-aware parse (no `float64` round-trip). Reads `NaN`/`Inf`/`Infinity`. |
+| `ParseDecimalAmount(str, decimals...)`             | Exact locale-aware parse (no `float64` round-trip). Reads `NaN`/`Inf`/`Infinity` and scientific notation (`1.5e2`). `decimals` matches the scale of the *result*. |
 | `DecimalAmountFrom(v)`                             | Generic conversion from integer types (exact, scale 0) and float types incl. `Amount`/`Rate` (shortest exact decimal of the float value). |
 | `DecimalAmountNaN()` / `DecimalAmountInf(sign)`    | Non-finite constructors.                           |
 | `a.Coefficient()` / `a.Scale()`                    | Raw parts (finite values only).                    |
@@ -88,6 +88,10 @@ account := perMonth.RoundToDecimals(4, money.RoundHalfToEven) // 13.8764
 
 Had every step been rounded to cents instead, the monthly amount would come out as `166.52 / 12 → 13.88` here, but chains of such intermediate roundings drift by whole cents; keeping full precision until the final rounding avoids that. The float-based `MultipliedByRate`/`DividedByRate`/`Percentage` follow the same pattern: they return the exact shortest decimal of the `float64` result (e.g. `0.10 × Rate(3)` → `0.30000000000000004`) for you to round once at the end.
 
+JSON encodes a finite amount as an unquoted number that keeps the exact value *and* the scale (`1.50` stays `1.50`); the non-finite states have no JSON number literal, so they encode as the quoted strings `"NaN"`, `"Inf"` and `"-Inf"`. Decoding accepts a JSON number, a quoted decimal string, or `null` (`null` and `""` decode as zero), so everything `MarshalJSON` writes decodes back to the identical coefficient and scale.
+
+SQL `Value` writes the exact decimal string rather than a `float64`, so a `numeric`/`decimal` column keeps every digit and the same literal still coerces into `float8` or `text`; non-finite values use the PostgreSQL spellings `NaN`, `Infinity` and `-Infinity`. `Scan` reads `string`/`[]byte` (parsed exactly, including those literals), `int64`, and `float64` via its shortest exact decimal. A `float64` too large for the coefficient is an error rather than a silent `±Inf` — unlike `DecimalAmountFrom(float64)`, which still saturates. Underflow stays deliberately asymmetric: a `float64` needing more than 18 decimal places is rounded to that scale, so `1e-300` scans as zero instead of making a column of near-zero rounding noise unreadable. Both codecs accept the exponent form (`1.5e2`) that JSON encoders emit for `float64` values outside `1e-6`..`1e21` and that PostgreSQL uses in `float8` text output.
+
 `NullableDecimalAmount` is `nullable.Type[DecimalAmount]`. Wrap a value with `a.Nullable()` or a pointer with `NullableDecimalAmountFromPtr(*DecimalAmount)` (nil → null).
 
 ## CentAmount
@@ -101,7 +105,7 @@ Whole cents (hundredths of a currency unit) as `int64` — the exact integer cou
 
 | Function / Method                                  | Description                                        |
 |----------------------------------------------------|----------------------------------------------------|
-| `ParseCentAmount(str, mode, decimals...)`          | Exact locale-aware parse straight from the decimal digits, applying `mode` beyond 2 decimals. `NaN`/`Inf` are errors. |
+| `ParseCentAmount(str, mode, decimals...)`          | Exact locale-aware parse straight from the decimal digits, applying `mode` beyond 2 decimals. Reads scientific notation (`1.5e2`) like `ParseDecimalAmount`; `decimals` matches the value after the exponent. `NaN`/`Inf` are errors. |
 | `CentAmountFromPtr(ptr, def)` / `c.Ptr()`          | Pointer round-trip helpers.                        |
 | `c.Cents()`                                        | The raw cent count (`int64`).                      |
 | `c.Amount()` / `a.CentAmount(mode)`                | Convert to/from the `float64` `Amount`.            |

@@ -48,6 +48,47 @@ picking the semver baseline.
   `money.Amount(math.NaN())`, `money.Amount(math.Inf(1))` and
   `money.Amount(math.Copysign(0, -1))` so the output always parses back to the
   identical amount.
+- `money.ParseDecimalAmount` accepts scientific notation like `1.5e2` instead
+  of rejecting it. The exponent shifts the scale of the exactly parsed
+  coefficient, so no precision is lost on the way. This makes
+  `DecimalAmount.UnmarshalJSON` accept the exponent form that JSON encoders
+  emit for `float64` values outside `1e-6`..`1e21`, and `DecimalAmount.Scan`
+  accept the exponent form PostgreSQL uses in `float8` text output. The
+  resulting scale still has to fit `MaxDecimalAmountScale`, so `1e-19` is an
+  error while `10e-19` (== `1e-18`) is not, and `acceptedDecimals` is now
+  matched against the scale of the result rather than the decimals written in
+  the mantissa. That last point diverges from `ParseAmount`, which keeps
+  matching the decimals written in the string: for `"1.5e2"`
+  `ParseDecimalAmount` accepts `0` and `ParseAmount` accepts `1`.
+  Redundant trailing zeros of the mantissa are dropped when, and only when, the
+  value would otherwise not fit, so the `BigDecimal.toString` style
+  `"1000000000000000000e-18"` parses as `1` while `"1.50"` keeps its cent
+  precision. A zero keeps the decimal places written in its mantissa, since an
+  exponent cannot add precision to it: `"0e-30"` is scale 0 and `"0.00e-30"` is
+  scale 2, so `acceptedDecimals` treats every spelling of zero alike.
+  The mantissa's own decimal places are still capped at `MaxDecimalAmountScale`
+  before the exponent is applied, so `"0.0000000000000000001e1"` is rejected
+  even though it equals the representable `1e-18`.
+  Whitespace is accepted around the whole number but not between the exponent
+  marker and its digits, so `" 1e3 "` parses and `"1e 3"` is an error. Trailing
+  BOM and zero-width runes are tolerated in both forms, matching
+  `float.ParseDetails`.
+- `money.ParseCentAmount` accepts scientific notation too, so the same JSON
+  payload or `float8` column scans into a `CentAmount` and a `DecimalAmount`
+  alike. The exponent moves the split between the integer and the fractional
+  digits rather than going through a `float64`, so the result stays exact over
+  the full `CentAmount` range and digits the exponent pushes past the second
+  decimal place still only decide the rounding: `"1.005e0"` is 101 cents and
+  `"1.005e1"` is 1005 cents. As for `ParseDecimalAmount`, `acceptedDecimals` is
+  matched against the decimal places of the value after the exponent is applied.
+- `money.DecimalAmount.Scan` returns an error for a `float64` outside the
+  representable range instead of saturating it to `±Inf`, matching how the
+  `int64` case already rejects out-of-range values. An actually infinite or
+  NaN `float64` still scans to the corresponding non-finite amount.
+  `DecimalAmountFrom(float64)` is unchanged and still saturates to `±Inf`, so
+  the two float entry points now differ on out-of-range input. Underflow stays
+  asymmetric: a `float64` smaller than `MaxDecimalAmountScale` can express, such
+  as `1e-300`, still scans as zero without an error.
 
 ## 2026-09-02
 

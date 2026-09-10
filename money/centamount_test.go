@@ -655,3 +655,122 @@ func TestDecimalAmount_CentAmount_fullRange(t *testing.T) {
 	_, err = NewDecimalAmount(maxDecimalAmountCoefficient, 0).CentAmount(RoundHalfAwayFromZero)
 	assert.Error(t, err, "2.88e17 currency units is 2.88e19 cents, beyond MaxCentAmount")
 }
+
+// TestParseCentAmount_scientificNotation covers the exponent forms that JSON
+// encoders and PostgreSQL float8 text output produce. CentAmount and
+// DecimalAmount are read from the same columns and the same payloads, so a
+// literal one of them accepts must not be an error in the other.
+//
+// The exponent moves the split between the integer and the fractional digits
+// instead of going through a float64, so the result stays exact: digits the
+// exponent pushes past the second decimal place still only decide the rounding.
+func TestParseCentAmount_scientificNotation(t *testing.T) {
+	valid := map[string]CentAmount{
+		"1e0":      100,
+		"1e2":      10000,
+		"1.5e2":    15000,
+		"1.5E+2":   15000,
+		"-2.5e1":   -2500,
+		"1e-2":     1,
+		"12.345e1": 12345,
+		"12.345e2": 123450,
+		// The exponent composes with the locale-aware separator detection.
+		"1.234,56e1": 1234560,
+		// A zero has nothing for the exponent to shift.
+		"0e-1000": 0,
+		"0e1000":  0,
+		// The full CentAmount range is reachable through an exponent, which is
+		// the range DecimalAmount cannot represent.
+		"92233720368547758.07e0": MaxCentAmount,
+		"9223372036854775807e-2": MaxCentAmount,
+	}
+	for str, expected := range valid {
+		t.Run(str, func(t *testing.T) {
+			parsed, err := ParseCentAmount(str, RoundHalfAwayFromZero)
+			require.NoError(t, err)
+			assert.Equal(t, expected, parsed)
+		})
+	}
+
+	// Rounding still applies to whatever lands past the second decimal place
+	// after the shift, and the mode still reaches it.
+	t.Run("rounding after the shift", func(t *testing.T) {
+		// 1.005e0 == 1.005 rounds to 101 cents, while the same digits shifted
+		// one place left land exactly on 10.05 and need no rounding at all.
+		parsed, err := ParseCentAmount("1.005e0", RoundHalfAwayFromZero)
+		require.NoError(t, err)
+		assert.Equal(t, CentAmount(101), parsed)
+
+		parsed, err = ParseCentAmount("1.005e0", RoundDown)
+		require.NoError(t, err)
+		assert.Equal(t, CentAmount(100), parsed)
+
+		parsed, err = ParseCentAmount("1.005e1", RoundDown)
+		require.NoError(t, err)
+		assert.Equal(t, CentAmount(1005), parsed)
+	})
+
+	// acceptedDecimals matches the decimal places of the value after the
+	// exponent is applied, so a caller validating cent precision sees what the
+	// value actually is, not how it happened to be spelled.
+	t.Run("acceptedDecimals after the shift", func(t *testing.T) {
+		parsed, err := ParseCentAmount("1.5e2", RoundHalfAwayFromZero, 0)
+		require.NoError(t, err)
+		assert.Equal(t, CentAmount(15000), parsed)
+
+		_, err = ParseCentAmount("1.5e2", RoundHalfAwayFromZero, 1)
+		assert.Error(t, err)
+
+		parsed, err = ParseCentAmount("12.345e1", RoundHalfAwayFromZero, 2)
+		require.NoError(t, err)
+		assert.Equal(t, CentAmount(12345), parsed)
+	})
+
+	// Unrepresentable or ambiguous exponent forms fail loud rather than
+	// producing an amount assembled from the wrong digits.
+	for _, str := range []string{
+		"1e19",   // 1e19 units exceeds MaxCentAmount cents
+		"1e1000", // far out of range
+		"-1e19",  // out of range on the negative side
+		"1e1e1",  // repeated exponent
+		"1 e3",   // whitespace before the exponent marker
+		"1e 3",   // whitespace after the exponent marker
+		"1e",     // marker without digits
+		"1e1001", // exponent beyond the accepted magnitude
+		"NaNe1",  // non-finite with an exponent
+	} {
+		t.Run(str, func(t *testing.T) {
+			_, err := ParseCentAmount(str, RoundHalfAwayFromZero)
+			assert.Error(t, err)
+		})
+	}
+
+	// The error names the type being parsed, not the one that happens to own
+	// the shared exponent helper.
+	_, err := ParseCentAmount("1e 3", RoundHalfAwayFromZero)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "money.CentAmount")
+}
+
+// TestParseCentAmount_exponentMatchesDecimalAmount pins that the two exact
+// money parsers agree on every exponent literal both can represent. They read
+// the same JSON payloads and the same SQL columns, so a value that scans into
+// one must scan into the other with the same amount.
+func TestParseCentAmount_exponentMatchesDecimalAmount(t *testing.T) {
+	for _, str := range []string{
+		"1e0", "1e2", "1.5e2", "1.5E+2", "-2.5e1", "1e-2", "12.345e2",
+		"1e-5", "0e-30", "0e30", "1.234,56e1", "2.5e-1", "-1e3",
+	} {
+		t.Run(str, func(t *testing.T) {
+			cents, err := ParseCentAmount(str, RoundHalfAwayFromZero)
+			require.NoError(t, err, "ParseCentAmount(%q)", str)
+
+			decimal, err := ParseDecimalAmount(str)
+			require.NoError(t, err, "ParseDecimalAmount(%q)", str)
+
+			fromDecimal, err := decimal.CentAmount(RoundHalfAwayFromZero)
+			require.NoError(t, err)
+			assert.Equal(t, fromDecimal, cents, "%q parsed differently by the two parsers", str)
+		})
+	}
+}
