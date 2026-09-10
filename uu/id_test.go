@@ -920,19 +920,25 @@ func TestID_V7Time(t *testing.T) {
 	timestamp := time.UnixMilli(1743076688815)
 	now := time.UnixMilli(time.Now().UnixMilli())
 	tests := []struct {
-		name string
-		id   ID
-		want time.Time
+		name   string
+		id     ID
+		want   time.Time
+		wantOK bool
 	}{
-		{name: "nil UUID", id: IDNil, want: time.Time{}},
-		{name: "version 1 UUID", id: IDv1(), want: time.Time{}},
-		{name: "version 4 UUID", id: IDv4(), want: time.Time{}},
-		{name: "version 7 UUID fixed timestamp", id: IDv7WithTime(timestamp), want: timestamp},
-		{name: "version 7 UUID current timestamp", id: IDv7WithTime(now), want: now},
+		{name: "nil UUID", id: IDNil, want: time.Time{}, wantOK: false},
+		{name: "version 1 UUID", id: IDv1(), want: time.Time{}, wantOK: false},
+		{name: "version 4 UUID", id: IDv4(), want: time.Time{}, wantOK: false},
+		{name: "version 7 UUID fixed timestamp", id: IDv7WithTime(timestamp), want: timestamp, wantOK: true},
+		{name: "version 7 UUID current timestamp", id: IDv7WithTime(now), want: now, wantOK: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			require.Equal(t, tt.want, tt.id.V7Time())
+			got, ok := tt.id.V7Time()
+			// ok reports whether the UUID carries a timestamp at all,
+			// so callers don't have to compare against a sentinel
+			// zero time to detect a non-version-7 UUID.
+			require.Equal(t, tt.wantOK, ok)
+			require.Equal(t, tt.want, got)
 		})
 	}
 }

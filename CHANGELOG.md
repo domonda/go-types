@@ -28,6 +28,9 @@ picking the semver baseline.
 
 ### Changed
 
+- `uu.ID.V7Time` now returns a second `ok bool` result reporting whether the
+  UUID is a version 7 UUID. Callers no longer have to compare the returned
+  time against the zero time to detect that there was no timestamp to decode.
 - Removed `money.NewAmount`, `money.NewRate` and `money.NewDecimalAmount`'s
   pointer form. They only allocated a pointer to a converted value, which
   Go 1.26's `new(expr)` expresses inline: `new(money.Amount(1.23))` and
