@@ -472,10 +472,8 @@ func TestIDSlice_UnmarshalJSON_Errors(t *testing.T) {
 }
 
 func TestIDSlice_AsSet(t *testing.T) {
-	// AsSet is the only behavioural line changed in idslice.go on this branch
-	// (AddSlice -> InsertAll). It is otherwise only reached transitively via
-	// MakeIDSet and IDSet.Scan, so the deduplication it must perform is
-	// asserted here directly.
+	// AsSet is only reached transitively via MakeIDSet and IDSet.Scan,
+	// so the deduplication it must perform is asserted here directly.
 	got := IDSlice{testIDA, testIDB, testIDA}.AsSet()
 	if want := MakeIDSet(testIDA, testIDB); !got.Equal(want) {
 		t.Errorf("AsSet() = %s, want %s", got, want)

@@ -57,7 +57,7 @@ method was removed and is now `SymmetricDifference`.**
 
 A nil `IDSet` is a valid empty set for reads and removals; `Insert` into one panics like a nil
 map assignment. `Sorted` returns the IDs as a sorted `IDSlice` (the former `AsSortedSlice`,
-which is deprecated).
+which was removed).
 
 `Value`/`Scan` and `MarshalJSON`/`UnmarshalJSON` keep three states distinct and round-trip each:
 

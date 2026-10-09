@@ -475,31 +475,10 @@ func TestAddressSet_StringNilVsEmpty(t *testing.T) {
 	}
 }
 
-// TestAddressSet_DeprecatedMutators covers the pre-DeleteAll API that is kept
-// for compatibility. It must stay behaviour compatible with the new methods,
-// because callers mix both while migrating.
-func TestAddressSet_DeprecatedMutators(t *testing.T) {
-	t.Run("DeleteSlice", func(t *testing.T) {
-		set := MakeAddressSet("a@example.com", "b@example.com")
-		set.DeleteSlice([]Address{"b@example.com", "x@example.com"})
-		if want := MakeAddressSet("a@example.com"); !set.Equal(want) {
-			t.Errorf("after DeleteSlice set = %s, want %s", set, want)
-		}
-	})
-
-	t.Run("DeleteSet", func(t *testing.T) {
-		set := MakeAddressSet("a@example.com", "b@example.com")
-		set.DeleteSet(MakeAddressSet("b@example.com", "x@example.com"))
-		if want := MakeAddressSet("a@example.com"); !set.Equal(want) {
-			t.Errorf("after DeleteSet set = %s, want %s", set, want)
-		}
-	})
-}
-
 // TestAddressSet_NullVsEmpty pins null and empty apart for the SQL round trip,
 // the same contract uu.IDSet has. AddressSet.Value already got this right; the
 // test exists so a future refactor through Sorted() (which is nil for an empty
-// set, like uu.IDSet.AsSortedSlice was) cannot silently collapse an empty set
+// set, like uu.IDSet.Sorted is) cannot silently collapse an empty set
 // into NULL again.
 func TestAddressSet_NullVsEmpty(t *testing.T) {
 	cases := []struct {

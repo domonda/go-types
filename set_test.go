@@ -329,60 +329,6 @@ func TestSetToSortedSlice_LenCases(t *testing.T) {
 	}
 }
 
-// TestSet_DeprecatedMutators covers the pre-Insert API that is kept for
-// compatibility. It must stay behaviour compatible with the new methods,
-// because callers mix both while migrating.
-func TestSet_DeprecatedMutators(t *testing.T) {
-	t.Run("Add", func(t *testing.T) {
-		set := NewSet[int]()
-		set.Add(1)
-		set.Add(1)
-		if want := NewSet(1); !set.Equal(want) {
-			t.Errorf("after Add set = %v, want %v", set, want)
-		}
-	})
-
-	t.Run("AddSlice", func(t *testing.T) {
-		set := NewSet(1)
-		set.AddSlice([]int{2, 3, 2})
-		if want := NewSet(1, 2, 3); !set.Equal(want) {
-			t.Errorf("after AddSlice set = %v, want %v", set, want)
-		}
-		set.AddSlice(nil)
-		if want := NewSet(1, 2, 3); !set.Equal(want) {
-			t.Errorf("AddSlice(nil) changed the set to %v", set)
-		}
-	})
-
-	t.Run("AddSet", func(t *testing.T) {
-		set := NewSet(1)
-		set.AddSet(NewSet(1, 2))
-		if want := NewSet(1, 2); !set.Equal(want) {
-			t.Errorf("after AddSet set = %v, want %v", set, want)
-		}
-		set.AddSet(nil)
-		if want := NewSet(1, 2); !set.Equal(want) {
-			t.Errorf("AddSet(nil) changed the set to %v", set)
-		}
-	})
-
-	t.Run("DeleteSlice", func(t *testing.T) {
-		set := NewSet(1, 2, 3)
-		set.DeleteSlice([]int{2, 4})
-		if want := NewSet(1, 3); !set.Equal(want) {
-			t.Errorf("after DeleteSlice set = %v, want %v", set, want)
-		}
-	})
-
-	t.Run("DeleteSet", func(t *testing.T) {
-		set := NewSet(1, 2, 3)
-		set.DeleteSet(NewSet(2, 4))
-		if want := NewSet(1, 3); !set.Equal(want) {
-			t.Errorf("after DeleteSet set = %v, want %v", set, want)
-		}
-	})
-}
-
 // TestSet_UnmarshalJSON_DoesNotMutateSharedMap covers the aliasing bug an
 // adversarial review found: UnmarshalJSON used to clear and refill the
 // receiver's existing map when it was non-nil, so unmarshalling into a struct

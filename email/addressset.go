@@ -204,24 +204,6 @@ func (set AddressSet) DeleteFunc(del func(Address) bool) bool {
 	return mapset.DeleteFunc(set, del)
 }
 
-// DeleteSlice removes all addresses in the passed slice from the set.
-//
-// Deprecated: use set.DeleteAll(slices.Values(vals)).
-func (set AddressSet) DeleteSlice(vals []Address) {
-	for _, val := range vals {
-		delete(set, val)
-	}
-}
-
-// DeleteSet removes all addresses contained in other from the set.
-//
-// Deprecated: use [AddressSet.DifferenceWith].
-func (set AddressSet) DeleteSet(other AddressSet) {
-	for str := range other {
-		delete(set, str)
-	}
-}
-
 // Clear removes all addresses from the set.
 // It is valid to call this method on a nil AddressSet.
 func (set AddressSet) Clear() {

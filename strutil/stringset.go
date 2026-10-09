@@ -69,32 +69,6 @@ func (set StringSet) IsEmpty() bool {
 	return len(set) == 0
 }
 
-// AddSlice adds all strings from the slice s to the set.
-//
-// Deprecated: use set.InsertAll(slices.Values(s)).
-func (set StringSet) AddSlice(s []string) {
-	for _, str := range s {
-		set[str] = struct{}{}
-	}
-}
-
-// AddSet adds all strings from the other set to this set.
-//
-// Deprecated: use [StringSet.UnionWith].
-func (set StringSet) AddSet(other StringSet) {
-	for str := range other {
-		set[str] = struct{}{}
-	}
-}
-
-// Add adds str to the set.
-//
-// Deprecated: use [StringSet.Insert] which additionally reports
-// whether the set was changed.
-func (set StringSet) Add(str string) {
-	set[str] = struct{}{}
-}
-
 // Insert adds str to the set and reports whether the set was changed.
 // It panics if the set is nil and str is not already an element.
 func (set StringSet) Insert(str string) bool {
@@ -167,24 +141,6 @@ func (set StringSet) DeleteFunc(del func(string) bool) bool {
 // It is valid to call this method on a nil StringSet.
 func (set StringSet) Clear() {
 	clear(set)
-}
-
-// DeleteSlice removes all strings in the slice s from the set.
-//
-// Deprecated: use set.DeleteAll(slices.Values(s)).
-func (set StringSet) DeleteSlice(s []string) {
-	for _, str := range s {
-		delete(set, str)
-	}
-}
-
-// DeleteSet removes all strings in the other set from this set.
-//
-// Deprecated: use [StringSet.DifferenceWith].
-func (set StringSet) DeleteSet(other StringSet) {
-	for str := range other {
-		delete(set, str)
-	}
 }
 
 // Clone returns a deep copy of the set. Returns nil if the set is nil.

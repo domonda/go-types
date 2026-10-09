@@ -3,6 +3,8 @@ package email
 import (
 	"testing"
 	"time"
+
+	"github.com/domonda/go-types/strutil"
 )
 
 func TestHTMLToPlaintext(t *testing.T) {
@@ -179,6 +181,71 @@ func Test_parseDate(t *testing.T) {
 			}
 			if err == nil && !got.Equal(tt.want) {
 				t.Errorf("parseDate() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestExtractBodyURLs covers the only function in utils.go that this branch
+// changed (strutil.StringSet.Add was removed in favour of Insert). The set
+// semantics it relies on are what make the swap safe, so they are asserted
+// here rather than assumed: both bodies feed one set, a URL repeated within
+// or across them appears once, and everything the regexp finds that is not
+// an http(s) URL is dropped.
+//
+// Value: protects=ExtractBodyURLs unions the http(s) URLs of Body and
+// BodyHTML into one deduplicated StringSet and drops non-http schemes;
+// fails_when=the Insert replacing the removed Add stops deduplicating, one of
+// the two bodies stops being scanned, or the "http" prefix filter is dropped;
+// why_new=ExtractBodyURLs has no test at all, so the Add -> Insert swap is
+// unprotected;
+// seam=none
+func TestExtractBodyURLs(t *testing.T) {
+	tests := []struct {
+		name     string
+		body     string
+		bodyHTML string
+		want     strutil.StringSet
+	}{
+		{
+			name: "empty message",
+			want: strutil.NewStringSet(),
+		},
+		{
+			name: "plaintext body only",
+			body: "see http://a.example.com and https://b.example.com/x?y=1",
+			want: strutil.NewStringSet("http://a.example.com", "https://b.example.com/x?y=1"),
+		},
+		{
+			name:     "HTML body only",
+			bodyHTML: `<a href="https://c.example.com/path">c</a>`,
+			want:     strutil.NewStringSet("https://c.example.com/path"),
+		},
+		{
+			name:     "both bodies are unioned",
+			body:     "http://a.example.com",
+			bodyHTML: `<a href="https://c.example.com">c</a>`,
+			want:     strutil.NewStringSet("http://a.example.com", "https://c.example.com"),
+		},
+		{
+			name:     "duplicates collapse within and across the bodies",
+			body:     "http://a.example.com twice http://a.example.com",
+			bodyHTML: `<a href="http://a.example.com">again</a>`,
+			want:     strutil.NewStringSet("http://a.example.com"),
+		},
+		{
+			name:     "non-http schemes are dropped",
+			body:     "write to mailto:a@example.com or fetch ftp://files.example.com/f",
+			bodyHTML: `<a href="mailto:b@example.com">b</a> <a href="https://d.example.com">d</a>`,
+			want:     strutil.NewStringSet("https://d.example.com"),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			msg := &Message{Body: tt.body}
+			msg.BodyHTML.Set(tt.bodyHTML)
+			if got := ExtractBodyURLs(msg); !got.Equal(tt.want) {
+				t.Errorf("ExtractBodyURLs() = %v, want %v", got.Sorted(), tt.want.Sorted())
 			}
 		})
 	}

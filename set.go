@@ -42,32 +42,6 @@ func (set Set[T]) GetOne() T {
 	return *new(T)
 }
 
-// Add adds a value to the set.
-//
-// Deprecated: use [Set.Insert] which additionally reports
-// whether the set was changed.
-func (set Set[T]) Add(val T) {
-	set[val] = struct{}{}
-}
-
-// AddSlice adds all values from the slice to the set.
-//
-// Deprecated: use set.InsertAll(slices.Values(vals)).
-func (set Set[T]) AddSlice(vals []T) {
-	for _, val := range vals {
-		set[val] = struct{}{}
-	}
-}
-
-// AddSet adds all values from another set to this set.
-//
-// Deprecated: use [Set.UnionWith].
-func (set Set[T]) AddSet(other Set[T]) {
-	for val := range other {
-		set[val] = struct{}{}
-	}
-}
-
 // Insert adds val to the set and reports whether the set was changed.
 // It panics if the set is nil and val is not already an element.
 func (set Set[T]) Insert(val T) bool {
@@ -128,24 +102,6 @@ func (set Set[T]) DeleteAll(seq iter.Seq[T]) bool {
 // It is valid to call this method on a nil set.
 func (set Set[T]) DeleteFunc(del func(T) bool) bool {
 	return mapset.DeleteFunc(set, del)
-}
-
-// DeleteSlice removes all values from the slice from the set.
-//
-// Deprecated: use set.DeleteAll(slices.Values(vals)).
-func (set Set[T]) DeleteSlice(vals []T) {
-	for _, val := range vals {
-		delete(set, val)
-	}
-}
-
-// DeleteSet removes all values from the other set from this set.
-//
-// Deprecated: use [Set.DifferenceWith].
-func (set Set[T]) DeleteSet(other Set[T]) {
-	for str := range other {
-		delete(set, str)
-	}
 }
 
 // Clear removes all values from the set.

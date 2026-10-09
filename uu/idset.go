@@ -164,51 +164,6 @@ func (s IDSet) Sorted() IDSlice {
 	return sl
 }
 
-// AsSortedSlice returns the IDs of the set as a sorted IDSlice.
-//
-// Deprecated: use [IDSet.Sorted], which is what types.Set,
-// strutil.StringSet and email.AddressSet call it.
-func (s IDSet) AsSortedSlice() IDSlice {
-	return s.Sorted()
-}
-
-// AddSlice adds all IDs from s to the set.
-//
-// Deprecated: use set.InsertAll(slices.Values(s)).
-func (set IDSet) AddSlice(s IDSlice) {
-	for _, id := range s {
-		set[id] = struct{}{}
-	}
-}
-
-// AddSet adds all IDs from other into the set.
-//
-// Deprecated: use [IDSet.UnionWith].
-func (s IDSet) AddSet(other IDSet) {
-	for id := range other {
-		s[id] = struct{}{}
-	}
-}
-
-// AddIDs adds all IDs yielded by ids into the set.
-//
-// Deprecated: use set.InsertAll(slices.Values(ids.AsSlice())),
-// or [IDSet.UnionWith] with ids.AsSet().
-func (s IDSet) AddIDs(ids IDs) {
-	ids.ForEach(func(id ID) error {
-		s[id] = struct{}{}
-		return nil
-	}) //#nosec G104 -- always returns nil
-}
-
-// Add inserts id into the set.
-//
-// Deprecated: use [IDSet.Insert] which additionally reports
-// whether the set was changed.
-func (s IDSet) Add(id ID) {
-	s[id] = struct{}{}
-}
-
 // Insert adds id to the set and reports whether the set was changed.
 // It panics if the set is nil and id is not already an element.
 func (s IDSet) Insert(id ID) bool {
@@ -274,24 +229,6 @@ func (s IDSet) DeleteFunc(del func(ID) bool) bool {
 // It is valid to call this method on a nil IDSet.
 func (s IDSet) Clear() {
 	clear(s)
-}
-
-// DeleteSlice removes every ID in sl from the set.
-//
-// Deprecated: use set.DeleteAll(slices.Values(sl)).
-func (s IDSet) DeleteSlice(sl IDSlice) {
-	for _, id := range sl {
-		delete(s, id)
-	}
-}
-
-// DeleteSet removes every ID contained in other from the set.
-//
-// Deprecated: use [IDSet.DifferenceWith].
-func (s IDSet) DeleteSet(other IDSet) {
-	for id := range other {
-		delete(s, id)
-	}
 }
 
 // Clone returns a shallow copy of the set, or nil if the set is nil.

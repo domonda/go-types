@@ -90,12 +90,12 @@ func ExtractBodyURLs(msg *Message) strutil.StringSet {
 	urls := make(strutil.StringSet)
 	for _, url := range extractBodyURLsRegexp.FindAllString(msg.Body, -1) {
 		if strings.HasPrefix(url, "http") {
-			urls.Add(url)
+			urls.Insert(url)
 		}
 	}
 	for _, url := range extractBodyURLsRegexp.FindAllString(string(msg.BodyHTML), -1) {
 		if strings.HasPrefix(url, "http") {
-			urls.Add(url)
+			urls.Insert(url)
 		}
 	}
 	return urls
