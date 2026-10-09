@@ -3,6 +3,7 @@ package email_test
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"os"
 	"testing"
 	"time"
@@ -94,5 +95,436 @@ func equalsExamplemessage(t *testing.T, actual *email.Message, built bool) {
 	for _, attachment := range actualAttachments {
 		hash := sha256.Sum256(attachment.Content)
 		require.Equal(t, expectedHashes[attachment.Filename], hex.EncodeToString(hash[:]))
+	}
+}
+
+func TestNewMessage(t *testing.T) {
+	msg := email.NewMessage("me@example.com", "you@example.com", "Subject", "Body", nullable.TrimmedStringFrom("<p>Body</p>"))
+	require.Equal(t, email.Address("me@example.com"), msg.From)
+	require.Equal(t, email.AddressList("you@example.com"), msg.To)
+	require.Equal(t, "Subject", msg.Subject)
+	require.Equal(t, "Body", msg.Body)
+	require.Equal(t, nullable.TrimmedString("<p>Body</p>"), msg.BodyHTML)
+	// ExtraHeader must be initialized so headers can be added without a nil map panic.
+	require.NotPanics(t, func() { msg.ExtraHeader.Set("X-Test", "value") })
+}
+
+// TestMessage_Recipients protects that every recipient gets the message
+// exactly once: addresses from To, Cc and Bcc are normalized to lower case
+// bare addresses and deduplicated across the fields, and an unparsable
+// entry must not prevent sending to the valid recipients.
+func TestMessage_Recipients(t *testing.T) {
+	msg := &email.Message{
+		To:  `John <John@Example.com>, jane@example.com`,
+		Cc:  `"J. Doe" <john@example.com>, not an address, cc@example.com`,
+		Bcc: `JANE@example.com, bcc@example.com`,
+	}
+	require.Equal(t,
+		[]string{"john@example.com", "jane@example.com", "cc@example.com", "bcc@example.com"},
+		msg.Recipients(),
+	)
+
+	require.Empty(t, (&email.Message{}).Recipients(), "a message without recipients")
+}
+
+func TestMessage_ReferencesMessageIDs(t *testing.T) {
+	tests := []struct {
+		name       string
+		references nullable.TrimmedString
+		want       []string
+	}{
+		{name: "NULL", references: "", want: nil},
+		{name: "single", references: "<a@example.com>", want: []string{"<a@example.com>"}},
+		// Empty entries from stray separators must not become message IDs.
+		{name: "comma separated", references: "<a@example.com>, ,<b@example.com>,", want: []string{"<a@example.com>", "<b@example.com>"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			msg := &email.Message{References: tt.references}
+			require.Equal(t, tt.want, msg.ReferencesMessageIDs())
+		})
+	}
+}
+
+// TestMessage_ReplyToAddress protects that replies go to the Reply-To
+// address requested by the sender and only fall back to From without it.
+func TestMessage_ReplyToAddress(t *testing.T) {
+	msg := &email.Message{From: "sender@example.com"}
+	require.Equal(t, email.Address("sender@example.com"), msg.ReplyToAddress())
+
+	msg.ReplyTo = "Support <support@example.com>"
+	require.Equal(t, email.Address("Support <support@example.com>"), msg.ReplyToAddress())
+}
+
+// TestMessage_IsAutoSubmitted protects auto-reply loop prevention per RFC 3834:
+// any Auto-Submitted value except "no" marks a message as automatic.
+func TestMessage_IsAutoSubmitted(t *testing.T) {
+	tests := []struct {
+		value string
+		want  bool
+	}{
+		{value: "", want: false},
+		{value: "no", want: false},
+		{value: "auto-replied", want: true},
+		{value: "auto-generated", want: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.value, func(t *testing.T) {
+			msg := &email.Message{ExtraHeader: make(email.Header)}
+			if tt.value != "" {
+				msg.ExtraHeader.Set("Auto-Submitted", tt.value)
+			}
+			require.Equal(t, tt.want, msg.IsAutoSubmitted())
+		})
+	}
+}
+
+// TestMessage_AutoResponseSuppress protects that no automatic reply is sent
+// when the sender (typically Exchange) asks to suppress auto replies.
+func TestMessage_AutoResponseSuppress(t *testing.T) {
+	tests := []struct {
+		name   string
+		values []string
+		want   bool
+	}{
+		{name: "no header", values: nil, want: false},
+		{name: "All", values: []string{"All"}, want: true},
+		{name: "DR", values: []string{"DR"}, want: true},
+		{name: "AutoReply", values: []string{"AutoReply"}, want: true},
+		// OOF only suppresses out of office replies.
+		{name: "OOF", values: []string{"OOF"}, want: false},
+		{name: "one of multiple headers", values: []string{"OOF", "AutoReply"}, want: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			msg := &email.Message{ExtraHeader: make(email.Header)}
+			for _, value := range tt.values {
+				msg.ExtraHeader.Add("X-Auto-Response-Suppress", value)
+			}
+			require.Equal(t, tt.want, msg.AutoResponseSuppress())
+		})
+	}
+}
+
+// TestMessage_ExtraHeaderAccessors protects that the header helpers work on
+// parsed messages, where header names are case-insensitive and stored in
+// ExtraHeader in canonical form.
+func TestMessage_ExtraHeaderAccessors(t *testing.T) {
+	msg, err := email.ParseMessage(rawMessage(
+		`From: newsletter@example.com`,
+		`To: me@example.com`,
+		`Subject: News`,
+		`Date: Thu, 22 Jan 2026 16:21:11 +0100`,
+		`AUTO-SUBMITTED: auto-generated`,
+		`x-auto-response-suppress: All`,
+		`List-ID: <news.example.com>`,
+		`Feedback-ID: 123:campaign:example`,
+		`Content-Type: text/plain; charset=utf-8`,
+		``,
+		`Body`,
+	))
+	require.NoError(t, err)
+	require.True(t, msg.IsAutoSubmitted())
+	require.True(t, msg.AutoResponseSuppress())
+	require.Equal(t, "<news.example.com>", msg.ListID())
+	require.Equal(t, "123:campaign:example", msg.FeedbackID())
+
+	empty := &email.Message{}
+	require.False(t, empty.IsAutoSubmitted(), "nil ExtraHeader must be handled")
+	require.False(t, empty.AutoResponseSuppress())
+	require.Empty(t, empty.ListID())
+	require.Empty(t, empty.FeedbackID())
+}
+
+func TestMessage_String(t *testing.T) {
+	// The string is used for logging and must identify the message
+	// without dumping the body.
+	msg := &email.Message{
+		Subject:    "Invoice 42",
+		From:       "sender@example.com",
+		MessageID:  "<id@example.com>",
+		ProviderID: "provider-id",
+		Body:       "SECRET BODY",
+	}
+	s := msg.String()
+	require.Contains(t, s, "Invoice 42")
+	require.Contains(t, s, "sender@example.com")
+	require.Contains(t, s, "<id@example.com>")
+	require.Contains(t, s, "provider-id")
+	require.NotContains(t, s, "SECRET BODY")
+}
+
+func TestMessage_AddAttachment(t *testing.T) {
+	msg := &email.Message{}
+	msg.AddAttachment("1", "invoice.pdf", []byte("%PDF-1.7"))
+	msg.AddAttachment("2", "readme.txt", []byte("Hello"))
+	require.Len(t, msg.Attachments, 2)
+	require.Equal(t, "invoice.pdf", msg.Attachments[0].Filename)
+	require.Equal(t, "application/pdf", msg.Attachments[0].ContentType)
+	require.Equal(t, "readme.txt", msg.Attachments[1].Filename)
+}
+
+func TestParseMessage_Empty(t *testing.T) {
+	msg, err := email.ParseMessage(nil)
+	require.Error(t, err)
+	require.Nil(t, msg)
+}
+
+// TestParseMessage_JSON protects that a Message serialized as JSON
+// (as stored or passed between services) is parsed back unchanged
+// instead of being misinterpreted as MIME message.
+func TestParseMessage_JSON(t *testing.T) {
+	date := time.Date(2026, 1, 22, 15, 21, 11, 0, time.UTC)
+	want := &email.Message{
+		ProviderID:     "provider-id",
+		ProviderLabels: []string{"INBOX", "UNREAD"},
+		MessageID:      "<id@example.com>",
+		InReplyTo:      "<parent@example.com>",
+		References:     "<parent@example.com>",
+		Date:           &date,
+		From:           `"Doe, John" <john@example.com>`,
+		ReplyTo:        "reply@example.com",
+		To:             "a@example.com, b@example.com",
+		Cc:             "cc@example.com",
+		ExtraHeader:    email.Header{"X-Custom": {"value"}},
+		Subject:        "Subject",
+		Body:           "Body",
+		BodyHTML:       "<p>Body</p>",
+		Attachments: []*email.Attachment{
+			{PartID: "1", ContentType: "application/pdf", Filename: "invoice.pdf", Content: []byte("%PDF-1.7")},
+		},
+	}
+	data, err := json.Marshal(want)
+	require.NoError(t, err)
+
+	got, err := email.ParseMessage(data)
+	require.NoError(t, err)
+	require.Equal(t, want, got)
+
+	_, err = email.ParseMessage([]byte(`{"subject": 1}`))
+	require.Error(t, err, "invalid JSON must be reported, not parsed as MIME")
+}
+
+// replyTextTemplate and replyHTMLTemplate quote the original message
+// the way a typical mail client does.
+const (
+	replyTextTemplate = `{{.ReplyText}}
+
+On {{.Date}} {{.From}} wrote:
+{{range .BodyLines}}> {{.}}
+{{end}}`
+
+	replyHTMLTemplate = `{{.ReplyHTML}}<blockquote>{{.BodyHTML}}</blockquote>`
+)
+
+func newOriginalMessage() *email.Message {
+	date := time.Date(2026, 1, 22, 16, 21, 11, 0, time.FixedZone("CET", 3600))
+	return &email.Message{
+		ProviderID:  "provider-id",
+		MessageID:   "<original@example.com>",
+		Date:        &date,
+		From:        "sender@example.com",
+		To:          "me@example.com",
+		Subject:     "Invoice",
+		Body:        "Line 1\nLine 2",
+		ExtraHeader: make(email.Header),
+		Attachments: []*email.Attachment{{PartID: "1", Filename: "invoice.pdf", Content: []byte("%PDF-1.7")}},
+	}
+}
+
+// TestMessage_NewReplyMessage_Threading protects the headers that make mail
+// clients show the reply in the same thread and deliver it to the right
+// address.
+func TestMessage_NewReplyMessage_Threading(t *testing.T) {
+	original := newOriginalMessage()
+
+	re, err := original.NewReplyMessage("me@example.com", "Thanks", "", false, replyTextTemplate, replyHTMLTemplate)
+	require.NoError(t, err)
+	require.Equal(t, email.Address("me@example.com"), re.From)
+	require.Equal(t, email.AddressList("sender@example.com"), re.To, "without Reply-To the reply goes to From")
+	require.Equal(t, "Re: Invoice", re.Subject)
+	require.Equal(t, original.MessageID, re.InReplyTo)
+	require.Equal(t, original.MessageID, re.References)
+	require.Equal(t, original.ProviderID, re.InReplyToProviderID)
+	require.NotNil(t, re.ExtraHeader)
+	require.Nil(t, re.Attachments, "attachments are only kept on request")
+
+	original.ReplyTo = `"Support" <support@example.com>`
+	re, err = original.NewReplyMessage("me@example.com", "Thanks", "", true, replyTextTemplate, replyHTMLTemplate)
+	require.NoError(t, err)
+	require.Equal(t, email.AddressList(`"Support" <support@example.com>`), re.To, "Reply-To must be preferred over From")
+	require.Equal(t, original.Attachments, re.Attachments)
+}
+
+// TestMessage_NewReplyMessage_Body protects how the reply body is rendered:
+// the templates quote the original message, the reply text is inserted
+// literally (it is user input and must never be executed as template),
+// and an HTML body is only created if there is HTML to render.
+func TestMessage_NewReplyMessage_Body(t *testing.T) {
+	t.Run("plaintext only", func(t *testing.T) {
+		original := newOriginalMessage()
+		re, err := original.NewReplyMessage("me@example.com", "Thanks {{.Subject}}", "", false, replyTextTemplate, replyHTMLTemplate)
+		require.NoError(t, err)
+		require.Equal(t,
+			"Thanks {{.Subject}}\n\nOn Thu, 22 Jan 2026 16:21:11 +0100 sender@example.com wrote:\n> Line 1\n> Line 2\n",
+			re.Body,
+		)
+		require.True(t, re.BodyHTML.IsNull(), "no HTML body without HTML in the original or the reply")
+	})
+
+	t.Run("original has HTML", func(t *testing.T) {
+		original := newOriginalMessage()
+		original.BodyHTML = "<p>Original</p>"
+		re, err := original.NewReplyMessage("me@example.com", "Thanks\nErik", "", false, replyTextTemplate, replyHTMLTemplate)
+		require.NoError(t, err)
+		// The plaintext reply is converted to HTML keeping its line breaks.
+		require.Equal(t, nullable.TrimmedString("Thanks<br>Erik<blockquote><p>Original</p></blockquote>"), re.BodyHTML)
+	})
+
+	t.Run("reply has HTML", func(t *testing.T) {
+		original := newOriginalMessage()
+		re, err := original.NewReplyMessage("me@example.com", "Thanks", "<b>Thanks</b>", false, replyTextTemplate, replyHTMLTemplate)
+		require.NoError(t, err)
+		// The plaintext original is quoted keeping its line breaks.
+		require.Equal(t, nullable.TrimmedString("<b>Thanks</b><blockquote>Line 1<br>Line 2</blockquote>"), re.BodyHTML)
+	})
+}
+
+func TestMessage_NewReplyMessage_TemplateErrors(t *testing.T) {
+	// Broken templates must be reported instead of sending a broken reply.
+	tests := []struct {
+		name      string
+		textTempl string
+		htmlTempl string
+	}{
+		{name: "invalid text template", textTempl: "{{.ReplyText", htmlTempl: replyHTMLTemplate},
+		{name: "failing text template", textTempl: "{{.NoSuchField}}", htmlTempl: replyHTMLTemplate},
+		{name: "invalid HTML template", textTempl: replyTextTemplate, htmlTempl: "{{.ReplyHTML"},
+		{name: "failing HTML template", textTempl: replyTextTemplate, htmlTempl: "{{.NoSuchField}}"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			re, err := newOriginalMessage().NewReplyMessage("me@example.com", "Thanks", "<b>Thanks</b>", false, tt.textTempl, tt.htmlTempl)
+			require.Error(t, err)
+			require.Nil(t, re)
+		})
+	}
+}
+
+// TestBuildRawMessage_RoundTrip protects that all header fields and body
+// variants survive BuildRawMessage and parsing the result again.
+func TestBuildRawMessage_RoundTrip(t *testing.T) {
+	date := time.Date(2026, 1, 22, 16, 21, 11, 0, time.FixedZone("CET", 3600))
+	msg := &email.Message{
+		MessageID:   "<id@example.com>",
+		InReplyTo:   "<parent@example.com>",
+		References:  "<parent@example.com>",
+		Date:        &date,
+		From:        `"John Doe" <john@example.com>`,
+		ReplyTo:     "reply@example.com",
+		To:          "a@example.com, b@example.com",
+		DeliveredTo: "d1@example.com, d2@example.com",
+		Cc:          "cc@example.com",
+		Bcc:         "bcc@example.com",
+		ExtraHeader: email.Header{"X-Custom": {"value"}},
+		Subject:     "  Subject with spaces  ",
+		Body:        "Body",
+	}
+	raw, err := msg.BuildRawMessage()
+	require.NoError(t, err)
+
+	parsed, err := email.ParseMessage(raw)
+	require.NoError(t, err)
+	require.Equal(t, msg.MessageID, parsed.MessageID)
+	require.Equal(t, msg.InReplyTo, parsed.InReplyTo)
+	require.Equal(t, msg.References, parsed.References)
+	require.True(t, date.Equal(*parsed.Date), "Date %s != %s", parsed.Date, date)
+	require.Equal(t, msg.From, parsed.From)
+	require.Equal(t, msg.ReplyTo, parsed.ReplyTo)
+	require.Equal(t, msg.To, parsed.To)
+	require.Equal(t, msg.DeliveredTo, parsed.DeliveredTo)
+	require.Equal(t, msg.Cc, parsed.Cc)
+	require.Equal(t, msg.Bcc, parsed.Bcc)
+	require.Equal(t, "value", parsed.ExtraHeader.Get("X-Custom"))
+	require.Equal(t, "Subject with spaces", parsed.Subject, "the subject is trimmed")
+	require.Equal(t, "Body", parsed.Body)
+	require.True(t, parsed.BodyHTML.IsNull())
+}
+
+func TestBuildRawMessage_Bodies(t *testing.T) {
+	tests := []struct {
+		name        string
+		body        string
+		bodyHTML    nullable.TrimmedString
+		attachments []*email.Attachment
+	}{
+		{name: "empty"},
+		{name: "text", body: "Text body"},
+		{name: "HTML", bodyHTML: "<p>HTML body</p>"},
+		{name: "text and HTML", body: "Text body", bodyHTML: "<p>HTML body</p>"},
+		{
+			name:     "text, HTML and attachments",
+			body:     "Text body",
+			bodyHTML: "<p>HTML body</p>",
+			attachments: []*email.Attachment{
+				{ContentType: "application/pdf", Filename: "invoice.pdf", Content: []byte("%PDF-1.7")},
+				{ContentType: "text/plain", Filename: "readme.txt", Content: []byte("Hello")},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			msg := &email.Message{
+				From:        "a@example.com",
+				To:          "b@example.com",
+				Body:        tt.body,
+				BodyHTML:    tt.bodyHTML,
+				Attachments: tt.attachments,
+			}
+			before := time.Now().Truncate(time.Second)
+			raw, err := msg.BuildRawMessage()
+			require.NoError(t, err)
+
+			parsed, err := email.ParseMessage(raw)
+			require.NoError(t, err)
+			// A missing date is set to the build time because RFC 5322 requires it.
+			require.NotNil(t, parsed.Date)
+			require.False(t, parsed.Date.Before(before))
+
+			if tt.body != "" || tt.bodyHTML == "" {
+				require.Equal(t, tt.body, parsed.Body)
+			}
+			require.Equal(t, tt.bodyHTML, parsed.BodyHTML)
+			require.Len(t, parsed.Attachments, len(tt.attachments))
+			for i, want := range tt.attachments {
+				got := parsed.Attachments[i]
+				require.Equal(t, want.Filename, got.Filename)
+				require.Equal(t, want.ContentType, got.ContentType)
+				require.Equal(t, want.Content, got.Content)
+			}
+		})
+	}
+}
+
+// TestBuildRawMessage_InvalidRecipients protects that a message with
+// unparsable recipients is not built, because silently dropping a
+// recipient would send the message to fewer people than intended.
+func TestBuildRawMessage_InvalidRecipients(t *testing.T) {
+	tests := []struct {
+		name string
+		msg  email.Message
+	}{
+		{name: "To", msg: email.Message{To: "a@example.com, not an address"}},
+		{name: "Delivered-To", msg: email.Message{To: "a@example.com", DeliveredTo: "not an address"}},
+		{name: "Cc", msg: email.Message{To: "a@example.com", Cc: "not an address"}},
+		{name: "Bcc", msg: email.Message{To: "a@example.com", Bcc: "not an address"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.msg.From = "from@example.com"
+			raw, err := tt.msg.BuildRawMessage()
+			require.Error(t, err)
+			require.Nil(t, raw)
+		})
 	}
 }

@@ -285,3 +285,45 @@ func BenchmarkReflectIsNull(b *testing.B) {
 		}
 	}
 }
+
+func TestIsNull(t *testing.T) {
+	// IsNull takes an any argument, so a typed nil pointer arrives as a
+	// non-nil interface. It must still be reported as null, otherwise
+	// optional pointer fields would be treated as present values.
+	var nilTimePtr *time.Time
+	var nilNullablePtr *nullablePtrT
+
+	tests := []struct {
+		name string
+		v    any
+		want bool
+	}{
+		{name: "untyped nil", v: nil, want: true},
+		{name: "typed nil pointer", v: nilTimePtr, want: true},
+		{name: "typed nil pointer to pointer receiver Nullable", v: nilNullablePtr, want: true},
+		{name: "nil slice", v: []int(nil), want: true},
+		{name: "nil map", v: map[string]int(nil), want: true},
+		{name: "Nullable null", v: nullableValueT{null: true}, want: true},
+		{name: "Nullable not null", v: nullableValueT{null: false}, want: false},
+		{name: "pointer receiver Nullable null", v: &nullablePtrT{null: true}, want: true},
+		{name: "Zeroable zero", v: zeroableValueT{zero: true}, want: true},
+		{name: "Nullable wins over Zeroable", v: bothT{nullable: false, zero: true}, want: false},
+		{name: "TimeNull", v: TimeNull, want: true},
+		{name: "zero time.Time", v: time.Time{}, want: true},
+		{name: "Type null", v: Type[int]{}, want: true},
+		{name: "Type not null", v: TypeFrom(0), want: false},
+		// Zero values of types without IsNull/IsZero are real values
+		{name: "zero int", v: 0, want: false},
+		{name: "empty string", v: "", want: false},
+		{name: "empty non-nil slice", v: []int{}, want: false},
+		{name: "plain struct", v: plainT{}, want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.NotPanics(t, func() {
+				assert.Equal(t, tt.want, IsNull(tt.v))
+			})
+			assert.Equal(t, ReflectIsNull(reflect.ValueOf(tt.v)), IsNull(tt.v), "same result as ReflectIsNull")
+		})
+	}
+}

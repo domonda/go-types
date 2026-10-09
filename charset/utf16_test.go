@@ -1,0 +1,122 @@
+package charset
+
+import (
+	"encoding/binary"
+	"testing"
+	"unicode/utf16"
+	"unicode/utf8"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func TestUTF16Encoding_String(t *testing.T) {
+	assert.Equal(t, "UTF-16LE Encoding", UTF16Encoding(binary.LittleEndian).String())
+	assert.Equal(t, "UTF-16BE Encoding", UTF16Encoding(binary.BigEndian).String())
+}
+
+func TestEncodeUTF16_ByteLayout(t *testing.T) {
+	// "A€😀": U+0041, U+20AC and U+1F600 which needs the surrogate pair
+	// D83D DE00. Encoded without a BOM, as documented.
+	const text = "A€😀"
+	tests := []struct {
+		name      string
+		byteOrder binary.ByteOrder
+		want      []byte
+	}{
+		{name: "LE", byteOrder: binary.LittleEndian, want: []byte{0x41, 0x00, 0xAC, 0x20, 0x3D, 0xD8, 0x00, 0xDE}},
+		{name: "BE", byteOrder: binary.BigEndian, want: []byte{0x00, 0x41, 0x20, 0xAC, 0xD8, 0x3D, 0xDE, 0x00}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			encoded, err := EncodeUTF16([]byte(text), tt.byteOrder)
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, encoded)
+
+			decoded, err := DecodeUTF16(tt.want, tt.byteOrder)
+			require.NoError(t, err)
+			assert.Equal(t, text, string(decoded))
+
+			str, err := DecodeUTF16String(tt.want, tt.byteOrder)
+			require.NoError(t, err)
+			assert.Equal(t, text, str)
+		})
+	}
+}
+
+func TestUTF16Encoding_RoundTrip(t *testing.T) {
+	for _, byteOrder := range []binary.ByteOrder{binary.LittleEndian, binary.BigEndian} {
+		enc := UTF16Encoding(byteOrder)
+		for _, text := range []string{"a", "Grüße 100 €", "世界 😀 𝄞", "\x00leading NUL"} {
+			encoded, err := enc.Encode([]byte(text))
+			require.NoError(t, err)
+			assert.Len(t, encoded, 2*len(utf16.Encode([]rune(text))), "%s %q", enc, text)
+
+			decoded, err := enc.Decode(encoded)
+			require.NoError(t, err)
+			assert.Equal(t, text, string(decoded), "%s", enc)
+		}
+	}
+}
+
+func TestDecodeUTF16_BOM(t *testing.T) {
+	// A matching BOM is stripped for both byte orders
+	got, err := DecodeUTF16([]byte{0xFE, 0xFF, 0x00, 'h', 0x00, 'i'}, binary.BigEndian)
+	require.NoError(t, err)
+	assert.Equal(t, "hi", string(got))
+	got, err = DecodeUTF16([]byte{0xFF, 0xFE, 'h', 0x00, 'i', 0x00}, binary.LittleEndian)
+	require.NoError(t, err)
+	assert.Equal(t, "hi", string(got))
+
+	// A BOM of the other byte order is an error,
+	// decoding with the wrong byte order would produce garbage
+	_, err = DecodeUTF16([]byte{0xFE, 0xFF, 0x00, 'h'}, binary.LittleEndian)
+	assert.EqualError(t, err, "expected UTF-16LE BOM but got UTF-16BE")
+	_, err = DecodeUTF16([]byte{0xFF, 0xFE, 'h', 0x00}, binary.BigEndian)
+	assert.EqualError(t, err, "expected UTF-16BE BOM but got UTF-16LE")
+}
+
+func TestDecodeUTF16_EmptyAndOddLength(t *testing.T) {
+	got, err := DecodeUTF16(nil, binary.LittleEndian)
+	assert.NoError(t, err)
+	assert.Nil(t, got)
+
+	str, err := DecodeUTF16String(nil, binary.BigEndian)
+	assert.NoError(t, err)
+	assert.Equal(t, "", str)
+
+	// An odd number of bytes can't be UTF-16, most likely the data is
+	// truncated or in a different encoding
+	_, err = DecodeUTF16([]byte{'h', 0, 'i'}, binary.LittleEndian)
+	assert.EqualError(t, err, "odd length of UTF-16 string: 3")
+}
+
+func TestDecodeUTF16_InvalidSurrogates(t *testing.T) {
+	// Unpaired surrogates can't be represented in UTF-8, they must be
+	// replaced with U+FFFD so that the result is always valid UTF-8
+	tests := []struct {
+		name string
+		le   []byte
+		want string
+	}{
+		{name: "lone high surrogate", le: []byte{0x3D, 0xD8, 'a', 0}, want: "\ufffda"},
+		{name: "lone low surrogate", le: []byte{0x00, 0xDE, 'a', 0}, want: "\ufffda"},
+		{name: "high surrogate at end", le: []byte{'a', 0, 0x3D, 0xD8}, want: "a\ufffd"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := DecodeUTF16(tt.le, binary.LittleEndian)
+			require.NoError(t, err)
+			assert.True(t, utf8.Valid(got))
+			assert.Equal(t, tt.want, string(got))
+		})
+	}
+}
+
+func TestEncodeUTF16_InvalidUTF8(t *testing.T) {
+	// Invalid UTF-8 anywhere in the input is an error, not only at the start
+	for _, in := range []string{"\xff", "abc\xff", "ab\xc3", "a\xed\xa0\x80b"} {
+		_, err := EncodeUTF16([]byte(in), binary.BigEndian)
+		assert.Error(t, err, "EncodeUTF16(%q)", in)
+	}
+}

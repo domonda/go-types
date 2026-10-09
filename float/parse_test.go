@@ -128,6 +128,8 @@ func Test_ParseFloat_invalid(t *testing.T) {
 		"123 1234 123.99",
 		"1234567,123,456", // first grouped block longer than 6 digits
 		"1234567 123 456", // first grouped block longer than 6 digits (space)
+		"1e",              // dangling exponent without digits
+		"1e999",           // out of float64 range must error, not silently become +Inf
 	}
 
 	for _, s := range invalidDecimalFloats {

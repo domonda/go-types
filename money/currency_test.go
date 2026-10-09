@@ -1,11 +1,13 @@
 package money
 
 import (
+	"fmt"
 	"maps"
 	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 var currencyTestTable = []string{
@@ -171,4 +173,152 @@ func TestCurrency_SymbolTableAndEnumStrings(t *testing.T) {
 		}
 		assert.Equal(t, want, Currency("").EnumStrings())
 	})
+}
+
+// TestStringIsCurrency pins that the currency detection used on free text
+// accepts the same symbols, codes and names as NormalizeCurrency
+// and rejects everything else.
+func TestStringIsCurrency(t *testing.T) {
+	for _, str := range []string{"EUR", "eur", " EUR ", "€", "$", "US$", "£", "Ft", "Euro", "SEK"} {
+		assert.True(t, StringIsCurrency(str), "StringIsCurrency(%q)", str)
+	}
+	for _, str := range []string{"", " ", "XYZ", "EU", "12.34", "BTC"} {
+		assert.False(t, StringIsCurrency(str), "StringIsCurrency(%q)", str)
+	}
+}
+
+// TestCurrency_ScanString pins that ScanString normalizes valid input,
+// rejects invalid input only when validating, and keeps the raw string
+// otherwise so that non-validating imports don't lose data.
+func TestCurrency_ScanString(t *testing.T) {
+	tests := []struct {
+		source   string
+		validate bool
+		want     Currency
+		wantErr  bool
+	}{
+		{source: "eur", validate: true, want: EUR},
+		{source: " € ", validate: true, want: EUR},
+		{source: "US Dollar", validate: false, want: USD},
+		{source: "XYZ", validate: true, wantErr: true},
+		{source: "", validate: true, wantErr: true},
+		{source: "XYZ", validate: false, want: "XYZ"},
+		{source: "", validate: false, want: ""},
+	}
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("%q validate=%t", tt.source, tt.validate), func(t *testing.T) {
+			c := Currency("CHF")
+			err := c.ScanString(tt.source, tt.validate)
+			if tt.wantErr {
+				assert.Error(t, err)
+				assert.Equal(t, CHF, c, "a failed scan must not modify the currency")
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, c)
+		})
+	}
+}
+
+// TestCurrency_GetOrDefault pins the nil-pointer safety of GetOrDefault
+// and that invalid currencies are replaced by the default.
+func TestCurrency_GetOrDefault(t *testing.T) {
+	var nilCurrency *Currency
+	assert.Equal(t, EUR, nilCurrency.GetOrDefault(EUR))
+	assert.Equal(t, EUR, new(Currency).GetOrDefault(EUR), "empty currency is invalid")
+	invalid := Currency("XYZ")
+	assert.Equal(t, EUR, invalid.GetOrDefault(EUR))
+	usd := USD
+	assert.Equal(t, USD, usd.GetOrDefault(EUR))
+}
+
+// TestCurrency_ValidPtr pins that, unlike NullableCurrency.ValidPtr,
+// a nil *Currency is not valid because Currency has no NULL value.
+func TestCurrency_ValidPtr(t *testing.T) {
+	var nilCurrency *Currency
+	assert.False(t, nilCurrency.ValidPtr())
+	assert.False(t, new(Currency).ValidPtr())
+	eur := Currency("eur")
+	assert.True(t, eur.ValidPtr())
+}
+
+// TestCurrency_NullableCurrency pins the conversion to NullableCurrency
+// where the empty Currency becomes the valid NULL value.
+func TestCurrency_NullableCurrency(t *testing.T) {
+	assert.Equal(t, NullableCurrency("EUR"), EUR.NullableCurrency())
+	empty := Currency("").NullableCurrency()
+	assert.True(t, empty.IsNull())
+	assert.True(t, empty.Valid())
+}
+
+// TestCurrency_NormalizedOrNull pins that unknown currencies degrade to NULL
+// instead of being stored in their invalid form.
+func TestCurrency_NormalizedOrNull(t *testing.T) {
+	assert.Equal(t, NullableCurrency("EUR"), Currency("€").NormalizedOrNull())
+	assert.Equal(t, NullableCurrency("USD"), Currency(" usd ").NormalizedOrNull())
+	assert.Equal(t, NullableCurrency(CurrencyNull), Currency("XYZ").NormalizedOrNull())
+	assert.Equal(t, NullableCurrency(CurrencyNull), Currency("").NormalizedOrNull())
+}
+
+// TestCurrency_IsEUR pins that IsEUR recognizes every way the Euro is
+// written on invoices, not only the normalized code.
+func TestCurrency_IsEUR(t *testing.T) {
+	for _, c := range []Currency{"EUR", "eur", "€", "Euro", " EURO "} {
+		assert.True(t, c.IsEUR(), "Currency(%q).IsEUR()", string(c))
+	}
+	for _, c := range []Currency{"USD", "$", "", "XYZ"} {
+		assert.False(t, c.IsEUR(), "Currency(%q).IsEUR()", string(c))
+	}
+}
+
+// TestCurrency_SQL pins that the empty Currency is written to SQL as NULL
+// instead of an empty string, that SQL NULL scans back to the empty
+// Currency, and that both text representations of drivers are accepted.
+func TestCurrency_SQL(t *testing.T) {
+	v, err := Currency(CurrencyNull).Value()
+	require.NoError(t, err)
+	assert.Nil(t, v)
+
+	v, err = EUR.Value()
+	require.NoError(t, err)
+	assert.Equal(t, "EUR", v)
+
+	var c Currency
+	require.NoError(t, c.Scan("USD"))
+	assert.Equal(t, USD, c)
+
+	src := []byte("CHF")
+	require.NoError(t, c.Scan(src))
+	src[0] = 'X' // drivers may reuse the buffer after Scan returns
+	assert.Equal(t, CHF, c)
+
+	require.NoError(t, c.Scan(nil))
+	assert.Equal(t, Currency(CurrencyNull), c)
+
+	c = EUR
+	assert.Error(t, c.Scan(int64(1)))
+	assert.Equal(t, EUR, c, "a failed scan must not modify the currency")
+}
+
+// TestCurrency_SymbolAndEnglishName pins the display helpers: well known
+// currencies get their symbol, all others fall back to their code,
+// and unknown codes have no English name.
+func TestCurrency_SymbolAndEnglishName(t *testing.T) {
+	tests := []struct {
+		currency Currency
+		symbol   string
+		name     string
+	}{
+		{currency: EUR, symbol: "€", name: "Euro Member Countries"},
+		{currency: USD, symbol: "$", name: "United States Dollar"},
+		{currency: GBP, symbol: "£", name: "United Kingdom Pound"},
+		{currency: CHF, symbol: "₣", name: "Switzerland Franc"},
+		{currency: JPY, symbol: "¥", name: "Japan Yen"},
+		{currency: SEK, symbol: "SEK", name: "Sweden Krona"},
+		{currency: "XYZ", symbol: "XYZ", name: ""},
+	}
+	for _, tt := range tests {
+		assert.Equal(t, tt.symbol, tt.currency.Symbol(), "Currency(%q).Symbol()", string(tt.currency))
+		assert.Equal(t, tt.name, tt.currency.EnglishName(), "Currency(%q).EnglishName()", string(tt.currency))
+	}
 }

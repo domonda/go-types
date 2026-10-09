@@ -1,8 +1,12 @@
 package email
 
 import (
+	"html/template"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/domonda/go-types/strutil"
 )
@@ -247,6 +251,39 @@ func TestExtractBodyURLs(t *testing.T) {
 			if got := ExtractBodyURLs(msg); !got.Equal(tt.want) {
 				t.Errorf("ExtractBodyURLs() = %v, want %v", got.Sorted(), tt.want.Sorted())
 			}
+		})
+	}
+}
+
+func Test_plaintextToHTML(t *testing.T) {
+	// Line breaks of a quoted plaintext body must survive in the HTML reply.
+	assert.Equal(t, template.HTML("Hello<br>World<br>"), plaintextToHTML("Hello\nWorld\n"))
+	assert.Equal(t, template.HTML(""), plaintextToHTML(""))
+}
+
+// Test_formatDate protects that every built message gets a Date header
+// (RFC 5322 requires it) that parseDate can read back, because
+// BuildRawMessage writes it with formatDate and ParseMIMEMessage
+// reads it with parseDate.
+func Test_formatDate(t *testing.T) {
+	t.Run("round-trip", func(t *testing.T) {
+		date := time.Date(2026, 2, 19, 6, 12, 35, 0, time.FixedZone("CET", 3600))
+		formatted := formatDate(&date)
+		assert.Equal(t, "Thu, 19 Feb 2026 06:12:35 +0100", formatted)
+
+		parsed, err := parseDate(formatted)
+		require.NoError(t, err)
+		assert.True(t, parsed.Equal(date), "parseDate(formatDate(%s)) = %s", date, parsed)
+	})
+
+	for name, date := range map[string]*time.Time{"nil": nil, "zero": {}} {
+		t.Run(name+" uses current time", func(t *testing.T) {
+			before := time.Now().Truncate(time.Second)
+			parsed, err := parseDate(formatDate(date))
+			require.NoError(t, err)
+			after := time.Now()
+			assert.False(t, parsed.Before(before), "%s is before %s", parsed, before)
+			assert.False(t, parsed.After(after), "%s is after %s", parsed, after)
 		})
 	}
 }

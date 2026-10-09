@@ -397,3 +397,46 @@ func TestParseAddressList_PartialResult(t *testing.T) {
 		require.Nil(t, addrs)
 	})
 }
+
+// TestUniqueNormalizedAddressSlice protects that the result is a sorted set
+// of bare lower case mailboxes: duplicates that only differ in case or
+// display name collapse, and unparsable addresses are dropped instead of
+// being passed on as recipients.
+func TestUniqueNormalizedAddressSlice(t *testing.T) {
+	tests := []struct {
+		name  string
+		addrs []Address
+		want  []Address
+	}{
+		{name: "nil", addrs: nil, want: nil},
+		{name: "empty", addrs: []Address{}, want: nil},
+		{name: "single", addrs: []Address{`John <John@Example.com>`}, want: []Address{`john@example.com`}},
+		{name: "single invalid", addrs: []Address{`not an address`}, want: nil},
+		{
+			name:  "duplicates, sorting and invalid",
+			addrs: []Address{`b@example.com`, `not an address`, `A@Example.com`, `"Someone" <a@example.com>`, `B <B@example.com>`},
+			want:  []Address{`a@example.com`, `b@example.com`},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, UniqueNormalizedAddressSlice(tt.addrs))
+		})
+	}
+}
+
+// TestParseAddressList_GarbageAfterAddress protects that unparsable text
+// following an address (instead of the ',' separator) is reported as error
+// while the addresses before and after it are still returned.
+func TestParseAddressList_GarbageAfterAddress(t *testing.T) {
+	addrs, err := ParseAddressList("a@example.com junk, c@example.com")
+	require.Error(t, err)
+	require.Len(t, addrs, 2)
+	require.Equal(t, "a@example.com", addrs[0].Address)
+	require.Equal(t, "c@example.com", addrs[1].Address)
+
+	addrs, err = ParseAddressList("a@example.com junk")
+	require.Error(t, err, "trailing garbage without another separator")
+	require.Len(t, addrs, 1)
+	require.Equal(t, "a@example.com", addrs[0].Address)
+}

@@ -55,13 +55,13 @@ func Test_Normalize(t *testing.T) {
 		// US "Month Day, Year" — comma is now a separator and
 		// abbreviated months may end in '.' (also a separator).
 		// Test data adapted from github.com/araddon/dateparse.
-		"oct 7, 1970":  "1970-10-07",
-		"oct 7, '70":   "1970-10-07",
-		"Oct 7, '70":   "1970-10-07",
-		"Oct. 7, '70":  "1970-10-07",
-		"oct. 7, '70":  "1970-10-07",
-		"oct. 7, 1970": "1970-10-07",
-		"Sept. 7, '70": "1970-09-07",
+		"oct 7, 1970":   "1970-10-07",
+		"oct 7, '70":    "1970-10-07",
+		"Oct 7, '70":    "1970-10-07",
+		"Oct. 7, '70":   "1970-10-07",
+		"oct. 7, '70":   "1970-10-07",
+		"oct. 7, 1970":  "1970-10-07",
+		"Sept. 7, '70":  "1970-09-07",
 		"sept. 7, 1970": "1970-09-07",
 		"Feb 8, 2009":   "2009-02-08",
 
@@ -1180,4 +1180,58 @@ func TestDate_JSONSchema(t *testing.T) {
 	assert.Equal(t, "Date", schema.Title)
 	assert.Equal(t, "string", schema.Type)
 	assert.Equal(t, "date", schema.Format)
+}
+
+func TestDate_ScanStringWithLang(t *testing.T) {
+	tests := []struct {
+		name                 string
+		source               string
+		lang                 language.Code
+		want                 Date
+		wantNormalized       bool
+		wantMonthMustBeFirst bool
+		wantErr              bool
+	}{
+		{name: "already normalized", source: "2023-12-25", want: "2023-12-25", wantNormalized: true},
+		{name: "German day first", source: "25.12.2023", lang: language.DE, want: "2023-12-25"},
+		// 25 can't be a month, so the input proves month-first ordering
+		// which callers use to detect the date format of a whole document.
+		{name: "unambiguous US order", source: "12/25/2023", lang: language.DE, want: "2023-12-25", wantMonthMustBeFirst: true},
+		{name: "ambiguous with EN hint", source: "05/06/2024", lang: language.EN, want: "2024-05-06"},
+		{name: "ambiguous with DE hint", source: "05/06/2024", lang: language.DE, want: "2024-06-05"},
+		{name: "ambiguous with upper case EN hint", source: "05/06/2024", lang: "EN", want: "2024-05-06"},
+		{name: "empty", source: "", wantErr: true},
+		{name: "invalid", source: "invalid", wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			d := Date("2000-01-01")
+			wasNormalized, monthMustBeFirst, err := d.ScanStringWithLang(tt.source, tt.lang)
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.Equal(t, Date("2000-01-01"), d, "unchanged on error")
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, d)
+			assert.Equal(t, tt.wantNormalized, wasNormalized, "wasNormalized")
+			assert.Equal(t, tt.wantMonthMustBeFirst, monthMustBeFirst, "monthMustBeFirst")
+		})
+	}
+}
+
+func TestDate_ZeroDateHasNoTime(t *testing.T) {
+	// A zero Date represents "no date" and must not be converted
+	// into the midnight of year 1 or any other concrete point in time.
+	for _, zero := range []Date{"", "0000-00-00", "0001-01-01"} {
+		t.Run(string(zero), func(t *testing.T) {
+			assert.True(t, zero.Time(12, 0, 0, time.UTC).IsZero(), "Time")
+			assert.True(t, zero.MidnightUTC().IsZero(), "MidnightUTC")
+			assert.True(t, zero.MidnightInLocation(time.UTC).IsZero(), "MidnightInLocation")
+			assert.Equal(t, time.Weekday(0), zero.Weekday(), "Weekday")
+			year, week := zero.ISOWeek()
+			assert.Equal(t, 0, year, "ISOWeek year")
+			assert.Equal(t, 0, week, "ISOWeek week")
+		})
+	}
 }

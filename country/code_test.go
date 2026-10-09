@@ -1,7 +1,9 @@
 package country
 
 import (
+	"encoding/json"
 	"maps"
+	"regexp"
 	"slices"
 	"testing"
 )
@@ -187,4 +189,276 @@ func TestCode_CustomMethodsAndInvalidSentinel(t *testing.T) {
 			t.Errorf("EnumStrings() = %v\nwant the Enums() values as strings %v", got, want)
 		}
 	})
+}
+
+func TestCode_ValidAndNormalized(t *testing.T) {
+	tests := []struct {
+		c    Code
+		want bool
+	}{
+		{c: "DE", want: true},
+		{c: "de", want: false},   // valid, but lower case
+		{c: " DE ", want: false}, // valid, but surrounded by spaces
+		{c: "D", want: false},    // valid AltCode, but not ISO 3166-1
+		{c: "xx", want: false},
+		{c: Invalid, want: false},
+	}
+	for _, tt := range tests {
+		t.Run(string(tt.c), func(t *testing.T) {
+			if got := tt.c.ValidAndNormalized(); got != tt.want {
+				t.Errorf("Code(%q).ValidAndNormalized() = %t, want %t", string(tt.c), got, tt.want)
+			}
+		})
+	}
+
+	// Every canonical code must report itself as already normalized,
+	// otherwise code that only normalizes when !ValidAndNormalized()
+	// would never settle on a stable value.
+	for _, c := range Code("").Enums() {
+		if !c.ValidAndNormalized() {
+			t.Errorf("enum value %q is not ValidAndNormalized", string(c))
+		}
+	}
+}
+
+func TestCode_IsEU(t *testing.T) {
+	tests := []struct {
+		c    Code
+		want bool
+	}{
+		{c: AT, want: true},
+		{c: DE, want: true},
+		{c: GR, want: true},
+		{c: "de", want: true},          // normalized before the lookup
+		{c: "Deutschland", want: true}, // AltCodes are resolved
+		{c: CH, want: false},           // EFTA, not EU
+		{c: NO, want: false},           // EEA, not EU
+		{c: GB, want: false},           // left the EU with Brexit
+		{c: US, want: false},
+		{c: "xx", want: false},
+		{c: Invalid, want: false},
+	}
+	for _, tt := range tests {
+		t.Run(string(tt.c), func(t *testing.T) {
+			if got := tt.c.IsEU(); got != tt.want {
+				t.Errorf("Code(%q).IsEU() = %t, want %t", string(tt.c), got, tt.want)
+			}
+		})
+	}
+}
+
+func TestCode_EnglishName(t *testing.T) {
+	tests := []struct {
+		c    Code
+		want string
+	}{
+		{c: DE, want: "Germany"},
+		{c: " at ", want: "Austria"}, // normalized before the lookup
+		{c: "Schweiz", want: "Switzerland"},
+		{c: "xx", want: ""},
+		{c: Invalid, want: ""},
+	}
+	for _, tt := range tests {
+		t.Run(string(tt.c), func(t *testing.T) {
+			if got := tt.c.EnglishName(); got != tt.want {
+				t.Errorf("Code(%q).EnglishName() = %q, want %q", string(tt.c), got, tt.want)
+			}
+		})
+	}
+
+	// ParseCode accepts English names, so every code must have one.
+	for _, c := range Code("").Enums() {
+		if c.EnglishName() == "" {
+			t.Errorf("enum value %q has no English name", string(c))
+		}
+	}
+}
+
+func TestCode_Scan(t *testing.T) {
+	t.Run("string is stored raw", func(t *testing.T) {
+		// As documented, Scan does not normalize.
+		var c Code
+		if err := c.Scan("de"); err != nil {
+			t.Fatal(err)
+		}
+		if c != "de" {
+			t.Errorf("Scan(\"de\") = %q, want %q", string(c), "de")
+		}
+	})
+	t.Run("bytes are copied", func(t *testing.T) {
+		// database/sql drivers may reuse the []byte buffer after Scan,
+		// so the Code must not alias it.
+		buf := []byte("DE")
+		var c Code
+		if err := c.Scan(buf); err != nil {
+			t.Fatal(err)
+		}
+		copy(buf, "XX")
+		if c != DE {
+			t.Errorf("Scan([]byte) = %q, want %q after the buffer was reused", string(c), "DE")
+		}
+	})
+	t.Run("NULL is Invalid", func(t *testing.T) {
+		c := DE
+		if err := c.Scan(nil); err != nil {
+			t.Fatal(err)
+		}
+		if c != Invalid {
+			t.Errorf("Scan(nil) = %q, want Invalid", string(c))
+		}
+	})
+	t.Run("unsupported type", func(t *testing.T) {
+		var c Code
+		if err := c.Scan(int64(49)); err == nil {
+			t.Error("Scan(int64) = nil, want an error")
+		}
+	})
+}
+
+func TestCode_Value(t *testing.T) {
+	tests := []struct {
+		c    Code
+		want any
+	}{
+		// Invalid is the empty string and must be written as SQL NULL.
+		{c: Invalid, want: nil},
+		{c: DE, want: "DE"},
+		// Codes are written normalized so equal countries compare equal in SQL.
+		{c: "de", want: "DE"},
+		{c: "Österreich", want: "AT"},
+	}
+	for _, tt := range tests {
+		t.Run(string(tt.c), func(t *testing.T) {
+			got, err := tt.c.Value()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != tt.want {
+				t.Errorf("Code(%q).Value() = %#v, want %#v", string(tt.c), got, tt.want)
+			}
+		})
+	}
+}
+
+// Scan(Value()) must give back the same Code, including Invalid as NULL.
+func TestCode_SQLRoundTrip(t *testing.T) {
+	for _, c := range []Code{Invalid, DE, XK} {
+		v, err := c.Value()
+		if err != nil {
+			t.Fatal(err)
+		}
+		var got Code
+		if err := got.Scan(v); err != nil {
+			t.Fatal(err)
+		}
+		if got != c {
+			t.Errorf("Scan(Value()) of %q = %q", string(c), string(got))
+		}
+	}
+}
+
+func TestCode_MarshalJSON(t *testing.T) {
+	tests := []struct {
+		c    Code
+		want string
+	}{
+		{c: DE, want: `"DE"`},
+		// JSON output is normalized so API consumers always see ISO codes.
+		{c: "de", want: `"DE"`},
+		{c: "Deutschland", want: `"DE"`},
+		{c: Invalid, want: `""`},
+	}
+	for _, tt := range tests {
+		t.Run(string(tt.c), func(t *testing.T) {
+			got, err := json.Marshal(tt.c)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(got) != tt.want {
+				t.Errorf("json.Marshal(Code(%q)) = %s, want %s", string(tt.c), got, tt.want)
+			}
+		})
+	}
+
+	t.Run("round-trip", func(t *testing.T) {
+		type doc struct {
+			Country Code `json:"country"`
+		}
+		data, err := json.Marshal(doc{Country: AT})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var got doc
+		if err := json.Unmarshal(data, &got); err != nil {
+			t.Fatal(err)
+		}
+		if got.Country != AT {
+			t.Errorf("JSON round-trip of AT = %q", string(got.Country))
+		}
+	})
+}
+
+// The published JSON schema must accept every code this package produces,
+// otherwise API clients validating against the schema would reject
+// our own output.
+func TestCode_JSONSchema(t *testing.T) {
+	s := Code("").JSONSchema()
+	if s.Type != "string" {
+		t.Errorf("JSONSchema().Type = %q, want string", s.Type)
+	}
+	pattern := regexp.MustCompile(s.Pattern)
+	for _, c := range Code("").Enums() {
+		if !pattern.MatchString(string(c)) {
+			t.Errorf("enum value %q does not match the schema pattern %s", string(c), s.Pattern)
+		}
+	}
+	if pattern.MatchString("de") {
+		t.Errorf("schema pattern %s accepts the non-normalized code \"de\"", s.Pattern)
+	}
+}
+
+func TestCode_ScanString(t *testing.T) {
+	t.Run("valid input is stored normalized", func(t *testing.T) {
+		for _, validate := range []bool{true, false} {
+			var c Code
+			if err := c.ScanString(" österreich ", validate); err != nil {
+				t.Fatal(err)
+			}
+			if c != AT {
+				t.Errorf("ScanString(validate=%t) = %q, want AT", validate, string(c))
+			}
+		}
+	})
+	t.Run("validate rejects invalid input and keeps the old value", func(t *testing.T) {
+		c := DE
+		if err := c.ScanString("Atlantis", true); err == nil {
+			t.Error("ScanString(\"Atlantis\", true) = nil, want an error")
+		}
+		if c != DE {
+			t.Errorf("failed ScanString changed the value to %q", string(c))
+		}
+	})
+	t.Run("without validate invalid input is stored as is", func(t *testing.T) {
+		var c Code
+		if err := c.ScanString("Atlantis", false); err != nil {
+			t.Fatal(err)
+		}
+		if c != "Atlantis" {
+			t.Errorf("ScanString(\"Atlantis\", false) = %q, want the input unchanged", string(c))
+		}
+	})
+}
+
+// Nullable must map the Invalid sentinel to Null, as documented,
+// and keep every other value unchanged.
+func TestCode_Nullable(t *testing.T) {
+	if got := Invalid.Nullable(); got != Null {
+		t.Errorf("Invalid.Nullable() = %q, want Null", string(got))
+	}
+	if got := DE.Nullable(); got != NullableCode("DE") {
+		t.Errorf("DE.Nullable() = %q, want DE", string(got))
+	}
+	if got := Code("de").Nullable(); got != NullableCode("de") {
+		t.Errorf("Code(\"de\").Nullable() = %q, want the input unchanged", string(got))
+	}
 }

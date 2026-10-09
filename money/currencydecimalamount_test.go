@@ -97,6 +97,9 @@ func TestCurrencyDecimalAmount_SQL(t *testing.T) {
 	assert.Equal(t, "12.5", scanned.Amount.String())
 
 	assert.Error(t, scanned.Scan(true))
+	assert.Error(t, scanned.Scan("EUR abc"))
+	assert.Equal(t, Currency(""), scanned.Currency, "a failed scan must not modify the value")
+	assert.Equal(t, "12.5", scanned.Amount.String(), "a failed scan must not modify the value")
 }
 
 func TestCurrencyDecimalAmount_JSON(t *testing.T) {
@@ -122,6 +125,14 @@ func TestCurrencyDecimalAmount_ScanString(t *testing.T) {
 	require.NoError(t, ca.ScanString("EUR 1.234,56", true))
 	assert.Equal(t, Currency("EUR"), ca.Currency)
 	assert.Equal(t, "1234.56", ca.Amount.String())
+
+	// A failed scan must leave the previously scanned value untouched,
+	// and validate must reject the non-finite amounts the parser accepts.
+	before := ca
+	assert.Error(t, ca.ScanString("XYZ 12.34", false))
+	assert.Equal(t, before, ca)
+	assert.Error(t, ca.ScanString("EUR NaN", true))
+	assert.Equal(t, before, ca)
 }
 
 // TestParseCurrencyDecimalAmount_scientificNotation guards the currency split

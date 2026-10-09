@@ -1,6 +1,7 @@
 package money
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
 	"math/big"
@@ -406,4 +407,303 @@ func TestAmount_CentAmount(t *testing.T) {
 	assert.Equal(t, MaxCentAmount, Amount(math.Inf(1)).CentAmount(RoundHalfAwayFromZero))
 	assert.Equal(t, MinCentAmount, Amount(math.Inf(-1)).CentAmount(RoundHalfAwayFromZero))
 	assert.Equal(t, MaxCentAmount, Amount(1e30).CentAmount(RoundHalfAwayFromZero))
+}
+
+// TestNullableAmount pins that NullableAmount distinguishes a zero amount
+// (for example a free item) from a missing amount in Go, JSON and SQL.
+func TestNullableAmount(t *testing.T) {
+	t.Run("constructors", func(t *testing.T) {
+		zero := NullableAmountFrom(0)
+		assert.True(t, zero.IsNotNull(), "a zero amount is a valid amount, not NULL")
+		assert.Equal(t, Amount(0), zero.Get())
+
+		assert.True(t, NullableAmountFromPtr(nil).IsNull())
+
+		a := Amount(12.34)
+		fromPtr := NullableAmountFromPtr(&a)
+		a = 0
+		assert.Equal(t, Amount(12.34), fromPtr.Get(), "NullableAmountFromPtr must copy the pointed to value")
+	})
+
+	t.Run("JSON", func(t *testing.T) {
+		data, err := json.Marshal(NullableAmount{})
+		require.NoError(t, err)
+		assert.Equal(t, `null`, string(data))
+
+		data, err = json.Marshal(NullableAmountFrom(0))
+		require.NoError(t, err)
+		assert.Equal(t, `0`, string(data))
+
+		got := NullableAmountFrom(1)
+		require.NoError(t, json.Unmarshal([]byte(`null`), &got))
+		assert.True(t, got.IsNull(), "JSON null must clear a previously set amount")
+
+		// The tolerant string parsing of Amount.UnmarshalJSON
+		// must also work through the nullable wrapper
+		require.NoError(t, json.Unmarshal([]byte(`"1.234,56"`), &got))
+		assert.Equal(t, NullableAmountFrom(1234.56), got)
+	})
+
+	t.Run("SQL", func(t *testing.T) {
+		v, err := NullableAmount{}.Value()
+		require.NoError(t, err)
+		assert.Nil(t, v, "NULL must be written to SQL as nil, not as 0")
+
+		v, err = NullableAmountFrom(12.34).Value()
+		require.NoError(t, err)
+		assert.Equal(t, float64(12.34), v, "drivers need a plain float64, not the named Amount type")
+
+		got := NullableAmountFrom(1)
+		require.NoError(t, got.Scan(nil))
+		assert.True(t, got.IsNull(), "SQL NULL must scan as NULL")
+
+		// Postgres NUMERIC columns arrive as text bytes
+		require.NoError(t, got.Scan([]byte("1234.56")))
+		assert.Equal(t, NullableAmountFrom(1234.56), got)
+	})
+}
+
+// TestAmount_ScanString pins that amounts from CSV and bank exports in the
+// common real-world notations (German decimal comma, English decimal point,
+// French space and Swiss apostrophe grouping, leading or trailing sign) all
+// scan to the same value, and that validate rejects NaN and ±Inf.
+func TestAmount_ScanString(t *testing.T) {
+	tests := []struct {
+		source   string
+		validate bool
+		want     Amount
+		wantErr  bool
+	}{
+		{source: "1.234,56", validate: true, want: 1234.56},
+		{source: "1,234.56", validate: true, want: 1234.56},
+		{source: "1 234,56", validate: true, want: 1234.56},
+		{source: "1'234.56", validate: true, want: 1234.56},
+		{source: "1234,56", validate: true, want: 1234.56},
+		{source: " 1234.56 ", validate: true, want: 1234.56},
+		{source: "-12,34", validate: true, want: -12.34},
+		{source: "12,34-", validate: true, want: -12.34}, // trailing minus of accounting exports
+		{source: "+12,34", validate: true, want: 12.34},
+		{source: "1.234.567", validate: true, want: 1234567}, // repeated group separator is not a decimal separator
+		{source: "NaN", validate: false, want: Amount(math.NaN())},
+		{source: "-Inf", validate: false, want: Amount(math.Inf(-1))},
+		{source: "NaN", validate: true, wantErr: true},
+		{source: "Inf", validate: true, wantErr: true},
+		{source: "", validate: false, wantErr: true},
+		{source: "12,34 EUR", validate: false, wantErr: true},
+		{source: "1,23,45", validate: false, wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("%q validate=%t", tt.source, tt.validate), func(t *testing.T) {
+			a := Amount(666)
+			err := a.ScanString(tt.source, tt.validate)
+			if tt.wantErr {
+				assert.Error(t, err)
+				assert.Equal(t, Amount(666), a, "a failed scan must not modify the amount")
+				return
+			}
+			require.NoError(t, err)
+			assert.True(t, equalInclNaN(float64(tt.want), float64(a)), "got %v, want %v", float64(a), float64(tt.want))
+		})
+	}
+}
+
+// TestAmount_Cents pins that Cents rounds half away from zero
+// symmetrically for positive and negative amounts.
+func TestAmount_Cents(t *testing.T) {
+	tests := []struct {
+		amount Amount
+		want   int64
+	}{
+		{amount: 0, want: 0},
+		{amount: 1234.56, want: 123456},
+		{amount: -1234.56, want: -123456},
+		{amount: 0.125, want: 13}, // exactly representable half cent
+		{amount: -0.125, want: -13},
+		{amount: 0.1 + 0.2, want: 30}, // binary noise must not change the cents
+	}
+	for _, tt := range tests {
+		assert.Equal(t, tt.want, tt.amount.Cents(), "Amount(%v).Cents()", float64(tt.amount))
+	}
+}
+
+// TestAmount_WithinOneCent pins the tolerance used to compare amounts
+// from different sources (e.g. invoice total vs. sum of line items)
+// where rounding of intermediate results can differ by one cent.
+func TestAmount_WithinOneCent(t *testing.T) {
+	tests := []struct {
+		a, b Amount
+		want bool
+	}{
+		{a: 10, b: 10, want: true},
+		{a: 10, b: 10.01, want: true},
+		{a: 10, b: 9.99, want: true},
+		{a: 10, b: 10.02, want: false},
+		{a: 10, b: 9.98, want: false},
+		{a: 0.1 + 0.2, b: 0.3, want: true},
+		{a: -5, b: -5.01, want: true},
+		{a: 0.01, b: -0.01, want: false},
+	}
+	for _, tt := range tests {
+		assert.Equal(t, tt.want, tt.a.WithinOneCent(tt.b), "Amount(%v).WithinOneCent(%v)", float64(tt.a), float64(tt.b))
+		assert.Equal(t, tt.want, tt.b.WithinOneCent(tt.a), "WithinOneCent must be symmetric")
+	}
+}
+
+// TestAmount_Rounding pins half away from zero rounding for RoundToInt
+// and RoundToDecimals, that RoundToDecimals(2) agrees with RoundToCents,
+// and that negative decimals round to tens, hundreds, etc.
+func TestAmount_Rounding(t *testing.T) {
+	assert.Equal(t, Amount(3), Amount(2.5).RoundToInt())
+	assert.Equal(t, Amount(-3), Amount(-2.5).RoundToInt())
+	assert.Equal(t, Amount(1), Amount(0.5).RoundToInt())
+	assert.Equal(t, Amount(2), Amount(2.4999).RoundToInt())
+
+	tests := []struct {
+		amount   Amount
+		decimals int
+		want     Amount
+	}{
+		{amount: 1.23456, decimals: 3, want: 1.235},
+		{amount: -1.23456, decimals: 3, want: -1.235},
+		{amount: 1.23456, decimals: 0, want: 1},
+		{amount: 123456, decimals: -3, want: 123000},
+		{amount: 123500, decimals: -3, want: 124000},
+		{amount: -123500, decimals: -3, want: -124000},
+	}
+	for _, tt := range tests {
+		assert.Equal(t, tt.want, tt.amount.RoundToDecimals(tt.decimals), "Amount(%v).RoundToDecimals(%d)", float64(tt.amount), tt.decimals)
+	}
+
+	for _, a := range []Amount{0.004, 0.005, 1.999, -1.995, 123456.789, 9999999.005} {
+		assert.Equal(t, a.RoundToCents(), a.RoundToDecimals(2), "Amount(%v)", float64(a))
+		assert.Equal(t, a.RoundToInt(), a.RoundToDecimals(0), "Amount(%v)", float64(a))
+	}
+}
+
+// TestAmount_PtrHelpers pins the nil handling of the pointer helpers
+// used for optional amounts, and that StringOr formats like String,
+// rounded to cents.
+func TestAmount_PtrHelpers(t *testing.T) {
+	var nilAmount *Amount
+	a := Amount(1234.567)
+
+	assert.Equal(t, Amount(1), AmountFromPtr(nil, 1))
+	assert.Equal(t, a, AmountFromPtr(&a, 1))
+
+	ptr := a.Ptr()
+	*ptr = 0
+	assert.Equal(t, Amount(1234.567), a, "Ptr must return a pointer to a copy")
+
+	assert.Equal(t, "n/a", nilAmount.StringOr("n/a"))
+	assert.Equal(t, "1234.57", a.Ptr().StringOr("n/a"))
+	assert.Equal(t, 1.5, nilAmount.FloatOr(1.5))
+	assert.Equal(t, 1234.567, a.Ptr().FloatOr(1.5))
+	assert.Equal(t, Amount(1.5), nilAmount.AmountOr(1.5))
+	assert.Equal(t, a, a.Ptr().AmountOr(1.5))
+}
+
+// TestAmount_Equal pins that Equal compares the pointed to values
+// (not the pointer identity) and treats nil as only equal to nil.
+func TestAmount_Equal(t *testing.T) {
+	a, b, c := Amount(12.34), Amount(12.34), Amount(12.35)
+	nan1, nan2 := Amount(math.NaN()), Amount(math.NaN())
+	var nilAmount *Amount
+
+	assert.True(t, nilAmount.Equal(nil))
+	assert.False(t, a.Ptr().Equal(nil))
+	assert.False(t, nilAmount.Equal(&a))
+	assert.True(t, (&a).Equal(&b), "different pointers to equal values")
+	assert.False(t, (&a).Equal(&c))
+	assert.True(t, (&nan1).Equal(&nan1), "the same pointer is always equal")
+	assert.False(t, (&nan1).Equal(&nan2), "NaN values are never equal")
+}
+
+// TestAmount_Sign pins the sign helpers that are used to book an amount
+// as debit or credit regardless of the sign it was parsed with
+// (e.g. credit notes with negative or positive totals).
+func TestAmount_Sign(t *testing.T) {
+	negZero := Amount(math.Copysign(0, -1))
+
+	assert.Equal(t, Amount(12.34), Amount(-12.34).Abs())
+	assert.Equal(t, Amount(math.Inf(1)), Amount(math.Inf(-1)).Abs())
+	assert.True(t, Amount(math.NaN()).Abs().IsNaN())
+	assert.False(t, negZero.Abs().Signbit())
+	assert.Equal(t, 12.34, Amount(-12.34).AbsFloat())
+
+	assert.Equal(t, Amount(-12.34), Amount(12.34).Inverted())
+	assert.Equal(t, Amount(12.34), Amount(-12.34).Inverted())
+	a := Amount(12.34)
+	a.Invert()
+	assert.Equal(t, Amount(-12.34), a, "Invert must change the amount in place")
+
+	for _, a := range []Amount{12.34, -12.34} {
+		assert.Equal(t, Amount(12.34), a.WithPosSign(true), "%v.WithPosSign(true)", float64(a))
+		assert.Equal(t, Amount(-12.34), a.WithPosSign(false), "%v.WithPosSign(false)", float64(a))
+		assert.Equal(t, Amount(-12.34), a.WithNegSign(true), "%v.WithNegSign(true)", float64(a))
+		assert.Equal(t, Amount(12.34), a.WithNegSign(false), "%v.WithNegSign(false)", float64(a))
+	}
+	assert.False(t, negZero.WithPosSign(true).Signbit())
+}
+
+// TestAmount_RateArithmetic pins the typical tax and currency calculations:
+// 20% VAT of a net amount via a rate or a percentage gives the same result,
+// and dividing by a rate is the inverse of multiplying by it.
+func TestAmount_RateArithmetic(t *testing.T) {
+	assert.Equal(t, Amount(40), Amount(200).MultipliedByRate(0.2))
+	assert.Equal(t, Amount(40), Amount(200).Percentage(20))
+	assert.Equal(t, Amount(80), Amount(100).DividedByRate(1.25))
+	assert.Equal(t, Amount(-50), Amount(-250).Percentage(20))
+	assert.Equal(t, Amount(22.8), Amount(119.99).Percentage(19).RoundToCents())
+
+	// Dividing by zero must produce a non-finite amount that Valid rejects
+	assert.False(t, Amount(100).DividedByRate(0).Valid())
+}
+
+// TestAmount_Valid pins that NaN and ±Inf, which ParseAmount accepts
+// without error, are rejected by all Valid methods.
+func TestAmount_Valid(t *testing.T) {
+	tests := []struct {
+		name        string
+		amount      Amount
+		valid       bool
+		positive    bool
+		greaterZero bool
+		smallerZero bool
+		nan         bool
+		inf         bool
+	}{
+		{name: "positive", amount: 12.34, valid: true, positive: true, greaterZero: true},
+		{name: "zero", amount: 0, valid: true, positive: true},
+		{name: "negative zero", amount: Amount(math.Copysign(0, -1)), valid: true, positive: true},
+		{name: "negative", amount: -12.34, valid: true, smallerZero: true},
+		{name: "NaN", amount: Amount(math.NaN()), nan: true},
+		{name: "+Inf", amount: Amount(math.Inf(1)), inf: true},
+		{name: "-Inf", amount: Amount(math.Inf(-1)), inf: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.valid, tt.amount.Valid(), "Valid")
+			assert.Equal(t, tt.positive, tt.amount.ValidAndPositive(), "ValidAndPositive")
+			assert.Equal(t, tt.greaterZero, tt.amount.ValidAndGreaterZero(), "ValidAndGreaterZero")
+			assert.Equal(t, tt.smallerZero, tt.amount.ValidAndSmallerZero(), "ValidAndSmallerZero")
+			assert.Equal(t, tt.nan, tt.amount.IsNaN(), "IsNaN")
+			assert.Equal(t, tt.inf, tt.amount.IsInf(), "IsInf")
+			assert.Equal(t, tt.valid, tt.amount.ValidAndHasSign(0), "ValidAndHasSign(0) accepts any sign")
+		})
+	}
+
+	assert.True(t, Amount(12.34).ValidAndHasSign(1))
+	assert.False(t, Amount(12.34).ValidAndHasSign(-1))
+	assert.True(t, Amount(-12.34).ValidAndHasSign(-1))
+	assert.False(t, Amount(-12.34).ValidAndHasSign(1))
+	assert.False(t, Amount(math.Inf(1)).ValidAndHasSign(1))
+	assert.False(t, Amount(math.Inf(-1)).ValidAndHasSign(-1))
+}
+
+// TestAmount_BigFloat pins that BigFloat carries the exact float64 value,
+// so high precision calculations start from the identical amount.
+func TestAmount_BigFloat(t *testing.T) {
+	f, acc := Amount(1234.56).BigFloat().Float64()
+	assert.Equal(t, 1234.56, f)
+	assert.Equal(t, big.Exact, acc)
 }

@@ -233,6 +233,13 @@ func TestSplitArray(t *testing.T) {
 
 		// Invalid
 		{
+			// Whitespace between a quoted element and the separator
+			// is not part of the element
+			name:       "whitespace after quoted elements",
+			array:      "{\"a\" ,\t\"b\"\n}",
+			wantFields: []string{`"a"`, `"b"`},
+		},
+		{
 			name:    "empty",
 			array:   ``,
 			wantErr: true,
@@ -294,6 +301,39 @@ func TestSplitArray(t *testing.T) {
 			// report a genuinely unclosed quote there
 			name:    `[{"a":"x}]`,
 			array:   `[{"a":"x}]`,
+			wantErr: true,
+		},
+		{
+			// Unbalanced nesting must be reported instead of returning
+			// elements that cut a nested object or array in the middle
+			name:    `[{"a":1}}]`,
+			array:   `[{"a":1}}]`,
+			wantErr: true,
+		},
+		{
+			name:    `[[1,2]]]`,
+			array:   `[[1,2]]]`,
+			wantErr: true,
+		},
+		{
+			name:    `[{"a":1]`,
+			array:   `[{"a":1]`,
+			wantErr: true,
+		},
+		{
+			name:    `[[1,2]`,
+			array:   `[[1,2]`,
+			wantErr: true,
+		},
+		{
+			name:    `{{1,2}`,
+			array:   `{{1,2}`,
+			wantErr: true,
+		},
+		{
+			// Only a separator may follow a quoted element
+			name:    `{"a" "b"}`,
+			array:   `{"a" "b"}`,
 			wantErr: true,
 		},
 	}

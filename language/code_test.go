@@ -1,7 +1,9 @@
 package language
 
 import (
+	"database/sql/driver"
 	"maps"
+	"regexp"
 	"slices"
 	"testing"
 
@@ -247,4 +249,72 @@ func TestCode_ValidateStringAndNullSentinel(t *testing.T) {
 		}
 		assert.Equal(t, want, Code("").EnumStrings())
 	})
+}
+
+// TestCode_ScanValue protects the SQL NULL mapping documented on Code:
+// the empty Code (Null) is written as SQL NULL, and SQL NULL is scanned
+// back as Null, so a nullable language column round-trips without turning
+// NULL into an empty string or vice versa.
+func TestCode_ScanValue(t *testing.T) {
+	t.Run("Scan", func(t *testing.T) {
+		tests := []struct {
+			name  string
+			value any
+			want  Code
+		}{
+			{name: "string", value: "de", want: DE},
+			{name: "bytes", value: []byte("fr"), want: FR},
+			{name: "NULL", value: nil, want: Null},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				c := EN // non-zero start value to detect that Scan overwrites it
+				require.NoError(t, c.Scan(tt.value))
+				assert.Equal(t, tt.want, c)
+			})
+		}
+	})
+
+	t.Run("Scan unsupported type", func(t *testing.T) {
+		c := EN
+		err := c.Scan(42)
+		require.Error(t, err)
+		assert.Equal(t, EN, c, "failed Scan must not modify the Code")
+	})
+
+	t.Run("Value", func(t *testing.T) {
+		v, err := Null.Value()
+		require.NoError(t, err)
+		assert.Nil(t, v, "Null must be written as SQL NULL, not as empty string")
+
+		v, err = DE.Value()
+		require.NoError(t, err)
+		assert.Equal(t, driver.Value("de"), v)
+	})
+
+	t.Run("round-trip", func(t *testing.T) {
+		for _, c := range []Code{Null, EN, DE, ZH} {
+			v, err := c.Value()
+			require.NoError(t, err)
+			var scanned Code
+			require.NoError(t, scanned.Scan(v))
+			assert.Equal(t, c, scanned)
+		}
+	})
+}
+
+// TestCode_JSONSchema protects that the published JSON schema accepts every
+// valid language code and rejects non-normalized forms, so schema based
+// validation agrees with Code.ValidAndNormalized.
+func TestCode_JSONSchema(t *testing.T) {
+	schema := Code("").JSONSchema()
+	require.NotNil(t, schema)
+	assert.Equal(t, "string", schema.Type)
+	pattern := regexp.MustCompile(schema.Pattern)
+	for _, c := range Code("").Enums() {
+		assert.True(t, pattern.MatchString(string(c)), "schema pattern must accept %q", c)
+	}
+	for _, s := range []string{"", "EN", "eng", "en-US", "e"} {
+		assert.False(t, pattern.MatchString(s), "schema pattern must reject %q", s)
+	}
 }

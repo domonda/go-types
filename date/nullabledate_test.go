@@ -3,8 +3,12 @@ package date
 import (
 	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/domonda/go-types/language"
 )
 
 func Test_NullableDate(t *testing.T) {
@@ -80,7 +84,7 @@ func TestNullableDate_ValidAndNormalized(t *testing.T) {
 func TestNullableDate_Get(t *testing.T) {
 	d := NullableDate("2023-12-25")
 	assert.Equal(t, Date("2023-12-25"), d.Get())
-	
+
 	assert.Panics(t, func() {
 		Null.Get()
 	})
@@ -135,7 +139,7 @@ func TestNullableDate_YearMonthDay(t *testing.T) {
 	assert.Equal(t, 2023, y)
 	assert.Equal(t, 12, int(m))
 	assert.Equal(t, 25, d)
-	
+
 	y, m, d = Null.YearMonthDay()
 	assert.Equal(t, 0, y)
 	assert.Equal(t, 0, int(m))
@@ -152,7 +156,7 @@ func TestNullableDate_ISOWeek(t *testing.T) {
 	y, w := NullableDate("2023-12-25").ISOWeek()
 	assert.Equal(t, 2023, y)
 	assert.Equal(t, 52, w)
-	
+
 	y, w = Null.ISOWeek()
 	assert.Equal(t, 0, y)
 	assert.Equal(t, 0, w)
@@ -167,7 +171,7 @@ func TestNullableDate_Format(t *testing.T) {
 func TestNullableDate_Compare(t *testing.T) {
 	d1 := NullableDate("2023-12-25")
 	d2 := NullableDate("2023-12-26")
-	
+
 	assert.Equal(t, -1, d1.Compare(d2))
 	assert.Equal(t, 1, d2.Compare(d1))
 	assert.Equal(t, 0, d1.Compare(d1))
@@ -177,7 +181,7 @@ func TestNullableDate_Compare(t *testing.T) {
 func TestNullableDate_After(t *testing.T) {
 	d1 := NullableDate("2023-12-25")
 	d2 := NullableDate("2023-12-26")
-	
+
 	assert.False(t, d1.After(d2))
 	assert.True(t, d2.After(d1))
 	assert.False(t, Null.After(d1))
@@ -189,14 +193,14 @@ func TestNullableDate_Before(t *testing.T) {
 
 	assert.True(t, d1.Before(d2))
 	assert.False(t, d2.Before(d1))
-	assert.True(t, Null.Before(d1)) // null is always before any non-null date
+	assert.True(t, Null.Before(d1))    // null is always before any non-null date
 	assert.False(t, Null.Before(Null)) // null is not before null
 }
 
 func TestNullableDate_EqualOrAfter(t *testing.T) {
 	d1 := NullableDate("2023-12-25")
 	d2 := NullableDate("2023-12-26")
-	
+
 	assert.False(t, d1.EqualOrAfter(d2))
 	assert.True(t, d2.EqualOrAfter(d1))
 	assert.True(t, d1.EqualOrAfter(d1))
@@ -205,7 +209,7 @@ func TestNullableDate_EqualOrAfter(t *testing.T) {
 func TestNullableDate_EqualOrBefore(t *testing.T) {
 	d1 := NullableDate("2023-12-25")
 	d2 := NullableDate("2023-12-26")
-	
+
 	assert.True(t, d1.EqualOrBefore(d2))
 	assert.False(t, d2.EqualOrBefore(d1))
 	assert.True(t, d1.EqualOrBefore(d1))
@@ -237,7 +241,7 @@ func TestNullableDate_MidnightUTC(t *testing.T) {
 	tm := d.MidnightUTC()
 	assert.False(t, tm.IsNull())
 	assert.Equal(t, 2023, tm.Get().Year())
-	
+
 	assert.True(t, Null.MidnightUTC().IsNull())
 }
 
@@ -245,15 +249,15 @@ func TestNullableDate_Midnight(t *testing.T) {
 	d := NullableDate("2023-12-25")
 	tm := d.Midnight()
 	assert.False(t, tm.IsNull())
-	
+
 	assert.True(t, Null.Midnight().IsNull())
 }
 
 func TestNullableDate_BeginningOfWeek(t *testing.T) {
-	d := NullableDate("2023-12-27") // Wednesday
+	d := NullableDate("2023-12-27")   // Wednesday
 	beginning := d.BeginningOfWeek(1) // Monday
 	assert.Equal(t, NullableDate("2023-12-25"), beginning)
-	
+
 	assert.Equal(t, Null, Null.BeginningOfWeek(1))
 }
 
@@ -277,9 +281,9 @@ func TestNullableDate_BeginningOfYear(t *testing.T) {
 
 func TestNullableDate_EndOfWeek(t *testing.T) {
 	d := NullableDate("2023-12-25") // Monday
-	end := d.EndOfWeek(1) // Monday as week start
+	end := d.EndOfWeek(1)           // Monday as week start
 	assert.Equal(t, NullableDate("2023-12-31"), end)
-	
+
 	assert.Equal(t, Null, Null.EndOfWeek(1))
 }
 
@@ -331,7 +335,7 @@ func TestNullableDate_IsTodayInUTC(t *testing.T) {
 func TestNullableDate_AfterToday(t *testing.T) {
 	tomorrow := NullableDate(OfToday().AddDays(1))
 	yesterday := NullableDate(OfToday().AddDays(-1))
-	
+
 	assert.True(t, tomorrow.AfterToday())
 	assert.False(t, yesterday.AfterToday())
 	assert.False(t, Null.AfterToday())
@@ -351,7 +355,7 @@ func TestNullableDate_Normalized(t *testing.T) {
 	normalized, err := d.Normalized()
 	assert.NoError(t, err)
 	assert.Equal(t, NullableDate("2023-12-25"), normalized)
-	
+
 	normalized, err = Null.Normalized()
 	assert.NoError(t, err)
 	assert.Equal(t, Null, normalized)
@@ -373,7 +377,7 @@ func TestNullableDate_NormalizedOrNull(t *testing.T) {
 func TestNullableDate_NormalizedEqual(t *testing.T) {
 	d1 := NullableDate("2023-12-25")
 	d2 := NullableDate("25.12.2023")
-	
+
 	assert.True(t, d1.NormalizedEqual(d2))
 	assert.True(t, Null.NormalizedEqual(Null))
 	assert.False(t, d1.NormalizedEqual(Null))
@@ -384,8 +388,317 @@ func TestNullableDate_Value(t *testing.T) {
 	val, err := d.Value()
 	assert.NoError(t, err)
 	assert.Equal(t, "2023-12-25", val)
-	
+
 	val, err = Null.Value()
 	assert.NoError(t, err)
 	assert.Nil(t, val)
+}
+
+func TestNormalizeNullable(t *testing.T) {
+	tests := []struct {
+		input   string
+		lang    []language.Code
+		want    NullableDate
+		wantErr bool
+	}{
+		{input: "25.12.2023", want: "2023-12-25"},
+		{input: "05/06/2024", lang: []language.Code{language.EN}, want: "2024-05-06"},
+		// Empty and zero dates are valid NULL values for NullableDate
+		{input: "", want: Null},
+		{input: "0001-01-01", want: Null},
+		{input: "0000-00-00", want: Null},
+		{input: "not a date", wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			got, err := NormalizeNullable(tt.input, tt.lang...)
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestMustNullable(t *testing.T) {
+	assert.Equal(t, NullableDate("2023-12-25"), MustNullable("25.12.2023"))
+	// Unlike Must for Date, an empty string is a valid NULL and must not panic
+	assert.Equal(t, Null, MustNullable(""))
+	assert.Panics(t, func() { MustNullable("not a date") })
+}
+
+func TestNullableDate_SetAndSetNull(t *testing.T) {
+	var n NullableDate
+	n.Set("2023-12-25")
+	assert.Equal(t, NullableDate("2023-12-25"), n)
+	assert.True(t, n.IsNotNull())
+
+	n.SetNull()
+	assert.Equal(t, Null, n)
+	assert.True(t, n.IsNull())
+}
+
+func TestNullableDate_ScanString(t *testing.T) {
+	tests := []struct {
+		name     string
+		source   string
+		validate bool
+		want     NullableDate
+		wantErr  bool
+	}{
+		// Textual NULL representations from CSV/form input must become NULL
+		// and must not be treated as invalid dates.
+		{name: "empty", source: "", validate: true, want: Null},
+		{name: "NULL", source: "NULL", validate: true, want: Null},
+		{name: "null", source: "null", validate: true, want: Null},
+		{name: "nil", source: "nil", validate: true, want: Null},
+		{name: "zero date", source: "0001-01-01", validate: true, want: Null},
+		{name: "valid is normalized", source: "25.12.2023", validate: true, want: "2023-12-25"},
+		{name: "invalid with validation", source: "invalid", validate: true, wantErr: true},
+		{name: "invalid without validation is kept", source: "invalid", validate: false, want: "invalid"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			n := NullableDate("2000-01-01")
+			err := n.ScanString(tt.source, tt.validate)
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.Equal(t, NullableDate("2000-01-01"), n, "unchanged on error")
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, n)
+		})
+	}
+}
+
+func TestNullableDate_ScanStringWithLang(t *testing.T) {
+	tests := []struct {
+		name                 string
+		source               string
+		lang                 language.Code
+		want                 NullableDate
+		wantNormalized       bool
+		wantMonthMustBeFirst bool
+		wantErr              bool
+	}{
+		{name: "empty is Null", source: "", want: Null},
+		{name: "zero date is Null", source: "0000-00-00", want: Null},
+		{name: "already normalized", source: "2023-12-25", want: "2023-12-25", wantNormalized: true},
+		{name: "German day first", source: "25.12.2023", lang: language.DE, want: "2023-12-25"},
+		// 25 can't be a month, so the input proves month-first ordering
+		// which callers use to detect the date format of a whole document.
+		{name: "unambiguous US order", source: "12/25/2023", lang: language.DE, want: "2023-12-25", wantMonthMustBeFirst: true},
+		{name: "ambiguous with EN hint", source: "05/06/2024", lang: language.EN, want: "2024-05-06"},
+		{name: "ambiguous with DE hint", source: "05/06/2024", lang: language.DE, want: "2024-06-05"},
+		{name: "invalid", source: "invalid", wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			n := NullableDate("2000-01-01")
+			wasNormalized, monthMustBeFirst, err := n.ScanStringWithLang(tt.source, tt.lang)
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.Equal(t, NullableDate("2000-01-01"), n, "unchanged on error")
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, n)
+			assert.Equal(t, tt.wantNormalized, wasNormalized, "wasNormalized")
+			assert.Equal(t, tt.wantMonthMustBeFirst, monthMustBeFirst, "monthMustBeFirst")
+		})
+	}
+}
+
+func TestNullableDate_String_Invalid(t *testing.T) {
+	// Invalid dates are returned unchanged so that the
+	// original input is visible in logs and error messages.
+	assert.Equal(t, "invalid", NullableDate("invalid").String())
+	assert.Equal(t, "2023-12-25", NullableDate("25.12.2023").String())
+}
+
+func TestNullableDate_AfterTime(t *testing.T) {
+	loc := time.FixedZone("UTC+2", 2*60*60)
+	d := NullableDate("2023-12-25")
+
+	assert.True(t, d.AfterTime(time.Date(2023, 12, 24, 23, 59, 0, 0, loc)))
+	assert.False(t, d.AfterTime(time.Date(2023, 12, 25, 0, 0, 1, 0, loc)))
+	// Midnight is evaluated in the location of the compared time:
+	// 00:30 UTC+2 is after midnight in UTC+2, although it is
+	// before midnight UTC (it's 22:30 UTC of the previous day).
+	assert.False(t, d.AfterTime(time.Date(2023, 12, 25, 0, 30, 0, 0, loc)))
+	// Any date is after the zero time (no value)
+	assert.True(t, d.AfterTime(time.Time{}))
+	// NULL is never after anything
+	assert.False(t, Null.AfterTime(time.Date(1900, 1, 1, 0, 0, 0, 0, time.UTC)))
+	assert.False(t, Null.AfterTime(time.Time{}))
+}
+
+func TestNullableDate_BeforeTime(t *testing.T) {
+	d := NullableDate("2023-12-25")
+
+	assert.True(t, d.BeforeTime(time.Date(2023, 12, 25, 0, 0, 1, 0, time.UTC)))
+	assert.False(t, d.BeforeTime(time.Date(2023, 12, 24, 23, 59, 0, 0, time.UTC)))
+	// NULL is before every non-zero time, consistent with Before(),
+	// but not before the zero time which also represents "no value".
+	assert.True(t, Null.BeforeTime(time.Date(1900, 1, 1, 0, 0, 0, 0, time.UTC)))
+	assert.False(t, Null.BeforeTime(time.Time{}))
+}
+
+func TestNullableDate_AddDate(t *testing.T) {
+	d := NullableDate("2023-01-31")
+	assert.Equal(t, NullableDate("2024-03-03"), d.AddDate(1, 1, 1), "2024-02-32 overflows into March like time.Time.AddDate")
+	assert.Equal(t, NullableDate("2022-12-31"), d.AddDate(0, 0, -31))
+	assert.Equal(t, Null, Null.AddDate(1, 1, 1), "NULL stays NULL")
+}
+
+func TestNullableDate_Add(t *testing.T) {
+	d := NullableDate("2023-12-31")
+	assert.Equal(t, NullableDate("2024-01-01"), d.Add(24*time.Hour))
+	assert.Equal(t, NullableDate("2023-12-31"), d.Add(23*time.Hour), "partial days are truncated")
+	assert.Equal(t, Null, Null.Add(24*time.Hour), "NULL stays NULL")
+}
+
+func TestNullableDate_Sub(t *testing.T) {
+	a := NullableDate("2023-12-25")
+	b := NullableDate("2023-12-20")
+	assert.Equal(t, 5*24*time.Hour, a.Sub(b))
+	assert.Equal(t, -5*24*time.Hour, b.Sub(a))
+	assert.Equal(t, time.Duration(0), a.Sub(a))
+	// There is no meaningful duration to or from NULL
+	assert.Equal(t, time.Duration(0), a.Sub(Null))
+	assert.Equal(t, time.Duration(0), Null.Sub(a))
+}
+
+func TestNullableDate_AfterTodayInUTC(t *testing.T) {
+	tomorrow := NullableDate(OfNowInUTC().AddDays(1))
+	yesterday := NullableDate(OfNowInUTC().AddDays(-1))
+
+	assert.True(t, tomorrow.AfterTodayInUTC())
+	assert.False(t, yesterday.AfterTodayInUTC())
+	assert.False(t, Null.AfterTodayInUTC(), "NULL is never after today")
+}
+
+func TestNullableDate_BeforeTodayInUTC(t *testing.T) {
+	tomorrow := NullableDate(OfNowInUTC().AddDays(1))
+	yesterday := NullableDate(OfNowInUTC().AddDays(-1))
+
+	assert.False(t, tomorrow.BeforeTodayInUTC())
+	assert.True(t, yesterday.BeforeTodayInUTC())
+	assert.True(t, Null.BeforeTodayInUTC(), "NULL is always before today")
+}
+
+func TestNullableDate_Format_Layouts(t *testing.T) {
+	d := NullableDate("2023-12-25")
+	assert.Equal(t, "25.12.2023", d.Format("02.01.2006"))
+	assert.Equal(t, "", d.Format(""), "empty layout")
+	// NULL must format as empty string, not as the zero time "01.01.0001"
+	assert.Equal(t, "", Null.Format("02.01.2006"))
+	assert.Equal(t, "", NullableDate("0001-01-01").Format("02.01.2006"))
+}
+
+func TestNullableDate_Scan(t *testing.T) {
+	tests := []struct {
+		name    string
+		value   any
+		want    NullableDate
+		wantErr bool
+	}{
+		{name: "SQL NULL", value: nil, want: Null},
+		{name: "string", value: "2023-12-25", want: "2023-12-25"},
+		{name: "string is normalized", value: "25.12.2023", want: "2023-12-25"},
+		// Zero dates written by other systems must be read back as NULL
+		{name: "empty string", value: "", want: Null},
+		{name: "zero date 0000-00-00", value: "0000-00-00", want: Null},
+		{name: "zero date 0001-01-01", value: "0001-01-01", want: Null},
+		{name: "time.Time", value: time.Date(2023, 12, 25, 23, 59, 0, 0, time.UTC), want: "2023-12-25"},
+		{name: "zero time.Time", value: time.Time{}, want: Null},
+		{name: "invalid string", value: "invalid", wantErr: true},
+		{name: "unsupported type", value: 20231225, wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			n := NullableDate("2000-01-01")
+			err := n.Scan(tt.value)
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, n)
+		})
+	}
+}
+
+func TestNullableDate_Value_EdgeCases(t *testing.T) {
+	// Zero dates must be written as SQL NULL, not as a bogus year 1 date
+	val, err := NullableDate("0001-01-01").Value()
+	require.NoError(t, err)
+	assert.Nil(t, val)
+
+	// Non-normalized dates are normalized before being written
+	val, err = NullableDate("25.12.2023").Value()
+	require.NoError(t, err)
+	assert.Equal(t, "2023-12-25", val)
+
+	// Invalid dates must not be silently written to the database
+	_, err = NullableDate("invalid").Value()
+	assert.Error(t, err)
+}
+
+func TestNullableDate_SQLRoundTrip(t *testing.T) {
+	for _, original := range []NullableDate{Null, "2023-12-25", "1999-01-01"} {
+		val, err := original.Value()
+		require.NoError(t, err)
+
+		var scanned NullableDate
+		require.NoError(t, scanned.Scan(val))
+		assert.Equal(t, original, scanned)
+	}
+}
+
+func TestNullableDate_MarshalJSON(t *testing.T) {
+	type wrapper struct {
+		D NullableDate `json:"d"`
+	}
+	tests := []struct {
+		date NullableDate
+		want string
+	}{
+		{date: Null, want: `{"d":null}`},
+		// A zero date is NULL and must be marshalled as JSON null
+		{date: "0001-01-01", want: `{"d":null}`},
+		{date: "2023-12-25", want: `{"d":"2023-12-25"}`},
+	}
+	for _, tt := range tests {
+		t.Run(string(tt.date), func(t *testing.T) {
+			data, err := json.Marshal(wrapper{D: tt.date})
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, string(data))
+		})
+	}
+
+	t.Run("round trip", func(t *testing.T) {
+		for _, original := range []NullableDate{Null, "2023-12-25"} {
+			data, err := json.Marshal(wrapper{D: original})
+			require.NoError(t, err)
+			var decoded wrapper
+			require.NoError(t, json.Unmarshal(data, &decoded))
+			assert.Equal(t, original, decoded.D)
+		}
+	})
+}
+
+func TestNullableDate_JSONSchema(t *testing.T) {
+	schema := NullableDate("").JSONSchema()
+	require.Len(t, schema.OneOf, 2)
+	assert.Equal(t, "string", schema.OneOf[0].Type)
+	assert.Equal(t, "date", schema.OneOf[0].Format)
+	assert.Equal(t, "null", schema.OneOf[1].Type, "NULL must be allowed by the schema")
+
+	data, err := json.Marshal(schema.Default)
+	require.NoError(t, err)
+	assert.Equal(t, "null", string(data), "default value is JSON null")
 }

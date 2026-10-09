@@ -1,6 +1,7 @@
 package nullable
 
 import (
+	"database/sql"
 	"database/sql/driver"
 	"encoding/json"
 	"errors"
@@ -508,5 +509,127 @@ func Test_Type_Value_EdgeCases(t *testing.T) {
 		// DefaultParameterConverter only allows []byte slices.
 		_, err := TypeFrom([]int{1, 2, 3}).Value()
 		require.Error(t, err)
+	})
+}
+
+func Test_Type_Scan_FailedScanKeepsNull(t *testing.T) {
+	// A failed Scan must not turn a NULL value into a valid zero value
+	var v Type[int]
+	require.Error(t, v.Scan("not a number"))
+	assert.True(t, v.IsNull())
+}
+
+func Test_Type_Scan_CopiesBytes(t *testing.T) {
+	// database/sql drivers may reuse the []byte buffer of a row
+	// after Scan returns, so the scanned value must own a copy.
+	t.Run("[]byte", func(t *testing.T) {
+		src := []byte("abc")
+		var v Type[[]byte]
+		require.NoError(t, v.Scan(src))
+		src[0] = 'X'
+		assert.Equal(t, []byte("abc"), v.Get())
+	})
+
+	t.Run("any", func(t *testing.T) {
+		src := []byte("abc")
+		var v Type[any]
+		require.NoError(t, v.Scan(src))
+		src[0] = 'X'
+		assert.Equal(t, []byte("abc"), v.Get())
+	})
+
+	t.Run("named byte slice", func(t *testing.T) {
+		type blob []byte
+		src := []byte("abc")
+		var v Type[blob]
+		require.NoError(t, v.Scan(src))
+		src[0] = 'X'
+		assert.Equal(t, blob("abc"), v.Get())
+	})
+}
+
+func Test_Type_Scan_Time(t *testing.T) {
+	ts := time.Date(2023, 12, 25, 13, 14, 15, 123456789, time.UTC)
+
+	t.Run("into time.Time", func(t *testing.T) {
+		var v Type[time.Time]
+		require.NoError(t, v.Scan(ts))
+		assert.Equal(t, ts, v.Get())
+	})
+
+	t.Run("into string as RFC3339Nano", func(t *testing.T) {
+		// Formatting must keep the full precision and time zone
+		var v Type[string]
+		require.NoError(t, v.Scan(ts))
+		assert.Equal(t, "2023-12-25T13:14:15.123456789Z", v.Get())
+	})
+
+	t.Run("into []byte as RFC3339Nano", func(t *testing.T) {
+		var v Type[[]byte]
+		require.NoError(t, v.Scan(ts))
+		assert.Equal(t, []byte("2023-12-25T13:14:15.123456789Z"), v.Get())
+	})
+
+	t.Run("round trip", func(t *testing.T) {
+		val, err := TypeFrom(ts).Value()
+		require.NoError(t, err)
+		var v Type[time.Time]
+		require.NoError(t, v.Scan(val))
+		assert.Equal(t, ts, v.Get())
+	})
+}
+
+func Test_Type_Scan_DestinationKinds(t *testing.T) {
+	t.Run("pointer destination", func(t *testing.T) {
+		var v Type[*int64]
+		require.NoError(t, v.Scan(int64(42)))
+		require.NotNil(t, v.Get())
+		assert.Equal(t, int64(42), *v.Get())
+	})
+
+	t.Run("sql.Scanner destination", func(t *testing.T) {
+		// Wrapped types that implement sql.Scanner handle the value themselves
+		var v Type[sql.NullString]
+		require.NoError(t, v.Scan("abc"))
+		assert.Equal(t, sql.NullString{String: "abc", Valid: true}, v.Get())
+	})
+
+	t.Run("named string from string", func(t *testing.T) {
+		type name string
+		var v Type[name]
+		require.NoError(t, v.Scan("abc"))
+		assert.Equal(t, name("abc"), v.Get())
+	})
+
+	t.Run("named string from []byte", func(t *testing.T) {
+		type name string
+		var v Type[name]
+		require.NoError(t, v.Scan([]byte("abc")))
+		assert.Equal(t, name("abc"), v.Get())
+	})
+
+	t.Run("named int from string", func(t *testing.T) {
+		type count int32
+		var v Type[count]
+		require.NoError(t, v.Scan("-7"))
+		assert.Equal(t, count(-7), v.Get())
+	})
+
+	t.Run("float32 into []byte", func(t *testing.T) {
+		var v Type[[]byte]
+		require.NoError(t, v.Scan(float32(1.25)))
+		assert.Equal(t, []byte("1.25"), v.Get())
+	})
+
+	t.Run("uint overflow", func(t *testing.T) {
+		// Values that don't fit must be an error, not silently truncated
+		var v Type[uint8]
+		assert.Error(t, v.Scan("300"))
+		assert.Error(t, v.Scan(int64(-1)))
+	})
+
+	t.Run("float into int is an error", func(t *testing.T) {
+		var v Type[int]
+		assert.Error(t, v.Scan(1.5))
 	})
 }

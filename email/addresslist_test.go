@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestStandardComparison(t *testing.T) {
@@ -127,4 +128,140 @@ func TestAddressList_Scan(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestNormalizeAddressList protects deduplication by mailbox: the same
+// address with a different display name or case must only appear once
+// (keeping the first spelling), otherwise a recipient would get a
+// message multiple times.
+func TestNormalizeAddressList(t *testing.T) {
+	got, err := NormalizeAddressList(`John <John@Example.com>, jane@example.com, "J. Doe" <john@example.com>, JANE@example.com`)
+	require.NoError(t, err)
+	assert.Equal(t, []string{`"John" <john@example.com>`, `jane@example.com`}, got)
+
+	// A strict normalization must not silently drop invalid entries.
+	_, err = NormalizeAddressList(`a@example.com, not an address`)
+	assert.Error(t, err)
+}
+
+// TestAddressListJoin protects that empty addresses never produce
+// empty list entries like "a@example.com, , b@example.com" that
+// would make the joined list invalid.
+func TestAddressListJoin(t *testing.T) {
+	tests := []struct {
+		name  string
+		addrs []Address
+		want  AddressList
+	}{
+		{name: "none", addrs: nil, want: ""},
+		{name: "only empty", addrs: []Address{"", ""}, want: ""},
+		{name: "one", addrs: []Address{"a@example.com"}, want: "a@example.com"},
+		{name: "empty skipped", addrs: []Address{"", "a@example.com", "", `"Doe, John" <john@example.com>`, ""}, want: `a@example.com, "Doe, John" <john@example.com>`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, AddressListJoin(tt.addrs...), "AddressListJoin")
+
+			strs := make([]string, len(tt.addrs))
+			for i, a := range tt.addrs {
+				strs[i] = string(a)
+			}
+			assert.Equal(t, tt.want, AddressListJoinStrings(strs...), "AddressListJoinStrings must behave like AddressListJoin")
+		})
+	}
+}
+
+func TestAddressList_Append(t *testing.T) {
+	tests := []struct {
+		name  string
+		list  AddressList
+		addrs []Address
+		want  AddressList
+	}{
+		// Appending to an empty list must not start with a separator.
+		{name: "to empty", list: "", addrs: []Address{"a@example.com"}, want: "a@example.com"},
+		{name: "to non empty", list: "a@example.com", addrs: []Address{"b@example.com", "c@example.com"}, want: "a@example.com, b@example.com, c@example.com"},
+		{name: "empty skipped", list: "a@example.com", addrs: []Address{"", "b@example.com", ""}, want: "a@example.com, b@example.com"},
+		{name: "nothing", list: "a@example.com", addrs: nil, want: "a@example.com"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.list.Append(tt.addrs...)
+			assert.Equal(t, tt.want, got)
+			assert.True(t, got.Valid(), "the appended list must stay parsable")
+		})
+	}
+}
+
+// TestAddressList_UniqueAddressParts protects that the set contains bare,
+// lower case mailboxes so it can be used for recipient lookups regardless
+// of display names and case.
+func TestAddressList_UniqueAddressParts(t *testing.T) {
+	set, err := AddressList(`John <John@Example.com>, jane@example.com, "J. Doe" <john@example.com>`).UniqueAddressParts()
+	require.NoError(t, err)
+	assert.Equal(t, MakeAddressSet("john@example.com", "jane@example.com"), set)
+
+	set, err = AddressList(`a@example.com, not an address`).UniqueAddressParts()
+	assert.Error(t, err, "an invalid entry must not be silently dropped")
+	assert.Nil(t, set)
+}
+
+func TestAddressList_ValidateAndNormalized(t *testing.T) {
+	tests := []struct {
+		list               AddressList
+		valid              bool
+		normalized         AddressList
+		validAndNormalized bool
+	}{
+		{
+			list:               `a@example.com, b@example.com`,
+			valid:              true,
+			normalized:         `a@example.com, b@example.com`,
+			validAndNormalized: true,
+		},
+		{
+			list:       `A@Example.com,b@example.com`,
+			valid:      true,
+			normalized: `a@example.com, b@example.com`,
+		},
+		{
+			list:       `John <John@Example.com>, <jane@example.com>`,
+			valid:      true,
+			normalized: `"John" <john@example.com>, jane@example.com`,
+		},
+		// The quoted comma in the name must survive normalization,
+		// otherwise the normalized list would split into a different
+		// number of addresses.
+		{
+			list:               `"Doe, John" <john@example.com>, b@example.com`,
+			valid:              true,
+			normalized:         `"Doe, John" <john@example.com>, b@example.com`,
+			validAndNormalized: true,
+		},
+		{list: `a@example.com, not an address`, valid: false},
+		{list: `not an address`, valid: false},
+	}
+	for _, tt := range tests {
+		t.Run(string(tt.list), func(t *testing.T) {
+			assert.Equal(t, tt.valid, tt.list.Valid(), "Valid")
+			assert.Equal(t, tt.valid, tt.list.Validate() == nil, "Validate must agree with Valid")
+			assert.Equal(t, tt.validAndNormalized, tt.list.ValidAndNormalized(), "ValidAndNormalized")
+
+			normalized, err := tt.list.Normalized()
+			if !tt.valid {
+				assert.Error(t, err)
+				// On error the input is returned unchanged so it isn't lost.
+				assert.Equal(t, tt.list, normalized)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.normalized, normalized)
+			assert.True(t, normalized.ValidAndNormalized(), "normalizing must be idempotent")
+		})
+	}
+}
+
+func TestAddressList_Nullable(t *testing.T) {
+	const list AddressList = `"Doe, John" <john@example.com>, b@example.com`
+	assert.Equal(t, NullableAddressList(list), list.Nullable(), "conversion must keep the exact string")
 }

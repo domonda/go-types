@@ -60,3 +60,37 @@ func Test_BoolArray_RoundTrip(t *testing.T) {
 	require.NoError(t, scanned.Scan(val))
 	assert.Equal(t, original, scanned)
 }
+
+func Test_BoolArray_Scan_PostgresLiterals(t *testing.T) {
+	var a BoolArray
+
+	// BoolArray can't represent NULL elements, so they must be an error
+	// instead of being silently converted to false.
+	assert.Error(t, a.Scan(`{t,NULL}`))
+
+	// PostgreSQL emits only t and f, other spellings are rejected
+	assert.Error(t, a.Scan(`{true}`))
+
+	// Only one-dimensional arrays are supported
+	assert.Error(t, a.Scan(`{{t,f},{f,t}}`))
+
+	// Scanning the empty array into a non-nil slice keeps it non-nil
+	a = BoolArray{true}
+	require.NoError(t, a.Scan("{}"))
+	assert.NotNil(t, a)
+	assert.Empty(t, a)
+}
+
+func Test_BoolArray_RoundTrip_EdgeCases(t *testing.T) {
+	// nil must round trip as SQL NULL and empty as {},
+	// so that NULL and empty arrays stay distinguishable.
+	for _, original := range []BoolArray{nil, {}, {false}, {true}} {
+		val, err := original.Value()
+		require.NoError(t, err)
+
+		var scanned BoolArray
+		require.NoError(t, scanned.Scan(val))
+		assert.Equal(t, original, scanned)
+		assert.Equal(t, original == nil, scanned == nil, "nil-ness is preserved")
+	}
+}

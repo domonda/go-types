@@ -63,3 +63,53 @@ func Test_StringArray_RoundTrip(t *testing.T) {
 	require.NoError(t, scanned.Scan(val))
 	assert.Equal(t, original, scanned)
 }
+
+func Test_StringArray_RoundTrip_SpecialCharacters(t *testing.T) {
+	// Every element is quoted and escaped by Value, so content that has
+	// a meaning in the PostgreSQL array literal syntax must survive
+	// a Value/Scan round trip unchanged.
+	tests := []struct {
+		name  string
+		array StringArray
+	}{
+		{name: "NULL literal as text", array: StringArray{"NULL", "null"}},
+		{name: "comma", array: StringArray{"a,b", ","}},
+		{name: "braces", array: StringArray{"{a}", "}", "{"}},
+		{name: "backslash", array: StringArray{`C:\path\`, `\`, `\\`}},
+		{name: "double quotes", array: StringArray{`"`, `""`, `say "hi"`}},
+		{name: "whitespace", array: StringArray{" leading", "trailing ", " ", "\t\n"}},
+		{name: "unicode", array: StringArray{"Grüße", "日本", "€"}},
+		{name: "single empty element", array: StringArray{""}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			val, err := tt.array.Value()
+			require.NoError(t, err)
+
+			var scanned StringArray
+			require.NoError(t, scanned.Scan(val))
+			assert.Equal(t, tt.array, scanned)
+		})
+	}
+}
+
+func Test_StringArray_Scan_PostgresLiterals(t *testing.T) {
+	var a StringArray
+
+	// A quoted "NULL" is the text NULL, not an SQL NULL element
+	require.NoError(t, a.Scan(`{"NULL",b}`))
+	assert.Equal(t, StringArray{"NULL", "b"}, a)
+
+	// StringArray can't represent NULL elements, so they must be an error
+	// instead of being silently converted to an empty string.
+	assert.Error(t, a.Scan(`{a,NULL}`))
+
+	// Only one-dimensional arrays are supported
+	assert.Error(t, a.Scan(`{{a,b},{c,d}}`))
+
+	// Scanning the empty array into a non-nil slice keeps it non-nil
+	a = StringArray{"x"}
+	require.NoError(t, a.Scan("{}"))
+	assert.NotNil(t, a)
+	assert.Empty(t, a)
+}

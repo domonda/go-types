@@ -957,3 +957,179 @@ func ExampleID_JSONSchema() {
 	//   "title": "UUID"
 	// }
 }
+
+func TestIDv7DeterministicFunc_Series(t *testing.T) {
+	// The returned function is meant to replace random IDs in tests
+	// (e.g. via ContextWithIDFunc), so it must produce the same
+	// strictly increasing series of valid v7 IDs on every run.
+	next := IDv7DeterministicFunc(1000)
+	other := IDv7DeterministicFunc(1000)
+
+	prev := IDNil
+	for i := range int64(5) {
+		id := next()
+		require.NoError(t, id.Validate())
+		require.Equal(t, IDv7Deterministic(1000+i), id, "deterministic series")
+		require.Equal(t, id, other(), "independent series with same start are equal")
+		ts, ok := id.V7Time()
+		require.True(t, ok)
+		require.Equal(t, 1000+i, ts.UnixMilli(), "timestamp counts up per call")
+		require.True(t, prev.Less(id) || prev.IsNil(), "series is sortable")
+		prev = id
+	}
+}
+
+func TestIDv7DeterministicFunc_Concurrent(t *testing.T) {
+	// Documented as safe for concurrent use: no ID may be
+	// handed out twice and none may be skipped.
+	const goroutines, perGoroutine = 8, 100
+	next := IDv7DeterministicFunc(0)
+
+	results := make(chan ID, goroutines*perGoroutine)
+	done := make(chan struct{})
+	for range goroutines {
+		go func() {
+			for range perGoroutine {
+				results <- next()
+			}
+			done <- struct{}{}
+		}()
+	}
+	for range goroutines {
+		<-done
+	}
+	close(results)
+
+	seen := make(IDSet)
+	for id := range results {
+		require.True(t, seen.Insert(id), "duplicate ID %s", id)
+	}
+	require.Len(t, seen, goroutines*perGoroutine)
+	for i := range int64(goroutines * perGoroutine) {
+		require.True(t, seen.Contains(IDv7Deterministic(i)), "missing ID number %d", i)
+	}
+}
+
+func TestIDFromPtr(t *testing.T) {
+	id := IDMust("6ba7b810-9dad-11d1-80b4-00c04fd430c8")
+	def := IDMust("de8482f2-164a-40f9-b4e0-c349b78c22f6")
+
+	require.Equal(t, id, IDFromPtr(&id, def))
+	require.Equal(t, def, IDFromPtr(nil, def), "nil pointer returns default")
+	require.Equal(t, IDNil, IDFromPtr(nil, IDNil))
+}
+
+func TestIDFromAny(t *testing.T) {
+	refStr := "6ba7b810-9dad-11d1-80b4-00c04fd430c8"
+	ref := IDMust(refStr)
+	invalidVersion := ref
+	invalidVersion.SetVersion(0)
+
+	tests := []struct {
+		name    string
+		val     any
+		want    ID
+		wantErr error
+	}{
+		{name: "string", val: refStr, want: ref},
+		{name: "hex string", val: ref.Hex(), want: ref},
+		{name: "[]byte text", val: []byte(refStr), want: ref},
+		{name: "[]byte binary", val: ref.Bytes(), want: ref},
+		{name: "ID", val: ref, want: ref},
+		{name: "NullableID", val: ref.Nullable(), want: ref},
+		{name: "[16]byte", val: [16]byte(ref), want: ref},
+		// Unlike NullableIDFromAny, a missing value is an error for a required ID
+		{name: "nil", val: nil, want: IDNil, wantErr: ErrNilID},
+		{name: "Nil ID", val: IDNil, want: IDNil, wantErr: ErrNilID},
+		{name: "NULL NullableID", val: IDNull, want: IDNil, wantErr: ErrNilID},
+		{name: "invalid version", val: invalidVersion, want: invalidVersion, wantErr: ErrInvalidVersion(0)},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := IDFromAny(tt.val)
+			if tt.wantErr != nil {
+				require.ErrorIs(t, err, tt.wantErr)
+			} else {
+				require.NoError(t, err)
+			}
+			require.Equal(t, tt.want, got)
+		})
+	}
+
+	t.Run("errors", func(t *testing.T) {
+		for _, val := range []any{"", "not-a-uuid", []byte("short"), 42, &ref} {
+			_, err := IDFromAny(val)
+			require.Error(t, err, "%#v", val)
+		}
+	})
+}
+
+func TestIDFrom_IDTypes(t *testing.T) {
+	// IDFrom does not validate, so typed IDs must pass through unchanged
+	ref := IDMust("6ba7b810-9dad-11d1-80b4-00c04fd430c8")
+	require.Equal(t, ref, IDFrom(ref))
+	require.Equal(t, ref, IDFrom(ref.Nullable()))
+	require.Equal(t, IDNil, IDFrom(IDNil))
+	require.Equal(t, IDNil, IDFrom(IDNull))
+	require.Equal(t, IDNil, IDFrom("not-a-uuid"), "unparseable string returns IDNil")
+	require.Equal(t, IDNil, IDFrom([]byte("short")), "unparseable bytes return IDNil")
+}
+
+func TestIDMust_Panics(t *testing.T) {
+	// IDMust is for IDs that must be valid, so every invalid
+	// input including the Nil UUID must panic instead of
+	// silently producing an unusable ID.
+	invalidVersion := IDMust("6ba7b810-9dad-11d1-80b4-00c04fd430c8")
+	invalidVersion.SetVersion(0)
+
+	require.Panics(t, func() { IDMust("not-a-uuid") })
+	require.Panics(t, func() { IDMust([]byte("short")) })
+	require.Panics(t, func() { IDMust(IDNil) })
+	require.Panics(t, func() { IDMust([16]byte{}) })
+	require.Panics(t, func() { IDMust(invalidVersion) })
+	require.Panics(t, func() { IDMust(invalidVersion.Nullable()) })
+	require.Panics(t, func() { IDMustFromString("not-a-uuid") })
+}
+
+func TestID_IsZeroIsNotNil(t *testing.T) {
+	id := IDMust("6ba7b810-9dad-11d1-80b4-00c04fd430c8")
+	require.True(t, IDNil.IsZero())
+	require.False(t, IDNil.IsNotNil())
+	require.False(t, id.IsZero())
+	require.True(t, id.IsNotNil())
+}
+
+func TestID_StringUpperAndHex(t *testing.T) {
+	id := IDMust("6ba7b810-9dad-11d1-80b4-00c04fd430c8")
+	require.Equal(t, "6BA7B810-9DAD-11D1-80B4-00C04FD430C8", id.StringUpper())
+	require.Equal(t, "6ba7b8109dad11d180b400c04fd430c8", id.Hex())
+
+	// Both representations must be parseable back to the same ID
+	for _, s := range []string{id.StringUpper(), id.Hex()} {
+		parsed, err := IDFromString(s)
+		require.NoError(t, err)
+		require.Equal(t, id, parsed)
+	}
+
+	require.Equal(t, "00000000000000000000000000000000", IDNil.Hex(), "Hex is always 32 characters")
+}
+
+func TestIDFromString_InvalidEncodings(t *testing.T) {
+	// The content must be validated for every supported encoding,
+	// not only the overall length and dash positions.
+	for _, s := range []string{
+		"6ba7b8109dad11d180b400c04fd430cx", // hex without dashes
+		"a3fW6RxSR_amqRvJxqIi2!",           // base64 URL
+		"a3fW6RxSR+amqRvJxqIi2g",           // standard base64 is not URL encoding
+		"xba7b810-9dad-11d1-80b4-00c04fd430c8",
+		"6ba7b810-xdad-11d1-80b4-00c04fd430c8",
+		"6ba7b810-9dad-x1d1-80b4-00c04fd430c8",
+		"6ba7b810-9dad-11d1-x0b4-00c04fd430c8",
+		"6ba7b810-9dad-11d1-80b4-x0c04fd430c8",
+		"urn:uuid:6ba7b810-9dad-11d1-80b4-00c04fd430cx",
+		"urn:uuid:6ba7b810-9dad-11d1-80b4-00c04fd430c",
+	} {
+		_, err := IDFromString(s)
+		require.Error(t, err, s)
+	}
+}

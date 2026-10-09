@@ -4,9 +4,11 @@ import (
 	"errors"
 	"reflect"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/domonda/go-errs"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/domonda/go-types/country"
@@ -736,4 +738,114 @@ func TestScanNilStringNotValidated(t *testing.T) {
 
 	// A scanned value is still validated
 	assert.Error(t, Scan(reflect.ValueOf(&i).Elem(), "666", config))
+}
+
+// TestScanBool checks that the configured TrueStrings and FalseStrings are
+// accepted with surrounding whitespace, because spreadsheet exports often
+// pad cells, and that the destination is really assigned in both directions.
+func TestScanBool(t *testing.T) {
+	config := NewScanConfig()
+
+	for _, source := range []string{"true", "Yes", " YES ", "1", "\ttrue"} {
+		b := false
+		assert.NoError(t, Scan(reflect.ValueOf(&b).Elem(), source, config), "Scan(bool, %q)", source)
+		assert.True(t, b, "Scan(bool, %q)", source)
+	}
+	for _, source := range []string{"false", "No", " NO ", "0", "FALSE\n"} {
+		b := true
+		assert.NoError(t, Scan(reflect.ValueOf(&b).Elem(), source, config), "Scan(bool, %q)", source)
+		assert.False(t, b, "Scan(bool, %q)", source)
+	}
+
+	// Only the configured strings are accepted
+	config.TrueStrings = []string{"ja"}
+	config.FalseStrings = []string{"nein"}
+	b := false
+	assert.NoError(t, Scan(reflect.ValueOf(&b).Elem(), "ja", config))
+	assert.True(t, b)
+	assert.Error(t, Scan(reflect.ValueOf(&b).Elem(), "true", config), "not in TrueStrings any more")
+	assert.True(t, b, "destination is not modified by a failed scan")
+}
+
+// TestScanFloat checks that floats are parsed with float.Parse, which
+// detects the decimal and thousands separators, so that numbers from
+// German and English spreadsheets both scan to the same value.
+func TestScanFloat(t *testing.T) {
+	config := NewScanConfig()
+	tests := []struct {
+		source string
+		want   float64
+	}{
+		{source: "0", want: 0},
+		{source: "1.5", want: 1.5},
+		{source: "1,5", want: 1.5},
+		{source: "1,234.56", want: 1234.56},
+		{source: "1.234,56", want: 1234.56},
+		{source: " -158,00 ", want: -158},
+		{source: "1e3", want: 1000},
+	}
+	for _, tt := range tests {
+		var f64 float64
+		assert.NoError(t, Scan(reflect.ValueOf(&f64).Elem(), tt.source, config), "Scan(float64, %q)", tt.source)
+		assert.Equal(t, tt.want, f64, "Scan(float64, %q)", tt.source)
+
+		var f32 float32
+		assert.NoError(t, Scan(reflect.ValueOf(&f32).Elem(), tt.source, config), "Scan(float32, %q)", tt.source)
+		assert.Equal(t, float32(tt.want), f32, "Scan(float32, %q)", tt.source)
+	}
+}
+
+// upperTextUnmarshaler implements only encoding.TextUnmarshaler,
+// not Scannable, to tell which scanning method Scan used.
+type upperTextUnmarshaler string
+
+func (u *upperTextUnmarshaler) UnmarshalText(text []byte) error {
+	if string(text) == "invalid" {
+		return errs.New("invalid text")
+	}
+	*u = upperTextUnmarshaler(strings.ToUpper(string(text)))
+	return nil
+}
+
+// TestScanTextUnmarshaler checks that a type implementing only
+// encoding.TextUnmarshaler is scanned by its UnmarshalText method instead
+// of the conversion of its kind, so the type's own parsing and validation
+// is not bypassed.
+func TestScanTextUnmarshaler(t *testing.T) {
+	config := NewScanConfig()
+
+	var dest upperTextUnmarshaler
+	assert.NoError(t, Scan(reflect.ValueOf(&dest).Elem(), "abc", config))
+	assert.Equal(t, upperTextUnmarshaler("ABC"), dest, "UnmarshalText was used, not the string kind")
+
+	assert.Error(t, Scan(reflect.ValueOf(&dest).Elem(), "invalid", config))
+	assert.Equal(t, upperTextUnmarshaler("ABC"), dest, "destination is not modified by a failed scan")
+}
+
+// TestScanUnsupportedKind checks that a destination type without any
+// scanning method and without a scannable kind is reported as an error
+// instead of being silently left unassigned.
+func TestScanUnsupportedKind(t *testing.T) {
+	config := NewScanConfig()
+
+	type plainStruct struct{ A int }
+	dest := plainStruct{A: 1}
+	err := Scan(reflect.ValueOf(&dest).Elem(), "x", config)
+	assert.Error(t, err)
+	assert.Equal(t, plainStruct{A: 1}, dest, "destination is not modified")
+
+	var c complex128
+	assert.Error(t, Scan(reflect.ValueOf(&c).Elem(), "1+2i", config))
+}
+
+// TestScanNullableTimeUnparsable checks that an unparsable non-nil string
+// is an error for nullable.Time instead of being scanned as null, which
+// would silently drop a malformed date from imported data.
+func TestScanNullableTimeUnparsable(t *testing.T) {
+	config := NewScanConfig()
+
+	want := nullable.TimeFrom(time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC))
+	dest := want
+	assert.Error(t, Scan(reflect.ValueOf(&dest).Elem(), "not a time", config))
+	assert.Equal(t, want, dest, "destination is not modified by a failed scan")
 }

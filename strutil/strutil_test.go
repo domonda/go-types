@@ -5,7 +5,9 @@ import (
 	"strings"
 	"testing"
 	"unicode"
+	"unsafe"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -155,7 +157,20 @@ func TestSanitizeFileName(t *testing.T) {
 		args args
 		want string
 	}{
-		// TODO: Add test cases.
+		// Common European special characters are transliterated instead
+		// of being dropped so that the name stays readable
+		{name: "transliteration", args: args{"Grüße an Österreich.PDF"}, want: "Gruesse_an_Oesterreich.pdf"},
+		// File names from URLs and multipart uploads are often query
+		// escaped, they are unescaped before sanitizing
+		{name: "query escaped", args: args{"My%20Invoice%3A2024.pdf"}, want: "My_Invoice-2024.pdf"},
+		{name: "plus means space", args: args{"a+b.txt"}, want: "a_b.txt"},
+		// An invalid escape sequence keeps the name as is
+		{name: "invalid escape kept", args: args{"100%.txt"}, want: "100-.txt"},
+		// No path separators or traversal may survive
+		{name: "path traversal", args: args{"../../etc/passwd"}, want: "etc-passwd"},
+		// Never returns an empty string, even if nothing valid is left
+		{name: "only invalid characters", args: args{"***"}, want: "_"},
+		{name: "escaped space only", args: args{"%20"}, want: "_"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -197,7 +212,24 @@ func TestTransliterateSpecialCharactersMaxLen(t *testing.T) {
 		args args
 		want string
 	}{
-		// TODO: Add test cases.
+		{name: "empty", args: args{"", 10}, want: ""},
+		// Zero means zero runes, not "no limit"
+		{name: "zero maxLen", args: args{"Österreich", 0}, want: ""},
+		{name: "unchanged ASCII", args: args{"Hello", -1}, want: "Hello"},
+		{name: "sharp s", args: args{"Straße", -1}, want: "Strasse"},
+		{name: "Scandinavian", args: args{"Ærøskøbing", -1}, want: "AEroeskoebing"},
+		// Characters missing from the transliteration table are kept
+		{name: "unknown special character kept", args: args{"Łódź", -1}, want: "Lodź"},
+		// maxLen counts runes, not bytes, so multi-byte text is not cut
+		// in the middle of a rune
+		{name: "maxLen counts runes", args: args{"もしもし", 2}, want: "もし"},
+		{name: "maxLen with transliteration that fits", args: args{"Öl", 2}, want: "Oe"},
+		{name: "maxLen larger than result", args: args{"Öl", 10}, want: "Oel"},
+		// The result must be valid UTF-8, invalid bytes are dropped
+		{name: "invalid byte in the middle", args: args{"ab\xffc", -1}, want: "abc"},
+		{name: "invalid byte at the end", args: args{"abc\xff", -1}, want: "abc"},
+		// Dropped invalid bytes don't count towards maxLen
+		{name: "invalid byte with maxLen", args: args{"ab\xffcd", 3}, want: "abc"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -303,8 +335,8 @@ func FuzzSanitizeLineEndings(f *testing.F) {
 
 func BenchmarkSanitizeLineEndings(b *testing.B) {
 	inputs := map[string]string{
-		"no_cr":   strings.Repeat("Hello, World!\n", 100),
-		"mixed":   strings.Repeat("Hello\r\nWorld\rFoo\n\r", 100),
+		"no_cr":    strings.Repeat("Hello, World!\n", 100),
+		"mixed":    strings.Repeat("Hello\r\nWorld\rFoo\n\r", 100),
 		"all_crlf": strings.Repeat("line\r\n", 200),
 	}
 	for name, in := range inputs {
@@ -316,4 +348,228 @@ func BenchmarkSanitizeLineEndings(b *testing.B) {
 			}
 		})
 	}
+}
+
+func TestIsRuneFuncs(t *testing.T) {
+	isAOrB := IsRune('a', 'b')
+	assert.True(t, isAOrB('a'))
+	assert.True(t, isAOrB('b'))
+	assert.False(t, isAOrB('c'))
+	assert.False(t, IsRune()('a'), "IsRune without runes matches nothing")
+	assert.True(t, IsRune('ü', '世')('世'), "multi-byte runes")
+
+	notAOrB := IsRuneInverse(isAOrB)
+	assert.False(t, notAOrB('a'))
+	assert.True(t, notAOrB('c'))
+
+	isLowerVowel := IsRuneAll(unicode.IsLower, IsRune('a', 'e', 'i', 'o', 'u', 'A'))
+	assert.True(t, isLowerVowel('e'))
+	assert.False(t, isLowerVowel('A'), "upper case fails IsLower")
+	assert.False(t, isLowerVowel('x'), "consonant fails IsRune")
+
+	isDigitOrDot := IsRuneAny(unicode.IsDigit, IsRune('.'))
+	assert.True(t, isDigitOrDot('7'))
+	assert.True(t, isDigitOrDot('.'))
+	assert.False(t, isDigitOrDot(','))
+
+	// Without functions the combinators return the identity of their
+	// logical operation so that they can be built up from dynamic lists:
+	// an empty AND is true, an empty OR is false
+	assert.True(t, IsRuneAll()('x'))
+	assert.False(t, IsRuneAny()('x'))
+}
+
+func TestIsNorLetterOrDigit(t *testing.T) {
+	// Letters and digits of all scripts count, not only ASCII
+	for _, r := range []rune{'a', 'Z', '0', '9', 'ü', 'ß', '世', 'Ω', '٣'} {
+		assert.False(t, IsNorLetterOrDigit(r), "%q is a letter or digit", r)
+	}
+	for _, r := range []rune{' ', '\t', '.', '-', '_', '€', '\u00a0', '\u200b'} {
+		assert.True(t, IsNorLetterOrDigit(r), "%q is neither letter nor digit", r)
+	}
+}
+
+// removeKeepRunesCases only uses valid UTF-8 without U+FFFD,
+// see the bug report about RemoveRunes and KeepRunes stopping
+// at the first utf8.RuneError.
+var removeKeepRunesCases = []struct {
+	name       string
+	str        string
+	funcs      []IsRuneFunc
+	wantRemove string
+	wantKeep   string
+}{
+	{
+		name:       "empty",
+		str:        "",
+		funcs:      []IsRuneFunc{unicode.IsDigit},
+		wantRemove: "",
+		wantKeep:   "",
+	},
+	{
+		name:       "no funcs",
+		str:        "abc",
+		funcs:      nil,
+		wantRemove: "abc",
+		wantKeep:   "",
+	},
+	{
+		name:       "digits from phone number",
+		str:        "Tel: +43 (1) 234-56",
+		funcs:      []IsRuneFunc{unicode.IsDigit},
+		wantRemove: "Tel: + () -",
+		wantKeep:   "43123456",
+	},
+	{
+		name:       "any of multiple funcs matches",
+		str:        "a-b_c d",
+		funcs:      []IsRuneFunc{IsRune('-', '_'), unicode.IsSpace},
+		wantRemove: "abcd",
+		wantKeep:   "-_ ",
+	},
+	{
+		name:       "multi-byte runes",
+		str:        "Grüße aus 世界",
+		funcs:      []IsRuneFunc{IsRune('ü', '世')},
+		wantRemove: "Grße aus 界",
+		wantKeep:   "ü世",
+	},
+	{
+		name:       "nothing matches",
+		str:        "Grüße",
+		funcs:      []IsRuneFunc{unicode.IsDigit},
+		wantRemove: "Grüße",
+		wantKeep:   "",
+	},
+}
+
+func TestRemoveRunes(t *testing.T) {
+	for _, tt := range removeKeepRunesCases {
+		t.Run(tt.name, func(t *testing.T) {
+			in := []byte(tt.str)
+			assert.Equal(t, tt.wantRemove, string(RemoveRunes(in, tt.funcs...)))
+			assert.Equal(t, tt.str, string(in), "input must not be modified")
+			// The string variant must produce the same result
+			assert.Equal(t, tt.wantRemove, RemoveRunesString(tt.str, tt.funcs...))
+		})
+	}
+}
+
+func TestKeepRunes(t *testing.T) {
+	for _, tt := range removeKeepRunesCases {
+		t.Run(tt.name, func(t *testing.T) {
+			in := []byte(tt.str)
+			assert.Equal(t, tt.wantKeep, string(KeepRunes(in, tt.funcs...)))
+			assert.Equal(t, tt.str, string(in), "input must not be modified")
+			// The string variant must produce the same result
+			assert.Equal(t, tt.wantKeep, KeepRunesString(tt.str, tt.funcs...))
+		})
+	}
+}
+
+func TestRemoveRunesString_NoCopyIfUnchanged(t *testing.T) {
+	// Documented: if no rune was removed, the string is not copied
+	str := strings.Repeat("Grüße ", 10)
+	got := RemoveRunesString(str, unicode.IsDigit)
+	require.Equal(t, str, got)
+	assert.Same(t, unsafe.StringData(str), unsafe.StringData(got), "unchanged string must not be copied")
+
+	// Removing the very first rune must not keep any of the original prefix
+	assert.Equal(t, "bc", RemoveRunesString("abc", IsRune('a')))
+	// Removing the very last rune
+	assert.Equal(t, "ab", RemoveRunesString("abc", IsRune('c')))
+}
+
+func TestMapRuneIsAfterWordSeparator(t *testing.T) {
+	// The result has one entry per byte (not per rune) so that it can be
+	// indexed with byte offsets, for example from regexp matches.
+	// The start of the string counts as being after a separator
+	// so that the first word is treated like every other word.
+	tests := []struct {
+		str  string
+		want []bool
+	}{
+		{str: "", want: []bool{}},
+		{str: "a", want: []bool{true}},
+		{str: "ab", want: []bool{true, false}},
+		{str: "a b", want: []bool{true, false, true}},
+		{str: "a.b", want: []bool{true, false, true}},
+		{str: "a  b", want: []bool{true, false, true, true}},
+		// Continuation bytes of a multi-byte rune get the value of the
+		// rune's first byte (not testing a multi-byte rune at the end of
+		// the string, see the bug report for that case)
+		{str: "ä b", want: []bool{true, true, false, true}},
+		{str: "x äb", want: []bool{true, false, true, true, false}},
+		{str: "世x", want: []bool{true, true, true, false}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.str, func(t *testing.T) {
+			got := MapRuneIsAfterWordSeparator(tt.str)
+			require.Len(t, got, len(tt.str))
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestEqualJSON(t *testing.T) {
+	type pair struct {
+		A int `json:"a"`
+	}
+	tests := []struct {
+		name string
+		a, b any
+		want bool
+	}{
+		{name: "both nil", a: nil, b: nil, want: true},
+		{name: "nil vs value", a: nil, b: 0, want: false},
+		{name: "value vs nil", a: "", b: nil, want: false},
+		{name: "equal strings", a: "a", b: "a", want: true},
+		{name: "different strings", a: "a", b: "b", want: false},
+		// Values of different Go types are equal if their JSON is equal
+		{name: "int vs float", a: 1, b: 1.0, want: true},
+		{name: "struct vs map", a: pair{A: 1}, b: map[string]int{"a": 1}, want: true},
+		{name: "struct pointer vs struct", a: &pair{A: 1}, b: pair{A: 1}, want: true},
+		// but the JSON type still matters
+		{name: "number vs string", a: 1, b: "1", want: false},
+		// Values that can't be marshalled are never equal to anything else
+		{name: "unmarshallable", a: func() {}, b: 1, want: false},
+		{name: "unmarshallable second", a: 1, b: make(chan int), want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, EqualJSON(tt.a, tt.b))
+		})
+	}
+}
+
+func TestTransliterateSpecialCharacters(t *testing.T) {
+	// Without a length limit
+	assert.Equal(t, "Gruesse aus Oesterreich", TransliterateSpecialCharacters("Grüße aus Österreich"))
+	assert.Equal(t, "", TransliterateSpecialCharacters(""))
+
+	// Unchanged input is returned without copying
+	str := strings.Repeat("plain ASCII ", 10)
+	got := TransliterateSpecialCharacters(str)
+	require.Equal(t, str, got)
+	assert.Same(t, unsafe.StringData(str), unsafe.StringData(got), "unchanged string must not be copied")
+}
+
+func TestSubStringInAndStringContainsAny(t *testing.T) {
+	// The two functions are mirror images: SubStringIn looks for a needle
+	// in many haystacks, StringContainsAny for many needles in a haystack.
+	strs := []string{"Hello World", "Grüße"}
+	assert.True(t, SubStringIn("World", strs))
+	assert.True(t, SubStringIn("üß", strs))
+	assert.True(t, SubStringIn("Grüße", strs), "equal string counts as substring")
+	assert.False(t, SubStringIn("world", strs), "case sensitive")
+	assert.False(t, SubStringIn("Hello World and more", strs), "haystack must contain needle, not vice versa")
+	assert.False(t, SubStringIn("", nil))
+
+	assert.True(t, StringContainsAny("Hello World", []string{"x", "World"}))
+	assert.True(t, StringContainsAny("Grüße", []string{"üß"}))
+	assert.False(t, StringContainsAny("Hello", []string{"Hello World"}), "needle must be in haystack, not vice versa")
+	assert.False(t, StringContainsAny("Hello", nil))
+	// Like strings.Contains, the empty string is contained in every string
+	assert.True(t, StringContainsAny("Hello", []string{""}))
+	assert.True(t, SubStringIn("", strs))
 }

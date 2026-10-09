@@ -1,10 +1,14 @@
 package vat
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/domonda/go-types/country"
 )
 
 var validVATIDs = map[string]string{
@@ -258,4 +262,251 @@ func Test_VATIDFinder_FindAllIndex(t *testing.T) {
 			}
 		}
 	}
+}
+
+// Every rejection must wrap ErrInvalidID so callers can detect invalid input
+// with errors.Is, and the message must name the gate that rejected the input
+// so users can tell a typo in the country prefix from a wrong check digit.
+func TestID_Normalized_rejectionReasons(t *testing.T) {
+	tests := []struct {
+		name       string
+		id         ID
+		wantReason string
+	}{
+		{name: "empty", id: "", wantReason: "too short"},
+		{name: "punctuation only counts as empty", id: " - . ", wantReason: "too short"},
+		{name: "3 chars", id: "ATU", wantReason: "too short"},
+		// The length limit applies after removing spaces and punctuation.
+		{name: "17 chars", id: "ATU10223006123456", wantReason: "too long"},
+		{name: "unknown country prefix", id: "XX123456789", wantReason: "invalid country code"},
+		{name: "country without VAT format", id: "US123456789", wantReason: "unsupported country code"},
+		// Greek VAT IDs use the EU prefix EL, not the ISO code GR.
+		{name: "Greece with ISO prefix", id: "GR094019245", wantReason: "unsupported country code"},
+		{name: "16 chars hit the format check", id: "ATU1022300612345", wantReason: "invalid format"},
+		{name: "AT without U", id: "AT10223006", wantReason: "invalid format"},
+		{name: "DE starting with 0", id: "DE011111125", wantReason: "invalid format"},
+		{name: "AT check digit", id: "ATU10223007", wantReason: "invalid check-sum"},
+		{name: "DE check digit", id: "DE111111126", wantReason: "invalid check-sum"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := tt.id.Normalized()
+			require.ErrorIs(t, err, ErrInvalidID)
+			assert.ErrorContains(t, err, tt.wantReason)
+
+			// Validate and NormalizeVATID share the same rules
+			assert.ErrorIs(t, tt.id.Validate(), ErrInvalidID)
+			_, err = NormalizeVATID(string(tt.id))
+			assert.ErrorIs(t, err, ErrInvalidID)
+		})
+	}
+}
+
+// Length limits are checked after spaces and punctuation are removed,
+// so heavily formatted input that is longer than IDMaxLength must still
+// be accepted when its normalized form is valid.
+func TestID_Normalized_lengthIsCheckedAfterNormalization(t *testing.T) {
+	raw := ID("AT - U - 1022 - 3006")
+	require.Greater(t, len(raw), IDMaxLength)
+
+	norm, err := raw.Normalized()
+	require.NoError(t, err)
+	assert.Equal(t, ID("ATU10223006"), norm)
+}
+
+func TestStringIsVATID(t *testing.T) {
+	// StringIsVATID and BytesAreVATID are the cheap predicates used by
+	// finders and must agree with ID.Valid for both valid and invalid input.
+	for in := range validVATIDs {
+		assert.Truef(t, StringIsVATID(in), "StringIsVATID(%q)", in)
+		assert.Truef(t, BytesAreVATID([]byte(in)), "BytesAreVATID(%q)", in)
+	}
+	for _, in := range slices.Concat(invalidVATIDs, []ID{"", "DE"}) {
+		assert.Falsef(t, StringIsVATID(string(in)), "StringIsVATID(%q)", string(in))
+		assert.Falsef(t, BytesAreVATID([]byte(in)), "BytesAreVATID(%q)", string(in))
+	}
+}
+
+func TestID_ValidAndNormalized(t *testing.T) {
+	tests := []struct {
+		id   ID
+		want bool
+	}{
+		{id: "ATU10223006", want: true},
+		{id: "atu10223006", want: false},  // valid, but lower case
+		{id: "ATU 10223006", want: false}, // valid, but contains a space
+		{id: "ATU12345678", want: false},  // invalid check-sum
+		{id: "", want: false},
+	}
+	for _, tt := range tests {
+		t.Run(string(tt.id), func(t *testing.T) {
+			assert.Equal(t, tt.want, tt.id.ValidAndNormalized())
+		})
+	}
+}
+
+// ValidateIsNormalized must tell "invalid" (ErrInvalidID) apart from
+// "valid but not normalized" (some other error), as documented,
+// so callers can decide whether normalizing would fix the value.
+func TestID_ValidateIsNormalized(t *testing.T) {
+	assert.NoError(t, ID("ATU10223006").ValidateIsNormalized())
+
+	err := ID("atu 10223006").ValidateIsNormalized()
+	require.Error(t, err, "valid but not normalized")
+	assert.NotErrorIs(t, err, ErrInvalidID, "a valid ID must not be reported as invalid")
+
+	assert.ErrorIs(t, ID("ATU12345678").ValidateIsNormalized(), ErrInvalidID)
+}
+
+// A valid but sloppily formatted ID is normalized on the way to NullableID,
+// while anything invalid becomes NULL instead of being stored as garbage.
+func TestID_NormalizedOrNull(t *testing.T) {
+	assert.Equal(t, NullableID("ATU10223006"), ID("at u 1022 3006").NormalizedOrNull())
+	assert.Equal(t, Null, ID("ATU12345678").NormalizedOrNull())
+	assert.Equal(t, Null, ID("").NormalizedOrNull())
+}
+
+// Nullable is a plain conversion: it must neither validate nor normalize,
+// so no information is lost when switching between ID and NullableID.
+func TestID_Nullable(t *testing.T) {
+	assert.Equal(t, NullableID("atu 10223006"), ID("atu 10223006").Nullable())
+	assert.Equal(t, NullableID("not a VAT ID"), ID("not a VAT ID").Nullable())
+	assert.Equal(t, Null, ID("").Nullable())
+}
+
+func TestID_CountryCode(t *testing.T) {
+	tests := []struct {
+		name string
+		id   ID
+		want country.Code
+	}{
+		{name: "Austria", id: "ATU10223006", want: country.AT},
+		{name: "normalizes first", id: "atu 10223006", want: country.AT},
+		{name: "Germany", id: "DE167015661", want: country.DE},
+		// "EU" is not a country, MOSS IDs are mapped to Belgium (Brussels).
+		{name: "MOSS", id: "EU372008134", want: country.BE},
+		// "XI" is not an ISO 3166-1 code, Northern Ireland belongs to the UK.
+		{name: "Northern Ireland", id: "XI123456782", want: country.GB},
+		{name: "invalid", id: "ATU12345678", want: country.Invalid},
+		{name: "empty", id: "", want: country.Invalid},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.id.CountryCode()
+			assert.Equal(t, tt.want, got)
+			if got != country.Invalid {
+				assert.True(t, got.Valid(), "CountryCode must return a valid ISO 3166-1 code")
+			}
+		})
+	}
+}
+
+func TestID_IsMOSS(t *testing.T) {
+	assert.True(t, ID("EU372008134").IsMOSS())
+	assert.True(t, ID("eu 372 008 134").IsMOSS(), "IsMOSS normalizes first")
+	assert.False(t, ID("ATU10223006").IsMOSS())
+	assert.False(t, ID("EU37200813").IsMOSS(), "invalid MOSS ID")
+	assert.False(t, ID("").IsMOSS())
+}
+
+func TestID_Number(t *testing.T) {
+	tests := []struct {
+		id   ID
+		want string
+	}{
+		// The number is everything after the 2-letter country prefix.
+		// For Austria this includes the "U", which is how VIES expects it.
+		{id: "ATU10223006", want: "U10223006"},
+		{id: "DE 167 015 661", want: "167015661"},
+		{id: "EU372008134", want: "372008134"},
+		{id: "NO 916634773 MVA", want: "916634773MVA"},
+		// Invalid IDs have no meaningful number part.
+		{id: "ATU12345678", want: ""},
+		{id: "", want: ""},
+	}
+	for _, tt := range tests {
+		t.Run(string(tt.id), func(t *testing.T) {
+			assert.Equal(t, tt.want, tt.id.Number())
+		})
+	}
+}
+
+// String must not lose information: valid IDs are shown normalized,
+// invalid input is shown exactly as given so it can be corrected.
+func TestID_String(t *testing.T) {
+	assert.Equal(t, "ATU10223006", ID("at u 1022 3006").String())
+	assert.Equal(t, "atu 1234 5678", ID("atu 1234 5678").String())
+	assert.Equal(t, "", ID("").String())
+}
+
+func TestID_ScanString(t *testing.T) {
+	t.Run("valid input is stored normalized", func(t *testing.T) {
+		for _, validate := range []bool{true, false} {
+			var id ID
+			require.NoError(t, id.ScanString("de 167-015-661", validate))
+			assert.Equal(t, ID("DE167015661"), id)
+		}
+	})
+	t.Run("validate rejects invalid input and keeps the old value", func(t *testing.T) {
+		id := ID("ATU10223006")
+		err := id.ScanString("ATU12345678", true)
+		assert.ErrorIs(t, err, ErrInvalidID)
+		assert.Equal(t, ID("ATU10223006"), id)
+	})
+	t.Run("without validate invalid input is stored as is", func(t *testing.T) {
+		var id ID
+		require.NoError(t, id.ScanString("atu 1234 5678", false))
+		assert.Equal(t, ID("atu 1234 5678"), id)
+	})
+}
+
+func TestID_Scan(t *testing.T) {
+	t.Run("string", func(t *testing.T) {
+		var id ID
+		require.NoError(t, id.Scan("ATU10223006"))
+		assert.Equal(t, ID("ATU10223006"), id)
+	})
+	t.Run("bytes are copied", func(t *testing.T) {
+		// database/sql drivers may reuse the []byte buffer after Scan,
+		// so the ID must not alias it.
+		buf := []byte("ATU10223006")
+		var id ID
+		require.NoError(t, id.Scan(buf))
+		copy(buf, "XXXXXXXXXXX")
+		assert.Equal(t, ID("ATU10223006"), id)
+	})
+	t.Run("NULL is an error", func(t *testing.T) {
+		// ID is not nullable, NULL must not silently become an empty ID.
+		// Use NullableID for nullable columns.
+		id := ID("ATU10223006")
+		assert.ErrorIs(t, id.Scan(nil), ErrInvalidID)
+	})
+	t.Run("unsupported type", func(t *testing.T) {
+		var id ID
+		assert.ErrorIs(t, id.Scan(int64(10223006)), ErrInvalidID)
+	})
+}
+
+// Valid IDs are written to the database in normalized form
+// so equal VAT IDs compare equal in SQL.
+func TestID_Value(t *testing.T) {
+	v, err := ID("at u 1022 3006").Value()
+	require.NoError(t, err)
+	assert.Equal(t, "ATU10223006", v)
+
+	v, err = ID("ATU10223006").Value()
+	require.NoError(t, err)
+	assert.Equal(t, "ATU10223006", v)
+}
+
+// The JSON schema limits must stay in sync with the length limits
+// that Normalized enforces, otherwise API validation and Go validation
+// would disagree.
+func TestID_JSONSchema(t *testing.T) {
+	s := ID("").JSONSchema()
+	assert.Equal(t, "string", s.Type)
+	require.NotNil(t, s.MinLength)
+	require.NotNil(t, s.MaxLength)
+	assert.Equal(t, uint64(IDMinLength), *s.MinLength)
+	assert.Equal(t, uint64(IDMaxLength), *s.MaxLength)
 }

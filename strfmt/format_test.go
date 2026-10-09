@@ -2,6 +2,7 @@ package strfmt
 
 import (
 	"errors"
+	"math"
 	"reflect"
 	"strings"
 	"testing"
@@ -271,4 +272,45 @@ func TestFormatValueNonAddressableUnexportedField(t *testing.T) {
 	// A struct kind has none, so fmt.Sprint is the fallback
 	assert.NotPanics(t, func() { FormatValue(val.Field(1), config) })
 	assert.NotEmpty(t, FormatValue(val.Field(1), config))
+}
+
+// valueStringer implements fmt.Stringer with a value receiver.
+type valueStringer struct{ Text string }
+
+func (s valueStringer) String() string { return "from String: " + s.Text }
+
+// TestFormatValueIntegerKinds checks that all integer kinds are formatted
+// as plain decimal numbers without thousands separators or a decimal part,
+// so that IDs, counts and years are written exactly as they are.
+func TestFormatValueIntegerKinds(t *testing.T) {
+	config := NewGermanFormatConfig()
+	tests := []struct {
+		value any
+		want  string
+	}{
+		{value: 0, want: "0"},
+		{value: 1234567, want: "1234567"},
+		{value: int8(-128), want: "-128"},
+		{value: int64(math.MinInt64), want: "-9223372036854775808"},
+		{value: uint(0), want: "0"},
+		{value: uint8(255), want: "255"},
+		{value: uint16(65535), want: "65535"},
+		{value: uint64(math.MaxUint64), want: "18446744073709551615"},
+	}
+	for _, tt := range tests {
+		assert.Equal(t, tt.want, Format(tt.value, config), "Format(%T(%v))", tt.value, tt.value)
+	}
+
+	u32 := uint32(4000000)
+	assert.Equal(t, "4000000", Format(&u32, config), "pointer to uint32 is dereferenced")
+}
+
+// TestFormatValueStringerThroughPointers checks that a Stringer is still
+// used when the value is passed through more than one level of pointers,
+// where neither the value itself nor its address has the String method in
+// its method set. Without it fmt.Sprint would print a pointer address.
+func TestFormatValueStringerThroughPointers(t *testing.T) {
+	config := NewFormatConfig()
+	s := &valueStringer{Text: "text"}
+	assert.Equal(t, "from String: text", Format(&s, config))
 }

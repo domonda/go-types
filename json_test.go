@@ -3,6 +3,7 @@ package types
 import (
 	"encoding"
 	"encoding/json"
+	"fmt"
 	"reflect"
 	"testing"
 )
@@ -70,6 +71,8 @@ func TestCanMarshalJSON(t *testing.T) {
 		// Interfaces.
 		{"any", reflect.TypeFor[any](), true},
 		{"json.Marshaler", reflect.TypeFor[json.Marshaler](), true},
+		// encoding/json marshals the dynamic value of any interface.
+		{"fmt.Stringer", reflect.TypeFor[fmt.Stringer](), true},
 
 		// Marshalers.
 		{"jsonMarshalerStub", reflect.TypeFor[jsonMarshalerStub](), true},
@@ -120,5 +123,28 @@ func TestCanMarshalJSON_AgreesWithEncodingJSON(t *testing.T) {
 				t.Errorf("CanMarshalJSON said yes but json.Marshal failed: %v", err)
 			}
 		})
+	}
+}
+
+// textMarshalerPtrFunc is a func type, which encoding/json can't marshal,
+// that becomes marshalable through its pointer receiver MarshalText.
+type textMarshalerPtrFunc func()
+
+func (*textMarshalerPtrFunc) MarshalText() ([]byte, error) { return []byte("text"), nil }
+
+// TestCanMarshalJSON_PointerReceiverTextMarshaler checks that a type is
+// reported as marshalable when only its pointer implements
+// encoding.TextMarshaler, because encoding/json uses the pointer method
+// for addressable values like the fields of a struct passed by pointer.
+func TestCanMarshalJSON_PointerReceiverTextMarshaler(t *testing.T) {
+	if !CanMarshalJSON(reflect.TypeFor[textMarshalerPtrFunc]()) {
+		t.Fatal("CanMarshalJSON(textMarshalerPtrFunc) = false, want true")
+	}
+	j, err := json.Marshal(&struct{ F textMarshalerPtrFunc }{F: func() {}})
+	if err != nil {
+		t.Fatalf("json.Marshal error: %v", err)
+	}
+	if want := `{"F":"text"}`; string(j) != want {
+		t.Errorf("json.Marshal = %s, want %s", j, want)
 	}
 }

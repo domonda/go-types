@@ -3,6 +3,9 @@ package email_test
 import (
 	"strings"
 	"testing"
+	"testing/iotest"
+
+	"github.com/domonda/go-errs"
 
 	"github.com/domonda/go-types/email"
 	"github.com/stretchr/testify/require"
@@ -97,4 +100,29 @@ func TestParseMIMEMessage_PartialResult(t *testing.T) {
 	// The valid address from the To list is kept even though the list also
 	// contained an unparseable entry.
 	require.Equal(t, email.AddressList("good@example.com"), msg.To)
+}
+
+// TestParseMIMEMessage_InvalidReplyTo protects the documented leniency for
+// Reply-To: unparsable values seen in the wild must not fail the message,
+// replies then fall back to the From address.
+func TestParseMIMEMessage_InvalidReplyTo(t *testing.T) {
+	msg, err := email.ParseMessage(rawMessage(
+		`From: sender@example.com`,
+		`Reply-To: not an address`,
+		`To: me@example.com`,
+		`Date: Thu, 22 Jan 2026 16:21:11 +0100`,
+		`Content-Type: text/plain; charset=utf-8`,
+		``,
+		`Body`,
+	))
+	require.NoError(t, err)
+	require.True(t, msg.ReplyTo.IsNull())
+	require.Equal(t, email.Address("sender@example.com"), msg.ReplyToAddress())
+}
+
+func TestParseMIMEMessage_ReadError(t *testing.T) {
+	// Read errors must be returned instead of a message with missing data.
+	msg, err := email.ParseMIMEMessage(iotest.ErrReader(errs.New("read failed")))
+	require.Error(t, err)
+	require.Nil(t, msg)
 }
