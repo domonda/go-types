@@ -242,7 +242,7 @@ func main() {
 
 Any non-nil error from `Validate`, `TryValidate` or `DeepValidate` means the value is invalid; there is no sentinel error to check with `errors.Is`.
 If a value implements both interfaces, only `Validate() error` is called and its error is returned unchanged.
-A `Validator` can't tell why its `Valid() bool` returned false, so its error names the type of the value instead, like `invalid language.Code value`.
+A `Validator` can't tell why its `Valid() bool` returned false, so its error names the type and value instead, like `invalid main.Status value: "unknown"`.
 `DeepValidate` prefixes each error with the path to the value, like `struct field Users -> element [1] -> struct field Name: ...`, and wraps the original error, so `errors.Is` and `errors.As` see through the path.
 
 ### Email Addresses

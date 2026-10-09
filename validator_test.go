@@ -3,6 +3,7 @@ package types
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -731,19 +732,20 @@ func (v strictValidLenientValidate) Validate() error {
 // error to check with errors.Is. The error of a ValidatErr is the better
 // message and has to reach the caller unchanged, not wrapped or replaced.
 // A Validator's Valid can't say why a value is invalid, so the error at
-// least has to name the type of the value to be diagnosable.
+// least has to name the type and value to be diagnosable.
 var validateTestCases = []struct {
 	name              string
 	value             any
-	wantErr           string // expected error message, empty for no error
+	wantErr           string // expected error message prefix, empty for no error
 	wantUnchanged     error  // if set, the exact error value expected, not a wrapper of it
 	wantIsValidatable bool
 }{
 	{name: "nil", value: nil, wantIsValidatable: false},
 	{name: "not validatable", value: 1, wantIsValidatable: false},
 	{name: "valid Validator", value: validString("x"), wantIsValidatable: true},
-	{name: "invalid Validator names its type", value: invalidString("x"), wantErr: "invalid types.invalidString value", wantIsValidatable: true},
-	{name: "invalid pointer Validator names its pointer type", value: new(invalidString("x")), wantErr: "invalid *types.invalidString value", wantIsValidatable: true},
+	{name: "invalid Validator names its type and value", value: invalidString("x"), wantErr: `invalid types.invalidString value: "x"`, wantIsValidatable: true},
+	// %#v of a pointer is its address, so only the prefix is checked
+	{name: "invalid pointer Validator names its pointer type", value: new(invalidString("x")), wantErr: "invalid *types.invalidString value: (*types.invalidString)(0x", wantIsValidatable: true},
 	{name: "valid ValidatErr", value: signedInt(1), wantIsValidatable: true},
 	{name: "invalid ValidatErr returns its error unchanged", value: signedInt(-1), wantErr: "negative number", wantUnchanged: errNegative, wantIsValidatable: true},
 	// Validate wins over Valid, so a type can offer a lenient Validate
@@ -760,12 +762,21 @@ func errString(err error) string {
 	return err.Error()
 }
 
+// errHasPrefix reports if err is nil for an empty prefix,
+// or if err is not nil and its message starts with prefix.
+func errHasPrefix(err error, prefix string) bool {
+	if prefix == "" {
+		return err == nil
+	}
+	return err != nil && strings.HasPrefix(err.Error(), prefix)
+}
+
 func TestValidate(t *testing.T) {
 	for _, tt := range validateTestCases {
 		t.Run(tt.name, func(t *testing.T) {
 			err := Validate(tt.value)
-			if got := errString(err); got != tt.wantErr {
-				t.Errorf("Validate(%#v) = %q, want %q", tt.value, got, tt.wantErr)
+			if !errHasPrefix(err, tt.wantErr) {
+				t.Errorf("Validate(%#v) = %q, want prefix %q", tt.value, errString(err), tt.wantErr)
 			}
 			if tt.wantUnchanged != nil && err != tt.wantUnchanged {
 				t.Errorf("Validate(%#v) = %#v, want the ValidatErr's error %#v unchanged", tt.value, err, tt.wantUnchanged)
@@ -778,8 +789,8 @@ func TestTryValidate(t *testing.T) {
 	for _, tt := range validateTestCases {
 		t.Run(tt.name, func(t *testing.T) {
 			err, isValidatable := TryValidate(tt.value)
-			if got := errString(err); got != tt.wantErr {
-				t.Errorf("TryValidate(%#v) error = %q, want %q", tt.value, got, tt.wantErr)
+			if !errHasPrefix(err, tt.wantErr) {
+				t.Errorf("TryValidate(%#v) error = %q, want prefix %q", tt.value, errString(err), tt.wantErr)
 			}
 			if tt.wantUnchanged != nil && err != tt.wantUnchanged {
 				t.Errorf("TryValidate(%#v) error = %#v, want the ValidatErr's error %#v unchanged", tt.value, err, tt.wantUnchanged)
@@ -801,6 +812,89 @@ func TestValidatorAsValidatErr(t *testing.T) {
 	err := ValidatorAsValidatErr{invalidString("x")}.Validate()
 	if got, want := errString(err), errString(Validate(invalidString("x"))); got != want {
 		t.Errorf("Validate() of invalid Validator = %q, want %q", got, want)
+	}
+}
+
+// TestValidatErrs checks that ValidatErrs and CombinedValidatErr report all
+// invalid elements at once instead of only the first one, so that a caller
+// can show every problem of a value together. Every element has to be
+// validated, also the ones after an error, the message has to list the
+// errors in element order without gaps for valid elements, and errors.Is
+// has to find each joined error, including a single one that the join wraps.
+func TestValidatErrs(t *testing.T) {
+	errA := errors.New("error a")
+	errB := errors.New("error b")
+	var called []string
+	validatErr := func(name string, err error) ValidatErr {
+		return ValidatErrFunc(func() error {
+			called = append(called, name)
+			return err
+		})
+	}
+
+	tests := []struct {
+		name        string
+		validatErrs []ValidatErr
+		wantCalled  []string
+		wantErrs    []error // joined in this order, none for a nil error
+	}{
+		{
+			name:        "nil",
+			validatErrs: nil,
+		},
+		{
+			name:        "all valid",
+			validatErrs: []ValidatErr{validatErr("1", nil), validatErr("2", nil)},
+			wantCalled:  []string{"1", "2"},
+		},
+		{
+			name:        "single error",
+			validatErrs: []ValidatErr{validatErr("1", nil), validatErr("2", errA), validatErr("3", nil)},
+			wantCalled:  []string{"1", "2", "3"},
+			wantErrs:    []error{errA},
+		},
+		{
+			name:        "all errors joined",
+			validatErrs: []ValidatErr{validatErr("1", errA), validatErr("2", nil), validatErr("3", errB)},
+			wantCalled:  []string{"1", "2", "3"},
+			wantErrs:    []error{errA, errB},
+		},
+	}
+	for _, tt := range tests {
+		for _, combined := range []struct {
+			name string
+			v    ValidatErr
+		}{
+			{"ValidatErrs", ValidatErrs(tt.validatErrs)},
+			{"CombinedValidatErr", CombinedValidatErr(tt.validatErrs...)},
+		} {
+			t.Run(tt.name+"/"+combined.name, func(t *testing.T) {
+				called = nil
+				err := combined.v.Validate()
+
+				if !slices.Equal(called, tt.wantCalled) {
+					t.Errorf("called validators %q, want %q", called, tt.wantCalled)
+				}
+				if len(tt.wantErrs) == 0 {
+					if err != nil {
+						t.Errorf("Validate() = %q, want nil", err)
+					}
+					return
+				}
+				if err == nil {
+					t.Fatalf("Validate() = nil, want %q", tt.wantErrs)
+				}
+				for _, want := range tt.wantErrs {
+					if !errors.Is(err, want) {
+						t.Errorf("errors.Is(%q, %q) = false, want true", err, want)
+					}
+				}
+				wantMsg := errors.Join(tt.wantErrs...).Error()
+				if err.Error() != wantMsg {
+					t.Errorf("Validate() message = %q, want %q", err, wantMsg)
+				}
+			})
+		}
 	}
 }
 
@@ -826,7 +920,326 @@ func TestDeepValidate_PathWrapsOriginalError(t *testing.T) {
 	if errors.Unwrap(errs[0]) != errNegative {
 		t.Errorf("expected the path to wrap the ValidatErr's error unchanged, got %#v", errors.Unwrap(errs[0]))
 	}
-	if got, want := errs[1].Error(), "struct field Invalid: invalid types.invalidString value"; got != want {
+	if got, want := errs[1].Error(), `struct field Invalid: invalid types.invalidString value: "x"`; got != want {
 		t.Errorf("DeepValidate error = %q, want %q", got, want)
 	}
+}
+
+// ptrValidatErr implements ValidatErr only with a pointer receiver, like LenString.
+type ptrValidatErr string
+
+func (p *ptrValidatErr) Validate() error {
+	if *p == "" {
+		return errors.New("empty ptrValidatErr")
+	}
+	return nil
+}
+
+// ptrValidator implements Validator only with a pointer receiver.
+type ptrValidator string
+
+func (p *ptrValidator) Valid() bool { return *p != "" }
+
+// mixedReceivers implements Validator with a value receiver
+// and ValidatErr with a pointer receiver.
+type mixedReceivers string
+
+func (m mixedReceivers) Valid() bool { return false }
+
+func (m *mixedReceivers) Validate() error {
+	if *m == "" {
+		return errors.New("empty mixedReceivers")
+	}
+	return nil
+}
+
+// errorStrings returns the messages of errs for comparing them in one go.
+func errorStrings(errs []error) []string {
+	strs := make([]string, len(errs))
+	for i, err := range errs {
+		strs[i] = err.Error()
+	}
+	return strs
+}
+
+// TestDeepValidate_PointerReceiverValidators checks that a validator with a
+// pointer receiver is called for every non-pointer value of its type.
+// Such values are struct fields, slice, array, and map elements, or the
+// dynamic value of an interface, and a LenString field would otherwise
+// never be validated at all, because its own fields are unexported.
+// Values that are not addressable, like the fields of a struct passed by
+// value or map values, have to be validated through a pointer to a copy.
+func TestDeepValidate_PointerReceiverValidators(t *testing.T) {
+	type fields struct {
+		F ptrValidatErr
+	}
+	tests := []struct {
+		name  string
+		input any
+		want  []string
+	}{
+		{"field of struct by value", fields{}, []string{"struct field F: empty ptrValidatErr"}},
+		{"field of struct by pointer", &fields{}, []string{"struct field F: empty ptrValidatErr"}},
+		{"top-level value", ptrValidatErr(""), []string{"empty ptrValidatErr"}},
+		{"slice element", []ptrValidatErr{"x", ""}, []string{"element [1]: empty ptrValidatErr"}},
+		{"array element of struct by value", struct{ A [1]ptrValidatErr }{}, []string{"struct field A -> element [0]: empty ptrValidatErr"}},
+		{"map value", map[string]ptrValidatErr{"k": ""}, []string{`map value ["k"]: empty ptrValidatErr`}},
+		{"dynamic value of interface", struct{ I any }{I: ptrValidatErr("")}, []string{"struct field I: empty ptrValidatErr"}},
+		{"valid value", fields{F: "x"}, []string{}},
+		// Like Validate, a ValidatErr is preferred over a Validator, even
+		// if only the pointer type implements ValidatErr
+		{"pointer receiver ValidatErr preferred over Validator", struct{ M mixedReceivers }{M: "x"}, []string{}},
+		{"pointer receiver ValidatErr error preferred", struct{ M mixedReceivers }{}, []string{"struct field M: empty mixedReceivers"}},
+		{"LenString field", struct{ S LenString }{S: LenString{str: "abc", min: 5, max: 1}}, []string{`struct field S: minimum length 5 is greater than maximum length 1 of LenString "abc"`}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := errorStrings(DeepValidate(tt.input))
+			if !slices.Equal(got, tt.want) {
+				t.Errorf("DeepValidate() errors = %q, want %q", got, tt.want)
+			}
+		})
+	}
+
+	t.Run("pointer receiver Validator", func(t *testing.T) {
+		errs := DeepValidate(struct{ V ptrValidator }{})
+		// The error names the pointer type because that's what implements
+		// Validator, %#v of the pointer is an address so only the prefix is checked
+		want := "struct field V: invalid *types.ptrValidator value: (*types.ptrValidator)(0x"
+		if len(errs) != 1 || !errHasPrefix(errs[0], want) {
+			t.Errorf("DeepValidate() errors = %q, want one with prefix %q", errorStrings(errs), want)
+		}
+	})
+}
+
+// TestDeepValidate_PointerReceiverDoesNotModifyMapValue checks that
+// validating a map value through a pointer to a copy can't write to the map,
+// which a pointer receiver Validate that normalizes in place would otherwise do.
+func TestDeepValidate_PointerReceiverDoesNotModifyMapValue(t *testing.T) {
+	m := map[string]LenString{"k": {str: "abc", min: 0, max: 5}}
+	if errs := DeepValidate(m); len(errs) != 0 {
+		t.Fatalf("expected no errors, got %v", errs)
+	}
+	if m["k"] != (LenString{str: "abc", min: 0, max: 5}) {
+		t.Errorf("map value changed to %#v", m["k"])
+	}
+}
+
+type embeddedFields struct {
+	Invalid    invalidString
+	unexported invalidString
+}
+
+type invalidStrings []invalidString
+
+// TestDeepValidate_UnexportedEmbeddedStruct checks that the exported fields
+// of an unexported embedded struct are validated: they are promoted to the
+// embedding struct and accessible from outside of the package like its own
+// fields, so skipping them because the embedded field itself is unexported
+// left them unvalidated.
+func TestDeepValidate_UnexportedEmbeddedStruct(t *testing.T) {
+	tests := []struct {
+		name  string
+		input any
+		want  []string
+	}{
+		{
+			name:  "embedded struct",
+			input: struct{ embeddedFields }{embeddedFields{Invalid: "x", unexported: "x"}},
+			want:  []string{`struct field embeddedFields -> struct field Invalid: invalid types.invalidString value: "x"`},
+		},
+		{
+			name:  "embedded struct pointer",
+			input: struct{ *embeddedFields }{&embeddedFields{Invalid: "x", unexported: "x"}},
+			want:  []string{`struct field embeddedFields -> struct field Invalid: invalid types.invalidString value: "x"`},
+		},
+		{
+			name:  "nil embedded struct pointer",
+			input: struct{ *embeddedFields }{},
+			want:  []string{},
+		},
+		{
+			// Only struct fields are promoted, the elements of an unexported
+			// embedded slice are not accessible from outside of the package
+			name:  "embedded non-struct type",
+			input: struct{ invalidStrings }{invalidStrings{"x"}},
+			want:  []string{},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := errorStrings(DeepValidate(tt.input))
+			if !slices.Equal(got, tt.want) {
+				t.Errorf("DeepValidate() errors = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestDeepValidate_MixedTypeMapKeysDeterministic checks that the errors of a
+// map with keys of different dynamic types are returned in the same order
+// every time. The keys are ordered by type name first, so the float64 key
+// comes before the int keys, which come before the string keys.
+func TestDeepValidate_MixedTypeMapKeysDeterministic(t *testing.T) {
+	want := []string{
+		"map value [1.5]: string cannot be empty",
+		"map value [1]: string cannot be empty",
+		"map value [2]: string cannot be empty",
+		`map value ["a"]: string cannot be empty`,
+		`map value ["b"]: string cannot be empty`,
+	}
+	// Map iteration order is random, so one run could pass by chance
+	for range 50 {
+		input := map[any]nonEmptyString{2: "", "b": "", 1.5: "", "a": "", 1: ""}
+		got := errorStrings(DeepValidate(input))
+		if !slices.Equal(got, want) {
+			t.Fatalf("DeepValidate() errors = %q, want %q", got, want)
+		}
+	}
+}
+
+// TestDeepValidate_NilFunc checks that a nil func whose type implements
+// Validator or ValidatErr is skipped like a nil pointer: its Valid or
+// Validate method would call the nil func and panic.
+func TestDeepValidate_NilFunc(t *testing.T) {
+	input := struct {
+		Validator  ValidatorFunc
+		ValidatErr ValidatErrFunc
+		Interface  any
+	}{
+		Interface: ValidatErrFunc(nil),
+	}
+	if errs := DeepValidate(input); len(errs) != 0 {
+		t.Errorf("expected no errors for nil funcs, got %v", errs)
+	}
+
+	// A non-nil func is still called,
+	// %#v of a func is an address so only the prefix is checked
+	input.Validator = func() bool { return false }
+	errs := DeepValidate(input)
+	want := "struct field Validator: invalid types.ValidatorFunc value: (types.ValidatorFunc)(0x"
+	if len(errs) != 1 || !errHasPrefix(errs[0], want) {
+		t.Errorf("DeepValidate() errors = %q, want one with prefix %q", errorStrings(errs), want)
+	}
+}
+
+type cycleNode struct {
+	Value invalidString
+	Next  *cycleNode
+}
+
+// invalidCycleNode is always invalid itself,
+// so revisiting it on a cycle would report it again.
+type invalidCycleNode struct {
+	Next *invalidCycleNode
+}
+
+func (*invalidCycleNode) Validate() error { return errors.New("invalid node") }
+
+type innerStruct struct {
+	Value invalidString
+}
+
+type holder struct {
+	Inner innerStruct
+	Ptr   *innerStruct
+}
+
+// TestDeepValidate_Cycles checks that cyclic data is validated once per
+// value on the cycle instead of recursing until the stack overflows,
+// which can't be recovered from and crashes the process.
+// Data shared by multiple paths without a cycle must still be validated
+// and reported under each of its paths.
+func TestDeepValidate_Cycles(t *testing.T) {
+	t.Run("pointer to itself", func(t *testing.T) {
+		n := &cycleNode{Value: "x"}
+		n.Next = n
+		got := errorStrings(DeepValidate(n))
+		want := []string{`struct field Value: invalid types.invalidString value: "x"`}
+		if !slices.Equal(got, want) {
+			t.Errorf("DeepValidate() errors = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("invalid value on a cycle is reported once", func(t *testing.T) {
+		n := &invalidCycleNode{}
+		n.Next = n
+		got := errorStrings(DeepValidate(n))
+		want := []string{"invalid node"}
+		if !slices.Equal(got, want) {
+			t.Errorf("DeepValidate() errors = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("two pointers to each other", func(t *testing.T) {
+		a := &cycleNode{Value: "a"}
+		a.Next = &cycleNode{Value: "b", Next: a}
+		got := errorStrings(DeepValidate(a))
+		want := []string{
+			`struct field Value: invalid types.invalidString value: "a"`,
+			`struct field Next -> struct field Value: invalid types.invalidString value: "b"`,
+		}
+		if !slices.Equal(got, want) {
+			t.Errorf("DeepValidate() errors = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("map containing itself", func(t *testing.T) {
+		m := map[string]any{"v": invalidString("x")}
+		m["self"] = m
+		got := errorStrings(DeepValidate(m))
+		want := []string{`map value ["v"]: invalid types.invalidString value: "x"`}
+		if !slices.Equal(got, want) {
+			t.Errorf("DeepValidate() errors = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("slice containing itself", func(t *testing.T) {
+		s := []any{invalidString("x"), nil}
+		s[1] = s
+		got := errorStrings(DeepValidate(s))
+		want := []string{`element [0]: invalid types.invalidString value: "x"`}
+		if !slices.Equal(got, want) {
+			t.Errorf("DeepValidate() errors = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("shorter slice of the same array is no cycle", func(t *testing.T) {
+		s := []any{invalidString("x"), nil}
+		s[1] = s[:1]
+		got := errorStrings(DeepValidate(s))
+		want := []string{
+			`element [0]: invalid types.invalidString value: "x"`,
+			`element [1] -> element [0]: invalid types.invalidString value: "x"`,
+		}
+		if !slices.Equal(got, want) {
+			t.Errorf("DeepValidate() errors = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("pointer shared by multiple paths is no cycle", func(t *testing.T) {
+		p := new(nonEmptyString(""))
+		got := errorStrings(DeepValidate([]*nonEmptyString{p, p}))
+		want := []string{
+			"element [0]: string cannot be empty",
+			"element [1]: string cannot be empty",
+		}
+		if !slices.Equal(got, want) {
+			t.Errorf("DeepValidate() errors = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("pointer to own first field is no cycle", func(t *testing.T) {
+		// h and h.Ptr have the same address but different types
+		h := &holder{Inner: innerStruct{Value: "x"}}
+		h.Ptr = &h.Inner
+		got := errorStrings(DeepValidate(h))
+		want := []string{
+			`struct field Inner -> struct field Value: invalid types.invalidString value: "x"`,
+			`struct field Ptr -> struct field Value: invalid types.invalidString value: "x"`,
+		}
+		if !slices.Equal(got, want) {
+			t.Errorf("DeepValidate() errors = %q, want %q", got, want)
+		}
+	})
 }
