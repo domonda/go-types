@@ -2,7 +2,10 @@ module github.com/domonda/go-types/tools
 
 go 1.26.0
 
-tool github.com/securego/gosec/v2/cmd/gosec
+tool (
+	github.com/securego/gosec/v2/cmd/gosec
+	github.com/ungerik/go-enum
+)
 
 require (
 	cloud.google.com/go v0.121.2 // indirect
@@ -27,6 +30,8 @@ require (
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.1 // indirect
 	github.com/tidwall/sjson v1.2.5 // indirect
+	github.com/ungerik/go-astvisit v0.0.0-20251017171216-b7bb0384dd33 // indirect
+	github.com/ungerik/go-enum v1.1.0 // indirect
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.61.0 // indirect

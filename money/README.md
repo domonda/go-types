@@ -136,7 +136,7 @@ type Currency string         // empty → SQL NULL; Currency("").Valid() == fals
 type NullableCurrency string // empty → SQL NULL; NullableCurrency("").Valid() == true
 ```
 
-ISO 4217 alphabetic codes (`USD`, `EUR`, `CHF`, …). Each currency has a package-level constant — see `constants.go`. Both types implement `fmt.Stringer`, `driver.Valuer`, `sql.Scanner`, `JSONSchema`, and the `ScanString(src, validate)` helper.
+ISO 4217 alphabetic codes (`USD`, `EUR`, `CHF`, …). Each currency has a package-level constant — see `currency.go`. Both types implement `fmt.Stringer`, `driver.Valuer`, `sql.Scanner`, `JSONSchema`, and the `ScanString(src, validate)` helper.
 
 | Method                                  | Description                                        |
 |-----------------------------------------|----------------------------------------------------|
@@ -197,7 +197,7 @@ normalized, err := p.Parse("1.234,56")
 
 ## Constants
 
-Every ISO 4217 alphabetic code (`AED`, `AFN`, …, `USD`, `EUR`, `XPF`, `ZWL`, …) is defined as an untyped string constant — see `constants.go`. Also: `CurrencyNull = ""`.
+Every ISO 4217 alphabetic code (`AED`, `AFN`, …, `USD`, `EUR`, `XPF`, `ZWL`, …) is defined as a typed `Currency` constant — see `currency.go`. Also: the untyped `CurrencyNull = ""` in `constants.go`.
 
 ## Related
 

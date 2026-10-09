@@ -1,6 +1,8 @@
 package language
 
 import (
+	"maps"
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -159,4 +161,90 @@ func TestParseCodeErrors(t *testing.T) {
 			assert.Equal(t, Code(tt.in), got, "error path should return input unchanged")
 		})
 	}
+}
+
+// TestCode_EnumsMatchCodeNames ties the two lists of language codes together:
+// Enums() is generated from the constants in code.go, but Valid() looks up
+// codeNames in constants.go. A code added to only one of them would make
+// Enums() list a code that Valid() rejects, or miss one that it accepts.
+func TestCode_EnumsMatchCodeNames(t *testing.T) {
+	assert.ElementsMatch(t, slices.Collect(maps.Keys(codeNames)), Code("").Enums())
+}
+
+// TestCode_ValidateStringAndNullSentinel covers the three parts of Code's
+// public surface that the //#enum migration created or had to protect.
+//
+// Validate carries a #custom marker because it normalizes first, like
+// country.Code and money.Currency, so input that types.Validate and
+// DeepValidate receive from users ("EN", "eng", "en-US") is not rejected.
+// The strict exact-match Validate that go-enum would generate instead
+// rejects all of them. Valid deliberately stays strict, see TestCodeValid.
+// String carries a #custom marker because it normalizes; the plain string
+// conversion go-enum generates instead would return "EN" and "eng"
+// unchanged. Null is declared as the conversion Code("") rather than
+// `Null Code = ""` so that go-enum keeps it out of the enum value lists
+// while it stays a typed Code constant with working methods.
+//
+// Value: protects=language.Code's #custom Validate accepts what Normalized
+// accepts, its #custom String normalizes, and Null stays a typed sentinel
+// outside Enums and EnumStrings;
+// fails_when=go-enum regenerates Validate as the strict lookup or String as
+// the plain conversion, or Null is redeclared as `Null Code = ""`;
+// why_new=Validate and String have no test at all and
+// TestCode_EnumsMatchCodeNames never looks at EnumStrings or Null;
+// seam=none
+func TestCode_ValidateStringAndNullSentinel(t *testing.T) {
+	t.Run("Validate accepts every enumerated code", func(t *testing.T) {
+		for _, c := range Code("").Enums() {
+			require.NoError(t, c.Validate(), "Code(%q).Validate()", string(c))
+		}
+	})
+
+	t.Run("Validate accepts what Normalized accepts", func(t *testing.T) {
+		// Valid rejects all of these, Validate must not.
+		for _, in := range []Code{"EN", " de ", "eng", "ger", "en-US", "zh_Hant"} {
+			require.NoError(t, in.Validate(), "Code(%q).Validate()", string(in))
+		}
+	})
+
+	t.Run("Validate rejects what Normalized rejects", func(t *testing.T) {
+		for _, in := range []Code{"", "xx", "zzz", "English"} {
+			err := in.Validate()
+			require.Error(t, err, "Code(%q).Validate() should error", string(in))
+			// The error has to name the offending value to be diagnosable.
+			assert.ErrorContains(t, err, string(in))
+		}
+	})
+
+	t.Run("String normalizes", func(t *testing.T) {
+		assert.Equal(t, "en", Code("en").String())
+		assert.Equal(t, "en", Code("EN").String(), "String() must normalize the case")
+		assert.Equal(t, "en", Code("eng").String(), "String() must normalize 639-3 to 639-1")
+		assert.Equal(t, "en", Code("en-US").String(), "String() must drop BCP-47 subtags")
+		// No error result, so an unresolvable code comes back unchanged
+		// instead of being replaced by the empty string.
+		assert.Equal(t, "xx", Code("xx").String())
+	})
+
+	t.Run("Null sentinel", func(t *testing.T) {
+		// Compile-time: Null stays a typed Code constant, not an untyped
+		// string, so it keeps its methods and can be compared to a Code.
+		var _ Code = Null
+
+		assert.False(t, Null.Valid(), "language.Null.Valid() must be false")
+		assert.Error(t, Null.Validate())
+		assert.NotContains(t, Code("").Enums(), Null, "Null is not a valid language code")
+		assert.NotContains(t, Code("").EnumStrings(), string(Null))
+	})
+
+	t.Run("EnumStrings matches Enums", func(t *testing.T) {
+		// Both lists are generated independently from the same constants, so
+		// nothing but this assertion keeps them from drifting apart.
+		enums := Code("").Enums()
+		want := make([]string, len(enums))
+		for i, c := range enums {
+			want[i] = string(c)
+		}
+		assert.Equal(t, want, Code("").EnumStrings())
+	})
 }

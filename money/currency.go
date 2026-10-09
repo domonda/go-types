@@ -25,7 +25,7 @@ func StringIsCurrency(str string) bool {
 // The main difference between Currency and NullableCurrency is:
 // Currency("").Valid() == false
 // NullableCurrency("").Valid() == true
-type Currency string
+type Currency string //#enum
 
 // NormalizeCurrency returns str as normalized Currency or an error.
 func NormalizeCurrency(str string) (Currency, error) {
@@ -69,6 +69,12 @@ func (c Currency) NullableCurrency() NullableCurrency {
 }
 
 // Valid indicates if c can be normalized to a valid currency.
+//
+// Hand-written: accepts non-normalized input (lower case, currency
+// symbols, English names) via Normalized, unlike the exact-match switch
+// over every enum value that go-enum would generate.
+//
+// #custom
 func (c Currency) Valid() bool {
 	return c.Validate() == nil
 }
@@ -80,6 +86,12 @@ func (c Currency) ValidAndNormalized() bool {
 }
 
 // Validate returns an error if c can not be normalized to a valid currency.
+//
+// Hand-written: returns the error from Normalized, which names the
+// offending input, instead of the generic error that go-enum would
+// generate.
+//
+// #custom
 func (c Currency) Validate() error {
 	_, err := c.Normalized()
 	return err
@@ -182,10 +194,526 @@ func (c Currency) EnglishName() string {
 // String returns the normalized currency as string if possible,
 // else it will be returned unchanged as string.
 // String implements the fmt.Stringer interface.
+//
+// Hand-written: normalizes before returning, unlike the plain string
+// conversion that go-enum would generate.
+//
+// #custom
 func (c Currency) String() string {
 	norm, err := c.Normalized()
 	if err != nil {
 		return string(c)
 	}
 	return string(norm)
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// ISO 4217 currency code constants
+//
+// These have to live in the same file as `type Currency string //#enum`
+// because go-enum collects the enum values of a type from the file that
+// declares it.
+//
+// CurrencyNull stays untyped in constants.go because it is shared with
+// NullableCurrency. It is not a valid Currency, so do not move it here.
+
+const (
+	AED Currency = "AED" // United Arab Emirates Dirham
+	AFN Currency = "AFN" // Afghanistan Afghani
+	ALL Currency = "ALL" // Albania Lek
+	AMD Currency = "AMD" // Armenia Dram
+	ANG Currency = "ANG" // Netherlands Antilles Guilder
+	AOA Currency = "AOA" // Angola Kwanza
+	ARS Currency = "ARS" // Argentina Peso
+	AUD Currency = "AUD" // Australia Dollar
+	AWG Currency = "AWG" // Aruba Guilder
+	AZN Currency = "AZN" // Azerbaijan New Manat
+	BAM Currency = "BAM" // Bosnia and Herzegovina Convertible Marka
+	BBD Currency = "BBD" // Barbados Dollar
+	BDT Currency = "BDT" // Bangladesh Taka
+	BGN Currency = "BGN" // Bulgaria Lev
+	BHD Currency = "BHD" // Bahrain Dinar
+	BIF Currency = "BIF" // Burundi Franc
+	BMD Currency = "BMD" // Bermuda Dollar
+	BND Currency = "BND" // Brunei Darussalam Dollar
+	BOB Currency = "BOB" // Bolivia Bolíviano
+	BRL Currency = "BRL" // Brazil Real
+	BSD Currency = "BSD" // Bahamas Dollar
+	BTN Currency = "BTN" // Bhutan Ngultrum
+	BWP Currency = "BWP" // Botswana Pula
+	BYN Currency = "BYN" // Belarus Ruble
+	BZD Currency = "BZD" // Belize Dollar
+	CAD Currency = "CAD" // Canada Dollar
+	CDF Currency = "CDF" // Congo/Kinshasa Franc
+	CHF Currency = "CHF" // Switzerland Franc
+	CLP Currency = "CLP" // Chile Peso
+	CNY Currency = "CNY" // China Yuan Renminbi
+	COP Currency = "COP" // Colombia Peso
+	CRC Currency = "CRC" // Costa Rica Colon
+	CUC Currency = "CUC" // Cuba Convertible Peso
+	CUP Currency = "CUP" // Cuba Peso
+	CVE Currency = "CVE" // Cape Verde Escudo
+	CZK Currency = "CZK" // Czech Republic Koruna
+	DJF Currency = "DJF" // Djibouti Franc
+	DKK Currency = "DKK" // Denmark Krone
+	DOP Currency = "DOP" // Dominican Republic Peso
+	DZD Currency = "DZD" // Algeria Dinar
+	EGP Currency = "EGP" // Egypt Pound
+	ERN Currency = "ERN" // Eritrea Nakfa
+	ETB Currency = "ETB" // Ethiopia Birr
+	EUR Currency = "EUR" // Euro Member Countries
+	FJD Currency = "FJD" // Fiji Dollar
+	FKP Currency = "FKP" // Falkland Islands (Malvinas) Pound
+	GBP Currency = "GBP" // United Kingdom Pound
+	GEL Currency = "GEL" // Georgia Lari
+	GGP Currency = "GGP" // Guernsey Pound
+	GHS Currency = "GHS" // Ghana Cedi
+	GIP Currency = "GIP" // Gibraltar Pound
+	GMD Currency = "GMD" // Gambia Dalasi
+	GNF Currency = "GNF" // Guinea Franc
+	GTQ Currency = "GTQ" // Guatemala Quetzal
+	GYD Currency = "GYD" // Guyana Dollar
+	HKD Currency = "HKD" // Hong Kong Dollar
+	HNL Currency = "HNL" // Honduras Lempira
+	HRK Currency = "HRK" // Croatia Kuna
+	HTG Currency = "HTG" // Haiti Gourde
+	HUF Currency = "HUF" // Hungary Forint
+	IDR Currency = "IDR" // Indonesia Rupiah
+	ILS Currency = "ILS" // Israel Shekel
+	IMP Currency = "IMP" // Isle of Man Pound
+	INR Currency = "INR" // India Rupee
+	IQD Currency = "IQD" // Iraq Dinar
+	IRR Currency = "IRR" // Iran Rial
+	ISK Currency = "ISK" // Iceland Krona
+	JEP Currency = "JEP" // Jersey Pound
+	JMD Currency = "JMD" // Jamaica Dollar
+	JOD Currency = "JOD" // Jordan Dinar
+	JPY Currency = "JPY" // Japan Yen
+	KES Currency = "KES" // Kenya Shilling
+	KGS Currency = "KGS" // Kyrgyzstan Som
+	KHR Currency = "KHR" // Cambodia Riel
+	KMF Currency = "KMF" // Comoros Franc
+	KPW Currency = "KPW" // Korea (North) Won
+	KRW Currency = "KRW" // Korea (South) Won
+	KWD Currency = "KWD" // Kuwait Dinar
+	KYD Currency = "KYD" // Cayman Islands Dollar
+	KZT Currency = "KZT" // Kazakhstan Tenge
+	LAK Currency = "LAK" // Laos Kip
+	LBP Currency = "LBP" // Lebanon Pound
+	LKR Currency = "LKR" // Sri Lanka Rupee
+	LRD Currency = "LRD" // Liberia Dollar
+	LSL Currency = "LSL" // Lesotho Loti
+	LYD Currency = "LYD" // Libya Dinar
+	MAD Currency = "MAD" // Morocco Dirham
+	MDL Currency = "MDL" // Moldova Leu
+	MGA Currency = "MGA" // Madagascar Ariary
+	MKD Currency = "MKD" // Macedonia Denar
+	MMK Currency = "MMK" // Myanmar (Burma) Kyat
+	MNT Currency = "MNT" // Mongolia Tughrik
+	MOP Currency = "MOP" // Macau Pataca
+	MRO Currency = "MRO" // Mauritania Ouguiya
+	MUR Currency = "MUR" // Mauritius Rupee
+	MVR Currency = "MVR" // Maldives (Maldive Islands) Rufiyaa
+	MWK Currency = "MWK" // Malawi Kwacha
+	MXN Currency = "MXN" // Mexico Peso
+	MYR Currency = "MYR" // Malaysia Ringgit
+	MZN Currency = "MZN" // Mozambique Metical
+	NAD Currency = "NAD" // Namibia Dollar
+	NGN Currency = "NGN" // Nigeria Naira
+	NIO Currency = "NIO" // Nicaragua Cordoba
+	NOK Currency = "NOK" // Norway Krone
+	NPR Currency = "NPR" // Nepal Rupee
+	NZD Currency = "NZD" // New Zealand Dollar
+	OMR Currency = "OMR" // Oman Rial
+	PAB Currency = "PAB" // Panama Balboa
+	PEN Currency = "PEN" // Peru Sol
+	PGK Currency = "PGK" // Papua New Guinea Kina
+	PHP Currency = "PHP" // Philippines Peso
+	PKR Currency = "PKR" // Pakistan Rupee
+	PLN Currency = "PLN" // Poland Zloty
+	PYG Currency = "PYG" // Paraguay Guarani
+	QAR Currency = "QAR" // Qatar Riyal
+	RON Currency = "RON" // Romania New Leu
+	RSD Currency = "RSD" // Serbia Dinar
+	RUB Currency = "RUB" // Russia Ruble
+	RWF Currency = "RWF" // Rwanda Franc
+	SAR Currency = "SAR" // Saudi Arabia Riyal
+	SBD Currency = "SBD" // Solomon Islands Dollar
+	SCR Currency = "SCR" // Seychelles Rupee
+	SDG Currency = "SDG" // Sudan Pound
+	SEK Currency = "SEK" // Sweden Krona
+	SGD Currency = "SGD" // Singapore Dollar
+	SHP Currency = "SHP" // Saint Helena Pound
+	SLL Currency = "SLL" // Sierra Leone Leone
+	SOS Currency = "SOS" // Somalia Shilling
+	SPL Currency = "SPL" // Seborga Luigino
+	SRD Currency = "SRD" // Suriname Dollar
+	STD Currency = "STD" // São Tomé and Príncipe Dobra
+	SVC Currency = "SVC" // El Salvador Colon
+	SYP Currency = "SYP" // Syria Pound
+	SZL Currency = "SZL" // Swaziland Lilangeni
+	THB Currency = "THB" // Thailand Baht
+	TJS Currency = "TJS" // Tajikistan Somoni
+	TMT Currency = "TMT" // Turkmenistan Manat
+	TND Currency = "TND" // Tunisia Dinar
+	TOP Currency = "TOP" // Tonga Pa'anga
+	TRY Currency = "TRY" // Turkey Lira
+	TTD Currency = "TTD" // Trinidad and Tobago Dollar
+	TVD Currency = "TVD" // Tuvalu Dollar
+	TWD Currency = "TWD" // Taiwan New Dollar
+	TZS Currency = "TZS" // Tanzania Shilling
+	UAH Currency = "UAH" // Ukraine Hryvnia
+	UGX Currency = "UGX" // Uganda Shilling
+	USD Currency = "USD" // United States Dollar
+	UYU Currency = "UYU" // Uruguay Peso
+	UZS Currency = "UZS" // Uzbekistan Som
+	VEF Currency = "VEF" // Venezuela Bolivar
+	VND Currency = "VND" // Viet Nam Dong
+	VUV Currency = "VUV" // Vanuatu Vatu
+	WST Currency = "WST" // Samoa Tala
+	XAF Currency = "XAF" // Communauté Financière Africaine (BEAC) CFA Franc BEAC
+	XCD Currency = "XCD" // East Caribbean Dollar
+	XDR Currency = "XDR" // International Monetary Fund (IMF) Special Drawing Rights
+	XOF Currency = "XOF" // Communauté Financière Africaine (BCEAO) Franc
+	XPF Currency = "XPF" // Comptoirs Français du Pacifique (CFP) Franc
+	YER Currency = "YER" // Yemen Rial
+	ZAR Currency = "ZAR" // South Africa Rand
+	ZMW Currency = "ZMW" // Zambia Kwacha
+	ZWD Currency = "ZWD" // Zimbabwe Dollar
+)
+
+// Enums returns all valid values for Currency
+func (Currency) Enums() []Currency {
+	return []Currency{
+		AED,
+		AFN,
+		ALL,
+		AMD,
+		ANG,
+		AOA,
+		ARS,
+		AUD,
+		AWG,
+		AZN,
+		BAM,
+		BBD,
+		BDT,
+		BGN,
+		BHD,
+		BIF,
+		BMD,
+		BND,
+		BOB,
+		BRL,
+		BSD,
+		BTN,
+		BWP,
+		BYN,
+		BZD,
+		CAD,
+		CDF,
+		CHF,
+		CLP,
+		CNY,
+		COP,
+		CRC,
+		CUC,
+		CUP,
+		CVE,
+		CZK,
+		DJF,
+		DKK,
+		DOP,
+		DZD,
+		EGP,
+		ERN,
+		ETB,
+		EUR,
+		FJD,
+		FKP,
+		GBP,
+		GEL,
+		GGP,
+		GHS,
+		GIP,
+		GMD,
+		GNF,
+		GTQ,
+		GYD,
+		HKD,
+		HNL,
+		HRK,
+		HTG,
+		HUF,
+		IDR,
+		ILS,
+		IMP,
+		INR,
+		IQD,
+		IRR,
+		ISK,
+		JEP,
+		JMD,
+		JOD,
+		JPY,
+		KES,
+		KGS,
+		KHR,
+		KMF,
+		KPW,
+		KRW,
+		KWD,
+		KYD,
+		KZT,
+		LAK,
+		LBP,
+		LKR,
+		LRD,
+		LSL,
+		LYD,
+		MAD,
+		MDL,
+		MGA,
+		MKD,
+		MMK,
+		MNT,
+		MOP,
+		MRO,
+		MUR,
+		MVR,
+		MWK,
+		MXN,
+		MYR,
+		MZN,
+		NAD,
+		NGN,
+		NIO,
+		NOK,
+		NPR,
+		NZD,
+		OMR,
+		PAB,
+		PEN,
+		PGK,
+		PHP,
+		PKR,
+		PLN,
+		PYG,
+		QAR,
+		RON,
+		RSD,
+		RUB,
+		RWF,
+		SAR,
+		SBD,
+		SCR,
+		SDG,
+		SEK,
+		SGD,
+		SHP,
+		SLL,
+		SOS,
+		SPL,
+		SRD,
+		STD,
+		SVC,
+		SYP,
+		SZL,
+		THB,
+		TJS,
+		TMT,
+		TND,
+		TOP,
+		TRY,
+		TTD,
+		TVD,
+		TWD,
+		TZS,
+		UAH,
+		UGX,
+		USD,
+		UYU,
+		UZS,
+		VEF,
+		VND,
+		VUV,
+		WST,
+		XAF,
+		XCD,
+		XDR,
+		XOF,
+		XPF,
+		YER,
+		ZAR,
+		ZMW,
+		ZWD,
+	}
+}
+
+// EnumStrings returns all valid values for Currency as strings
+func (Currency) EnumStrings() []string {
+	return []string{
+		"AED",
+		"AFN",
+		"ALL",
+		"AMD",
+		"ANG",
+		"AOA",
+		"ARS",
+		"AUD",
+		"AWG",
+		"AZN",
+		"BAM",
+		"BBD",
+		"BDT",
+		"BGN",
+		"BHD",
+		"BIF",
+		"BMD",
+		"BND",
+		"BOB",
+		"BRL",
+		"BSD",
+		"BTN",
+		"BWP",
+		"BYN",
+		"BZD",
+		"CAD",
+		"CDF",
+		"CHF",
+		"CLP",
+		"CNY",
+		"COP",
+		"CRC",
+		"CUC",
+		"CUP",
+		"CVE",
+		"CZK",
+		"DJF",
+		"DKK",
+		"DOP",
+		"DZD",
+		"EGP",
+		"ERN",
+		"ETB",
+		"EUR",
+		"FJD",
+		"FKP",
+		"GBP",
+		"GEL",
+		"GGP",
+		"GHS",
+		"GIP",
+		"GMD",
+		"GNF",
+		"GTQ",
+		"GYD",
+		"HKD",
+		"HNL",
+		"HRK",
+		"HTG",
+		"HUF",
+		"IDR",
+		"ILS",
+		"IMP",
+		"INR",
+		"IQD",
+		"IRR",
+		"ISK",
+		"JEP",
+		"JMD",
+		"JOD",
+		"JPY",
+		"KES",
+		"KGS",
+		"KHR",
+		"KMF",
+		"KPW",
+		"KRW",
+		"KWD",
+		"KYD",
+		"KZT",
+		"LAK",
+		"LBP",
+		"LKR",
+		"LRD",
+		"LSL",
+		"LYD",
+		"MAD",
+		"MDL",
+		"MGA",
+		"MKD",
+		"MMK",
+		"MNT",
+		"MOP",
+		"MRO",
+		"MUR",
+		"MVR",
+		"MWK",
+		"MXN",
+		"MYR",
+		"MZN",
+		"NAD",
+		"NGN",
+		"NIO",
+		"NOK",
+		"NPR",
+		"NZD",
+		"OMR",
+		"PAB",
+		"PEN",
+		"PGK",
+		"PHP",
+		"PKR",
+		"PLN",
+		"PYG",
+		"QAR",
+		"RON",
+		"RSD",
+		"RUB",
+		"RWF",
+		"SAR",
+		"SBD",
+		"SCR",
+		"SDG",
+		"SEK",
+		"SGD",
+		"SHP",
+		"SLL",
+		"SOS",
+		"SPL",
+		"SRD",
+		"STD",
+		"SVC",
+		"SYP",
+		"SZL",
+		"THB",
+		"TJS",
+		"TMT",
+		"TND",
+		"TOP",
+		"TRY",
+		"TTD",
+		"TVD",
+		"TWD",
+		"TZS",
+		"UAH",
+		"UGX",
+		"USD",
+		"UYU",
+		"UZS",
+		"VEF",
+		"VND",
+		"VUV",
+		"WST",
+		"XAF",
+		"XCD",
+		"XDR",
+		"XOF",
+		"XPF",
+		"YER",
+		"ZAR",
+		"ZMW",
+		"ZWD",
+	}
 }

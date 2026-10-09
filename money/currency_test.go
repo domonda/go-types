@@ -1,6 +1,8 @@
 package money
 
 import (
+	"maps"
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -46,4 +48,127 @@ func Test_NormalizeCurrency(t *testing.T) {
 func Test_NullCurrency(t *testing.T) {
 	assert.False(t, Currency("").Valid())
 	assert.True(t, NullableCurrency("").Valid())
+}
+
+// TestCurrency_EnumsMatchCurrencyCodeToName ties the two lists of currency
+// codes together: Enums() is generated from the constants in currency.go, but
+// Valid() resolves through currencyCodeToName in constants.go. A code added to
+// only one of them would make Enums() list a code that Valid() rejects, or
+// miss one that it accepts.
+func TestCurrency_EnumsMatchCurrencyCodeToName(t *testing.T) {
+	assert.ElementsMatch(t, slices.Collect(maps.Keys(currencyCodeToName)), Currency("").Enums())
+}
+
+// TestCurrency_CustomMethodsAcceptNonNormalizedInput pins why Valid, Validate
+// and String carry a #custom marker: they resolve through Normalized and
+// therefore accept currency symbols, English names and lower case, while the
+// exact-match switch over the enum constants that go-enum generates instead
+// would only accept the 3-letter ISO 4217 codes and String would stop
+// normalizing. Test_NormalizeCurrency exercises the same inputs through
+// NormalizeCurrency only, so a regenerated Valid/Validate/String would not
+// fail it.
+//
+// Value: protects=money.Currency's #custom Valid/Validate/String keep
+// accepting symbols, English names and lower case through Normalized;
+// fails_when=a go-enum run replaces them with the generated exact-match switch
+// and plain string conversion, so Currency("eur") and Currency("€") turn
+// invalid;
+// why_new=Test_NormalizeCurrency only calls NormalizeCurrency, and the only
+// Valid assertion in this package is for the empty Currency;
+// seam=none
+func TestCurrency_CustomMethodsAcceptNonNormalizedInput(t *testing.T) {
+	t.Run("accepted non-normalized input", func(t *testing.T) {
+		tests := []struct {
+			in   Currency
+			want string
+		}{
+			{in: "EUR", want: "EUR"}, // already normalized
+			{in: "eur", want: "EUR"}, // lower case
+			{in: "€", want: "EUR"},   // symbol
+			{in: "Euro", want: "EUR"},
+			{in: " EURO ", want: "EUR"},
+			{in: "US$", want: "USD"},
+			{in: "dollar", want: "USD"}, // English name
+			{in: "Pound Sterling", want: "GBP"},
+			{in: "₣", want: "CHF"},
+		}
+		for _, tt := range tests {
+			t.Run(string(tt.in), func(t *testing.T) {
+				assert.True(t, tt.in.Valid(), "Currency(%q).Valid()", string(tt.in))
+				assert.NoError(t, tt.in.Validate(), "Currency(%q).Validate()", string(tt.in))
+				assert.Equal(t, tt.want, tt.in.String(), "Currency(%q).String() must normalize", string(tt.in))
+			})
+		}
+	})
+
+	t.Run("rejected input is returned unchanged", func(t *testing.T) {
+		// String has no error result, so an unresolvable currency has to come
+		// back unchanged instead of being replaced by the empty string.
+		for _, in := range []Currency{"", "xxx", "Atlantean Shell"} {
+			t.Run(string(in), func(t *testing.T) {
+				assert.False(t, in.Valid(), "Currency(%q).Valid()", string(in))
+				assert.Error(t, in.Validate(), "Currency(%q).Validate()", string(in))
+				assert.Equal(t, string(in), in.String(), "Currency(%q).String() must return the input unchanged", string(in))
+			})
+		}
+	})
+}
+
+// TestCurrency_SymbolTableAndEnumStrings covers the invariant that the removal
+// of money.BTC and the ₿ symbol restored: a symbol must only ever normalize to
+// a currency that is itself an enumerated, valid ISO 4217 code. ₿ mapped to
+// BTC, which was never in currencyCodeToName, so Currency("₿").Valid() was
+// true while the Currency it normalized to was invalid.
+//
+// It also pins the generated EnumStrings, which no other test looks at, and
+// the exclusion of the untyped CurrencyNull from both enum value lists.
+//
+// Value: protects=every currencySymbolToCode / currencyCodeToSymbol entry
+// resolves to an enumerated valid Currency, and EnumStrings mirrors Enums
+// without CurrencyNull;
+// fails_when=a non-ISO-4217 symbol mapping such as ₿ -> BTC is added back, or
+// the two generated enum lists drift apart;
+// why_new=TestCurrency_EnumsMatchCurrencyCodeToName compares Enums to
+// currencyCodeToName only and never follows the symbol tables or EnumStrings;
+// seam=none
+func TestCurrency_SymbolTableAndEnumStrings(t *testing.T) {
+	enums := Currency("").Enums()
+
+	t.Run("symbols normalize to enumerated currencies", func(t *testing.T) {
+		for symbol, code := range currencySymbolToCode {
+			norm, err := Currency(symbol).Normalized()
+			if assert.NoError(t, err, "Currency(%q).Normalized()", symbol) {
+				assert.Equal(t, code, norm, "Currency(%q) must normalize to its table entry", symbol)
+			}
+			assert.Contains(t, enums, code, "the currency %q of symbol %q is not an enum value", string(code), symbol)
+			assert.True(t, code.ValidAndNormalized(), "the currency %q of symbol %q is not valid", string(code), symbol)
+		}
+	})
+
+	t.Run("symbol lookup only knows enumerated currencies", func(t *testing.T) {
+		for code := range currencyCodeToSymbol {
+			assert.Contains(t, enums, code, "Symbol() knows %q, which is not an enum value", string(code))
+		}
+	})
+
+	t.Run("Bitcoin is gone", func(t *testing.T) {
+		assert.False(t, Currency("₿").Valid(), "₿ is not an ISO 4217 currency")
+		assert.False(t, Currency("BTC").Valid(), "BTC is not an ISO 4217 currency")
+		assert.NotContains(t, Currency("").EnumStrings(), "BTC")
+	})
+
+	t.Run("CurrencyNull sentinel", func(t *testing.T) {
+		assert.NotContains(t, enums, Currency(CurrencyNull), "the SQL NULL is not a valid Currency")
+		assert.NotContains(t, Currency("").EnumStrings(), CurrencyNull)
+	})
+
+	t.Run("EnumStrings matches Enums", func(t *testing.T) {
+		// Both lists are generated independently from the same constants, so
+		// nothing but this assertion keeps them from drifting apart.
+		want := make([]string, len(enums))
+		for i, c := range enums {
+			want[i] = string(c)
+		}
+		assert.Equal(t, want, Currency("").EnumStrings())
+	})
 }

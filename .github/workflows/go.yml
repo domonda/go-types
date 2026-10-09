@@ -24,5 +24,10 @@ jobs:
     - name: Vet
       run: go vet ./...
 
+    # Fails if the go-enum generated methods are stale (same as
+    # ./run-go-enum.sh -validate).
+    - name: Validate go-enum methods
+      run: go tool -modfile=tools/go.mod go-enum -validate ./...
+
     - name: Test
       run: go test -count=1 -v ./...
