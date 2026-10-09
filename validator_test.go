@@ -696,3 +696,137 @@ func TestDeepValidate_JoinErrors(t *testing.T) {
 		t.Errorf("Joined error missing field names: %v", errMsg)
 	}
 }
+
+// errNegative is the specific error of signedInt.Validate.
+var errNegative = errors.New("negative number")
+
+// signedInt implements ValidatErr with its own specific error.
+type signedInt int
+
+func (v signedInt) Validate() error {
+	if v < 0 {
+		return errNegative
+	}
+	return nil
+}
+
+// strictValidLenientValidate implements both ValidatErr and Validator
+// with Valid deliberately disagreeing with Validate, like language.Code
+// whose Valid is a strict lookup while Validate normalizes first.
+type strictValidLenientValidate int
+
+func (v strictValidLenientValidate) Valid() bool { return false }
+
+func (v strictValidLenientValidate) Validate() error {
+	if v < 0 {
+		return errNegative
+	}
+	return nil
+}
+
+// validateTestCases are shared by TestValidate and TestTryValidate because
+// both functions must report the same error for the same value.
+//
+// A non-nil error is what marks a value as invalid, there is no sentinel
+// error to check with errors.Is. The error of a ValidatErr is the better
+// message and has to reach the caller unchanged, not wrapped or replaced.
+// A Validator's Valid can't say why a value is invalid, so the error at
+// least has to name the type of the value to be diagnosable.
+var validateTestCases = []struct {
+	name              string
+	value             any
+	wantErr           string // expected error message, empty for no error
+	wantUnchanged     error  // if set, the exact error value expected, not a wrapper of it
+	wantIsValidatable bool
+}{
+	{name: "nil", value: nil, wantIsValidatable: false},
+	{name: "not validatable", value: 1, wantIsValidatable: false},
+	{name: "valid Validator", value: validString("x"), wantIsValidatable: true},
+	{name: "invalid Validator names its type", value: invalidString("x"), wantErr: "invalid types.invalidString value", wantIsValidatable: true},
+	{name: "invalid pointer Validator names its pointer type", value: new(invalidString("x")), wantErr: "invalid *types.invalidString value", wantIsValidatable: true},
+	{name: "valid ValidatErr", value: signedInt(1), wantIsValidatable: true},
+	{name: "invalid ValidatErr returns its error unchanged", value: signedInt(-1), wantErr: "negative number", wantUnchanged: errNegative, wantIsValidatable: true},
+	// Validate wins over Valid, so a type can offer a lenient Validate
+	// next to a strict Valid without types.Validate rejecting its values.
+	{name: "ValidatErr takes precedence over valid=false Validator", value: strictValidLenientValidate(1), wantIsValidatable: true},
+	{name: "ValidatErr error takes precedence over Validator error", value: strictValidLenientValidate(-1), wantErr: "negative number", wantUnchanged: errNegative, wantIsValidatable: true},
+}
+
+// errString returns the message of err or an empty string for nil.
+func errString(err error) string {
+	if err == nil {
+		return ""
+	}
+	return err.Error()
+}
+
+func TestValidate(t *testing.T) {
+	for _, tt := range validateTestCases {
+		t.Run(tt.name, func(t *testing.T) {
+			err := Validate(tt.value)
+			if got := errString(err); got != tt.wantErr {
+				t.Errorf("Validate(%#v) = %q, want %q", tt.value, got, tt.wantErr)
+			}
+			if tt.wantUnchanged != nil && err != tt.wantUnchanged {
+				t.Errorf("Validate(%#v) = %#v, want the ValidatErr's error %#v unchanged", tt.value, err, tt.wantUnchanged)
+			}
+		})
+	}
+}
+
+func TestTryValidate(t *testing.T) {
+	for _, tt := range validateTestCases {
+		t.Run(tt.name, func(t *testing.T) {
+			err, isValidatable := TryValidate(tt.value)
+			if got := errString(err); got != tt.wantErr {
+				t.Errorf("TryValidate(%#v) error = %q, want %q", tt.value, got, tt.wantErr)
+			}
+			if tt.wantUnchanged != nil && err != tt.wantUnchanged {
+				t.Errorf("TryValidate(%#v) error = %#v, want the ValidatErr's error %#v unchanged", tt.value, err, tt.wantUnchanged)
+			}
+			if isValidatable != tt.wantIsValidatable {
+				t.Errorf("TryValidate(%#v) isValidatable = %t, want %t", tt.value, isValidatable, tt.wantIsValidatable)
+			}
+		})
+	}
+}
+
+// TestValidatorAsValidatErr checks that adapting a Validator to a ValidatErr
+// gives the same error as Validate gives for the Validator itself,
+// so wrapping a Validator does not lose the type name of the message.
+func TestValidatorAsValidatErr(t *testing.T) {
+	if err := (ValidatorAsValidatErr{validString("x")}).Validate(); err != nil {
+		t.Errorf("Validate() of valid Validator = %v, want nil", err)
+	}
+	err := ValidatorAsValidatErr{invalidString("x")}.Validate()
+	if got, want := errString(err), errString(Validate(invalidString("x"))); got != want {
+		t.Errorf("Validate() of invalid Validator = %q, want %q", got, want)
+	}
+}
+
+// TestDeepValidate_PathWrapsOriginalError checks that the path prefix of
+// DeepValidate keeps the error of the value's validator reachable:
+// callers that classify errors with errors.Is or errors.As must still
+// see the ValidatErr's own error behind the path.
+func TestDeepValidate_PathWrapsOriginalError(t *testing.T) {
+	input := struct {
+		Number  signedInt
+		Invalid invalidString
+	}{
+		Number:  -1,
+		Invalid: "x",
+	}
+	errs := DeepValidate(input)
+	if len(errs) != 2 {
+		t.Fatalf("expected 2 errors, got %d: %v", len(errs), errs)
+	}
+	if got, want := errs[0].Error(), "struct field Number: negative number"; got != want {
+		t.Errorf("DeepValidate error = %q, want %q", got, want)
+	}
+	if errors.Unwrap(errs[0]) != errNegative {
+		t.Errorf("expected the path to wrap the ValidatErr's error unchanged, got %#v", errors.Unwrap(errs[0]))
+	}
+	if got, want := errs[1].Error(), "struct field Invalid: invalid types.invalidString value"; got != want {
+		t.Errorf("DeepValidate error = %q, want %q", got, want)
+	}
+}

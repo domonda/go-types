@@ -55,6 +55,7 @@ The main package provides core utilities and type definitions:
 #### Validation Framework
 - **Validator**: Interface for boolean validation
 - **ValidatErr**: Interface for validation with detailed error information
+- **Validate / TryValidate**: Validate any value implementing `ValidatErr` or `Validator`
 - **DeepValidate**: Recursive validation of nested structures
 - **CombinedValidator**: Combine multiple validators
 - **CompareReflectValue**: Comparator for `slices.SortFunc` that orders `reflect.Value`s across all orderable kinds (numerics, strings, bool, complex, pointers, channels, arrays, slices including `[]byte`, structs, and interfaces) and returns `0` for non-orderable or mismatched-type values
@@ -238,6 +239,11 @@ func main() {
     }
 }
 ```
+
+Any non-nil error from `Validate`, `TryValidate` or `DeepValidate` means the value is invalid; there is no sentinel error to check with `errors.Is`.
+If a value implements both interfaces, only `Validate() error` is called and its error is returned unchanged.
+A `Validator` can't tell why its `Valid() bool` returned false, so its error names the type of the value instead, like `invalid language.Code value`.
+`DeepValidate` prefixes each error with the path to the value, like `struct field Users -> element [1] -> struct field Name: ...`, and wraps the original error, so `errors.Is` and `errors.As` see through the path.
 
 ### Email Addresses
 

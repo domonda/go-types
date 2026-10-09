@@ -1,7 +1,6 @@
 package types
 
 import (
-	"errors"
 	"fmt"
 	"reflect"
 	"slices"
@@ -58,6 +57,9 @@ func CombinedValidator(validators ...Validator) Validator {
 
 // ValidatErr can be implemented by types that can validate their data and return detailed error information.
 // This is more informative than the Validator interface as it provides specific error details.
+//
+// Any non-nil error means the data is invalid,
+// so the error should describe what is invalid.
 type ValidatErr interface {
 	// Validate returns an error if the data of the implementation is not valid.
 	Validate() error
@@ -107,7 +109,8 @@ func CombinedValidatErr(validatErrs ...ValidatErr) ValidatErr {
 }
 
 // ValidatorAsValidatErr wraps a Validator as a ValidatErr,
-// returning ErrInvalidValue when Validator.Valid() returns false.
+// returning an error naming the type of the Validator
+// when Validator.Valid() returns false.
 // This allows you to use a simple boolean validator in contexts that require detailed error information.
 type ValidatorAsValidatErr struct {
 	Validator
@@ -118,18 +121,18 @@ func (v ValidatorAsValidatErr) Validate() error {
 	if v.Valid() {
 		return nil
 	}
-	return ErrInvalidValue
+	return fmt.Errorf("invalid %T value", v.Validator)
 }
-
-// ErrInvalidValue means that a value is not valid,
-// returned by Validate() and ValidatorAsValidatErr.Validate().
-var ErrInvalidValue = errors.New("invalid value")
 
 // Validate returns an error if v implements ValidatErr or Validator
 // and the methods ValidatErr.Validate() or Validator.Valid()
 // indicate an invalid value.
-// The error from ValidatErr.Validate() is returned directly,
-// and ErrInvalidValue is returned if Validator.Valid() is false.
+// If v implements both interfaces, only ValidatErr.Validate() is called.
+// The error from ValidatErr.Validate() is returned unchanged.
+// If Validator.Valid() is false, which can't tell why v is invalid,
+// an error naming the type of v is returned,
+// like "invalid language.Code value".
+// Any non-nil error means v is invalid.
 // If v does not implement ValidatErr or Validator then nil will be returned.
 func Validate(v any) error {
 	switch x := v.(type) {
@@ -137,7 +140,7 @@ func Validate(v any) error {
 		return x.Validate()
 	case Validator:
 		if !x.Valid() {
-			return ErrInvalidValue
+			return fmt.Errorf("invalid %T value", v)
 		}
 	}
 	return nil
@@ -146,8 +149,12 @@ func Validate(v any) error {
 // TryValidate returns an error and true if v implements ValidatErr or Validator
 // and the methods ValidatErr.Validate() or Validator.Valid()
 // indicate an invalid value.
-// The error from ValidatErr.Validate() is returned directly,
-// and ErrInvalidValue is returned if Validator.Valid() is false.
+// If v implements both interfaces, only ValidatErr.Validate() is called.
+// The error from ValidatErr.Validate() is returned unchanged.
+// If Validator.Valid() is false, which can't tell why v is invalid,
+// an error naming the type of v is returned,
+// like "invalid language.Code value".
+// Any non-nil error means v is invalid.
 // If v does not implement ValidatErr or Validator then nil and false
 // will be returned.
 // The boolean return value indicates whether the value was validatable.
@@ -159,7 +166,7 @@ func TryValidate(v any) (err error, isValidatable bool) {
 		if x.Valid() {
 			return nil, true
 		} else {
-			return ErrInvalidValue, true
+			return fmt.Errorf("invalid %T value", v), true
 		}
 	default:
 		return nil, false
@@ -178,7 +185,9 @@ func TryValidate(v any) (err error, isValidatable bool) {
 //   - skips unexported struct fields, which cannot be inspected via reflection.
 //
 // Errors are prefixed with a human-readable path to the offending value,
-// e.g. "struct field Users -> element [1] -> struct field Name: invalid value".
+// e.g. "struct field Users -> element [1] -> struct field Name: invalid main.Name value".
+// The prefixed errors wrap the errors returned by [Validate],
+// so errors.Is and errors.As see through the path.
 //
 // Cycles via self-referential pointers or maps are not detected and will
 // recurse until the stack overflows; pass acyclic data.
