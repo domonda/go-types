@@ -62,10 +62,6 @@ type Account struct {
 
 Methods: `Valid()`, `Validate()` (joined errors), `Normalize()` (mutates in place), `String()`, plus `sql.Scanner`/`Valuer` using JSON for storage. JSON marshaling round-trips through `UnmarshalJSON`/`MarshalJSON`.
 
-## Bank enums
-
-`AccountType` (`CURRENT`, `SAVINGS`), `TransactionType` (`INCOMING`, `OUTGOING`), `PaymentStatus`. Each implements `sql.Scanner`/`driver.Valuer` with empty-string-as-NULL semantics for the SQL-facing types.
-
 ## CAMT.053 — ISO 20022 statements
 
 ```go

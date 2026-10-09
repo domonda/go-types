@@ -40,6 +40,10 @@ picking the semver baseline.
 
 ### Changed
 
+- `types.ValidatErrs.Validate` and so `types.CombinedValidatErr` validate
+  every element and return all their errors joined with `errors.Join`,
+  instead of stopping at the first error and returning it. A single error is
+  now wrapped by the join as well, so compare with `errors.Is` instead of `==`.
 - **Breaking:** the `money` currency constants (`EUR`, `USD`, …) are typed
   `Currency` instead of untyped strings, so go-enum can collect them.
   Assigning one to a `string` or `NullableCurrency` now needs a conversion:
@@ -110,8 +114,8 @@ picking the semver baseline.
 
 - **Breaking:** `types.ErrInvalidValue`. `types.Validate`, `TryValidate`,
   `DeepValidate` and `ValidatorAsValidatErr.Validate` return an error naming
-  the type for a `Validator` whose `Valid()` is false, like
-  `invalid language.Code value`, instead of the bare `invalid value`.
+  the type and value for a `Validator` whose `Valid()` is false, like
+  `invalid main.Status value: "unknown"`, instead of the bare `invalid value`.
   Any non-nil error means the value is invalid. The error of a `ValidatErr`
   is still returned unchanged; it never wrapped `ErrInvalidValue`, so
   `errors.Is(err, ErrInvalidValue)` was never a reliable invalidity check.
@@ -132,12 +136,41 @@ picking the semver baseline.
   `email.AddressSet` keeps its nil-safe pointer-receiver `Add` and `AddSet`;
   only its `DeleteSlice` and `DeleteSet` are removed.
 
+- **Breaking:** `bank.AccountType`, `bank.TransactionType` and
+  `bank.PaymentStatus`, along with `AccountType`'s `Valid`, `Scan` and `Value`
+  methods. The three types had no callers in this module, and only
+  `AccountType` carried any behaviour at all: `TransactionType` and
+  `PaymentStatus` declared their constants and nothing else, so neither could
+  round-trip through SQL. Declare the enum you need in the consuming service,
+  or ask for them back as generated `//#enum` types.
+
 - **Breaking:** `money.BTC` and the `₿` symbol mapping. Bitcoin is not an
   ISO 4217 currency, and the constant was never valid: `Valid()` resolves
   through `currencyCodeToName`, which has had no `BTC` entry since the initial
   commit, so `money.BTC.Valid()` always returned `false`. The symbol was the
   only input that reached it, which made `Currency("₿").Valid()` true while
   `money.BTC.Valid()` was false. `Currency("₿")` no longer normalizes.
+
+### Fixed
+
+- `types.DeepValidate` never called a `Validate` or `Valid` method with a
+  pointer receiver for a non-pointer value, so a `types.LenString` struct
+  field was never validated. Such values are now validated through a pointer
+  to them, or to a copy if they are not addressable, like map values.
+- `types.DeepValidate` skipped the exported fields of an unexported embedded
+  struct, although they are promoted to the embedding struct.
+- `types.DeepValidate` recursed until the stack overflowed on cyclic data,
+  crashing the process. A pointer, map, or slice that is already being
+  descended into higher up on the path is now not descended into again.
+  Data shared by multiple paths without a cycle is still validated under
+  each path.
+- `types.DeepValidate` panicked for a nil func whose type implements
+  `Validator` or `ValidatErr`, like a nil `types.ValidatorFunc` field.
+  A nil func is now skipped like a nil pointer.
+- `types.CompareReflectValue` returned 0 for interface values with different
+  dynamic types, so `DeepValidate` returned the errors of a `map[any]T` with
+  keys of mixed types in a random order. Such values are now ordered by type
+  name. Channels are now ordered by address as documented.
 
 ## 2026-09-02
 
