@@ -21,7 +21,8 @@ import (
 //   - array and slice (compared lexicographically by element, shorter first on tie;
 //     []byte uses [bytes.Compare])
 //   - struct (compared lexicographically by field)
-//   - interface (compared by dynamic type name, then by underlying value)
+//   - interface (nil first, then compared by dynamic type name,
+//     then by underlying value)
 //
 // This is used for sorting map keys in DeepValidate.
 func CompareReflectValue(a, b reflect.Value) int {
@@ -60,7 +61,7 @@ func CompareReflectValue(a, b reflect.Value) int {
 		}
 		return cmp.Compare(imag(ac), imag(bc))
 
-	case reflect.Pointer, reflect.UnsafePointer:
+	case reflect.Pointer, reflect.UnsafePointer, reflect.Chan:
 		return cmp.Compare(a.Pointer(), b.Pointer())
 
 	case reflect.Array:
@@ -103,7 +104,17 @@ func CompareReflectValue(a, b reflect.Value) int {
 				return 1
 			}
 		}
-		return CompareReflectValue(a.Elem(), b.Elem())
+		ae, be := a.Elem(), b.Elem()
+		if at, bt := ae.Type(), be.Type(); at != bt {
+			if c := cmp.Compare(at.String(), bt.String()); c != 0 {
+				return c
+			}
+			// Different types with the same name, like *template.Template
+			// of text/template and html/template, are ordered by the address
+			// of their type descriptors, which is fixed for a binary
+			return cmp.Compare(reflect.ValueOf(at).Pointer(), reflect.ValueOf(bt).Pointer())
+		}
+		return CompareReflectValue(ae, be)
 
 	default:
 		return 0

@@ -2,8 +2,10 @@ package types
 
 import (
 	"fmt"
+	htemplate "html/template"
 	"reflect"
 	"testing"
+	ttemplate "text/template"
 )
 
 func TestCompareReflectValue(t *testing.T) {
@@ -57,5 +59,63 @@ func TestCompareReflectValue(t *testing.T) {
 				t.Errorf("CompareReflectValue(%#v, %#v) = %d, want %d", tt.a, tt.b, got, tt.want)
 			}
 		})
+	}
+}
+
+// TestCompareReflectValue_Interface checks that interface values are totally
+// ordered even when their dynamic types differ. DeepValidate sorts the keys
+// of a map[any]T with CompareReflectValue, and returning 0 for differently
+// typed keys made the sort order, and so the order of the returned errors,
+// depend on the random map iteration order.
+func TestCompareReflectValue_Interface(t *testing.T) {
+	// iface returns v as a reflect.Value of kind Interface,
+	// like the keys of a map[any]T
+	iface := func(v any) reflect.Value { return reflect.ValueOf(&v).Elem() }
+
+	tests := []struct {
+		name string
+		a, b reflect.Value
+		want int
+	}{
+		{"nil before non-nil", iface(nil), iface(1), -1},
+		{"nil equals nil", iface(nil), iface(nil), 0},
+		{"non-nil after nil", iface(1), iface(nil), +1},
+		{"same dynamic type by value", iface(1), iface(2), -1},
+		{"same dynamic type equal", iface("a"), iface("a"), 0},
+		{"different dynamic types by type name", iface(2), iface("1"), -1}, // "int" < "string"
+		{"different dynamic types by type name reversed", iface("1"), iface(2), +1},
+		{"different dynamic types are never equal", iface(int32(1)), iface(int64(1)), -1},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := CompareReflectValue(tt.a, tt.b); got != tt.want {
+				t.Errorf("CompareReflectValue(%#v, %#v) = %d, want %d", tt.a, tt.b, got, tt.want)
+			}
+		})
+	}
+
+	t.Run("different types with the same name", func(t *testing.T) {
+		a := iface((*ttemplate.Template)(nil))
+		b := iface((*htemplate.Template)(nil))
+		if a.Elem().Type().String() != b.Elem().Type().String() {
+			t.Fatalf("test needs types with the same name, got %s and %s", a.Elem().Type(), b.Elem().Type())
+		}
+		ab, ba := CompareReflectValue(a, b), CompareReflectValue(b, a)
+		if ab == 0 || ab != -ba {
+			t.Errorf("CompareReflectValue = %d and reversed %d, want a non-zero antisymmetric order", ab, ba)
+		}
+	})
+}
+
+// TestCompareReflectValue_Chan checks that channels are ordered by address
+// as documented instead of all comparing as equal.
+func TestCompareReflectValue_Chan(t *testing.T) {
+	a, b := reflect.ValueOf(make(chan int)), reflect.ValueOf(make(chan int))
+	if got := CompareReflectValue(a, a); got != 0 {
+		t.Errorf("CompareReflectValue(a, a) = %d, want 0", got)
+	}
+	ab, ba := CompareReflectValue(a, b), CompareReflectValue(b, a)
+	if ab == 0 || ab != -ba {
+		t.Errorf("CompareReflectValue = %d and reversed %d, want a non-zero antisymmetric order", ab, ba)
 	}
 }
