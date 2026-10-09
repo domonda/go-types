@@ -5,16 +5,6 @@ Open issues and cleanup items before tagging `v1.0.0`. Grouped by what blocks a 
 ## Blockers for v1.0 (API or semantic)
 
 - [ ] **Tag `v1.0.0`.** No git tags exist yet. Pick semver baseline first.
-- [ ] **Remove `uu.IDSet.AsSortedSlice` and `uu.IDSet.AddIDs`,** both
-      deprecated in favour of `Sorted` and `InsertAll`/`UnionWith`.
-- [ ] **Remove the deprecated set methods.** `Add`, `AddSlice`, `AddSet`,
-      `DeleteSlice` and `DeleteSet` on `types.Set`, `uu.IDSet` and
-      `strutil.StringSet`, plus `DeleteSlice` and `DeleteSet` on
-      `email.AddressSet`, are kept only so consumers keep compiling against the
-      new abstract set interface. Migrating `domonda-service` first is 37
-      compiler-caught call sites: 32 `Add`→`Insert`, 4 `AddSlice`→`InsertAll`,
-      1 `AddSet`→`UnionWith`. `email.AddressSet.Add`, `AddSet`, `AddNormalized`
-      and `AddAddressPart` stay — they allocate a nil map and are not deprecated.
 
 ## After v1.0
 
@@ -29,6 +19,14 @@ Open issues and cleanup items before tagging `v1.0.0`. Grouped by what blocks a 
 
 ## Completed
 
+- [x] **Remove `uu.IDSet.AsSortedSlice` and `uu.IDSet.AddIDs`,** both
+      deprecated in favour of `Sorted` and `InsertAll`/`UnionWith`.
+      **Completed:** 2026-10-09
+- [x] **Remove the deprecated set methods.** `Add`, `AddSlice`, `AddSet`,
+      `DeleteSlice` and `DeleteSet` on `types.Set`, `uu.IDSet` and
+      `strutil.StringSet`, plus `DeleteSlice` and `DeleteSet` on
+      `email.AddressSet`.
+      **Completed:** 2026-10-09
 - [x] **No `CHANGELOG.md`.** Add one for the v1 cut.
       **Completed:** 2026-09-01 (unreleased section; no version tagged yet)
 - [x] **Require a Go version that accepts the collections proposal's
