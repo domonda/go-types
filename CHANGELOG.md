@@ -167,6 +167,11 @@ picking the semver baseline.
 - `types.DeepValidate` panicked for a nil func whose type implements
   `Validator` or `ValidatErr`, like a nil `types.ValidatorFunc` field.
   A nil func is now skipped like a nil pointer.
+- `types.DeepValidate` called the `Validate` or `Valid` method of a valid
+  value twice when reached through a pointer, once for the pointer and once
+  for the dereferenced value, repeating the side effects of stateful
+  validators. Every level of a pointer chain after the first one implementing
+  `ValidatErr` or `Validator` is now skipped, not only after an error.
 - `types.CompareReflectValue` returned 0 for interface values with different
   dynamic types, so `DeepValidate` returned the errors of a `map[any]T` with
   keys of mixed types in a random order. Such values are now ordered by type

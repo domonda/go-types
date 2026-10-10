@@ -254,8 +254,9 @@ func deepValidate(v reflect.Value, visiting map[visitKey]struct{}, onError func(
 	// Try Validate at every level of the pointer chain. The method
 	// set of **T does not include T's value-receiver Validators, so calling
 	// Validate only at the outer level would miss validators reachable only
-	// after one or more dereferences. Stop at the first level that produces
-	// an error to avoid duplicate reports for the same logical value.
+	// after one or more dereferences. Stop at the first level that implements
+	// ValidatErr or Validator, because the levels below call the same
+	// methods again, which would duplicate errors and side effects.
 	// An interface is not validated itself, but its dynamic value
 	// after unwrapping it, which has the same methods.
 	validated := false
@@ -276,13 +277,14 @@ func deepValidate(v reflect.Value, visiting map[visitKey]struct{}, onError func(
 			}
 		}
 		if !validated && v.Kind() != reflect.Interface && v.CanInterface() {
-			if err := Validate(validationTarget(v)); err != nil {
+			err, isValidatable := TryValidate(validationTarget(v))
+			if err != nil {
 				if len(path) > 0 {
 					err = fmt.Errorf("%s: %w", strings.Join(path, " -> "), err)
 				}
 				onError(err)
-				validated = true
 			}
+			validated = isValidatable
 		}
 		// Fully unwrap so the descent below sees the concrete container kind
 		if k := v.Kind(); k != reflect.Pointer && k != reflect.Interface {

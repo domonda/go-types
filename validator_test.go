@@ -1012,6 +1012,41 @@ func TestDeepValidate_PointerReceiverValidators(t *testing.T) {
 	})
 }
 
+// countingValidator counts the calls of its value receiver Valid method.
+type countingValidator struct{ calls *int }
+
+func (c countingValidator) Valid() bool {
+	*c.calls++
+	return true
+}
+
+// countingPtrValidatErr counts the calls of its pointer receiver Validate method.
+type countingPtrValidatErr struct{ calls int }
+
+func (c *countingPtrValidatErr) Validate() error {
+	c.calls++
+	return nil
+}
+
+// TestDeepValidate_ValidValueValidatedOnce checks that a valid value reached
+// through a pointer is validated only once. The pointer type has the methods
+// of its element type, so validating again after dereferencing would call
+// the same method twice and repeat the side effects of stateful validators.
+func TestDeepValidate_ValidValueValidatedOnce(t *testing.T) {
+	var valueCalls int
+	value := countingValidator{calls: &valueCalls}
+	DeepValidate(&value)
+	if valueCalls != 1 {
+		t.Errorf("value receiver Valid called %d times, want 1", valueCalls)
+	}
+
+	var ptr countingPtrValidatErr
+	DeepValidate(&ptr)
+	if ptr.calls != 1 {
+		t.Errorf("pointer receiver Validate called %d times, want 1", ptr.calls)
+	}
+}
+
 // TestDeepValidate_PointerReceiverDoesNotModifyMapValue checks that
 // validating a map value through a pointer to a copy can't write to the map,
 // which a pointer receiver Validate that normalizes in place would otherwise do.
