@@ -23,6 +23,19 @@ func waitOrFail(t *testing.T, done <-chan struct{}, msg string) {
 	}
 }
 
+// pollOrFail yields until cond returns true,
+// or fails the test with msg after deadlockGuard.
+func pollOrFail(t *testing.T, cond func() bool, msg string) {
+	t.Helper()
+	deadline := time.Now().Add(deadlockGuard)
+	for !cond() {
+		if time.Now().After(deadline) {
+			t.Fatal(msg)
+		}
+		runtime.Gosched()
+	}
+}
+
 // keyLockCount returns the number of goroutines holding or waiting
 // for the lock of key, read under the global mutex.
 func keyLockCount[T comparable](m *KeyMutex[T], key T) int {
@@ -99,10 +112,8 @@ func TestKeyMutex_SameKeyBlocks(t *testing.T) {
 		m.Unlock("a")
 	}()
 
-	// Wait until the goroutine registered itself as waiter for "a".
-	for keyLockCount(m, "a") != 2 {
-		runtime.Gosched()
-	}
+	pollOrFail(t, func() bool { return keyLockCount(m, "a") == 2 },
+		"second Lock of the same key did not register as waiter")
 	select {
 	case <-acquired:
 		t.Fatal("second Lock of the same key acquired it while the first holder still held it")
@@ -116,9 +127,8 @@ func TestKeyMutex_SameKeyBlocks(t *testing.T) {
 	}
 
 	close(released)
-	for m.IsLocked("a") {
-		runtime.Gosched()
-	}
+	pollOrFail(t, func() bool { return !m.IsLocked("a") },
+		"key still locked after the last holder unlocked it")
 }
 
 // TestKeyMutex_DifferentKeysDoNotBlock checks the point of a per-key mutex:

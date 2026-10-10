@@ -59,7 +59,7 @@ func equalInclNaN(a, b float64) bool {
 // escaped characters inside the string must be decoded before parsing.
 func TestTolerant_UnmarshalJSON_escapedString(t *testing.T) {
 	var f Tolerant
-	err := f.UnmarshalJSON([]byte(`"1,5"`)) // "1,5" with an escaped comma
+	err := f.UnmarshalJSON([]byte(`"1\u002c5"`)) // "1,5" with an escaped comma
 	if err != nil {
 		t.Fatalf("UnmarshalJSON returned error: %v", err)
 	}
