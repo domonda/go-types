@@ -21,8 +21,8 @@ import (
 // 128 bits set to zero: "00000000-0000-0000-0000-000000000000"
 var IDNil ID
 
-// ID is a UUID representation compliant with specification
-// described in RFC 4122.
+// ID is a UUID representation compliant with the specification
+// described in RFC 9562, which obsoletes RFC 4122.
 type ID [16]byte
 
 // IDv1 returns a version 1 ID based on current timestamp and MAC address.

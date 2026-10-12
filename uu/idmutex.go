@@ -101,7 +101,10 @@ func (m *IDMutex) onUnlockCallback(id ID) {
 	m.onUnlock(id)
 }
 
-// IsLocked tells wether an ID is locked.
+// IsLocked tells whether an ID is locked
+// or a Lock call for it is waiting.
+// The result is only a snapshot that can change
+// as soon as IsLocked returns.
 func (m *IDMutex) IsLocked(id ID) bool {
 	m.global.Lock()
 	_, locked := m.locks[id]

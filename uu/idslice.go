@@ -14,8 +14,8 @@ import (
 
 // IDSlice is a slice of uu.IDs.
 // It is a []ID underneath.
-// Implements the database/sql.Scanner and database/sql/driver.Valuer interfaces.
-// Implements the encoding/json.Marshaler and Unmarshaler interfaces.
+// Implements the database/sql.Scanner and database/sql/driver.Valuer interfaces
+// and the encoding/json.Marshaler and Unmarshaler interfaces
 // with the nil slice value used as SQL NULL and JSON null.
 //
 // Value and Scan use the PostgreSQL array text format ({"id1","id2"}),

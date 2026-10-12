@@ -156,7 +156,8 @@ func (s IDSet) ForEach(callback func(ID) error) error {
 	return nil
 }
 
-// Sorted returns the IDs of the set as a sorted IDSlice.
+// Sorted returns the IDs of the set as an IDSlice sorted by [ID.Less],
+// or nil if the set is empty.
 // The other set types of this module call this method Sorted too.
 func (s IDSet) Sorted() IDSlice {
 	sl := s.AsSlice()
@@ -333,8 +334,9 @@ func (s *IDSet) UnmarshalText(text []byte) error {
 
 // Scan implements the database/sql.Scanner interface
 // with the nil map value used as SQL NULL.
-// Id does assign a new IDSet to *set instead of modifying the existing map,
-// so it can be used with uninitialized IDSet variable.
+// It assigns a new IDSet to *s instead of modifying the existing map,
+// so it can be used with an uninitialized IDSet variable.
+// An empty string scans as an empty non-nil set.
 func (s *IDSet) Scan(value any) error {
 	if value == nil {
 		*s = nil

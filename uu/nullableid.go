@@ -13,7 +13,7 @@ import (
 	"github.com/domonda/go-types/nullable"
 )
 
-// IDNull is a zero UUID and will be treatet as SQL NULL.
+// IDNull is a zero UUID and will be treated as SQL NULL and JSON null.
 var IDNull NullableID
 
 // NullableID is a UUID where the Nil UUID "00000000-0000-0000-0000-000000000000"

@@ -79,7 +79,9 @@ func ContextWithIDSequence(ctx context.Context, key any, ids ...ID) context.Cont
 }
 
 // IDFuncFromContext returns the ID generating function from the context
-// added with ContextWithIDFunc.
+// added with ContextWithIDFunc without keys for the default key used by
+// [NewID], or nil if there is none.
+// Functions added for other keys are not returned.
 func IDFuncFromContext(ctx context.Context) func() ID {
 	if f, ok := ctx.Value(&newIDFuncCtxKey).(func() ID); ok {
 		return f
