@@ -372,3 +372,28 @@ func TestFormatValueStringerThroughPointers(t *testing.T) {
 	s := &valueStringer{Text: "text"}
 	assert.Equal(t, "from String: text", Format(&s, config))
 }
+
+// TestFormatValueNullableType checks that a non-null nullable.Type[T] without
+// a registered formatter is formatted like the T it wraps, with the locale of
+// the config, and null as config.Nil. nullable.Type has no String or
+// MarshalText method, so it fell back to fmt.Sprint and a spreadsheet cell
+// got the struct internals "{1234 true}" instead of the number, which can't
+// be read or scanned back.
+func TestFormatValueNullableType(t *testing.T) {
+	for _, config := range []*FormatConfig{NewGermanFormatConfig(), NewEnglishFormatConfig()} {
+		config.Nil = "N/A"
+
+		n := nullable.TypeFrom(1234)
+		assert.Equal(t, "1234", Format(n, config), "nullable.Type[int]")
+		assert.Equal(t, "1234", Format(&n, config), "*nullable.Type[int]")
+		assert.Equal(t, "text", Format(nullable.TypeFrom("text"), config), "nullable.Type[string]")
+		assert.Equal(t, config.True, Format(nullable.TypeFrom(true), config), "nullable.Type[bool]")
+		assert.Equal(t, Format(1234.5, config), Format(nullable.TypeFrom(1234.5), config), "nullable.Type[float64]")
+		assert.Equal(t, Format(money.Rate(0.19), config), Format(money.NullableRate(nullable.TypeFrom(money.Rate(0.19))), config), "money.NullableRate")
+		someDate := date.Date("2024-03-05")
+		assert.Equal(t, Format(someDate, config), Format(nullable.TypeFrom(someDate), config), "nullable.Type[date.Date]")
+
+		assert.Equal(t, "N/A", Format(nullable.Type[int]{}, config), "null nullable.Type[int]")
+		assert.Equal(t, "N/A", Format(money.NullableRate{}, config), "null money.NullableRate")
+	}
+}

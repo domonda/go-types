@@ -131,7 +131,8 @@ func FormatValue(val reflect.Value, config *FormatConfig) string
    - `float32`, `float64`: `float.Format` with `config.Float`, a `float32` with 32-bit precision,
    - signed and unsigned integers: base 10 without grouping.
 7. `fmt.Stringer` of the value, its address, or the dereferenced value.
-8. A `[]byte` as string, everything else with `fmt.Sprint`.
+8. A `nullable.Type[T]`, or another type whose pointer has the methods of `nullable.NullSetable[T]`, as the value of its `Get` method formatted with these steps: `nullable.TypeFrom(1234)` is `1234`, `money.NullableRate` like `money.Rate`.
+9. A `[]byte` as string, everything else with `fmt.Sprint`.
 
 ## FormatConfig
 
@@ -227,7 +228,6 @@ What the presets write, and whether `Scan` with the default `ScanConfig` reads i
 - **Registered formatters run before the null check.** A zero `money.Amount` formats as `0.00`, not as `config.Nil`, and an empty `date.Date` or null `date.NullableDate` formats as `""` even if `config.Nil` is `"-"`.
 - **Kinds win over `String` methods.** A type with a `string` or number kind and no registered formatter is formatted by its kind: `money.Currency("eur")` formats as `eur` although its `String` returns `EUR`, and `money.Rate(0.19)` as `0.19`.
 - **`nullable.Type` can only scan nil strings.** It has no `ScanString` or `UnmarshalText` method, so `money.NullableAmount`, `money.NullableCentAmount`, `money.NullableDecimalAmount`, and `money.NullableRate` scan `""` as null, but `"1,5"` is the error `can't scan "1,5" as destination type nullable.Type[...]`, although the presets format them. Use a pointer field like `*money.Amount` for optional cells, or register a `Scanner`.
-- **Other nullable types fall back to `fmt.Sprint`.** `nullable.Type[money.Rate]` formats as `{0.19 true}`. Register a formatter for such types.
 - **Formatters are looked up by the dereferenced type.** A formatter registered for `*T` only runs for a nil `*T`. Register it for `T`.
 - **Don't change `DefaultScanConfig` in place.** It is shared by every caller that passes nil. Create your own with `NewScanConfig`.
 - **Zero value configs.** `FormatConfig{}` has `Float.DecimalSep` 0, so formatting a float panics in `float.Format`, and it writes `""` for both bools. `ScanConfig{}` has no nil, true, or false strings. Start from the constructors.
