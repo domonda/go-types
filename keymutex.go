@@ -25,9 +25,14 @@ func NewKeyMutex[T comparable]() *KeyMutex[T] {
 	return &KeyMutex[T]{locks: make(map[T]*countedLock)}
 }
 
-// Lock the mutex for a given key
+// Lock the mutex for a given key.
+// The zero value of KeyMutex is usable,
+// it is initialized by the first Lock call.
 func (m *KeyMutex[T]) Lock(key T) {
 	m.global.Lock()
+	if m.locks == nil {
+		m.locks = make(map[T]*countedLock)
+	}
 	lock := m.locks[key]
 	if lock == nil {
 		lock = new(countedLock)

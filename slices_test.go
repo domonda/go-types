@@ -5,6 +5,8 @@ import "testing"
 // TestSliceContainsAll checks the subset semantics of SliceContainsAll:
 // the order of elements doesn't matter and an empty inner list is
 // vacuously contained in any slice, including a nil one.
+// Duplicates in inner are searched values, not a count of required
+// occurrences, so inner can be longer than outer and still be contained.
 func TestSliceContainsAll(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -17,6 +19,9 @@ func TestSliceContainsAll(t *testing.T) {
 		{name: "one missing", outer: []string{"a", "b", "c"}, inner: []string{"a", "x"}, want: false},
 		{name: "none present", outer: []string{"a", "b"}, inner: []string{"x"}, want: false},
 		{name: "outer shorter than inner", outer: []string{"a"}, inner: []string{"a", "b"}, want: false},
+		{name: "duplicate search value", outer: []string{"a"}, inner: []string{"a", "a"}, want: true},
+		{name: "duplicates longer than outer", outer: []string{"a", "b"}, inner: []string{"b", "a", "b"}, want: true},
+		{name: "duplicates with one missing", outer: []string{"a"}, inner: []string{"a", "a", "x"}, want: false},
 		{name: "empty inner", outer: []string{"a"}, inner: nil, want: true},
 		{name: "nil outer and empty inner", outer: nil, inner: nil, want: true},
 		{name: "nil outer", outer: nil, inner: []string{"a"}, want: false},

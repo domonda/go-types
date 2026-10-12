@@ -67,6 +67,47 @@ func TestKeyMutex_IsLocked(t *testing.T) {
 	}
 }
 
+// TestKeyMutex_ZeroValue checks that the zero value is usable without
+// NewKeyMutex, like a sync.Mutex, so a KeyMutex can be declared as a
+// struct field or variable. Unlocking a not locked key must still panic
+// with the documented message instead of a nil map error.
+// The first Lock calls can race to initialize the zero value,
+// run with -race to verify that this is synchronized.
+func TestKeyMutex_ZeroValue(t *testing.T) {
+	var s struct{ m KeyMutex[string] }
+	if s.m.IsLocked("a") {
+		t.Error("IsLocked() of zero value = true, want false")
+	}
+	s.m.Lock("a")
+	if !s.m.IsLocked("a") {
+		t.Error("IsLocked() of locked key = false, want true")
+	}
+	s.m.Unlock("a")
+	if s.m.IsLocked("a") {
+		t.Error("IsLocked() after Unlock = true, want false")
+	}
+
+	func() {
+		var m KeyMutex[string]
+		defer func() {
+			if msg, _ := recover().(string); !strings.Contains(msg, "called for non locked key") {
+				t.Errorf("Unlock of zero value panic = %q, want the non locked key panic", msg)
+			}
+		}()
+		m.Unlock("a")
+	}()
+
+	var m KeyMutex[int]
+	var wg sync.WaitGroup
+	for i := range 8 {
+		wg.Go(func() {
+			m.Lock(i)
+			m.Unlock(i)
+		})
+	}
+	wg.Wait()
+}
+
 // TestKeyMutex_UnlockNotLockedPanics checks that unlocking a key that is not
 // locked panics like sync.Mutex does, instead of silently corrupting state,
 // and that the panic message names the key for debugging.

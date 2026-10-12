@@ -752,7 +752,37 @@ var validateTestCases = []struct {
 	// next to a strict Valid without types.Validate rejecting its values.
 	{name: "ValidatErr takes precedence over valid=false Validator", value: strictValidLenientValidate(1), wantIsValidatable: true},
 	{name: "ValidatErr error takes precedence over Validator error", value: strictValidLenientValidate(-1), wantErr: "negative number", wantUnchanged: errNegative, wantIsValidatable: true},
+	// A nil pointer has no value that a value receiver method could be
+	// called on, Go panics with a nil pointer dereference instead.
+	// Like DeepValidate skips nil pointers, the absent value is not
+	// validated, but its type implements the interface so it is validatable.
+	{name: "nil pointer to value receiver Validator is not validated", value: (*invalidString)(nil), wantIsValidatable: true},
+	{name: "nil pointer to value receiver ValidatErr is not validated", value: (*signedInt)(nil), wantIsValidatable: true},
+	{name: "nil pointer to value receiver ValidatErr and Validator is not validated", value: (*strictValidLenientValidate)(nil), wantIsValidatable: true},
+	// A pointer receiver method can handle nil itself, so it is still called
+	{name: "nil pointer receiver ValidatErr is called with nil", value: (*nilCheckingValidatErr)(nil), wantErr: "nil pointer", wantUnchanged: errNilPointer, wantIsValidatable: true},
+	{name: "nil pointer receiver Validator is called with nil", value: (*nilCheckingValidator)(nil), wantErr: "invalid *types.nilCheckingValidator value: (*types.nilCheckingValidator)(nil)", wantIsValidatable: true},
 }
+
+// errNilPointer is the specific error of nilCheckingValidatErr.Validate.
+var errNilPointer = errors.New("nil pointer")
+
+// nilCheckingValidatErr implements ValidatErr with a pointer receiver
+// that handles being called with a nil pointer.
+type nilCheckingValidatErr struct{}
+
+func (p *nilCheckingValidatErr) Validate() error {
+	if p == nil {
+		return errNilPointer
+	}
+	return nil
+}
+
+// nilCheckingValidator implements Validator with a pointer receiver
+// that reports a nil pointer as invalid.
+type nilCheckingValidator struct{}
+
+func (p *nilCheckingValidator) Valid() bool { return p != nil }
 
 // errString returns the message of err or an empty string for nil.
 func errString(err error) string {

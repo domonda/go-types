@@ -137,11 +137,21 @@ func (v ValidatorAsValidatErr) Validate() error {
 // like `invalid main.Status value: "unknown"`.
 // Any non-nil error means v is invalid.
 // If v does not implement ValidatErr or Validator then nil will be returned.
+// If v is a nil pointer to a type implementing the method with a value
+// receiver, which can't be called without a value, then nil is returned,
+// like [DeepValidate] skips nil pointers. A method with a pointer receiver
+// is called with the nil pointer, so it can handle nil itself.
 func Validate(v any) error {
 	switch x := v.(type) {
 	case ValidatErr:
+		if isNilPointerWithValueMethod(v, validatErrType) {
+			return nil
+		}
 		return x.Validate()
 	case Validator:
+		if isNilPointerWithValueMethod(v, validatorType) {
+			return nil
+		}
 		if !x.Valid() {
 			return fmt.Errorf("invalid %T value: %#v", v, v)
 		}
@@ -160,12 +170,22 @@ func Validate(v any) error {
 // Any non-nil error means v is invalid.
 // If v does not implement ValidatErr or Validator then nil and false
 // will be returned.
+// If v is a nil pointer to a type implementing the method with a value
+// receiver, which can't be called without a value, then nil and true are
+// returned, like [DeepValidate] skips nil pointers. A method with a pointer
+// receiver is called with the nil pointer, so it can handle nil itself.
 // The boolean return value indicates whether the value was validatable.
 func TryValidate(v any) (err error, isValidatable bool) {
 	switch x := v.(type) {
 	case ValidatErr:
+		if isNilPointerWithValueMethod(v, validatErrType) {
+			return nil, true
+		}
 		return x.Validate(), true
 	case Validator:
+		if isNilPointerWithValueMethod(v, validatorType) {
+			return nil, true
+		}
 		if !x.Valid() {
 			return fmt.Errorf("invalid %T value: %#v", v, v), true
 		}
@@ -173,6 +193,15 @@ func TryValidate(v any) (err error, isValidatable bool) {
 	default:
 		return nil, false
 	}
+}
+
+// isNilPointerWithValueMethod reports if v is a nil pointer that has the
+// method of the interface type iface only because its element type
+// implements iface with a value receiver. Calling that method would
+// dereference the nil pointer and panic.
+func isNilPointerWithValueMethod(v any, iface reflect.Type) bool {
+	val := reflect.ValueOf(v)
+	return val.Kind() == reflect.Pointer && val.IsNil() && val.Type().Elem().Implements(iface)
 }
 
 // DeepValidate recursively validates v and everything reachable from it,

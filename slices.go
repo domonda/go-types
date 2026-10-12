@@ -3,12 +3,10 @@ package types
 import "slices"
 
 // SliceContainsAll returns true if outer contains all elements of inner.
-// It returns false if outer has fewer elements than inner or if any element
-// in inner is not found in outer.
+// It returns false if any element in inner is not found in outer.
+// Duplicate elements in inner don't have to occur multiple times in outer,
+// so inner can have more elements than outer.
 func SliceContainsAll[T comparable](outer []T, inner ...T) bool {
-	if len(outer) < len(inner) {
-		return false
-	}
 	for _, innerElem := range inner {
 		if !slices.Contains(outer, innerElem) {
 			return false
