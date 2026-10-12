@@ -1067,24 +1067,83 @@ func TestDecimalAmount_AmountInterop(t *testing.T) {
 func TestDecimalAmount_RateInterop(t *testing.T) {
 	price := NewDecimalAmount(10000, 2) // 100.00
 
-	// The result is the shortest decimal that round-trips the float64
-	// product exactly; round to the final precision explicitly at the end.
+	// The result is the exact product with the shortest decimal of the rate,
+	// without trailing zeros; round to the final precision explicitly at the end.
 	product := price.MultipliedByRate(Rate(1.19))
+	assert.Equal(t, "119", product.String())
 	assert.Equal(t, "119.00", product.RoundToCents(RoundHalfAwayFromZero).String())
-	// A float64 product carrying binary noise keeps that noise until rounded:
-	// 0.10 * 3 in float64 is 0.30000000000000004.
-	noisy := NewDecimalAmount(10, 2).MultipliedByRate(Rate(3))
-	assert.Equal(t, "0.30000000000000004", noisy.String())
-	assert.Equal(t, "0.30", noisy.RoundToCents(RoundHalfAwayFromZero).String())
+	// No float64 binary noise: 0.10 * 3 in float64 is 0.30000000000000004,
+	// the exact product is 0.3.
+	exact := NewDecimalAmount(10, 2).MultipliedByRate(Rate(3))
+	assert.Equal(t, "0.3", exact.String())
+	assert.Equal(t, "0.30", exact.RoundToCents(RoundHalfAwayFromZero).String())
 	// Reverse: 119.00 / 1.19 -> 100.00 after rounding to cents.
 	assert.Equal(t, "100.00", NewDecimalAmount(11900, 2).DividedByRate(Rate(1.19)).RoundToCents(RoundHalfAwayFromZero).String())
-	// 19% of 100.00 -> 19.00 (exact in float64, shortest representation "19").
+	// 19% of 100.00 -> 19.00 (shortest representation "19").
 	assert.Equal(t, "19.00", price.Percentage(19).RoundToCents(RoundHalfAwayFromZero).String())
-	// An exact float64 product converts without any rounding needed.
+	// An exact product has no trailing zeros.
 	assert.Equal(t, "250", price.MultipliedByRate(Rate(2.5)).String())
 
 	// Dividing by a zero rate yields +Inf instead of panicking.
 	assert.True(t, price.DividedByRate(Rate(0)).IsInf(1))
+}
+
+// TestDecimalAmount_rateMethodsRoundShortestDecimal protects the rounding
+// convention of the module, that a float is rounded by its shortest decimal
+// representation half away from zero, for the float rate methods of the
+// exact DecimalAmount. They computed a float64 product, so 3.00 * 0.145 was
+// 0.43499999999999994 and rounded to 0.43 cents instead of the 0.44 of the
+// exact 0.435, unlike CentAmount(300).MultipliedByRate(0.145). The rate is
+// taken as its shortest decimal and the result is computed exactly.
+func TestDecimalAmount_rateMethodsRoundShortestDecimal(t *testing.T) {
+	tests := []struct {
+		name      string
+		got       DecimalAmount
+		want      string
+		wantCents string
+	}{
+		{name: "3.00 * 0.145", got: NewDecimalAmount(300, 2).MultipliedByRate(0.145), want: "0.435", wantCents: "0.44"},
+		{name: "-3.00 * 0.145", got: NewDecimalAmount(-300, 2).MultipliedByRate(0.145), want: "-0.435", wantCents: "-0.44"},
+		{name: "100 * 0.00145", got: NewDecimalAmount(100, 0).MultipliedByRate(0.00145), want: "0.145", wantCents: "0.15"},
+		{name: "0.10 * 3", got: NewDecimalAmount(10, 2).MultipliedByRate(3), want: "0.3", wantCents: "0.30"},
+		{name: "100.00 * 2.5", got: NewDecimalAmount(10000, 2).MultipliedByRate(2.5), want: "250", wantCents: "250.00"},
+		{name: "0.17 / 0.272", got: NewDecimalAmount(17, 2).DividedByRate(0.272), want: "0.625", wantCents: "0.63"},
+		{name: "1 / 3 at the largest scale that fits", got: NewDecimalAmount(1, 0).DividedByRate(3), want: "0.33333333333333333", wantCents: "0.33"},
+		{name: "25.00 * 1.14%", got: NewDecimalAmount(2500, 2).Percentage(1.14), want: "0.285", wantCents: "0.29"},
+		{name: "1.00 * 14.5%", got: NewDecimalAmount(100, 2).Percentage(14.5), want: "0.145", wantCents: "0.15"},
+	}
+	for _, tt := range tests {
+		assert.Equal(t, tt.want, tt.got.String(), tt.name)
+		assert.Equal(t, tt.wantCents, tt.got.RoundToCents(RoundHalfAwayFromZero).String(), tt.name+" rounded to cents")
+	}
+
+	// A rate without an exact DecimalAmount still yields the float64 product
+	assert.True(t, NewDecimalAmount(1, 0).MultipliedByRate(1e-20).IsZero(), "a rate beyond the scale")
+	assert.True(t, NewDecimalAmount(1, 18).MultipliedByRate(1e18).Equal(NewDecimalAmount(1, 0)), "a rate beyond the coefficient range")
+
+	// Rounded to cents the DecimalAmount and the CentAmount methods agree
+	for _, cents := range []int64{100, 300, -300, 17, 2500, 1250} {
+		d := NewDecimalAmount(cents, 2)
+		for _, rate := range []Rate{0.145, 0.272, 0.0114, 1.19} {
+			want := CentAmount(cents).MultipliedByRate(rate)
+			got, err := d.MultipliedByRate(rate).CentAmount(RoundHalfAwayFromZero)
+			if assert.NoError(t, err) {
+				assert.Equal(t, want, got, "%v.MultipliedByRate(%v)", d, rate)
+			}
+			want = CentAmount(cents).DividedByRate(rate)
+			got, err = d.DividedByRate(rate).CentAmount(RoundHalfAwayFromZero)
+			if assert.NoError(t, err) {
+				assert.Equal(t, want, got, "%v.DividedByRate(%v)", d, rate)
+			}
+		}
+		for _, percent := range []float64{14.5, 27.2, 1.14, 119} {
+			want := CentAmount(cents).Percentage(percent)
+			got, err := d.Percentage(percent).CentAmount(RoundHalfAwayFromZero)
+			if assert.NoError(t, err) {
+				assert.Equal(t, want, got, "%v.Percentage(%v)", d, percent)
+			}
+		}
+	}
 }
 
 func TestDecimalAmount_CentAmount(t *testing.T) {

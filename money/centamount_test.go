@@ -351,6 +351,54 @@ func TestCentAmount_rateMethods(t *testing.T) {
 	assert.Equal(t, CentAmount(0), CentAmount(1).MultipliedByRate(Rate(math.NaN())))
 }
 
+// TestCentAmount_rateMethodsRoundShortestDecimal protects the rounding
+// convention of the module, that a float is rounded by its shortest decimal
+// representation half away from zero, for the CentAmount rate methods.
+// They rounded the binary float64 result instead, so a tie like the 14.5
+// cents of CentAmount(100).MultipliedByRate(0.145), whose float64 product is
+// 14.499999999999998, was rounded down to 14, while Percentage(14.5) and
+// Amount(1).MultipliedByRate(0.145).CentAmount gave 15 for the same price.
+// The rate is taken as its shortest decimal, 0.145 and not
+// 0.14499999999999999, and the result is rounded exactly once.
+func TestCentAmount_rateMethodsRoundShortestDecimal(t *testing.T) {
+	tests := []struct {
+		name string
+		got  CentAmount
+		want CentAmount
+	}{
+		{name: "100 * 0.145 = 14.5", got: CentAmount(100).MultipliedByRate(0.145), want: 15},
+		{name: "-100 * 0.145 = -14.5", got: CentAmount(-100).MultipliedByRate(0.145), want: -15},
+		{name: "300 * 0.145 = 43.5", got: CentAmount(300).MultipliedByRate(0.145), want: 44},
+		{name: "10000 * 0.00145 = 14.5", got: CentAmount(10000).MultipliedByRate(0.00145), want: 15},
+		{name: "1 * 0.5 = 0.5", got: CentAmount(1).MultipliedByRate(0.5), want: 1},
+		{name: "-1 * 0.5 = -0.5", got: CentAmount(-1).MultipliedByRate(0.5), want: -1},
+		{name: "700 * 0.0035 = 2.45", got: CentAmount(700).MultipliedByRate(0.0035), want: 2},
+		{name: "17 / 0.272 = 62.5", got: CentAmount(17).DividedByRate(0.272), want: 63},
+		{name: "-17 / 0.272 = -62.5", got: CentAmount(-17).DividedByRate(0.272), want: -63},
+		{name: "1 / 3 = 0.333", got: CentAmount(1).DividedByRate(3), want: 0},
+		{name: "2 / 3 = 0.667", got: CentAmount(2).DividedByRate(3), want: 1},
+		{name: "100 * 14.5% = 14.5", got: CentAmount(100).Percentage(14.5), want: 15},
+		{name: "2500 * 1.14% = 28.5", got: CentAmount(2500).Percentage(1.14), want: 29},
+		{name: "-2500 * 1.14% = -28.5", got: CentAmount(-2500).Percentage(1.14), want: -29},
+		{name: "1250 * 2.28% = 28.5", got: CentAmount(1250).Percentage(2.28), want: 29},
+		{name: "like Amount", got: CentAmount(100).MultipliedByRate(0.145), want: Amount(1).MultipliedByRate(0.145).CentAmount(RoundHalfAwayFromZero)},
+		{name: "like Percentage", got: CentAmount(100).MultipliedByRate(0.145), want: CentAmount(100).Percentage(14.5)},
+		{name: "MaxCentAmount * 2 clamps", got: MaxCentAmount.MultipliedByRate(2), want: MaxCentAmount},
+		{name: "MinCentAmount * 2 clamps", got: MinCentAmount.MultipliedByRate(2), want: MinCentAmount},
+		{name: "MaxCentAmount * -1", got: MaxCentAmount.MultipliedByRate(-1), want: -MaxCentAmount},
+		{name: "1 * 1e300 clamps", got: CentAmount(1).MultipliedByRate(1e300), want: MaxCentAmount},
+		{name: "1 * +Inf clamps", got: CentAmount(1).MultipliedByRate(Rate(math.Inf(1))), want: MaxCentAmount},
+		{name: "0 * +Inf is NaN", got: CentAmount(0).MultipliedByRate(Rate(math.Inf(1))), want: 0},
+		{name: "1 / +Inf", got: CentAmount(1).DividedByRate(Rate(math.Inf(1))), want: 0},
+		{name: "0 / 0 is NaN", got: CentAmount(0).DividedByRate(0), want: 0},
+		{name: "-1 / -0", got: CentAmount(-1).DividedByRate(Rate(math.Copysign(0, -1))), want: MaxCentAmount},
+		{name: "1 * NaN%", got: CentAmount(1).Percentage(math.NaN()), want: 0},
+	}
+	for _, tt := range tests {
+		assert.Equal(t, tt.want, tt.got, tt.name)
+	}
+}
+
 func TestCentAmount_SplitEqually(t *testing.T) {
 	type input struct {
 		amount CentAmount
