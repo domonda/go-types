@@ -312,6 +312,7 @@ const (
 	MNT Currency = "MNT" // Mongolia Tughrik
 	MOP Currency = "MOP" // Macau Pataca
 	MRO Currency = "MRO" // Mauritania Ouguiya
+	MRU Currency = "MRU" // Mauritania New Ouguiya
 	MUR Currency = "MUR" // Mauritius Rupee
 	MVR Currency = "MVR" // Maldives (Maldive Islands) Rufiyaa
 	MWK Currency = "MWK" // Malawi Kwacha
@@ -344,11 +345,14 @@ const (
 	SEK Currency = "SEK" // Sweden Krona
 	SGD Currency = "SGD" // Singapore Dollar
 	SHP Currency = "SHP" // Saint Helena Pound
+	SLE Currency = "SLE" // Sierra Leone New Leone
 	SLL Currency = "SLL" // Sierra Leone Leone
 	SOS Currency = "SOS" // Somalia Shilling
 	SPL Currency = "SPL" // Seborga Luigino
 	SRD Currency = "SRD" // Suriname Dollar
+	SSP Currency = "SSP" // South Sudan Pound
 	STD Currency = "STD" // São Tomé and Príncipe Dobra
+	STN Currency = "STN" // São Tomé and Príncipe New Dobra
 	SVC Currency = "SVC" // El Salvador Colon
 	SYP Currency = "SYP" // Syria Pound
 	SZL Currency = "SZL" // Swaziland Lilangeni
@@ -367,12 +371,15 @@ const (
 	USD Currency = "USD" // United States Dollar
 	UYU Currency = "UYU" // Uruguay Peso
 	UZS Currency = "UZS" // Uzbekistan Som
+	VED Currency = "VED" // Venezuela Bolívar Digital
 	VEF Currency = "VEF" // Venezuela Bolivar
+	VES Currency = "VES" // Venezuela Bolívar Soberano
 	VND Currency = "VND" // Viet Nam Dong
 	VUV Currency = "VUV" // Vanuatu Vatu
 	WST Currency = "WST" // Samoa Tala
 	XAF Currency = "XAF" // Communauté Financière Africaine (BEAC) CFA Franc BEAC
 	XCD Currency = "XCD" // East Caribbean Dollar
+	XCG Currency = "XCG" // Caribbean Guilder
 	XDR Currency = "XDR" // International Monetary Fund (IMF) Special Drawing Rights
 	XOF Currency = "XOF" // Communauté Financière Africaine (BCEAO) Franc
 	XPF Currency = "XPF" // Comptoirs Français du Pacifique (CFP) Franc
@@ -380,6 +387,7 @@ const (
 	ZAR Currency = "ZAR" // South Africa Rand
 	ZMW Currency = "ZMW" // Zambia Kwacha
 	ZWD Currency = "ZWD" // Zimbabwe Dollar
+	ZWG Currency = "ZWG" // Zimbabwe Gold
 )
 
 // Enums returns all valid values for Currency
@@ -479,6 +487,7 @@ func (Currency) Enums() []Currency {
 		MNT,
 		MOP,
 		MRO,
+		MRU,
 		MUR,
 		MVR,
 		MWK,
@@ -511,11 +520,14 @@ func (Currency) Enums() []Currency {
 		SEK,
 		SGD,
 		SHP,
+		SLE,
 		SLL,
 		SOS,
 		SPL,
 		SRD,
+		SSP,
 		STD,
+		STN,
 		SVC,
 		SYP,
 		SZL,
@@ -534,12 +546,15 @@ func (Currency) Enums() []Currency {
 		USD,
 		UYU,
 		UZS,
+		VED,
 		VEF,
+		VES,
 		VND,
 		VUV,
 		WST,
 		XAF,
 		XCD,
+		XCG,
 		XDR,
 		XOF,
 		XPF,
@@ -547,6 +562,7 @@ func (Currency) Enums() []Currency {
 		ZAR,
 		ZMW,
 		ZWD,
+		ZWG,
 	}
 }
 
@@ -647,6 +663,7 @@ func (Currency) EnumStrings() []string {
 		"MNT",
 		"MOP",
 		"MRO",
+		"MRU",
 		"MUR",
 		"MVR",
 		"MWK",
@@ -679,11 +696,14 @@ func (Currency) EnumStrings() []string {
 		"SEK",
 		"SGD",
 		"SHP",
+		"SLE",
 		"SLL",
 		"SOS",
 		"SPL",
 		"SRD",
+		"SSP",
 		"STD",
+		"STN",
 		"SVC",
 		"SYP",
 		"SZL",
@@ -702,12 +722,15 @@ func (Currency) EnumStrings() []string {
 		"USD",
 		"UYU",
 		"UZS",
+		"VED",
 		"VEF",
+		"VES",
 		"VND",
 		"VUV",
 		"WST",
 		"XAF",
 		"XCD",
+		"XCG",
 		"XDR",
 		"XOF",
 		"XPF",
@@ -715,5 +738,6 @@ func (Currency) EnumStrings() []string {
 		"ZAR",
 		"ZMW",
 		"ZWD",
+		"ZWG",
 	}
 }

@@ -322,3 +322,33 @@ func TestCurrency_SymbolAndEnglishName(t *testing.T) {
 		assert.Equal(t, tt.name, tt.currency.EnglishName(), "Currency(%q).EnglishName()", string(tt.currency))
 	}
 }
+
+// TestCurrency_CurrentISO4217Codes pins that the codes ISO 4217 introduced
+// for redenominations and new currencies are valid enum values with an
+// English name, because invoices in those currencies must not be rejected
+// as invalid. The withdrawn codes they replaced stay valid, because old
+// documents and stored data still carry them.
+func TestCurrency_CurrentISO4217Codes(t *testing.T) {
+	enums := Currency("").Enums()
+	current := []Currency{
+		"MRU", // Mauritania, replaced MRO in 2018
+		"SLE", // Sierra Leone, replaced SLL in 2022
+		"SSP", // South Sudan, since 2011
+		"STN", // São Tomé and Príncipe, replaced STD in 2018
+		"VED", // Venezuela digital bolívar, since 2021
+		"VES", // Venezuela, replaced VEF in 2018
+		"XCG", // Curaçao and Sint Maarten, replaced ANG in 2025
+		"ZWG", // Zimbabwe Gold, replaced ZWL in 2024
+	}
+	for _, code := range current {
+		assert.True(t, code.Valid(), "Currency(%q).Valid()", string(code))
+		assert.True(t, code.ValidAndNormalized(), "Currency(%q).ValidAndNormalized()", string(code))
+		assert.Contains(t, enums, code, "Currency(%q) in Enums()", string(code))
+		assert.NotEmpty(t, code.EnglishName(), "Currency(%q).EnglishName()", string(code))
+	}
+	withdrawn := []Currency{"ANG", "HRK", "MRO", "SLL", "STD", "VEF", "ZWD"}
+	for _, code := range withdrawn {
+		assert.True(t, code.Valid(), "withdrawn Currency(%q) must stay valid for old data", string(code))
+		assert.Contains(t, enums, code, "withdrawn Currency(%q) in Enums()", string(code))
+	}
+}
