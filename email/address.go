@@ -1,13 +1,3 @@
-// Package email provides comprehensive email address handling, parsing, validation,
-// and message processing utilities for Go applications.
-//
-// The package includes:
-// - Email address parsing with lenient validation
-// - Address normalization and validation
-// - Email message parsing (MIME, TNEF)
-// - Address lists and sets management
-// - Database integration (Scanner/Valuer interfaces)
-// - JSON schema generation
 package email
 
 import (
