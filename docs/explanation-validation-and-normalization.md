@@ -107,15 +107,17 @@ wins.
 
 ### `bank.BIC`: lenient `Normalized`, strict `Validate`
 
-`bank.BIC` is the opposite case, and not a deliberate one. `Normalized` removes
-all whitespace before it checks the code, `Validate` does not:
+`bank.BIC` is the opposite case, and deliberate too. `Normalized` removes all
+whitespace before it checks the code, `Valid` and `Validate` do not, because
+`Parse`, `IsTestBIC`, `IsPassiveSWIFT` and `ReceiverPaysFees` read fixed
+character positions once the BIC is valid:
 
 | Value                    | `Valid()` | `Validate()`                          | `Normalized()` |
 |--------------------------|-----------|---------------------------------------|----------------|
 | `bank.BIC("BKAU AT WW")` | `false`   | `invalid BIC "BKAU AT WW" length: 10` | `BKAUATWWXXX`  |
 
 So `types.Validate` rejects a BIC that `Normalized` accepts. Normalize a BIC
-before validating it until the two agree.
+before validating it.
 
 ## Why `types.Validate` prefers `ValidatErr`
 
@@ -258,14 +260,14 @@ exists on `bank.IBAN`, `bank.BIC`, their nullable types, `country.NullableCode`,
 
 The SQL and JSON methods don't normalize consistently:
 
-| Type             | `Value()`                    | JSON       |
-|------------------|------------------------------|------------|
-| `country.Code`   | normalized                   | normalized |
-| `vat.ID`         | normalized if valid          | as stored  |
-| `date.Date`      | normalized, error if invalid | as stored  |
-| `money.Currency` | as stored                    | as stored  |
-| `language.Code`  | as stored                    | as stored  |
-| `bank.IBAN`      | as stored                    | as stored  |
+| Type             | `Value()`                    | JSON                |
+|------------------|------------------------------|---------------------|
+| `country.Code`   | normalized if valid          | normalized if valid |
+| `vat.ID`         | normalized if valid          | as stored           |
+| `date.Date`      | normalized, error if invalid | as stored           |
+| `money.Currency` | as stored                    | as stored           |
+| `language.Code`  | as stored                    | as stored           |
+| `bank.IBAN`      | as stored                    | as stored           |
 
 `Scan` of these types stores the database text without checking it, except
 `date.Date.Scan`, which normalizes and rejects invalid dates. `String()`

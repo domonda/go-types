@@ -207,7 +207,7 @@ To test whether a document contains an identifier at all, pass `n = 1`: `len(ban
 | `bank.IBANFinder`    | Compact upper-case IBANs with a valid check sum, at any position | Grouped IBANs (`AT61 1904 3002 3457 3201`) and lower case. It checks no word boundaries, so `XAT611904300234573201` yields `AT611904300234573201`. |
 | `bank.BICFinder`     | Upper-case 8 or 11 character words with BIC syntax and a valid country code, between word separators | Lower-case and spaced BICs. Upper-case words like `RECHNUNG` and `DEUTSCHE` (country `SC`) are found. The deny-list has only 9 German words. |
 | `vat.IDFinder`       | Runs of one to three words, split at whitespace and `:`, that form a valid VAT ID | IDs written as four or more words: `DE 167 015 661` is missed, `DE 167015661` is found. Prefixes without a format like `US`, and `GR` (Greek IDs use `EL`). |
-| `date.NewFinder`     | Runs of one to three words that `date.Normalize` accepts | Everything `date.Normalize` rejects, like `2014-04` and `20140601`, and ISO date-times like `2023-12-25T10:00:00Z` (see Troubleshooting). |
+| `date.NewFinder`     | Runs of one to three words that `date.Normalize` accepts | Everything `date.Normalize` rejects, like `2014-04` and `20140601`. |
 | `money.AmountFinder` | Words with exactly two decimals, like `1.234,50`, `-1234.56` and `99.00`, and the words `NaN`, `Inf`, `+Inf` and `-Inf` | `12.5`, `1234` and amounts with an attached symbol like `€1.234,50`. A day and month like `25.12` look like an amount and are found. |
 
 ## Troubleshooting
@@ -271,8 +271,6 @@ func main() {
 `money.ParseCurrencyAmount("€1.234,50")` parses such a word with its currency, if you already have it.
 
 **`date.Normalize` returns a different date than you expect for `05/06/2024`.** Without a language, ambiguous dates are read day first: 2024-06-05. Pass `language.EN` to both `date.NewFinder` and `date.Normalize` for documents with month first dates. To detect the order from the document itself, see [Detecting the date order of a whole document](explanation-lenient-parsing.md#detecting-the-date-order-of-a-whole-document).
-
-**An ISO date-time like `2023-12-25T10:00:00Z` is not found.** `date.Normalize` accepts it, but `date.Finder` lower-cases each candidate first, and `date.Normalize("2023-12-25t10:00:00z")` fails with `invalid date: "2023-12-25t10:00:00z"`. Search such values with a regular expression like `\d{4}-\d{2}-\d{2}T` and pass the match to `date.Normalize`.
 
 **`vat.NormalizeVATID` fails with `invalid VAT ID: "GR094019245" has an unsupported country code: "GR"`.** Greek VAT IDs use the prefix `EL`, and `IDFinder` doesn't find `GR` IDs either. Replace the prefix if your source writes `GR`.
 

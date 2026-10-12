@@ -210,7 +210,7 @@ The steps build one program. Step 6 shows it complete, with its output.
 
 - Both files print `round trip equal: true`: every field was written and read back to the same Go value.
 - The amounts have the separators of the preset, `1,234.50` and `1.234,50`. The CSV writer quotes the English amount because it contains the field separator.
-- The null `Note` is written as the placeholder `-`. The null `DueDate` is an empty cell, because `date.NullableDate` has its own formatter, which writes `""` for null and doesn't use `Nil`. Both are in `NilStrings`, so both scan back as null.
+- The null `DueDate` and the null `Note` are written as the placeholder `-`, which is in `NilStrings`, so both scan back as null.
 - The two broken rows report the column and the reason, and are left out of the result.
 
 ## Troubleshooting

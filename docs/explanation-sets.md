@@ -222,9 +222,10 @@ SQL, only for the two types with a `Value` method:
 Other differences:
 
 - `uu.IDSet.Scan("")` gives an empty non-nil set. `email.AddressSet.Scan("")`
-  returns the error `can't scan empty string as email.AddressSet`, and
-  `email.AddressSet.Scan` of a plain string that is not an array literal gives
-  a set with that one address.
+  returns the error `can't scan empty string as email.AddressSet`, and a
+  whitespace-only string an error as well. `email.AddressSet.Scan` of a plain
+  string that is not an array literal gives a set with that one address,
+  trimmed.
 - `types.Set.UnmarshalJSON` and `uu.IDSet.UnmarshalJSON` always assign a new
   map. Refilling the existing map would rewrite every other variable that
   shares it, like a default permission set copied into a struct field; the test

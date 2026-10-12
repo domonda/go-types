@@ -303,11 +303,13 @@ difference:
 | `date.NullableDate`                                | `""`                 | `""`, `"0001-01-01"`, `"0000-00-00"` |
 | `money.DecimalAmount`, `money.CentAmount`          | `CentAmount(0)` only | a zero amount                        |
 
-Tag optional fields with `omitzero`. It omits exactly the null value of every
-`NullableX` and keeps the empty set apart from the nil set. Be careful with
-`omitzero` on non-nullable types that have an `IsZero` method:
-`money.DecimalAmount` and `money.CentAmount` drop a real zero amount, and
-`date.Date` drops `"0001-01-01"`.
+Tag optional fields with `omitzero`. It omits the null value of every
+`NullableX` and keeps the empty set apart from the nil set. A whitespace-only
+value, which several string based `NullableX` types also treat as null, is not
+omitted but written as `null`. Be careful with `omitzero` on non-nullable
+types that have an `IsZero` method: `money.DecimalAmount` and
+`money.CentAmount` drop a real zero amount, and `date.Date` drops
+`"0001-01-01"`.
 
 ## Summary: Go zero value to SQL and JSON
 
@@ -392,14 +394,16 @@ current code:
 - **`Scan("")` of ID collections.** `uu.IDSlice.Scan("")` gives a nil slice,
   `uu.IDSet.Scan("")` an empty non-nil set.
 - **Names.** `money.Currency` converts with `NullableCurrency()`, every other
-  `X` with `Nullable()`. `vat.Null` is a variable while the other string null
-  values are typed constants, and `money.CurrencyNull` is an untyped constant.
+  `X` with `Nullable()`. `money.CurrencyNull` is an untyped constant, while
+  the other string null values, like `vat.Null` and `country.Null`, are typed
+  constants.
 - **`nullable.NullableValidator`** (`ValidAndNotNull`) is implemented by the
   bank, country, date, money and vat nullable types, but not by
   `uu.NullableID`, `account.NullableNumber` or `email.NullableAddress`.
 
 Changing any of these changes stored data or wire formats, so each needs its
-own breaking-change decision. They are tracked in [TODOS.md](../TODOS.md).
+own breaking-change decision. They are tracked in [TODOS.md](../TODOS.md),
+except the untyped `money.CurrencyNull`.
 
 ## Related
 

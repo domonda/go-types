@@ -47,9 +47,9 @@ When two readings are possible, a fixed rule decides, and the caller can overrid
 3. **A repeated `.` or `,` groups thousands.** `1.234.567` is 1234567.
 4. **`'` and space only ever group thousands.** `1'234` and `1 234` are 1234. One that can't group thousands, like in `1'5`, is an error.
 5. **Groups have fixed sizes.** Every thousands separator is followed by exactly 3 digits, and the group in front of the first one has 1 to 3 digits. `1234.567,89` and `1.23.4` are errors.
-6. **The sign can be leading or trailing.** `1.234,56-` is -1234.56, as some bank exports write it.
+6. **The sign can be leading or trailing, but not both.** `1.234,56-` is -1234.56, as some bank exports write it. `+1.5-` is an error.
 7. **Scientific notation is accepted.** `1.5e3` is 1500, because JSON encoders and PostgreSQL `float8` text output use it. A separator inside the exponent is an error.
-8. **Non-finite values are exact tokens.** `NaN`, `Inf`, `+Inf` and `-Inf` parse to the non-finite values, and `ParseDecimalAmount` also reads `Infinity`. `infinity` in lower case is an error, and `ParseCentAmount` rejects all of them because `CentAmount` has no non-finite states.
+8. **Non-finite values are exact tokens.** `NaN`, `Inf`, `+Inf` and `-Inf` parse to the non-finite values, and `ParseDecimalAmount` also reads `Infinity`. `infinity` in lower case is an error, and `ParseCentAmount` rejects all of them because `CentAmount` has no non-finite states. `ParseAmount`, `ParseRate` and `ParseDecimalAmount` reject them too when `acceptedDecimals` are passed.
 
 ```go
 package main
@@ -147,7 +147,7 @@ A numeric date with the year last is ambiguous when both numbers can be the mont
                   or an ordinal suffix on the second      02 1st 2003 -> 2003-02-01
 ```
 
-The hint is the first `lang` argument. Only its first two letters count, normalized, so `language.EN`, `"en-US"` and `"eng"` all mean English, and only English changes the result. The hint and an ordinal suffix only decide ambiguous dates. A date with one valid reading, like `15.06.2024`, gives 2024-06-15 with any hint, and the separator never matters.
+The hint is the first `lang` argument. Only its first two letters count, normalized, so `language.EN`, `"en-US"` and `"eng"` all mean English, and only English changes the result. An ordinal suffix decides before the hint, so `1st 02 2003` is 2003-02-01 also with `language.EN`. The hint and an ordinal suffix only decide ambiguous dates. A date with one valid reading, like `15.06.2024`, gives 2024-06-15 with any hint, and the separator never matters.
 
 ### Detecting the date order of a whole document
 

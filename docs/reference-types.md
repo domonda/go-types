@@ -58,7 +58,7 @@ Implements: `json.Marshaler` (value receiver), `json.Unmarshaler` (pointer recei
 
 A nil `Set` is a valid empty set for every method except `Insert`, `InsertAll`, `UnionWith` and `SymmetricDifferenceWith`, which panic like an assignment to a nil map when they have to add a value. `Union`, `Intersection`, `Difference`, `SymmetricDifference` and `Map` always return a new non-nil set.
 
-`Difference` is the asymmetric difference of the collections proposal. Before 2026-08 it returned the symmetric difference, which is now `SymmetricDifference`. The change does not break compilation, so check old call sites.
+`Difference` is the asymmetric difference of the collections proposal. Before the 2026-09-02 release it returned the symmetric difference, which is now `SymmetricDifference`. The change does not break compilation, so check old call sites.
 
 ## Validation
 
@@ -181,7 +181,7 @@ type Finder interface {
 | `Unlock(key T)`                            | Unlock `key`. Panics with a message like `KeyMutex[string].Unlock("k") called for non locked key` if `key` is not locked. |
 | `IsLocked(key T) bool`                     | `key` is locked or a `Lock` call for it is in progress. Only a snapshot. |
 
-`strutil.StrMutex` and `uu.IDMutex` implement the same algorithm for `string` and `uu.ID` keys. `KeyMutex` is the generic version and the only one with `IsLocked`.
+`strutil.StrMutex` and `uu.IDMutex` implement the same algorithm for `string` and `uu.ID` keys. `KeyMutex` is the generic version. `uu.IDMutex` has `IsLocked` too and adds lock and unlock callbacks, `strutil.StrMutex` has no `IsLocked`.
 
 ## Reflection helpers
 

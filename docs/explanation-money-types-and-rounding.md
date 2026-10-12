@@ -150,13 +150,14 @@ Where the rule applies without a rounding argument:
 - `CurrencyAmount`: `String` and `FormatSep`.
 - `float`: `RoundToDecimals` and `Format`, which back all of the above.
 - `CentAmount`: `ScanString`, `MultipliedByRate`, `DividedByRate` and `Percentage`.
+- `DecimalAmount`: `DividedByRate`, for a quotient that doesn't terminate.
 - `strfmt`: `MoneyFormat.FormatDecimalAmount`, `FormatCentAmount` and `FormatCurrencyDecimalAmount`.
 
 `Amount.RoundToInt` uses `math.Round`, which gives the same result because a tie like `2.5` is exact in `float64`.
 
 Where you choose the rounding:
 
-- every `DecimalAmount` method that may round: `RoundToDecimals`, `RoundToCents`, `RoundToInt`, `Mul`, `Div` and `CentAmount`,
+- every other `DecimalAmount` method that may round: `RoundToDecimals`, `RoundToCents`, `RoundToInt`, `Mul`, `Div` and `CentAmount`,
 - `Amount.CentAmount(mode)` and `Amount.DecimalAmount(scale, mode)`, which also round the shortest decimal,
 - `ParseCentAmount(str, mode, ...)` for input with more than two decimals.
 

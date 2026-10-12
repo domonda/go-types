@@ -340,11 +340,6 @@ cross-field rules in the struct's `Validate`, as in step 3.
 `types.CombinedValidatErr` wrap even a single error with `errors.Join`.
 Compare with `errors.Is(err, ErrSomething)`.
 
-**`panic: runtime error: invalid memory address or nil pointer dereference`.**
-A `types.ValidatErrs` slice contains a nil element, or `types.Validate` got a
-nil `types.ValidatorFunc` or `types.ValidatErrFunc`. `DeepValidate` skips nil
-funcs, the other functions don't.
-
 **A `language.Code` field with the value `"EN"` passes, but `Valid()` is
 false.**
 `Validate()` normalizes first and accepts `"EN"`, `"eng"` and `"en-US"`, while
