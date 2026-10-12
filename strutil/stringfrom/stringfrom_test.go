@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/domonda/go-types/uu"
 )
@@ -120,9 +121,60 @@ func TestBool(t *testing.T) {
 }
 
 func TestInterface(t *testing.T) {
-	// Only the unambiguous cases are tested here,
-	// see the bug report about non-pointer and untyped nil values.
 	s := "Grüße"
 	assert.Equal(t, "Grüße", Interface(&s))
 	assert.Equal(t, "", Interface((*string)(nil)), "typed nil pointer")
+}
+
+// Interface renders arbitrary, often optional values like the other
+// functions of this package, so it must not panic for nil or for a
+// value that is not a pointer: it used to panic for an untyped nil,
+// for any non-pointer value except nil maps, slices, funcs and channels,
+// and for any non-nil map, slice, func or channel.
+// Nil returns "" like documented and a value returns the same string
+// as a pointer to it, so callers don't have to care which one they have.
+func TestInterface_NilAndNonPointer(t *testing.T) {
+	type named string
+	var (
+		nilMap   map[string]int
+		nilSlice []int
+		nilPtr   *string
+	)
+	for _, tt := range []struct {
+		name string
+		val  any
+		want string
+	}{
+		{name: "untyped nil", val: nil, want: ""},
+		{name: "typed nil pointer", val: (*int)(nil), want: ""},
+		{name: "pointer to nil pointer", val: &nilPtr, want: ""},
+		{name: "nil map", val: nilMap, want: ""},
+		{name: "pointer to nil map", val: &nilMap, want: ""},
+		{name: "nil slice", val: nilSlice, want: ""},
+		{name: "pointer to nil slice", val: &nilSlice, want: ""},
+		{name: "string", val: "Grüße", want: "Grüße"},
+		{name: "named string type", val: named("x"), want: "x"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			require.NotPanics(t, func() {
+				assert.Equal(t, tt.want, Interface(tt.val))
+			})
+		})
+	}
+
+	// A non-pointer value returns the same string as a pointer to it
+	same := func(t *testing.T, name string, val, ptr any) {
+		t.Helper()
+		require.NotPanics(t, func() {
+			assert.Equal(t, Interface(ptr), Interface(val), name)
+		})
+	}
+	str, n, m, sl, st := "x", 42, map[string]int{"a": 1}, []int{1}, struct{ A int }{1}
+	same(t, "string", str, &str)
+	same(t, "int", n, &n)
+	same(t, "map", m, &m)
+	same(t, "slice", sl, &sl)
+	same(t, "struct", st, &st)
+	same(t, "nil map", nilMap, &nilMap)
+	same(t, "nil slice", nilSlice, &nilSlice)
 }

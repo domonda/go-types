@@ -8,7 +8,8 @@
 // - Boolean to string conversion with custom true/false strings
 // - Interface reflection-based string conversion
 //
-// All functions handle nil pointers gracefully by returning customizable default strings,
+// All functions handle nil pointers gracefully, the *Ptr functions by returning
+// customizable default strings and Interface by returning an empty string,
 // making them safe for use in scenarios where pointers might be nil.
 package stringfrom
 
@@ -104,14 +105,23 @@ func Bool(boolVal bool, trueString, falseString string) string {
 	return falseString
 }
 
-// Interface converts any interface{} value to a string using reflection.
-// Returns empty string for nil or invalid values.
+// Interface converts i, or the value i points to, to a string
+// using reflect.Value.String, so a non-pointer value returns
+// the same string as a pointer to it.
+// Returns an empty string for nil, a nil pointer,
+// or a nil map, slice, func, channel or interface value.
 func Interface(i any) string {
 	v := reflect.ValueOf(i)
-
-	if v.IsNil() || !v.IsValid() {
-		return ""
+	if v.Kind() == reflect.Pointer {
+		v = v.Elem() // zero Value for a nil pointer
 	}
-
-	return v.Elem().String()
+	switch v.Kind() {
+	case reflect.Invalid:
+		return ""
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice, reflect.UnsafePointer:
+		if v.IsNil() {
+			return ""
+		}
+	}
+	return v.String()
 }
