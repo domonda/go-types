@@ -211,6 +211,36 @@ func TestNullableBIC_JSON(t *testing.T) {
 	assert.Equal(t, NullableBIC("BELADEBEXXX"), got.BIC)
 }
 
+func TestNullableBIC_UnmarshalJSON(t *testing.T) {
+	type obj struct {
+		BIC NullableBIC `json:"bic"`
+	}
+	// JSON null must reset a field that holds a value, like for
+	// uu.NullableID and email.NullableAddress, else decoding a partial
+	// update with null into an existing struct keeps the old BIC.
+	o := obj{BIC: "BELADEBEXXX"}
+	require.NoError(t, json.Unmarshal([]byte(`{"bic":null}`), &o))
+	assert.Equal(t, BICNull, o.BIC)
+
+	// A JSON string is assigned unchanged, without normalization or
+	// validation, like encoding/json did before NullableBIC had
+	// UnmarshalJSON.
+	for _, str := range []string{"BELADEBEXXX", "BELADEBE", "nope", ""} {
+		o := obj{BIC: "GENODEF1JEV"}
+		data, err := json.Marshal(map[string]string{"bic": str})
+		require.NoError(t, err)
+		require.NoError(t, json.Unmarshal(data, &o))
+		assert.Equal(t, NullableBIC(str), o.BIC, "json.Unmarshal(%s)", data)
+	}
+
+	// Any other JSON value is an error and leaves the value unchanged.
+	for _, data := range []string{`123`, `true`, `{}`, `["BELADEBEXXX"]`} {
+		bic := NullableBIC("BELADEBEXXX")
+		assert.Error(t, json.Unmarshal([]byte(data), &bic), "json.Unmarshal(%s)", data)
+		assert.Equal(t, NullableBIC("BELADEBEXXX"), bic, "json.Unmarshal(%s)", data)
+	}
+}
+
 func TestNullableBIC_JSONSchema(t *testing.T) {
 	// The schema must accept JSON null because NULL is marshalled as null
 	s := BICNull.JSONSchema()

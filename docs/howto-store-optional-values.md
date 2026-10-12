@@ -61,8 +61,8 @@ nil value writes NULL. Reading such a column never gives nil: `{}` scans as an
 empty, non-nil value.
 
 The same types work for optional JSON fields. Each nullable type in the
-table writes `null` for its null value, and decoding `null` into a new struct
-gives null.
+table writes `null` for its null value, and decoding `null` gives null, also
+into a field that already holds a value.
 
 ### 3. Declare the struct and tag optional fields with `omitzero`
 
@@ -315,13 +315,6 @@ The field has `omitempty`, which drops empty slices and maps. Use `omitzero`.
 The client sent `""`. For `money.NullableAmount`, `NullableDecimalAmount` and
 `NullableRate`, the JSON string `""` decodes as a present zero, not as null.
 Send `null` or leave the field out.
-
-**A field keeps its old value after decoding `{"country":null}`.**
-`country.NullableCode`, `bank.NullableIBAN`, `bank.NullableBIC`,
-`date.NullableDate`, `vat.NullableID` and `money.NullableCurrency` have no
-`UnmarshalJSON` method, and `encoding/json` ignores `null` for a string type.
-Decode into a new struct, or call `SetNull()` on the fields first, when you
-apply a partial update.
 
 **`invalid UUID length 0: ""` when decoding JSON.**
 The client sent `""` for a `uu.NullableID`. Send `null` or leave the field out.

@@ -76,7 +76,7 @@ An `IBAN` where `""` is the null value. A whitespace only value is null too, lik
 | `Scan(value) error`, `Value()`, `MarshalJSON()` | See [Serialization](#serialization).               |
 | `JSONSchema()`                                  | `IBANRegex` string or null.                        |
 
-Implements: `sql.Scanner`, `driver.Valuer`, `json.Marshaler`, `fmt.Stringer`, `strfmt.Scannable`, `nullable.NullSetable[IBAN]`, `types.NormalizableValidator[NullableIBAN]`. No `json.Unmarshaler`.
+Implements: `sql.Scanner`, `driver.Valuer`, `json.Marshaler`, `json.Unmarshaler`, `fmt.Stringer`, `strfmt.Scannable`, `nullable.NullSetable[IBAN]`, `types.NormalizableValidator[NullableIBAN]`.
 
 ## BIC
 
@@ -141,7 +141,7 @@ A `BIC` where `""` is the null value. A whitespace only value is null too, like 
 | `Scan(value) error`, `Value()`, `MarshalJSON()` | See [Serialization](#serialization).               |
 | `JSONSchema()`                                  | `BICRegex` string or null.                         |
 
-Implements: `sql.Scanner`, `driver.Valuer`, `json.Marshaler`, `fmt.Stringer`, `strfmt.Scannable`, `nullable.NullSetable[BIC]`. No `json.Unmarshaler`. There is no `CountryCode` or `NormalizedShort`, use `Get()` first.
+Implements: `sql.Scanner`, `driver.Valuer`, `json.Marshaler`, `json.Unmarshaler`, `fmt.Stringer`, `strfmt.Scannable`, `nullable.NullSetable[BIC]`. There is no `CountryCode` or `NormalizedShort`, use `Get()` first.
 
 ## Account
 
@@ -233,7 +233,7 @@ The tag paths start below the root element, which is not checked.
 | Type                          | `Value()` writes                             | `Scan` accepts                                     | JSON                                               | Text                                               |
 |-------------------------------|----------------------------------------------|----------------------------------------------------|----------------------------------------------------|----------------------------------------------------|
 | `IBAN`, `BIC`                 | The string unchanged, `""` as `""`, not NULL | `string` and `[]byte` unchanged, NULL as `""`, other types are errors | No methods: plain string, `""` as `""`, `null` leaves the value unchanged | No text methods, `ScanString` for `strfmt`         |
-| `NullableIBAN`, `NullableBIC` | Null (`""` or whitespace only) as NULL, else the string unchanged | Like `IBAN`, NULL is null                          | `MarshalJSON` writes null as `null`, else the string unchanged. No `UnmarshalJSON`: strings are assigned unchanged, `null` leaves the value unchanged | No text methods, `ScanString` for `strfmt`         |
+| `NullableIBAN`, `NullableBIC` | Null (`""` or whitespace only) as NULL, else the string unchanged | Like `IBAN`, NULL is null                          | `MarshalJSON` writes null as `null`, else the string unchanged. `UnmarshalJSON` assigns strings unchanged and sets null for `null`, other JSON values are errors | No text methods, `ScanString` for `strfmt`         |
 | `Account`                     | No `Valuer`, marshal to JSON yourself        | `string` or `[]byte` with JSON or an IBAN, see `UnmarshalJSON`. NULL is an error. | Marshal: `{"iban":"...","bic":"...","currency":"...","holder":"..."}`, `iban` always, the others omitted when empty. Unmarshal: a JSON object is assigned without normalization or validation, a JSON string must be a valid IBAN and is normalized, `BIC`, `Currency`, and `Holder` become null. `null` leaves the account unchanged. | `UnmarshalText` like `UnmarshalJSON` after trimming, also for an unquoted IBAN |
 
 ## Gotchas
@@ -247,7 +247,6 @@ The tag paths start below the root element, which is not checked.
 - **Only the nullable types write SQL NULL.** `IBAN("").Value()` and `BIC("").Value()` return `""`. All four types scan NULL as `""`.
 - **Decoded values are unchecked.** `Scan`, JSON decoding, and the JSON object form of `Account` accept anything: `{"iban":"invalid","bic":"nope"}` decodes into an `Account` without error. Call `Normalize` or `Validate` after decoding.
 - **An IBAN string resets the other `Account` fields.** `UnmarshalJSON` of `"DE89370400440532013000"` sets `BIC`, `Currency`, and `Holder` to null.
-- **JSON `null` doesn't reset `NullableIBAN` and `NullableBIC`**, because they have no `UnmarshalJSON`. Decoding `null` into a field that already has a value keeps the old value.
 - **IBAN lengths.** `IBANMaxLength` is 32, the longest IBAN known to the table, while ISO 13616 allows 34. `GG`, `IM`, and `JE` are accepted as IBAN countries with length 22. `BankAndAccountNumbers` only supports AT, CH, and DE.
 - **`IBANFinder` only finds compact uppercase IBANs** and checks no word boundaries: `AT61 1904 3002 3457 3201` and `at611904300234573201` are not found, and `XAT611904300234573201` yields `AT611904300234573201`.
 - **`BICFinder` finds uppercase words with BIC syntax.** The deny-list has only 9 entries, so `DEUTSCHE BANK` yields `DEUTSCHE` (country code `SC`). Check the context of finder results.

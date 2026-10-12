@@ -45,6 +45,36 @@ func Test_NullableDate_UnmarshalJSON(t *testing.T) {
 	assert.Equal(t, NullableDate("Not a date!"), s.Invalid, "invalid NullableDate parsed as is, without error")
 	assert.False(t, s.Invalid.Valid(), "invalid NullableDate parsed as is, not valid")
 }
+
+func TestNullableDate_UnmarshalJSONResetsAndRejects(t *testing.T) {
+	type doc struct {
+		Paid NullableDate `json:"paid"`
+	}
+	// JSON null must reset a field that holds a value, like for
+	// uu.NullableID and email.NullableAddress, else decoding a partial
+	// update with null into an existing struct keeps the old date.
+	d := doc{Paid: "2024-01-02"}
+	require.NoError(t, json.Unmarshal([]byte(`{"paid":null}`), &d))
+	assert.Equal(t, Null, d.Paid)
+
+	// A JSON string is assigned unchanged, without normalization or
+	// validation, like encoding/json did before NullableDate had
+	// UnmarshalJSON (see Test_NullableDate_UnmarshalJSON).
+	for _, str := range []string{"2023-12-25", "25.12.2023", "bad", ""} {
+		d := doc{Paid: "2024-01-02"}
+		data, err := json.Marshal(map[string]string{"paid": str})
+		require.NoError(t, err)
+		require.NoError(t, json.Unmarshal(data, &d))
+		assert.Equal(t, NullableDate(str), d.Paid, "json.Unmarshal(%s)", data)
+	}
+
+	// Any other JSON value is an error and leaves the value unchanged.
+	for _, data := range []string{`20231225`, `true`, `{}`, `["2023-12-25"]`} {
+		n := NullableDate("2024-01-02")
+		assert.Error(t, json.Unmarshal([]byte(data), &n), "json.Unmarshal(%s)", data)
+		assert.Equal(t, NullableDate("2024-01-02"), n, "json.Unmarshal(%s)", data)
+	}
+}
 func TestNullableDate_IsNull(t *testing.T) {
 	assert.True(t, NullableDate("").IsNull())
 	assert.True(t, Null.IsNull())

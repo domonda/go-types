@@ -1,7 +1,9 @@
 package country
 
 import (
+	"bytes"
 	"database/sql/driver"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -187,6 +189,19 @@ func (n NullableCode) MarshalJSON() ([]byte, error) {
 		return []byte(`null`), nil
 	}
 	return Code(n).MarshalJSON()
+}
+
+// UnmarshalJSON implements encoding/json.Unmarshaler
+// by setting the NullableCode to null for the JSON null value,
+// so that decoding null into a field that holds a value resets it.
+// A JSON string is assigned unchanged, without normalization or validation,
+// like encoding/json does for a string type, any other JSON value is an error.
+func (n *NullableCode) UnmarshalJSON(data []byte) error {
+	if bytes.Equal(data, []byte(`null`)) {
+		n.SetNull()
+		return nil
+	}
+	return json.Unmarshal(data, (*string)(n))
 }
 
 // JSONSchema returns the JSON schema definition for the NullableCode type.

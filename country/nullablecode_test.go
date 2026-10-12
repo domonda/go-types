@@ -329,6 +329,47 @@ func TestNullableCode_JSON(t *testing.T) {
 	}
 }
 
+func TestNullableCode_UnmarshalJSON(t *testing.T) {
+	type doc struct {
+		Country NullableCode `json:"country"`
+	}
+	// JSON null must reset a field that holds a value, like for
+	// uu.NullableID and email.NullableAddress, else decoding a partial
+	// update with null into an existing struct keeps the old country.
+	d := doc{Country: "DE"}
+	if err := json.Unmarshal([]byte(`{"country":null}`), &d); err != nil {
+		t.Fatal(err)
+	}
+	if d.Country != Null {
+		t.Errorf("json.Unmarshal of null kept %q, want Null", string(d.Country))
+	}
+
+	// A JSON string is assigned unchanged, without normalization or
+	// validation, like encoding/json did before NullableCode had
+	// UnmarshalJSON, and the round trip of a code keeps it.
+	for _, str := range []string{"AT", "at", "XX", ""} {
+		d := doc{Country: "DE"}
+		data, _ := json.Marshal(map[string]string{"country": str})
+		if err := json.Unmarshal(data, &d); err != nil {
+			t.Fatalf("json.Unmarshal(%s): %s", data, err)
+		}
+		if d.Country != NullableCode(str) {
+			t.Errorf("json.Unmarshal(%s) = %q, want %q", data, string(d.Country), str)
+		}
+	}
+
+	// Any other JSON value is an error and leaves the value unchanged.
+	for _, data := range []string{`123`, `true`, `{}`, `["DE"]`} {
+		n := NullableCode("DE")
+		if err := json.Unmarshal([]byte(data), &n); err == nil {
+			t.Errorf("json.Unmarshal(%s) returned no error", data)
+		}
+		if n != "DE" {
+			t.Errorf("json.Unmarshal(%s) changed the value to %q", data, string(n))
+		}
+	}
+}
+
 func TestNullableCode_JSONSchema(t *testing.T) {
 	s := NullableCode("").JSONSchema()
 	if len(s.OneOf) != 2 {

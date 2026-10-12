@@ -190,7 +190,7 @@ These methods mirror `Date` and add null rules:
 
 `NullableDate` has no `Time`, `TimeLocal`, `TimeUTC`, `WithinIncl`, `BetweenExcl` or `Nullable`.
 
-Implements: `fmt.Stringer`, `database/sql.Scanner`, `database/sql/driver.Valuer`, `json.Marshaler` (`MarshalJSON`, no `UnmarshalJSON`), `strfmt.Scannable`, `nullable.NullSetable[Date]` and `JSONSchema()` (string with format `date`, or null).
+Implements: `fmt.Stringer`, `database/sql.Scanner`, `database/sql/driver.Valuer`, `json.Marshaler`, `json.Unmarshaler`, `strfmt.Scannable`, `nullable.NullSetable[Date]` and `JSONSchema()` (string with format `date`, or null).
 
 ## Periods
 
@@ -231,7 +231,7 @@ const YearMonthNull NullableYearMonth = ""
 | `Compare(other)`                     | String comparison.                                 |
 | `Nullable()`                         | Plain conversion to `NullableYearMonth`.           |
 
-`NullableYearMonth` has the same methods (null returns 0, `""`, `false` or null) plus `IsNull()` (only `""`; `"0000-00"` is zero but not null), `IsNotNull()`, `ValidAndNotNull()` (false for null and zero values), `Get()` (panics if null), `GetOr(defaultYearMonth)`, `Set(ym)`, `SetNull()` and `StringOr(nullString)`. Its `Date` and `DateRange` return `NullableDate`. Implements `nullable.NullSetable[YearMonth]`.
+`NullableYearMonth` has the same methods (null returns 0, `""`, `false` or null) plus `IsNull()` (only `""`; `"0000-00"` is zero but not null), `IsNotNull()`, `ValidAndNotNull()` (false for null and zero values), `Get()` (panics if null), `GetOr(defaultYearMonth)`, `Set(ym)`, `SetNull()` and `StringOr(nullString)`. Its `Date` and `DateRange` return `NullableDate`. Implements `nullable.NullSetable[YearMonth]` and `json.Unmarshaler` (JSON `null` sets null, a string is assigned as is).
 
 ## YearQuarter and NullableYearQuarter
 
@@ -259,7 +259,7 @@ const YearQuarterNull NullableYearQuarter = ""
 | `Compare(other)`                                   | String comparison.                                 |
 | `Nullable()`                                       | Plain conversion to `NullableYearQuarter`.         |
 
-`NullableYearQuarter` has the same methods plus the same null helpers as `NullableYearMonth`. Its `Date` and `DateRange` return `NullableDate`. Implements `nullable.NullSetable[YearQuarter]`.
+`NullableYearQuarter` has the same methods plus the same null helpers as `NullableYearMonth`. Its `Date` and `DateRange` return `NullableDate`. Implements `nullable.NullSetable[YearQuarter]` and `json.Unmarshaler` like `NullableYearMonth`.
 
 ## Format, Formatter and Parser
 
@@ -323,9 +323,10 @@ Reading values:
 | `Scan(time.Time)`                          | `OfTime(t)`, `""` if zero | `OfTime(t)`, `Null` if zero |
 | `Scan` of other types                      | error                     | error                       |
 | JSON string                                | stored as is, not checked | stored as is, not checked   |
-| JSON `null`                                | field left unchanged      | field left unchanged        |
+| JSON `null`                                | field left unchanged      | `Null`                      |
+| other JSON values                          | error                     | error                       |
 
-No type in this package has `UnmarshalJSON`, so `encoding/json` stores any JSON string as is. Call `Validate` or `Normalized` after decoding. `YearMonth`, `YearQuarter`, `NullableYearMonth` and `NullableYearQuarter` have no SQL methods: `database/sql` writes them as plain strings and fails to scan NULL into them (`converting NULL to string is unsupported`); scan into a `*YearMonth` to accept NULL.
+`Date`, `YearMonth` and `YearQuarter` have no `UnmarshalJSON`, so `encoding/json` stores any JSON string as is and ignores JSON `null`. The `UnmarshalJSON` of `NullableDate`, `NullableYearMonth` and `NullableYearQuarter` also stores a JSON string as is, but sets null for JSON `null`. Call `Validate` or `Normalized` after decoding. `YearMonth`, `YearQuarter`, `NullableYearMonth` and `NullableYearQuarter` have no SQL methods: `database/sql` writes them as plain strings and fails to scan NULL into them (`converting NULL to string is unsupported`); scan into a `*YearMonth` to accept NULL.
 
 ## Gotchas
 

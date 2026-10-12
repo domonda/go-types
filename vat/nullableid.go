@@ -1,6 +1,7 @@
 package vat
 
 import (
+	"bytes"
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
@@ -240,6 +241,19 @@ func (n NullableID) MarshalJSON() ([]byte, error) {
 		return []byte(`null`), nil
 	}
 	return json.Marshal(string(n))
+}
+
+// UnmarshalJSON implements encoding/json.Unmarshaler
+// by setting the NullableID to null for the JSON null value,
+// so that decoding null into a field that holds a value resets it.
+// A JSON string is assigned unchanged, without normalization or validation,
+// like encoding/json does for a string type, any other JSON value is an error.
+func (n *NullableID) UnmarshalJSON(data []byte) error {
+	if bytes.Equal(data, []byte(`null`)) {
+		n.SetNull()
+		return nil
+	}
+	return json.Unmarshal(data, (*string)(n))
 }
 
 // JSONSchema returns the JSON schema for NullableID, describing it with the

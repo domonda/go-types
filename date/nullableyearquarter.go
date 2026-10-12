@@ -1,6 +1,8 @@
 package date
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -98,6 +100,19 @@ func (yq NullableYearQuarter) StringOr(nullString string) string {
 		return nullString
 	}
 	return yq.String()
+}
+
+// UnmarshalJSON implements encoding/json.Unmarshaler
+// by setting the NullableYearQuarter to null for the JSON null value,
+// so that decoding null into a field that holds a value resets it.
+// A JSON string is assigned unchanged, without normalization or validation,
+// like encoding/json does for a string type, any other JSON value is an error.
+func (yq *NullableYearQuarter) UnmarshalJSON(data []byte) error {
+	if bytes.Equal(data, []byte(`null`)) {
+		yq.SetNull()
+		return nil
+	}
+	return json.Unmarshal(data, (*string)(yq))
 }
 
 // Compare compares the year-quarter with another NullableYearQuarter.

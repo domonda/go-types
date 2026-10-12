@@ -100,7 +100,7 @@ const Null NullableCode = ""
 | `IsEU()`, `EnglishName()`      | As for `Code`.                                     |
 | `ScanString(source, validate)` | `""`, `"NULL"`, `"null"` and `"nil"` set `Null`; otherwise like `Code`. |
 
-Implements: `fmt.Stringer`, `database/sql.Scanner`, `database/sql/driver.Valuer`, `json.Marshaler` (no `UnmarshalJSON`), `strfmt.Scannable`, `nullable.NullSetable[Code]` and `JSONSchema()` (the `Code` pattern or null).
+Implements: `fmt.Stringer`, `database/sql.Scanner`, `database/sql/driver.Valuer`, `json.Marshaler`, `json.Unmarshaler`, `strfmt.Scannable`, `nullable.NullSetable[Code]` and `JSONSchema()` (the `Code` pattern or null).
 
 ## Serialization
 
@@ -120,7 +120,8 @@ Implements: `fmt.Stringer`, `database/sql.Scanner`, `database/sql/driver.Valuer`
 | `Scan(string)`, `Scan([]byte)` | stored as is, not normalized or checked | same                 |
 | `Scan` of other types          | error                                   | error                |
 | JSON string                    | stored as is, not normalized or checked | same                 |
-| JSON `null`                    | field left unchanged                    | field left unchanged |
+| JSON `null`                    | field left unchanged                    | `Null`               |
+| other JSON values              | error                                   | error                |
 
 Output is normalized, input is not: a value read with `Scan` or `json.Unmarshal` keeps its spelling until you call `Normalized`, but it is written back canonical.
 

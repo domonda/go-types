@@ -224,6 +224,35 @@ func TestNullableCurrency_JSON(t *testing.T) {
 	}
 }
 
+// TestNullableCurrency_UnmarshalJSON pins that JSON null resets a field
+// that holds a value, like for uu.NullableID and email.NullableAddress,
+// else decoding a partial update with null into an existing struct keeps
+// the old currency. A JSON string is assigned unchanged, without
+// normalization or validation, like encoding/json did before
+// NullableCurrency had UnmarshalJSON, and any other JSON value is an error.
+func TestNullableCurrency_UnmarshalJSON(t *testing.T) {
+	type doc struct {
+		Currency NullableCurrency `json:"currency"`
+	}
+	d := doc{Currency: "EUR"}
+	require.NoError(t, json.Unmarshal([]byte(`{"currency":null}`), &d))
+	assert.Equal(t, NullableCurrency(CurrencyNull), d.Currency)
+
+	for _, str := range []string{"USD", "usd", "€", "XYZ", ""} {
+		d := doc{Currency: "EUR"}
+		data, err := json.Marshal(map[string]string{"currency": str})
+		require.NoError(t, err)
+		require.NoError(t, json.Unmarshal(data, &d))
+		assert.Equal(t, NullableCurrency(str), d.Currency, "json.Unmarshal(%s)", data)
+	}
+
+	for _, data := range []string{`123`, `true`, `{}`, `["EUR"]`} {
+		n := NullableCurrency("EUR")
+		assert.Error(t, json.Unmarshal([]byte(data), &n), "json.Unmarshal(%s)", data)
+		assert.Equal(t, NullableCurrency("EUR"), n, "json.Unmarshal(%s)", data)
+	}
+}
+
 // TestNullableCurrency_Display pins the display helpers, which must not
 // panic on NULL like Get does, and the raw Currency conversion.
 func TestNullableCurrency_Display(t *testing.T) {

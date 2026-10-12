@@ -1,6 +1,7 @@
 package date
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -414,5 +415,34 @@ func TestNullableYearMonth_ContainsDate(t *testing.T) {
 			got := tt.ym.ContainsDate(tt.date)
 			require.Equal(t, tt.want, got)
 		})
+	}
+}
+
+func TestNullableYearMonth_UnmarshalJSON(t *testing.T) {
+	type doc struct {
+		Period NullableYearMonth `json:"period"`
+	}
+	// JSON null must reset a field that holds a value, like for
+	// uu.NullableID and email.NullableAddress, else decoding a partial
+	// update with null into an existing struct keeps the old period.
+	d := doc{Period: "2024-01"}
+	require.NoError(t, json.Unmarshal([]byte(`{"period":null}`), &d))
+	require.Equal(t, YearMonthNull, d.Period)
+
+	// A JSON string is assigned unchanged, without validation,
+	// like encoding/json did before NullableYearMonth had UnmarshalJSON.
+	for _, str := range []string{"2023-07", "2023-13", "bad", ""} {
+		d := doc{Period: "2024-01"}
+		data, err := json.Marshal(map[string]string{"period": str})
+		require.NoError(t, err)
+		require.NoError(t, json.Unmarshal(data, &d))
+		require.Equal(t, NullableYearMonth(str), d.Period, "json.Unmarshal(%s)", data)
+	}
+
+	// Any other JSON value is an error and leaves the value unchanged.
+	for _, data := range []string{`202307`, `true`, `{}`, `["2023-07"]`} {
+		ym := NullableYearMonth("2024-01")
+		require.Error(t, json.Unmarshal([]byte(data), &ym), "json.Unmarshal(%s)", data)
+		require.Equal(t, NullableYearMonth("2024-01"), ym, "json.Unmarshal(%s)", data)
 	}
 }

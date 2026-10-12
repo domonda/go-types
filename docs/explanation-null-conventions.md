@@ -389,12 +389,6 @@ current code:
   `NullableDecimalAmount` and `NullableRate` it decodes as a present zero,
   because `Amount`, `DecimalAmount` and `Rate` read `""` as `0`. For
   `money.NullableCentAmount` and `uu.NullableID` it is an error.
-- **JSON `null` into a field that holds a value.** `country.NullableCode`,
-  `bank.NullableIBAN`, `bank.NullableBIC`, `date.NullableDate`,
-  `vat.NullableID` and `money.NullableCurrency` have no `UnmarshalJSON`, so
-  `encoding/json` treats `null` as a no-op and the field keeps its value.
-  `uu.NullableID`, `email.NullableAddress`, `account.NullableNumber`, the
-  `nullable` strings and `nullable.Type[T]` set it to null.
 - **`Scan("")` of ID collections.** `uu.IDSlice.Scan("")` gives a nil slice,
   `uu.IDSet.Scan("")` an empty non-nil set.
 - **Names.** `money.Currency` converts with `NullableCurrency()`, every other

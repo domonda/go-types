@@ -1,6 +1,7 @@
 package bank
 
 import (
+	"bytes"
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
@@ -185,6 +186,19 @@ func (bic NullableBIC) MarshalJSON() ([]byte, error) {
 		return []byte(`null`), nil
 	}
 	return json.Marshal(string(bic))
+}
+
+// UnmarshalJSON implements encoding/json.Unmarshaler
+// by setting the NullableBIC to null for the JSON null value,
+// so that decoding null into a field that holds a value resets it.
+// A JSON string is assigned unchanged, without normalization or validation,
+// like encoding/json does for a string type, any other JSON value is an error.
+func (bic *NullableBIC) UnmarshalJSON(data []byte) error {
+	if bytes.Equal(data, []byte(`null`)) {
+		bic.SetNull()
+		return nil
+	}
+	return json.Unmarshal(data, (*string)(bic))
 }
 
 // JSONSchema returns the JSON schema definition for the NullableBIC type,

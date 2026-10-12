@@ -319,6 +319,36 @@ func TestNullableID_JSON(t *testing.T) {
 	})
 }
 
+func TestNullableID_UnmarshalJSON(t *testing.T) {
+	type doc struct {
+		VAT NullableID `json:"vat"`
+	}
+	// JSON null must reset a field that holds a value, like for
+	// uu.NullableID and email.NullableAddress, else decoding a partial
+	// update with null into an existing struct keeps the old VAT ID.
+	d := doc{VAT: "ATU10223006"}
+	require.NoError(t, json.Unmarshal([]byte(`{"vat":null}`), &d))
+	assert.Equal(t, Null, d.VAT)
+
+	// A JSON string is assigned unchanged, without normalization or
+	// validation, like encoding/json did before NullableID had
+	// UnmarshalJSON.
+	for _, str := range []string{"ATU10223006", "atu 1022 3006", "bad", ""} {
+		d := doc{VAT: "DE167015661"}
+		data, err := json.Marshal(map[string]string{"vat": str})
+		require.NoError(t, err)
+		require.NoError(t, json.Unmarshal(data, &d))
+		assert.Equal(t, NullableID(str), d.VAT, "json.Unmarshal(%s)", data)
+	}
+
+	// Any other JSON value is an error and leaves the value unchanged.
+	for _, data := range []string{`123`, `true`, `{}`, `["ATU10223006"]`} {
+		n := NullableID("ATU10223006")
+		assert.Error(t, json.Unmarshal([]byte(data), &n), "json.Unmarshal(%s)", data)
+		assert.Equal(t, NullableID("ATU10223006"), n, "json.Unmarshal(%s)", data)
+	}
+}
+
 func TestNullableID_JSONSchema(t *testing.T) {
 	s := NullableID("").JSONSchema()
 	require.Len(t, s.OneOf, 2)

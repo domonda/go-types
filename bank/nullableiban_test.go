@@ -239,6 +239,36 @@ func TestNullableIBAN_JSON(t *testing.T) {
 	assert.Equal(t, NullableIBAN("DE89370400440532013000"), got.IBAN)
 }
 
+func TestNullableIBAN_UnmarshalJSON(t *testing.T) {
+	type obj struct {
+		IBAN NullableIBAN `json:"iban"`
+	}
+	// JSON null must reset a field that holds a value, like for
+	// uu.NullableID and email.NullableAddress, else decoding a partial
+	// update with null into an existing struct keeps the old IBAN.
+	o := obj{IBAN: "DE89370400440532013000"}
+	require.NoError(t, json.Unmarshal([]byte(`{"iban":null}`), &o))
+	assert.Equal(t, IBANNull, o.IBAN)
+
+	// A JSON string is assigned unchanged, without normalization or
+	// validation, like encoding/json did before NullableIBAN had
+	// UnmarshalJSON.
+	for _, str := range []string{"DE89370400440532013000", "DE89 3704 0044 0532 0130 00", "invalid", ""} {
+		o := obj{IBAN: "AT611904300234573201"}
+		data, err := json.Marshal(map[string]string{"iban": str})
+		require.NoError(t, err)
+		require.NoError(t, json.Unmarshal(data, &o))
+		assert.Equal(t, NullableIBAN(str), o.IBAN, "json.Unmarshal(%s)", data)
+	}
+
+	// Any other JSON value is an error and leaves the value unchanged.
+	for _, data := range []string{`123`, `true`, `{}`, `["DE89370400440532013000"]`} {
+		iban := NullableIBAN("DE89370400440532013000")
+		assert.Error(t, json.Unmarshal([]byte(data), &iban), "json.Unmarshal(%s)", data)
+		assert.Equal(t, NullableIBAN("DE89370400440532013000"), iban, "json.Unmarshal(%s)", data)
+	}
+}
+
 func TestNullableIBAN_JSONSchema(t *testing.T) {
 	// The schema must accept JSON null because NULL is marshalled as null
 	s := IBANNull.JSONSchema()

@@ -127,7 +127,7 @@ const Null NullableID = ""
 | `IsMOSS()`, `Number()`             | Like `ID`; false and `""` for `Null`.              |
 | `ScanString(source, validate)`     | `""`, `"NULL"`, `"null"` and `"nil"` set `Null`; otherwise like `ID`. |
 
-Implements: `fmt.Stringer`, `database/sql.Scanner`, `database/sql/driver.Valuer`, `json.Marshaler` (`MarshalJSON`, no `UnmarshalJSON`), `strfmt.Scannable`, `nullable.NullSetable[ID]` and `JSONSchema()` (the `ID` string or null).
+Implements: `fmt.Stringer`, `database/sql.Scanner`, `database/sql/driver.Valuer`, `json.Marshaler`, `json.Unmarshaler`, `strfmt.Scannable`, `nullable.NullSetable[ID]` and `JSONSchema()` (the `ID` string or null).
 
 ## Finding VAT IDs in text
 
@@ -159,7 +159,8 @@ var IDFinder idFinder
 | `Scan(string)`, `Scan([]byte)` | stored as is, not normalized or checked | same                 |
 | `Scan` of other types          | error wrapping `ErrInvalidID`           | error                |
 | JSON string                    | stored as is, not normalized or checked | same                 |
-| JSON `null`                    | field left unchanged                    | field left unchanged |
+| JSON `null`                    | field left unchanged                    | `Null`               |
+| other JSON values              | error                                   | error                |
 
 ## Gotchas
 
