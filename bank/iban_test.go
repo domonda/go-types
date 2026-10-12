@@ -157,6 +157,7 @@ func TestIBAN_Normalized_Rejects(t *testing.T) {
 		wantErr string
 	}{
 		{name: "empty", iban: "", wantErr: "empty"},
+		{name: "only whitespace", iban: " \t\n", wantErr: "empty"},
 		{name: "shorter than shortest country (NO)", iban: "NO938601111794", wantErr: "too short"},
 		{name: "unknown country", iban: "XX89370400440532013000", wantErr: "country code"},
 		{name: "lowercase country", iban: "de89370400440532013000", wantErr: "country code"},
@@ -200,6 +201,11 @@ func TestIBAN_Normalized_Whitespace(t *testing.T) {
 		"DE89\t3704\n0044\r\n0532 0130 00",
 		"DE89 3704 0044 0532 0130 00", // non-breaking space
 		"DE89​3704​0044​0532​0130​00", // zero width space
+		// Leading whitespace must be accepted like trailing whitespace,
+		// the country code is checked after removing the whitespace.
+		" DE89370400440532013000",
+		"\tDE89 3704 0044 0532 0130 00\n",
+		" DE89 3704 0044 0532 0130 00", // leading non-breaking space
 	} {
 		t.Run(string(iban), func(t *testing.T) {
 			norm, err := iban.Normalized()
@@ -328,6 +334,12 @@ func TestIBAN_BankAndAccountNumbers_Countries(t *testing.T) {
 		{"DE89370400440532013000", "37040044", "0532013000"},
 		{"CH9300762011623852957", "00762", "011623852957"},
 		{"AT611904300234573201", "19043", "00234573201"},
+		// IBANs are usually written in groups of 4 and are valid with
+		// whitespace, so the numbers must be taken from the normalized
+		// IBAN. Slicing the raw string returns wrong numbers without error.
+		{"DE89 3704 0044 0532 0130 00", "37040044", "0532013000"},
+		{" CH93 0076 2011 6238 5295 7", "00762", "011623852957"},
+		{"AT61 1904 3002 3457 3201\n", "19043", "00234573201"},
 	}
 	for _, tt := range tests {
 		t.Run(string(tt.iban), func(t *testing.T) {

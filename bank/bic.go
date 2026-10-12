@@ -1,13 +1,3 @@
-// Package bank provides comprehensive banking data types and utilities for Go applications.
-//
-// The package includes:
-// - IBAN (International Bank Account Number) validation and parsing
-// - BIC (Bank Identifier Code) validation and parsing
-// - Bank account management with validation
-// - CAMT53 bank statement parsing
-// - Database integration (Scanner/Valuer interfaces)
-// - JSON marshalling/unmarshalling
-// - Nullable banking types support
 package bank
 
 import (
@@ -37,8 +27,9 @@ func StringIsBIC(str string) bool {
 }
 
 // BIC represents a SWIFT Business Identifier Code (also known as SWIFT-Code).
-// BIC implements the database/sql.Scanner and database/sql/driver.Valuer interfaces
-// and treats an empty BIC string as SQL NULL value.
+// BIC implements the database/sql.Scanner and database/sql/driver.Valuer interfaces.
+// Scan assigns an empty BIC for SQL NULL, but Value writes an empty BIC
+// as empty string, use NullableBIC to write SQL NULL.
 type BIC string
 
 // ScanString tries to parse and assign the passed source string as value of the implementing type.
@@ -212,17 +203,17 @@ func (bic BIC) TrimBranchCode() BIC {
 	return bic[:8]
 }
 
-// IsTestBIC returns true if this is a test BIC (7th character is '0').
+// IsTestBIC returns true if this is a test BIC (8th character is '0').
 func (bic BIC) IsTestBIC() bool {
 	return bic.Valid() && bic[7] == '0'
 }
 
-// IsPassiveSWIFT returns true if this is a passive SWIFT BIC (7th character is '1').
+// IsPassiveSWIFT returns true if this is a passive SWIFT BIC (8th character is '1').
 func (bic BIC) IsPassiveSWIFT() bool {
 	return bic.Valid() && bic[7] == '1'
 }
 
-// ReceiverPaysFees returns true if the receiver pays fees (7th character is '2').
+// ReceiverPaysFees returns true if the receiver pays fees (8th character is '2').
 func (bic BIC) ReceiverPaysFees() bool {
 	return bic.Valid() && bic[7] == '2'
 }

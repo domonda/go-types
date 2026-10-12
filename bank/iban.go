@@ -42,8 +42,9 @@ func StringIsIBAN(str string) bool {
 }
 
 // IBAN is a International Bank Account Number.
-// IBAN implements the database/sql.Scanner and database/sql/driver.Valuer interfaces,
-// and will treat an empty IBAN string as SQL NULL value.
+// IBAN implements the database/sql.Scanner and database/sql/driver.Valuer interfaces.
+// Scan assigns an empty IBAN for SQL NULL, but Value writes an empty IBAN
+// as empty string, use NullableIBAN to write SQL NULL.
 type IBAN string
 
 // ScanString tries to parse and assign the passed
@@ -96,19 +97,21 @@ func (iban IBAN) CountryCode() country.Code {
 
 // Normalized returns the iban in normalized form,
 // or an error if the format can't be detected.
+// All whitespace, including leading whitespace, is removed
+// before the IBAN is checked.
 // Returns the IBAN unchanged in case of an error.
 func (iban IBAN) Normalized() (IBAN, error) {
+	normalized := IBAN(strutil.RemoveRunesString(string(iban), strutil.IsSpace))
 	switch {
-	case iban.Nullable().IsNull():
+	case normalized == "":
 		return iban, errors.New("empty IBAN")
-	case len(iban) < IBANMinLength:
+	case len(normalized) < IBANMinLength:
 		return iban, errors.New("IBAN too short")
 	}
-	countryLength, found := countryIBANLength[country.Code(iban[:2])]
+	countryLength, found := countryIBANLength[country.Code(normalized[:2])]
 	if !found {
 		return iban, errors.New("invalid IBAN country code")
 	}
-	normalized := IBAN(strutil.RemoveRunesString(string(iban), strutil.IsSpace))
 	if len(normalized) != countryLength {
 		// fmt.Println(normalized, len(normalized), countryLength)
 		return iban, errors.New("wrong IBAN length")
@@ -228,19 +231,19 @@ func (IBAN) JSONSchema() *jsonschema.Schema {
 	}
 }
 
-// BankAndAccountNumbers extracts the bank number and account number from the IBAN
-// for supported countries (AT, CH, DE). Returns an error if the IBAN is invalid
-// or the country is not supported.
+// BankAndAccountNumbers extracts the bank number and account number from the
+// normalized IBAN (whitespace removed) for supported countries (AT, CH, DE).
+// Returns an error if the IBAN is invalid or the country is not supported.
 func (iban *IBAN) BankAndAccountNumbers() (bankNo, accountNo string, err error) {
-	country := iban.CountryCode()
-	if country == "" {
+	norm, err := iban.Normalized()
+	if err != nil {
 		return "", "", fmt.Errorf("invalid IBAN: %q", string(*iban))
 	}
-	getNumbers, found := getBankAndAccountNumbers[country]
+	getNumbers, found := getBankAndAccountNumbers[country.Code(norm[:2])]
 	if !found {
 		return "", "", fmt.Errorf("can't extract bank and account numbers from IBAN: %q", string(*iban))
 	}
-	return getNumbers(string(*iban))
+	return getNumbers(string(norm))
 }
 
 var getBankAndAccountNumbers = map[country.Code]func(string) (string, string, error){

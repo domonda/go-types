@@ -152,8 +152,8 @@ func (bic NullableBIC) String() string {
 	return string(norm)
 }
 
-// StringOr returns the result of NullableBIC.String()
-// or the passed defaultString if the NullableBIC is null.
+// StringOr returns the NullableBIC as string without normalization,
+// unlike String, or the passed defaultString if the NullableBIC is null.
 func (bic NullableBIC) StringOr(defaultString string) string {
 	if bic.IsNull() {
 		return defaultString

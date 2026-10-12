@@ -1,13 +1,18 @@
-// Package bank provides comprehensive banking data types and utilities for Go applications.
+// Package bank provides banking data types for Go applications.
 //
 // The package includes:
-// - IBAN (International Bank Account Number) validation and parsing
-// - BIC (Bank Identifier Code) validation and parsing
-// - Bank account management with validation
-// - CAMT53 bank statement parsing
-// - Database integration (Scanner/Valuer interfaces)
-// - JSON marshalling/unmarshalling
-// - Nullable banking types support
+//   - IBAN (International Bank Account Number) validation and normalization
+//   - BIC (Business Identifier Code, SWIFT-Code) validation and normalization
+//   - NullableIBAN and NullableBIC using the empty string as null value
+//   - Account combining IBAN, BIC, currency, and holder with validation
+//   - IBANFinder and BICFinder to find IBANs and BICs in text,
+//     IBANParser and BICParser implementing strfmt.Parser
+//   - database/sql Scanner and driver.Valuer implementations,
+//     only the nullable types write SQL NULL
+//   - JSON null for the empty nullable types, Account unmarshalling
+//     from a JSON object or an IBAN string, and JSON schemas
+//   - CAMT53 and related structs to unmarshal CAMT.053 bank statement XML
+//     with encoding/xml (the package has no CAMT.053 parsing logic of its own)
 package bank
 
 import (
