@@ -194,9 +194,12 @@ func TestNullableRate(t *testing.T) {
 	})
 }
 
-// TestRate_ScanString pins that ScanString accepts both decimal separators
-// and thousands grouping like ParseRate does, and that validate rejects
-// the non-finite rates that the parser accepts.
+// TestRate_ScanString pins that ScanString accepts both decimal separators,
+// thousands grouping and a trailing percent sign like ParseRate does, and
+// that validate rejects the non-finite rates that the parser accepts.
+// A percentage like "15%" has to scan as the same fraction 0.15 that
+// ParseRate and UnmarshalJSON return for it, because a rate read from a
+// CSV or form must not depend on which of the three entry points read it.
 func TestRate_ScanString(t *testing.T) {
 	tests := []struct {
 		source   string
@@ -210,12 +213,16 @@ func TestRate_ScanString(t *testing.T) {
 		{source: "1.234,5", validate: true, want: 1234.5},
 		{source: "1,234.5", validate: true, want: 1234.5},
 		{source: "-1,5", validate: true, want: -1.5},
+		{source: "15%", validate: true, want: 0.15},
+		{source: " 19,5 % ", validate: true, want: 0.195},
+		{source: "-2.5%", validate: false, want: -0.025},
 		{source: "NaN", validate: false, want: Rate(math.NaN())},
 		{source: "Inf", validate: false, want: Rate(math.Inf(1))},
 		{source: "NaN", validate: true, wantErr: true},
 		{source: "-Inf", validate: true, wantErr: true},
 		{source: "", validate: false, wantErr: true},
 		{source: "abc", validate: false, wantErr: true},
+		{source: "%", validate: false, wantErr: true},
 	}
 	for _, tt := range tests {
 		t.Run(fmt.Sprintf("%q validate=%t", tt.source, tt.validate), func(t *testing.T) {
@@ -228,6 +235,10 @@ func TestRate_ScanString(t *testing.T) {
 			}
 			require.NoError(t, err)
 			assert.True(t, equalInclNaN(float64(tt.want), float64(r)), "got %v, want %v", r, tt.want)
+
+			parsed, err := ParseRate(tt.source)
+			require.NoError(t, err)
+			assert.True(t, equalInclNaN(float64(parsed), float64(r)), "ScanString %v must equal ParseRate %v", r, parsed)
 		})
 	}
 }

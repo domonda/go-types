@@ -88,15 +88,18 @@ func (r Rate) Ptr() *Rate {
 // If validate is false and the source string
 // can still be assigned in some non-normalized way
 // it will be assigned without returning an error.
+//
+// The source string is parsed with ParseRate,
+// so a trailing '%' divides the number by 100.
 func (r *Rate) ScanString(source string, validate bool) error {
-	f, err := float.Parse(source)
+	rate, err := ParseRate(source)
 	if err != nil {
 		return err
 	}
-	if validate && !Rate(f).Valid() {
+	if validate && !rate.Valid() {
 		return fmt.Errorf("invalid rate: %q", source)
 	}
-	*r = Rate(f)
+	*r = rate
 	return nil
 }
 
