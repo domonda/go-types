@@ -762,6 +762,15 @@ var validateTestCases = []struct {
 	// A pointer receiver method can handle nil itself, so it is still called
 	{name: "nil pointer receiver ValidatErr is called with nil", value: (*nilCheckingValidatErr)(nil), wantErr: "nil pointer", wantUnchanged: errNilPointer, wantIsValidatable: true},
 	{name: "nil pointer receiver Validator is called with nil", value: (*nilCheckingValidator)(nil), wantErr: "invalid *types.nilCheckingValidator value: (*types.nilCheckingValidator)(nil)", wantIsValidatable: true},
+	// A nil func has no function that its Valid or Validate method
+	// could call, Go panics with a nil func call instead.
+	// Like DeepValidate skips nil funcs, the absent func is not
+	// validated, but its type implements the interface so it is validatable.
+	{name: "nil ValidatorFunc is not called", value: ValidatorFunc(nil), wantIsValidatable: true},
+	{name: "nil ValidatErrFunc is not called", value: ValidatErrFunc(nil), wantIsValidatable: true},
+	// Only the nil func is skipped, a func is still called
+	{name: "non-nil ValidatorFunc is called", value: ValidatorFunc(func() bool { return false }), wantErr: "invalid types.ValidatorFunc value: (types.ValidatorFunc)(0x", wantIsValidatable: true},
+	{name: "non-nil ValidatErrFunc is called", value: ValidatErrFunc(func() error { return errNegative }), wantErr: "negative number", wantUnchanged: errNegative, wantIsValidatable: true},
 }
 
 // errNilPointer is the specific error of nilCheckingValidatErr.Validate.
@@ -845,6 +854,39 @@ func TestValidatorAsValidatErr(t *testing.T) {
 	}
 }
 
+// TestValidators checks that Validators and CombinedValidator are valid only
+// if every element is valid, using the Valid method of each element even if
+// it also implements ValidatErr. An absent validator has nothing to validate,
+// like Validate returns nil for it, so a nil element, a nil func, and a nil
+// pointer to a value receiver Validator are skipped instead of panicking.
+func TestValidators(t *testing.T) {
+	tests := []struct {
+		name       string
+		validators []Validator
+		want       bool
+	}{
+		{name: "nil", validators: nil, want: true},
+		{name: "all valid", validators: []Validator{validString("a"), StaticValidator(true)}, want: true},
+		{name: "one invalid", validators: []Validator{validString("a"), invalidString("b")}, want: false},
+		// Valid is used, not the lenient Validate of the same value
+		{name: "Valid of a ValidatErr is used", validators: []Validator{strictValidLenientValidate(1)}, want: false},
+		{name: "nil elements are skipped", validators: []Validator{nil, ValidatorFunc(nil), (*invalidString)(nil), validString("a")}, want: true},
+		{name: "nil elements don't hide an invalid one", validators: []Validator{nil, ValidatorFunc(nil), invalidString("b")}, want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name+"/Validators", func(t *testing.T) {
+			if got := Validators(tt.validators).Valid(); got != tt.want {
+				t.Errorf("Valid() = %t, want %t", got, tt.want)
+			}
+		})
+		t.Run(tt.name+"/CombinedValidator", func(t *testing.T) {
+			if got := CombinedValidator(tt.validators...).Valid(); got != tt.want {
+				t.Errorf("Valid() = %t, want %t", got, tt.want)
+			}
+		})
+	}
+}
+
 // TestValidatErrs checks that ValidatErrs and CombinedValidatErr report all
 // invalid elements at once instead of only the first one, so that a caller
 // can show every problem of a value together. Every element has to be
@@ -888,6 +930,21 @@ func TestValidatErrs(t *testing.T) {
 			validatErrs: []ValidatErr{validatErr("1", errA), validatErr("2", nil), validatErr("3", errB)},
 			wantCalled:  []string{"1", "2", "3"},
 			wantErrs:    []error{errA, errB},
+		},
+		{
+			// An absent validator has nothing to validate,
+			// like Validate returns nil for each of these values,
+			// so it must neither panic nor hide the other errors.
+			name: "nil elements are skipped",
+			validatErrs: []ValidatErr{
+				nil,
+				validatErr("1", errA),
+				ValidatErrFunc(nil),
+				(*signedInt)(nil),
+				validatErr("2", errB),
+			},
+			wantCalled: []string{"1", "2"},
+			wantErrs:   []error{errA, errB},
 		},
 	}
 	for _, tt := range tests {

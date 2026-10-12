@@ -54,6 +54,7 @@ func TestCanMarshalJSON(t *testing.T) {
 		{"map[uint64]string", reflect.TypeFor[map[uint64]string](), true},
 		{"map[textMarshalerStub]int", reflect.TypeFor[map[textMarshalerStub]int](), true},
 		{"map[float64]string", reflect.TypeFor[map[float64]string](), false},
+		{"map[any]int", reflect.TypeFor[map[any]int](), false},
 		{"map[bool]int", reflect.TypeFor[map[bool]int](), false},
 		{"map[complex128]int", reflect.TypeFor[map[complex128]int](), false},
 
@@ -146,5 +147,62 @@ func TestCanMarshalJSON_PointerReceiverTextMarshaler(t *testing.T) {
 	}
 	if want := `{"F":"text"}`; string(j) != want {
 		t.Errorf("json.Marshal = %s, want %s", j, want)
+	}
+}
+
+// textMarshalerPtrStub implements encoding.TextMarshaler
+// only with a pointer receiver.
+type textMarshalerPtrStub struct{ s string }
+
+func (t *textMarshalerPtrStub) MarshalText() ([]byte, error) { return []byte(t.s), nil }
+
+// textMarshalerPtrString is of string kind and implements
+// encoding.TextMarshaler only with a pointer receiver.
+type textMarshalerPtrString string
+
+func (t *textMarshalerPtrString) MarshalText() ([]byte, error) { return []byte(*t), nil }
+
+// TestCanMarshalJSON_MapKeys checks that CanMarshalJSON accepts exactly the
+// map key types that encoding/json accepts, because callers use it to decide
+// up front whether json.Marshal can encode a value. encoding/json accepts a
+// key of string or integer kind, or a key type that implements
+// encoding.TextMarshaler itself. It never calls a pointer receiver
+// MarshalText for a key, because map keys are not addressable, so a key type
+// whose pointer type alone implements the interface fails, while the pointer
+// type works as key.
+//
+// Float and interface keys are not compared with json.Marshal here: the
+// encoding/json of Go 1.27, which is built on encoding/json/v2, also encodes
+// them, unlike its documented rule and Go 1.26. TestCanMarshalJSON pins the
+// documented rule for them.
+func TestCanMarshalJSON_MapKeys(t *testing.T) {
+	tests := []struct {
+		name string
+		m    any // map with one entry
+		want bool
+	}{
+		{name: "string", m: map[string]int{"a": 1}, want: true},
+		{name: "int8", m: map[int8]int{1: 1}, want: true},
+		{name: "uintptr", m: map[uintptr]int{1: 1}, want: true},
+		// The string kind is used, the pointer method is not needed
+		{name: "string kind with pointer receiver MarshalText", m: map[textMarshalerPtrString]int{"a": 1}, want: true},
+		{name: "value receiver MarshalText", m: map[textMarshalerStub]int{{s: "a"}: 1}, want: true},
+		{name: "pointer receiver MarshalText", m: map[textMarshalerPtrStub]int{{s: "a"}: 1}, want: false},
+		{name: "pointer to pointer receiver MarshalText", m: map[*textMarshalerPtrStub]int{{s: "a"}: 1}, want: true},
+		{name: "encoding.TextMarshaler interface", m: map[encoding.TextMarshaler]int{textMarshalerStub{s: "a"}: 1}, want: true},
+		{name: "bool", m: map[bool]int{true: 1}, want: false},
+		{name: "array", m: map[[2]int]int{{1, 2}: 1}, want: false},
+		{name: "struct", m: map[struct{ A int }]int{{A: 1}: 1}, want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := json.Marshal(tt.m)
+			if jsonOK := err == nil; jsonOK != tt.want {
+				t.Fatalf("test case is wrong: json.Marshal(%T) error = %v, want success %t", tt.m, err, tt.want)
+			}
+			if got := CanMarshalJSON(reflect.TypeOf(tt.m)); got != tt.want {
+				t.Errorf("CanMarshalJSON(%T) = %t, but json.Marshal error = %v", tt.m, got, err)
+			}
+		})
 	}
 }

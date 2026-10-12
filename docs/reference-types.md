@@ -75,11 +75,11 @@ Composition helpers:
 |----------------------------------------------------|----------------------------------------------------|
 | `ValidatorFunc`                                    | `func() bool` that implements `Validator`.         |
 | `StaticValidator`                                  | `bool` that implements `Validator`.                |
-| `Validators`                                       | `[]Validator`. `Valid()` is false if any element is false. A nil element panics unless an earlier element is false. |
+| `Validators`                                       | `[]Validator`. `Valid()` is false if any element is false. nil elements, nil funcs and nil pointers that `Validate` does not validate are skipped. |
 | `CombinedValidator(validators ...Validator) Validator` | Returns `Validators(validators)`.                  |
 | `ValidatErrFunc`                                   | `func() error` that implements `ValidatErr`.       |
 | `StaticValidatErr`                                 | `struct{ Err error }` whose `Validate()` returns `Err`. |
-| `ValidatErrs`                                      | `[]ValidatErr`. `Validate()` calls every element and returns all errors joined with `errors.Join`, or nil. A nil element panics. |
+| `ValidatErrs`                                      | `[]ValidatErr`. `Validate()` calls `Validate` for every element and returns all errors joined with `errors.Join`, or nil. |
 | `CombinedValidatErr(validatErrs ...ValidatErr) ValidatErr` | Returns `ValidatErrs(validatErrs)`.                |
 | `ValidatorAsValidatErr`                            | `struct{ Validator }` whose `Validate()` returns an error naming the type and value of the wrapped `Validator` if it is invalid. |
 
@@ -222,14 +222,14 @@ type Finder interface {
 - `Set.String()` gives `[1, 2]`, while `mapset.String` gives `{1 2}`.
 - A `ValidatErr` method wins over a `Validator` method on the same type, so `Validate` can accept a value whose `Valid()` is false.
 - The error for a failed `Validator` contains the value formatted with `%#v`: a pointer shows up as an address, and a secret like a password ends up in the message, for example `invalid main.secret value: "pw"`. Implement `ValidatErr` with your own message for such types.
-- `Validate(types.ValidatorFunc(nil))` panics with a nil func call, and so does a nil element in `Validators` or `ValidatErrs`. `DeepValidate` skips nil funcs.
+- A nil func like `types.ValidatorFunc(nil)` counts as valid: `Validate` returns nil for it, and `Validators`, `ValidatErrs` and `DeepValidate` skip it, also if its method could handle nil. So do nil elements of `Validators` and `ValidatErrs`.
 - `DeepValidate` calls `Validate` methods with pointer receivers through a pointer to addressable data, so a `Validate` that changes its receiver changes the caller's data when you pass a pointer. Map values and values passed by value are validated through a copy.
 - `LenString` counts bytes: `NewLenString("äö", 0, 3).Validate()` fails because `"äö"` has 4 bytes.
 - All `LenString` methods have pointer receivers. A `LenString` field of a struct marshalled by value encodes as `{}`, and `types.MustLenString("abc", 1, 3).String()` does not compile. Use `*LenString` fields or marshal a pointer to the struct.
 - The zero `LenString{}` has `min` and `max` 0 and accepts only `""`.
 - `KeyMutex` is not reentrant, and `Unlock` of a key that is not locked panics with the key in the message.
 - Sorting values of different types with `CompareReflectValue` does not panic, but their order is unspecified, because the result is not a strict weak ordering.
-- `CanMarshalJSON` can return true for types that fail at runtime: struct fields, slice elements and map values are not inspected, so `struct{ C chan int }` passes, and pointer-receiver marshalers are not called for values passed by value or for map keys.
+- `CanMarshalJSON` can return true for types that fail at runtime: struct fields, slice elements and map values are not inspected, so `struct{ C chan int }` passes, and pointer-receiver marshalers are not called for values passed by value.
 
 ## Examples
 

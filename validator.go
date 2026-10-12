@@ -39,9 +39,14 @@ type Validators []Validator
 
 // Valid returns if the data of the implementation is valid.
 // Returns false if any validator in the slice returns false.
-// A nil element panics unless an earlier element returned false.
+// Elements that [Validate] does not validate are skipped:
+// nil, a nil func, and a nil pointer to a type implementing
+// Validator with a value receiver.
 func (v Validators) Valid() bool {
 	for _, validator := range v {
+		if validator == nil || isNilFunc(validator) || isNilPointerWithValueMethod(validator, validatorType) {
+			continue
+		}
 		if !validator.Valid() {
 			return false
 		}
@@ -97,10 +102,12 @@ type ValidatErrs []ValidatErr
 // and returns all their errors joined with errors.Join,
 // or nil if no element returned an error.
 // errors.Is and errors.As find each of the joined errors.
-// A nil element panics.
+// Elements that [Validate] does not validate are skipped:
+// nil, a nil func, and a nil pointer to a type implementing
+// ValidatErr with a value receiver.
 func (v ValidatErrs) Validate() (err error) {
 	for _, validatErr := range v {
-		err = errors.Join(err, validatErr.Validate())
+		err = errors.Join(err, Validate(validatErr))
 	}
 	return err
 }
@@ -143,15 +150,17 @@ func (v ValidatorAsValidatErr) Validate() error {
 // receiver, which can't be called without a value, then nil is returned,
 // like [DeepValidate] skips nil pointers. A method with a pointer receiver
 // is called with the nil pointer, so it can handle nil itself.
+// If v is a nil func like ValidatorFunc(nil), whose method would call
+// the nil func, then nil is returned, like [DeepValidate] skips nil funcs.
 func Validate(v any) error {
 	switch x := v.(type) {
 	case ValidatErr:
-		if isNilPointerWithValueMethod(v, validatErrType) {
+		if isNilFunc(v) || isNilPointerWithValueMethod(v, validatErrType) {
 			return nil
 		}
 		return x.Validate()
 	case Validator:
-		if isNilPointerWithValueMethod(v, validatorType) {
+		if isNilFunc(v) || isNilPointerWithValueMethod(v, validatorType) {
 			return nil
 		}
 		if !x.Valid() {
@@ -176,16 +185,19 @@ func Validate(v any) error {
 // receiver, which can't be called without a value, then nil and true are
 // returned, like [DeepValidate] skips nil pointers. A method with a pointer
 // receiver is called with the nil pointer, so it can handle nil itself.
+// If v is a nil func like ValidatorFunc(nil), whose method would call
+// the nil func, then nil and true are returned, like [DeepValidate]
+// skips nil funcs.
 // The boolean return value indicates whether the value was validatable.
 func TryValidate(v any) (err error, isValidatable bool) {
 	switch x := v.(type) {
 	case ValidatErr:
-		if isNilPointerWithValueMethod(v, validatErrType) {
+		if isNilFunc(v) || isNilPointerWithValueMethod(v, validatErrType) {
 			return nil, true
 		}
 		return x.Validate(), true
 	case Validator:
-		if isNilPointerWithValueMethod(v, validatorType) {
+		if isNilFunc(v) || isNilPointerWithValueMethod(v, validatorType) {
 			return nil, true
 		}
 		if !x.Valid() {
@@ -204,6 +216,13 @@ func TryValidate(v any) (err error, isValidatable bool) {
 func isNilPointerWithValueMethod(v any, iface reflect.Type) bool {
 	val := reflect.ValueOf(v)
 	return val.Kind() == reflect.Pointer && val.IsNil() && val.Type().Elem().Implements(iface)
+}
+
+// isNilFunc reports if v is a nil func, like ValidatorFunc(nil).
+// A Valid or Validate method of a func type would call the nil func and panic.
+func isNilFunc(v any) bool {
+	val := reflect.ValueOf(v)
+	return val.Kind() == reflect.Func && val.IsNil()
 }
 
 // DeepValidate recursively validates v and everything reachable from it,

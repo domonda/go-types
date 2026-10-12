@@ -21,8 +21,9 @@ var (
 //     unsigned integer kind, float32/float64, or string,
 //   - t is an array, slice, or struct (field types are not inspected),
 //   - t is a map whose key kind is supported by encoding/json: string,
-//     any integer kind, or a key type implementing [encoding.TextMarshaler]
-//     (directly or via its pointer receiver),
+//     any integer kind, or a key type that implements [encoding.TextMarshaler]
+//     itself, not only via its pointer type, because map keys are not
+//     addressable,
 //   - t is a pointer to a marshalable element type.
 //
 // Kinds rejected by encoding/json (complex, chan, func, unsafe.Pointer) return
@@ -32,9 +33,9 @@ var (
 //     inspected, so a struct with a chan field or a non-empty []func()
 //     passes the check,
 //   - encoding/json calls a method with a pointer receiver only for
-//     addressable values and never for map keys, so a type whose pointer
-//     type alone implements [json.Marshaler] or [encoding.TextMarshaler]
-//     can still fail when marshalled by value or used as map key,
+//     addressable values, so a type whose pointer type alone implements
+//     [json.Marshaler] or [encoding.TextMarshaler] can still fail
+//     when marshalled by value,
 //   - value-dependent failures such as float NaN/Inf are invisible here.
 func CanMarshalJSON(t reflect.Type) bool {
 	if t == nil {
@@ -80,7 +81,9 @@ func CanMarshalJSON(t reflect.Type) bool {
 
 // canMarshalJSONMapKey reports whether encoding/json accepts k as a map key
 // type. The rules mirror encoding/json: string keys, integer keys, or keys
-// implementing [encoding.TextMarshaler].
+// implementing [encoding.TextMarshaler]. Map keys are not addressable,
+// so a key type whose pointer type alone implements
+// [encoding.TextMarshaler] is not accepted.
 func canMarshalJSONMapKey(k reflect.Type) bool {
 	switch k.Kind() {
 	case reflect.String,
@@ -88,11 +91,5 @@ func canMarshalJSONMapKey(k reflect.Type) bool {
 		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
 		return true
 	}
-	if k.Implements(textMarshalerType) {
-		return true
-	}
-	if k.Kind() != reflect.Pointer && reflect.PointerTo(k).Implements(textMarshalerType) {
-		return true
-	}
-	return false
+	return k.Implements(textMarshalerType)
 }
