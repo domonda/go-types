@@ -17,7 +17,12 @@ import (
 // Valid rune values for thousandsSep are 0, ',', '.', ' ', "'"
 // and thousandsSep must be different from decimalSep.
 // The precision argument is the number of fractional digits the value is
-// rounded to. The special precision -1 uses the smallest number of digits
+// rounded to half away from zero. Like RoundToDecimals it rounds the
+// shortest decimal representation of f, which is the decimal literal that
+// parses back to f, instead of its binary value, so 1.005 formats as "1.01"
+// and 2.5 as "3" with precisions 2 and 0, where strconv.FormatFloat rounds
+// the binary value 1.00499999999999989342 to "1.00" and the tie 2.5 to even.
+// The special precision -1 uses the smallest number of digits
 // necessary such that ParseFloat will return f exactly.
 // If padPrecision is true, the fractional part is kept at exactly precision
 // digits, padding the end with '0' characters when needed.
@@ -39,32 +44,37 @@ func Format[T ~float32 | ~float64](f T, thousandsSep, decimalSep rune, precision
 	}
 
 	bitSize := reflect.TypeFor[T]().Bits()
-	str := strconv.FormatFloat(float64(f), 'f', precision, bitSize)
+	str := strconv.FormatFloat(float64(f), 'f', -1, bitSize)
 	// NaN and ±Inf have no integer part to group or fractional part
 	// to trim, so return strconv's representation unchanged.
 	if math.IsNaN(float64(f)) || math.IsInf(float64(f), 0) {
 		return str
 	}
+	if precision >= 0 {
+		str = roundFormatted(str, precision)
+	}
 
-	// strconv.FormatFloat with a non-negative precision always emits exactly
-	// precision fractional digits. When padPrecision is false those trailing
-	// zeros are trimmed (along with a then-dangling point) to return the
-	// shortest representation of the value rounded to precision.
+	// With a non-negative precision str has exactly precision fractional
+	// digits. When padPrecision is false those trailing zeros are trimmed
+	// (along with a then-dangling point) to return the shortest
+	// representation of the value rounded to precision.
 	if !padPrecision && strings.IndexByte(str, '.') != -1 {
 		str = strings.TrimRight(str, "0")
 		str = strings.TrimSuffix(str, ".")
 	}
 
-	if thousandsSep != 0 && math.Abs(float64(f)) >= 1000 {
-		pointPos := strings.IndexByte(str, '.')
-		if pointPos == -1 {
-			pointPos = len(str)
-		}
-		prefixLen := 0
-		if f < 0 {
-			prefixLen = 1
-		}
-		integerLen := pointPos - prefixLen
+	pointPos := strings.IndexByte(str, '.')
+	if pointPos == -1 {
+		pointPos = len(str)
+	}
+	prefixLen := 0
+	if str[0] == '-' {
+		prefixLen = 1
+	}
+	integerLen := pointPos - prefixLen
+	// Checking the formatted integer digits instead of f also groups
+	// a value like 999.995 that rounding carried to 1000
+	if thousandsSep != 0 && integerLen > 3 {
 		firstGroupLen := prefixLen
 		if integerLen%3 == 0 {
 			firstGroupLen += 3
@@ -104,4 +114,40 @@ func Format[T ~float32 | ~float64](f T, thousandsSep, decimalSep rune, precision
 	}
 
 	return str
+}
+
+// roundFormatted rounds the decimal number str, as formatted by
+// strconv.FormatFloat with the 'f' format, half away from zero
+// to exactly precision fractional digits.
+func roundFormatted(str string, precision int) string {
+	_, fracDigits, hasPoint := strings.Cut(str, ".")
+	if len(fracDigits) <= precision {
+		// Nothing to round, only zeros to pad
+		if precision == 0 {
+			return str
+		}
+		var b strings.Builder
+		b.Grow(len(str) + 1 + precision - len(fracDigits))
+		b.WriteString(str)
+		if !hasPoint {
+			b.WriteByte('.')
+		}
+		for range precision - len(fracDigits) {
+			b.WriteByte('0')
+		}
+		return b.String()
+	}
+	sign := ""
+	if str[0] == '-' {
+		sign, str = "-", str[1:]
+	}
+	intDigits, fracDigits, _ := strings.Cut(str, ".")
+	// The digits of the rounded number times 10^precision, which are at
+	// least len(intDigits)+precision digits because intDigits is never empty
+	digits := roundDigitsHalfAwayFromZero(intDigits, fracDigits, precision)
+	if precision == 0 {
+		return sign + digits
+	}
+	intLen := len(digits) - precision
+	return sign + digits[:intLen] + "." + digits[intLen:]
 }
