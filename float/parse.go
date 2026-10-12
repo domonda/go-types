@@ -11,7 +11,8 @@ import (
 )
 
 // Parse a float string compatible with Format.
-// If a separator was not detected, then zero will be returned for thousandsSep or decimalSep.
+// It is ParseDetails without the detected separators and decimals,
+// see ParseDetails for the separator rules.
 // See: https://en.wikipedia.org/wiki/Decimal_separator
 func Parse(str string) (float64, error) {
 	f, _, _, _, err := ParseDetails(str)

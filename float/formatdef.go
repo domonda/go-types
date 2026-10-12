@@ -46,7 +46,10 @@ func (ff *FormatDef) Format(f float64) string {
 	return Format(f, ff.ThousandsSep, ff.DecimalSep, ff.Precision, ff.PadPrecision)
 }
 
-// Parse implements the Parser interface
+// Parse implements the strfmt.Parser interface.
+// It parses str with the package function Parse
+// and returns the value formatted with ff.
+// The langHints are ignored.
 func (ff *FormatDef) Parse(str string, langHints ...language.Code) (normalized string, err error) {
 	f, err := Parse(str)
 	if err != nil {

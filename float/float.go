@@ -1,12 +1,3 @@
-// Package float provides utilities for working with floating-point numbers in Go.
-// It includes functions for rounding, validation, and safe pointer dereferencing
-// for both float32 and float64 types using Go generics.
-//
-// The package includes:
-//   - Decimal rounding utilities
-//   - Float validation (NaN and infinity checks)
-//   - Sign validation
-//   - Safe pointer dereferencing with default values
 package float
 
 import (
