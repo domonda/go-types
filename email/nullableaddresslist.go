@@ -197,7 +197,8 @@ func (n *NullableAddressList) UnmarshalText(text []byte) error {
 }
 
 // UnmarshalJSON implements the json.Unmarshaler interface
-// returning the JSON null value for and empty/NULL address list.
+// setting the NullableAddressList to null for the JSON null value
+// or an empty JSON string.
 func (n *NullableAddressList) UnmarshalJSON(data []byte) error {
 	if bytes.Equal(data, []byte("null")) {
 		n.SetNull()

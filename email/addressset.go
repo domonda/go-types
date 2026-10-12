@@ -13,6 +13,7 @@ import (
 	"github.com/domonda/go-types"
 	"github.com/domonda/go-types/mapset"
 	"github.com/domonda/go-types/notnull"
+	"github.com/domonda/go-types/strutil"
 )
 
 // AddressSet is a set of unique email addresses.
@@ -387,6 +388,7 @@ func (set AddressSet) ValidAndNormalized() bool {
 
 // Scan implements the database/sql.Scanner interface.
 // Supports scanning SQL strings and string arrays.
+// Whitespace around the array elements or a plain string is trimmed.
 func (set *AddressSet) Scan(value any) error {
 	switch s := value.(type) {
 	case string:
@@ -408,7 +410,12 @@ func (set *AddressSet) Scan(value any) error {
 				set.Add(Address(addr))
 			}
 		} else {
-			*set = AddressSet{Address(s): struct{}{}}
+			// Trimmed like the array elements by scanAddressArray
+			addr := strutil.TrimSpace(s)
+			if addr == "" {
+				return errors.New("can't scan whitespace only string as email.AddressSet")
+			}
+			*set = AddressSet{Address(addr): struct{}{}}
 		}
 		return nil
 

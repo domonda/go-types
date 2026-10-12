@@ -330,6 +330,13 @@ func TestAddressSet_ScanNonArray(t *testing.T) {
 		// A plain string is a single address, not an array literal,
 		// so that a non-array SQL column can be scanned too.
 		{name: "plain string", value: "a@example.com", want: MakeAddressSet("a@example.com")},
+		// Like the padded array elements below, the padding of a plain
+		// string is not part of the address, else " a@example.com " and
+		// "a@example.com" would be different members of the set.
+		{name: "padded plain string", value: " a@example.com\t", want: MakeAddressSet("a@example.com")},
+		{name: "padded plain bytes", value: []byte(" a@example.com "), want: MakeAddressSet("a@example.com")},
+		// Whitespace only is no address, like the empty string
+		{name: "whitespace only plain string", value: "  ", wantErr: true},
 		{name: "bytes", value: []byte(`{a@example.com,b@example.com}`), want: MakeAddressSet("a@example.com", "b@example.com")},
 		{name: "empty array", value: "{}", want: AddressSet{}},
 		// A hand written literal, unlike PostgreSQL output, may pad its

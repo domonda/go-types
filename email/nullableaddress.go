@@ -175,6 +175,9 @@ func (n *NullableAddress) Scan(value any) error {
 		*n = NullableAddress(s)
 		return nil
 
+	case []byte:
+		return n.Scan(string(s))
+
 	default:
 		return fmt.Errorf("can't scan %T as email.NullableAddress", value)
 	}
@@ -195,7 +198,8 @@ func (n *NullableAddress) UnmarshalText(text []byte) error {
 }
 
 // UnmarshalJSON implements the json.Unmarshaler interface
-// returning the JSON null value for and empty/NULL address.
+// setting the NullableAddress to null for the JSON null value
+// or an empty JSON string.
 func (n *NullableAddress) UnmarshalJSON(data []byte) error {
 	if bytes.Equal(data, []byte(`null`)) {
 		n.SetNull()

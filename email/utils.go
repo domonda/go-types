@@ -102,7 +102,7 @@ func ExtractBodyURLs(msg *Message) strutil.StringSet {
 }
 
 // HTMLToPlaintext converts HTML to plaintext
-// by concaternating the content of text nodes
+// by concatenating the content of text nodes
 // with the passed delimiter between them.
 // Whitespace is trimmed from the text nodes and
 // nodes consisting only of whitespace are ignored.
