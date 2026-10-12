@@ -402,6 +402,14 @@ picking the semver baseline.
 - **Breaking:** `strfmt` formats a zero `date.Date` and a null
   `date.NullableDate` as the `FormatConfig.Nil` placeholder like every other
   null value, instead of `""`.
+- **Breaking:** a non-nil empty `nullable.JSON` is null: `IsNull` reports it
+  and `Value` writes SQL NULL, like `MarshalJSON` already wrote `null` for it.
+  `Value` wrote empty bytes, which a PostgreSQL `json` column rejects. A
+  non-nil empty `notnull.JSON` is written as `'{}'` like nil.
+- **Breaking:** `account.NullableNumber` treats a whitespace-only value as
+  null in `IsNull`, as `Value` and `MarshalJSON` already wrote it as NULL and
+  `null`, and decodes the JSON number `0` as `NumberNull` like
+  `Scan(int64(0))` and `NullableNumberFromUint(0)`.
 - `strfmt.Scan` scans into `nullable.Type[T]` destinations, like
   `money.NullableAmount`, `NullableCentAmount` and `NullableDecimalAmount`,
   by scanning into a `T` with its own scanner and setting the value, and a
