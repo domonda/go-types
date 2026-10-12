@@ -2,422 +2,160 @@
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/domonda/go-types.svg)](https://pkg.go.dev/github.com/domonda/go-types) [![Go Report Card](https://goreportcard.com/badge/github.com/domonda/go-types)](https://goreportcard.com/report/github.com/domonda/go-types) [![Go](https://github.com/domonda/go-types/actions/workflows/go.yml/badge.svg)](https://github.com/domonda/go-types/actions/workflows/go.yml) [![Go version](https://img.shields.io/github/go-mod/go-version/domonda/go-types)](https://github.com/domonda/go-types) [![license](https://img.shields.io/badge/license-MIT-red.svg?style=flat)](https://github.com/domonda/go-types/blob/master/LICENSE)
 
-A comprehensive Go library providing enhanced type definitions, validation, and utility functions for common data types and operations.
+Go types for the data that business documents are made of: money amounts and
+currencies, dates, IBANs and BICs, VAT IDs, country and language codes, email
+addresses and messages, and UUIDs. Each type parses the many ways people and
+other systems write a value, normalizes it to one canonical form, validates
+it, and round-trips through `database/sql` and `encoding/json`. Optional
+values have `Nullable` variants that map to SQL `NULL` and JSON `null`.
 
-## Overview
-
-`go-types` is a collection of Go packages that extend the standard library with additional type definitions, validation frameworks, and utility functions. It provides type-safe implementations for common data structures and operations, making it easier to work with validated data, nullable types, and specialized data formats.
-
-## Features
-
-- **Type-Safe Collections**: Generic Set implementation with comprehensive operations
-- **Validation Framework**: Flexible validation system with both boolean and error-based validation
-- **Nullable Types**: Support for nullable values with proper JSON marshaling/unmarshaling
-- **Specialized Data Types**: Email addresses, dates, money amounts, VAT IDs, and more
-- **String Utilities**: Enhanced string manipulation and formatting functions
-- **Iterator Utilities**: Helper functions for Go's iterator patterns
-- **JSON Support**: Comprehensive JSON marshaling/unmarshaling for all types
-
-## Packages
-
-| Package                   | Description                                        |
-|---------------------------|----------------------------------------------------|
-| [`types`](./) (root)      | Generic `Set`, validation framework, pointer/iterator/JSON helpers, `LenString`, `Finder`, `KeyMutex` |
-| [`account`](./account/)   | Alphanumeric account numbers with validation and SQL/JSON/XML support |
-| [`bank`](./bank/)         | IBAN, BIC/SWIFT, bank accounts, and ISO 20022 CAMT.053 statement parsing |
-| [`charset`](./charset/)   | UTF-8/16/32 encoding, BOM detection, and `golang.org/x/text` integration |
-| [`country`](./country/)   | ISO 3166-1 alpha-2 country codes with normalization and EU membership |
-| [`date`](./date/)         | ISO 8601 `Date`, `YearMonth`, `YearQuarter`, lenient locale-aware parsing |
-| [`email`](./email/)       | Lenient email parsing, address lists/sets, MIME and TNEF message handling |
-| [`float`](./float/)       | Locale-aware float parsing/formatting and a JSON-tolerant float type |
-| [`language`](./language/) | ISO 639-1 language codes with normalization        |
-| [`mapset`](./mapset/)     | Set operations on `map[K]struct{}` / `map[K]bool`, mirroring the proposed `container/mapset` |
-| [`money`](./money/)       | Monetary amounts, ISO 4217 currencies, currency+amount pairs, and rates |
-| [`notnull`](./notnull/)   | Never-null SQL/JSON wrappers (nil slices serialize as `'{}'` / `[]`) |
-| [`nullable`](./nullable/) | SQL-friendly nullable wrappers and the generic `Type[T]` |
-| [`queue`](./queue/)       | Generic unbounded concurrent FIFO queue exposed as a channel |
-| [`set`](./set/)           | Generic set helpers over the idiomatic `map[T]struct{}` representation |
-| [`strfmt`](./strfmt/)     | Reflection-driven string scan/format with locale presets |
-| [`strutil`](./strutil/)   | String manipulation, trimming, transliteration, domain extraction, sets |
-| [`uu`](./uu/)             | UUID type with `ID`, `NullableID`, `IDSlice`, `IDSet`, and helpers |
-| [`vat`](./vat/)           | European VAT IDs with per-country format and checksum validation |
-
-## Core Packages
-
-### Main Package (`types`)
-
-The main package provides core utilities and type definitions:
-
-#### Collections
-- **Set[T]**: A generic set implementation with comprehensive operations (union, intersection, difference, etc.)
-- **Slice Utilities**: Functions for checking slice containment (`SliceContainsAll`, `SliceContainsAny`)
-
-#### Validation Framework
-- **Validator**: Interface for boolean validation
-- **ValidatErr**: Interface for validation with detailed error information
-- **Validate / TryValidate**: Validate any value implementing `ValidatErr` or `Validator`
-- **DeepValidate**: Recursive validation of nested structures
-- **CombinedValidator**: Combine multiple validators
-- **CompareReflectValue**: Comparator for `slices.SortFunc` that orders `reflect.Value`s across all orderable kinds (numerics, strings, bool, complex, pointers, channels, arrays, slices including `[]byte`, structs, and interfaces) and returns `0` for non-orderable or mismatched-type values
-
-#### Utility Functions
-- **Pointer Utilities**: Safe pointer dereferencing (`Ptr`, `FromPtr`, `FromPtrOr`)
-- **Iterator Helpers**: Functions for working with Go's iterator patterns (`Yield`, `Yield2`, `YieldErr`)
-- **JSON Utilities**: Check if types can be marshaled as JSON (`CanMarshalJSON`)
-
-#### Specialized Types
-- **LenString**: String with length constraints and validation
-- **Finder**: Interface for pattern matching in byte slices
-
-### Subpackages
-
-#### `email` - Email Address Handling
-- **Address**: Email address type with normalization and validation
-- **AddressList**: Collection of email addresses
-- **AddressSet**: Set of unique email addresses
-- **Attachment**: Email attachment handling
-- **Message**: Complete email message structure
-- **ParseAddress**: Flexible email address parsing
-
-#### `money` - Financial Data Types
-- **Amount**: `float64` money amount with locale-aware parsing and formatting
-- **DecimalAmount**: Exact fixed-point money amount packed into an `int64`
-- **CentAmount**: Whole cents as `int64`, the exact integer counterpart of `Amount`
-- **Currency**: Currency codes and information
-- **CurrencyAmount**: Combined currency and amount
-- **Rate**: Exchange rate handling
-- **AmountParser**: Parse monetary values from strings
-- **CurrencyParser**: Parse currency information
-
-#### `date` - Date Handling
-- **Date**: Date type with comprehensive parsing and formatting
-- **NullableDate**: Nullable date type
-- **DateNames**: Localized date names
-- **DateFinder**: Find dates in text
-- **DateFormatter**: Format dates in various styles
-- **DateParser**: Parse dates from strings
-
-#### `bank` - Banking Data Types
-- **IBAN**: International Bank Account Number handling
-- **BIC**: Bank Identifier Code handling
-- **Account**: Bank account information
-- **CAMT53**: ISO 20022 CAMT.053 message handling
-- **IBANParser/BICParser**: Parse banking identifiers
-
-#### `vat` - VAT ID Handling
-- **ID**: VAT identification number with country-specific validation
-- **IDFinder**: Find VAT IDs in text
-- **IDParser**: Parse VAT IDs from strings
-- **NullableID**: Nullable VAT ID type
-
-#### `country` - Country Information
-- **Code**: ISO country codes
-- **NullableCode**: Nullable country code
-- **Country Data**: Comprehensive country information
-
-#### `language` - Language Codes
-- **Code**: ISO 639 language codes
-- **Constants**: Language code constants
-- **ISO 639-3**: Language-name and macrolanguage lookups
-
-#### `nullable` - Nullable Types
-- **Type[T]**: Generic nullable type wrapper
-- **Arrays**: Nullable array types for various data types
-- **NonEmptyString**: String that cannot be empty
-- **TrimmedString**: String with automatic trimming
-- **Time**: Nullable time type
-
-#### `strutil` - String Utilities
-- **String Manipulation**: Enhanced string functions
-- **DomainName**: Domain name validation and manipulation
-- **HTML Utilities**: HTML processing functions
-- **Random**: Random string generation
-- **StringSet**: Set of strings
-- **StrMutex**: String-based mutex for synchronization
-
-#### `strfmt` - String Formatting
-- **Format**: String format detection and handling
-- **Scanner**: String scanning utilities
-- **Formatter**: String formatting functions
-- **Detector**: Format detection algorithms
-
-#### `float` - Float Utilities
-- **Parse**: Enhanced float parsing with tolerance
-- **Format**: Float formatting utilities
-- **Tolerant**: Tolerant float operations
-
-#### `queue` - Queue Implementation
-- **Queue[T]**: Generic, unbounded, goroutine-safe FIFO queue consumed via a channel
-- **New[T]**: Constructor configured by functional options (`ChanLen`, `InitialBufferSize`)
-- **Non-blocking Add**: An internal growable ring buffer absorbs bursts, so producers never block
-
-#### `charset` - Character Set Handling
-- **Encoding**: Character encoding detection and conversion
-- **UTF8/UTF16/UTF32**: Unicode handling utilities
-- **BOM**: Byte Order Mark handling
-
-#### `uu` - UUID Utilities
-- **ID**: UUID handling and generation
-- **IDContext**: Context-aware UUID operations
-- **IDMutex**: UUID-based mutex for synchronization
-- **IDSet**: Set of UUIDs
-- **IDSlice**: Slice of UUIDs with utilities
-
-## Installation
-
-```bash
+```
 go get github.com/domonda/go-types
 ```
 
-## Usage Examples
+Requires Go 1.26 or later.
 
-### Sets
-
-```go
-package main
-
-import (
-    "fmt"
-    "github.com/domonda/go-types"
-)
-
-func main() {
-    // Create a set
-    set1 := types.NewSet(1, 2, 3, 4, 5)
-    set2 := types.NewSet(4, 5, 6, 7, 8)
-    
-    // Set operations
-    union := set1.Union(set2)
-    intersection := set1.Intersection(set2)
-    difference := set1.Difference(set2)                   // in set1, not in set2
-    symmetric := set1.SymmetricDifference(set2)           // in exactly one of both
-
-    fmt.Printf("Union: %v\n", union.Sorted())                        // [1 2 3 4 5 6 7 8]
-    fmt.Printf("Intersection: %v\n", intersection.Sorted())          // [4 5]
-    fmt.Printf("Difference: %v\n", difference.Sorted())              // [1 2 3]
-    fmt.Printf("SymmetricDifference: %v\n", symmetric.Sorted())      // [1 2 3 6 7 8]
-}
-```
-
-### Validation
+## Quick start
 
 ```go
 package main
 
 import (
-    "fmt"
-    "github.com/domonda/go-types"
-)
+	"fmt"
 
-type User struct {
-    Name  string
-    Email string
-    Age   int
-}
-
-func (u User) Validate() error {
-    if u.Name == "" {
-        return fmt.Errorf("name is required")
-    }
-    if u.Age < 0 {
-        return fmt.Errorf("age must be non-negative")
-    }
-    return nil
-}
-
-func main() {
-    user := User{Name: "John", Email: "john@example.com", Age: 25}
-    
-    // Validate single value
-    if err := types.Validate(user); err != nil {
-        fmt.Printf("Validation error: %v\n", err)
-    }
-    
-    // Deep validation of nested structures
-    if err := types.DeepValidate(user); err != nil {
-        fmt.Printf("Deep validation error: %v\n", err)
-    }
-}
-```
-
-Any non-nil error from `Validate`, `TryValidate` or `DeepValidate` means the value is invalid; there is no sentinel error to check with `errors.Is`.
-If a value implements both interfaces, only `Validate() error` is called and its error is returned unchanged.
-A `Validator` can't tell why its `Valid() bool` returned false, so its error names the type and value instead, like `invalid main.Status value: "unknown"`.
-`DeepValidate` prefixes each error with the path to the value, like `struct field Users -> element [1] -> struct field Name: ...`, and wraps the original error, so `errors.Is` and `errors.As` see through the path.
-
-### Email Addresses
-
-```go
-package main
-
-import (
-    "fmt"
-    "github.com/domonda/go-types/email"
+	"github.com/domonda/go-types/bank"
+	"github.com/domonda/go-types/date"
+	"github.com/domonda/go-types/language"
+	"github.com/domonda/go-types/money"
+	"github.com/domonda/go-types/vat"
 )
 
 func main() {
-    // Parse and normalize email address
-    addr, err := email.NormalizedAddress("John Doe <john@example.com>")
-    if err != nil {
-        fmt.Printf("Error: %v\n", err)
-        return
-    }
-    
-    fmt.Printf("Normalized: %s\n", addr)
-    
-    // Create address list
-    list := email.AddressListJoin(addr, email.Address("jane@example.com"))
-    fmt.Printf("Address list: %v\n", list)
+	// Normalize identifiers as they appear on invoices
+	vatID, err := vat.ID("atu 1022 3006").Normalized()
+	fmt.Println(vatID, err)
+
+	iban, err := bank.IBAN("DE89 3704 0044 0532 0130 00").Normalized()
+	fmt.Println(iban, err)
+
+	// Dates are day-first unless a language hint says otherwise
+	d, err := date.Normalize("05.06.2024")
+	fmt.Println(d, err)
+	d, err = date.Normalize("05/06/2024", language.EN)
+	fmt.Println(d, err)
+
+	// Exact money amounts with locale-aware parsing
+	amount, err := money.ParseDecimalAmount("1.234,50")
+	fmt.Println(amount, err)
+	currency, err := money.Currency("€").Normalized()
+	fmt.Println(currency, err)
+
+	// Integer cents split without losing or inventing a cent
+	fmt.Println(money.CentAmount(1000).SplitEqually(3))
+
+	// Output:
+	// ATU10223006 <nil>
+	// DE89370400440532013000 <nil>
+	// 2024-06-05 <nil>
+	// 2024-05-06 <nil>
+	// 1234.50 <nil>
+	// EUR <nil>
+	// [3.33 3.33 3.34]
 }
 ```
 
-### Money Amounts
+New here? The [tutorial](docs/tutorial-invoice-record.md) builds an invoice
+record from raw strings to validated JSON and SQL values step by step.
 
-```go
-package main
+## Packages
 
-import (
-    "fmt"
-    "github.com/domonda/go-types/money"
-)
+| Package                                           | What it gives you                                  |
+|---------------------------------------------------|----------------------------------------------------|
+| [`types`](docs/reference-types.md) (root)         | `Set[T]`, the `Validator`/`ValidatErr` interfaces with `Validate` and `DeepValidate`, `Normalizable`, `LenString`, `KeyMutex`, `Finder`, pointer and iterator helpers |
+| [`account`](account/)                             | Alphanumeric account numbers with SQL, JSON and XML support |
+| [`bank`](bank/)                                   | IBAN and BIC validation and normalization, finders for document text, CAMT.053 XML structs |
+| [`charset`](charset/)                             | BOM detection, UTF-16 and UTF-32, legacy charsets by IANA or MIME label |
+| [`country`](country/)                             | ISO 3166-1 alpha-2 country codes, alternative spellings, EU membership |
+| [`date`](date/)                                   | ISO 8601 `Date`, `YearMonth`, `YearQuarter`, lenient locale-aware parsing, period ranges |
+| [`email`](email/)                                 | Lenient address parsing, address lists and sets, MIME and TNEF message parsing and building |
+| [`float`](float/)                                 | Locale-aware float parsing and formatting, decimal rounding, a JSON-tolerant float |
+| [`language`](language/)                           | ISO 639-1 language codes from BCP 47, ISO 639-2/3 and locale identifiers |
+| [`mapset`](mapset/)                               | Set algebra on `map[K]struct{}` and `map[K]bool`, mirroring the proposed `container/mapset` |
+| [`money`](money/)                                 | `Amount` (float64), `CentAmount` (int64 cents), `DecimalAmount` (exact fixed-point), ISO 4217 currencies, rates |
+| [`notnull`](notnull/)                             | Never-null SQL/JSON wrappers: nil slices become `'{}'` and `[]` |
+| [`nullable`](nullable/)                           | Nullable wrappers that map the zero value to SQL `NULL` and JSON `null`, generic `Type[T]` |
+| [`queue`](queue/)                                 | Unbounded goroutine-safe FIFO queue consumed through a channel |
+| [`set`](set/)                                     | Helpers for `map[T]struct{}` sets (prefer `mapset` for new code) |
+| [`strfmt`](strfmt/)                               | Reflection-driven scanning and formatting of values with locale presets |
+| [`strutil`](strutil/)                             | Trimming, rune filtering, transliteration, file names, domain extraction, `StringSet` |
+| [`strutil/stringfrom`](strutil/stringfrom/)       | Render pointers and optional values as strings with a text for nil |
+| [`uu`](uu/)                                       | UUID `ID`, `NullableID`, `IDSlice`, `IDSet`, v7 by default, context-injectable generation |
+| [`vat`](vat/)                                     | European VAT IDs with per-country format and checksum validation |
 
-func main() {
-    // Parse money amount
-    amount, err := money.ParseAmount("123.45", 2) // 2 decimal places
-    if err != nil {
-        fmt.Printf("Error: %v\n", err)
-        return
-    }
-    
-    fmt.Printf("Amount: %v\n", amount)
-    
-    // Create currency amount
-    currencyAmount := money.CurrencyAmount{
-        Amount:   amount,
-        Currency: money.Currency("USD"),
-    }
-    
-    fmt.Printf("Currency amount: %v\n", currencyAmount)
-}
+Every package README is the complete reference for its package: all exported
+types and functions, how each value is written to and read from SQL and JSON,
+the gotchas, and runnable examples. The same API is on
+[pkg.go.dev](https://pkg.go.dev/github.com/domonda/go-types).
+
+## Documentation
+
+The [docs index](docs/README.md) lists everything. By what you need:
+
+- **Learn the library:** [Tutorial: an invoice record](docs/tutorial-invoice-record.md)
+- **Get a task done:**
+  - [How to validate structs](docs/howto-validate-structs.md)
+  - [How to store optional values in SQL and JSON](docs/howto-store-optional-values.md)
+  - [How to extract IBANs, VAT IDs, dates and amounts from text](docs/howto-extract-identifiers-from-text.md)
+  - [How to scan and format table rows](docs/howto-scan-and-format-table-rows.md)
+  - [How to add a country, language or currency code](docs/howto-add-an-enum-code.md)
+  - [How to use deterministic IDs in tests](docs/howto-deterministic-ids-in-tests.md)
+- **Understand the design:**
+  - [Null conventions: `X` and `NullableX`](docs/explanation-null-conventions.md)
+  - [Validation and normalization](docs/explanation-validation-and-normalization.md)
+  - [Money types and rounding](docs/explanation-money-types-and-rounding.md)
+  - [Lenient parsing of numbers and dates](docs/explanation-lenient-parsing.md)
+  - [Sets: `types.Set`, `set` and `mapset`](docs/explanation-sets.md)
+- **Look something up:** the package READMEs in the table above.
+
+## Conventions shared by all packages
+
+- Identifier types like `country.Code`, `vat.ID`, `bank.IBAN` and `uu.ID`
+  have an invalid zero value, and their `NullableX` variant uses that zero
+  value as SQL `NULL` and JSON `null`. Number types like `money.Amount`, where
+  zero is a valid value, use the generic `nullable.Type[T]` instead. See
+  [null conventions](docs/explanation-null-conventions.md).
+- `Valid() bool` and `Validate() error` accept the input that `Normalized()`
+  accepts, so `country.Code("de").Valid()` and `vat.ID("atu 1022 3006").Valid()`
+  are true. `ValidAndNormalized()` reports whether a value is already in
+  canonical form. Two types are strict: `language.Code.Valid` only accepts a
+  canonical code (its `Validate` normalizes first), and `bank.BIC.Valid` only
+  accepts the compact upper case form. See
+  [validation and normalization](docs/explanation-validation-and-normalization.md).
+- How each type is written to and read from SQL and JSON, including its zero
+  and null values, is in the Serialization section of its package README.
+- `types.Validate` and `types.DeepValidate` work with any type that implements
+  `Validate() error` or `Valid() bool`, including your own.
+
+## Development
+
+```
+go test ./...          # all tests
+./run-go-enum.sh       # regenerate Enums()/EnumStrings() after adding a code
+./run-gosec.sh         # static security analysis
 ```
 
-### Dates
+`go-enum` and `gosec` are pinned as tool dependencies in `tools/go.mod`, so the
+main module does not depend on them. CI builds, vets, checks that the
+generated enum methods are up to date and runs the tests on every pull
+request.
 
-```go
-package main
+## Status
 
-import (
-    "fmt"
-    "github.com/domonda/go-types/date"
-)
-
-func main() {
-    // Parse date from string
-    d, err := date.Normalize("2024-01-15")
-    if err != nil {
-        fmt.Printf("Error: %v\n", err)
-        return
-    }
-    
-    fmt.Printf("Date: %s\n", d)
-    fmt.Printf("Is valid: %v\n", d.Valid())
-}
-```
-
-### Nullable Types
-
-```go
-package main
-
-import (
-    "fmt"
-    "github.com/domonda/go-types/nullable"
-)
-
-func main() {
-    // Create nullable string
-    nullableStr := nullable.New("hello")
-    
-    fmt.Printf("Value: %v\n", nullableStr.Value())
-    fmt.Printf("Is null: %v\n", nullableStr.IsNull())
-    
-    // Set to null
-    nullableStr.SetNull()
-    fmt.Printf("Is null after SetNull: %v\n", nullableStr.IsNull())
-}
-```
-
-## JSON Support
-
-All types in `go-types` support JSON marshaling and unmarshaling:
-
-```go
-package main
-
-import (
-    "encoding/json"
-    "fmt"
-    "github.com/domonda/go-types"
-)
-
-func main() {
-    // Set JSON marshaling
-    set := types.NewSet(1, 2, 3, 4, 5)
-    
-    jsonData, err := json.Marshal(set)
-    if err != nil {
-        fmt.Printf("Error: %v\n", err)
-        return
-    }
-    
-    fmt.Printf("JSON: %s\n", string(jsonData))
-    
-    // Unmarshal back to set
-    var newSet types.Set[int]
-    err = json.Unmarshal(jsonData, &newSet)
-    if err != nil {
-        fmt.Printf("Error: %v\n", err)
-        return
-    }
-    
-    fmt.Printf("Unmarshaled set: %v\n", newSet.Sorted())
-}
-```
-
-## Testing
-
-The library includes comprehensive tests for all functionality:
-
-```bash
-go test ./...
-```
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
+No version has been tagged yet. [CHANGELOG.md](CHANGELOG.md) lists every
+change, including the breaking ones, and [TODOS.md](TODOS.md) lists what is
+left before `v1.0.0`.
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## Dependencies
-
-- Go 1.26.0 or later
-- Standard library packages
-- External dependencies are minimal and well-maintained
-
-## Performance
-
-The library is designed with performance in mind:
-- Generic types provide compile-time type safety
-- Efficient data structures (sets implemented as maps)
-- Minimal allocations where possible
-- Comprehensive caching for expensive operations
-
-## Security
-
-Security considerations:
-- Input validation for all user-provided data
-- Safe handling of nullable types
-- Proper error handling and reporting
-- No unsafe operations exposed in public API
+MIT, see [LICENSE](LICENSE). The `uu` package is derived from
+[github.com/satori/go.uuid](https://github.com/satori/go.uuid).
