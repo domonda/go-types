@@ -470,12 +470,54 @@ func TestIDSlice_UnmarshalJSON_Errors(t *testing.T) {
 		// A JSON string is text, a 16 character string
 		// must not be taken as raw binary UUID bytes
 		{name: "16 character string", data: `["abcdefghijklmnop"]`},
+		// Accepting whitespace must not accept missing elements
+		{name: "only a comma", data: `[ , ]`},
+		{name: "trailing comma", data: `["9256978d-18e6-4435-ad16-d7046d41b71a", ]`},
+		{name: "invalid ID between whitespace", data: "[ \"not-an-uuid\" ]"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var s IDSlice
 			if err := s.UnmarshalJSON([]byte(tt.data)); err == nil {
 				t.Errorf("UnmarshalJSON(%s) returned no error", tt.data)
+			}
+		})
+	}
+}
+
+// TestIDSlice_UnmarshalJSON_Whitespace checks that IDSlice and IDSet accept
+// every valid JSON array of UUID strings, because JSON allows whitespace
+// around the array elements and pretty printed JSON from other systems,
+// like an empty array formatted as "[ ]" or one element per line,
+// must unmarshal like the compact form instead of failing.
+func TestIDSlice_UnmarshalJSON_Whitespace(t *testing.T) {
+	tests := []struct {
+		name string
+		data string
+		want IDSlice
+	}{
+		{name: "empty with space", data: `[ ]`, want: IDSlice{}},
+		{name: "empty with newline", data: "[\n]", want: IDSlice{}},
+		{name: "empty with tab and CR", data: "[\t\r\n ]", want: IDSlice{}},
+		{name: "spaces around elements", data: `[ "9256978d-18e6-4435-ad16-d7046d41b71a" , "a92bb308-f0f9-43d2-b31d-c0962198c31c" ]`, want: IDSlice{testIDA, testIDB}},
+		{name: "one element per line", data: "[\n  \"9256978d-18e6-4435-ad16-d7046d41b71a\",\n  \"a92bb308-f0f9-43d2-b31d-c0962198c31c\"\n]", want: IDSlice{testIDA, testIDB}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var s IDSlice
+			if err := json.Unmarshal([]byte(tt.data), &s); err != nil {
+				t.Fatalf("json.Unmarshal(%q) into IDSlice returned %v", tt.data, err)
+			}
+			if s == nil || !s.Equal(tt.want) {
+				t.Errorf("json.Unmarshal(%q) into IDSlice = %#v, want %#v", tt.data, s, tt.want)
+			}
+
+			var set IDSet
+			if err := json.Unmarshal([]byte(tt.data), &set); err != nil {
+				t.Fatalf("json.Unmarshal(%q) into IDSet returned %v", tt.data, err)
+			}
+			if set == nil || !set.Equal(tt.want.AsSet()) {
+				t.Errorf("json.Unmarshal(%q) into IDSet = %s, want %s", tt.data, set, tt.want.AsSet())
 			}
 		})
 	}

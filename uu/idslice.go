@@ -374,7 +374,8 @@ func (s *IDSlice) UnmarshalJSON(data []byte) error {
 
 	ids := make(IDSlice, 0)
 
-	if len(data) > 2 {
+	// An array of only whitespace like "[ ]" is empty
+	if len(strutil.TrimSpaceBytes(data[1:len(data)-1])) > 0 {
 		for i, next := 1, 1; i < len(data); i++ {
 			if data[i] == ',' || i == len(data)-1 {
 				str := strutil.TrimSpaceBytes(data[next:i])

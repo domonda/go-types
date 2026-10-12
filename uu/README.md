@@ -293,7 +293,6 @@ The text and JSON parsers of a single ID require at least 22 bytes (an empty tex
 - `IDSet.ContainsAny` takes variadic IDs, `IDSlice.ContainsAny` takes an `IDSlice`.
 - `IDSet.Difference` is the asymmetric difference. The removed `Diff` method returned the symmetric difference, which is now `SymmetricDifference`. The removed `AsSortedSlice` is now `Sorted`.
 - PostgreSQL array elements must not contain whitespace or `NULL`: `Scan("{NULL}")` returns `invalid UUID length 4: "NULL"`.
-- `json.Unmarshal` of `[ ]` (whitespace between the brackets) into an `IDSlice` or `IDSet` currently returns an error, `[]` works.
 - Version 7 IDs created before the switch to RFC 9562 byte order (commit `1a2950e`) stored the timestamp little-endian. `V7Time()` returns wrong times for them, and they don't sort by creation time.
 - Version 7 IDs have millisecond precision. IDs from the same millisecond are ordered by their random bits, not by call order. Use `IDv7DeterministicFunc` where order matters in tests.
 - `ContextWithIDSequence` needs a key and so can't feed `NewID`. For `NewID` pass your own function to `ContextWithIDFunc(ctx, f)` without keys, for example `IDv7DeterministicFunc`.
