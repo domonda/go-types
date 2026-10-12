@@ -64,7 +64,7 @@ An `IBAN` where `""` is the null value. A whitespace only value is null too, lik
 | `NormalizedOrNull() NullableIBAN`               | Normalized, or `IBANNull` if null or invalid.      |
 | `Valid() bool`, `Validate() error`              | Null or a valid IBAN.                              |
 | `ValidAndNotNull() bool`                        | Not null and valid.                                |
-| `ValidAndNormalized() bool`                     | Null, or valid and in compact form.                |
+| `ValidAndNormalized() bool`                     | `""`, or valid and in compact form. False for a whitespace only null, which normalizes to `""`. |
 | `CountryCode() country.Code`                    | Like `IBAN.CountryCode`, `""` for null or invalid values. |
 | `IsNull() bool`, `IsNotNull() bool`             | Null is `""` or whitespace only.                   |
 | `Get() IBAN`                                    | Panics if null.                                    |
@@ -130,7 +130,7 @@ A `BIC` where `""` is the null value. A whitespace only value is null too, like 
 | `NormalizedOrNull() NullableBIC`                | Normalized, or `BICNull` if null or invalid.       |
 | `Valid() bool`, `Validate() error`              | Null or a valid BIC.                               |
 | `ValidAndNotNull() bool`                        | Not null and valid.                                |
-| `ValidAndNormalized() bool`                     | Null, or the valid 11 character form.              |
+| `ValidAndNormalized() bool`                     | `""`, or the valid 11 character form. False for a whitespace only null, which normalizes to `""`. |
 | `IsNull() bool`, `IsNotNull() bool`             | Null is `""` or whitespace only.                   |
 | `Get() BIC`                                     | Panics if null.                                    |
 | `GetOr(defaultBIC BIC) BIC`                     | Value or the default.                              |

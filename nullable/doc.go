@@ -16,11 +16,13 @@
 //     empty array '{}' stay distinct. Package
 //     github.com/domonda/go-types/notnull writes a nil slice as '{}' instead.
 //
-// The interfaces [Nullable] and [NullSetable] are implemented by these types
-// and by the NullableX types of the domain packages, [NullableValidator] by
-// the domain types whose non-null values can be invalid, and [Zeroable]
-// matches types with an IsZero method like time.Time. [ReflectIsNull] and
-// [IsNull] report null values of any type, including nil pointers.
+// The interface [Nullable] is implemented by these types except [StringArray]
+// and [BoolArray], and by the NullableX types of the domain packages.
+// [NullSetable] is implemented by pointers to [Type], [Time] and the
+// NullableX types of the domain packages, [NullableValidator] by the domain
+// types whose non-null values can be invalid, and [Zeroable] matches types
+// with an IsZero method like time.Time. [ReflectIsNull] and [IsNull] report
+// null values of any type, including nil pointers.
 //
 // See the [README] for tables of all functions and the exact
 // serialization rules.

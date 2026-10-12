@@ -274,7 +274,7 @@ These plug dates into the [`strfmt`](../strfmt/README.md) package, which calls `
 | `(*Format).Format(d)`                        | `d.Format(f.Layout)`.                              |
 | `(*Format).Parse(str, langHints...)`         | `Normalize`, then formats with `Layout`. Pointer receiver: only `*Format` implements `strfmt.Parser`. |
 | `(*Format).AssignString(dest, source)`       | Parses `source` (with `Normalize` if `Layout` is empty, else `time.Parse(Layout)`) and assigns it to the addressable `dest` of type `Date`, `NullableDate`, `time.Time`, `*time.Time` or `nullable.Time`. Whitespace-only `source` assigns the empty value. A parsed zero time is an error. |
-| `(*Format).FormatString(val)`                | `NilString` for nil or invalid values, `ZeroString` for zero values with `Format`/`IsZero` methods (`Date`, `NullableDate`, `time.Time`), else `Format(Layout)`. Other types are an error. |
+| `(*Format).FormatString(val)`                | `NilString` for an invalid `reflect.Value` or a nil pointer, `ZeroString` for zero values with `Format`/`IsZero` methods (`Date`, `NullableDate`, `time.Time`), else `Format(Layout)`, so an invalid date like `"bad"` formats as the zero time. Other types are an error. |
 
 `Parser` and `Formatter` implement `strfmt.Parser` as values, `Format` only as `*Format`. None of them implements `strfmt.Formatter`.
 

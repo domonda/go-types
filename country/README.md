@@ -98,7 +98,7 @@ const Null NullableCode = ""
 | `String()`                     | `""` if null, else the normalized code or the raw string. |
 | `StringOr(defaultString)`      | The raw string (not normalized), or `defaultString` if null. |
 | `IsEU()`, `EnglishName()`      | As for `Code`.                                     |
-| `ScanString(source, validate)` | `""`, `"NULL"`, `"null"` and `"nil"` set `Null`; otherwise like `Code`. |
+| `ScanString(source, validate)` | `""`, whitespace only, `"NULL"`, `"null"` and `"nil"` set `Null`; otherwise like `Code`. |
 
 Implements: `fmt.Stringer`, `database/sql.Scanner`, `database/sql/driver.Valuer`, `json.Marshaler`, `json.Unmarshaler`, `strfmt.Scannable`, `nullable.NullSetable[Code]` and `JSONSchema()` (the `Code` pattern or null).
 

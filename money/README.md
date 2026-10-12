@@ -239,11 +239,11 @@ Implements: `fmt.Stringer`, `sql.Scanner` (pointer), `driver.Valuer`, `strfmt.Sc
 type NullableCurrency string
 ```
 
-A `Currency` where `""` (`CurrencyNull`) is the null value. Null counts as valid.
+A `Currency` where `""` (`CurrencyNull`) is the null value. A whitespace only value is null too, like for `country.NullableCode`. Null counts as valid.
 
 | Method                                             | Description                                        |
 |----------------------------------------------------|----------------------------------------------------|
-| `IsNull() bool`, `IsNotNull() bool`                | `n == ""`, `n != ""`.                              |
+| `IsNull() bool`, `IsNotNull() bool`                | Null is `""` or whitespace only.                   |
 | `Get() Currency`                                   | Panics if null.                                    |
 | `GetOr(defaultVal Currency) Currency`              | The value if valid and not null, else the default. |
 | `Currency() Currency`                              | Type conversion, also for null.                    |
@@ -252,14 +252,14 @@ A `Currency` where `""` (`CurrencyNull`) is the null value. Null counts as valid
 | `String() string`                                  | Normalized if valid, else unchanged, `""` for null. |
 | `Valid() bool`, `Validate() error`                 | Null or a valid currency.                          |
 | `ValidAndNotNull() bool`                           | Not null and valid.                                |
-| `ValidAndNormalized() bool`                        | Null, or valid and normalized.                     |
+| `ValidAndNormalized() bool`                        | `""`, or valid and normalized. False for a whitespace only null, which normalizes to `""`. |
 | `(*NullableCurrency).ValidPtr() bool`              | Nil, null, or valid.                               |
 | `Normalized() (NullableCurrency, error)`, `NormalizedOrNull()` | Like `Currency`, null stays null.                  |
 | `Symbol() string`, `EnglishName() string`          | Like `Currency`.                                   |
-| `(*NullableCurrency).ScanString(source, validate) error` | `""`, `NULL`, `null`, and `nil` set null, other values like `Currency.ScanString`. |
-| `(*NullableCurrency).Scan(value) error`, `Value()`, `MarshalJSON()` | See [Serialization](#serialization).               |
+| `(*NullableCurrency).ScanString(source, validate) error` | `""`, whitespace only, `NULL`, `null`, and `nil` set null, other values like `Currency.ScanString`. |
+| `(*NullableCurrency).Scan(value) error`, `Value()`, `MarshalJSON()`, `(*NullableCurrency).UnmarshalJSON(data) error` | See [Serialization](#serialization).               |
 
-Implements: `fmt.Stringer`, `sql.Scanner` (pointer), `driver.Valuer`, `json.Marshaler`, `strfmt.Scannable` (pointer), `nullable.Nullable`, `nullable.NullSetable[Currency]` (pointer). No `UnmarshalJSON` and no `MinorUnits`, use `Get().MinorUnits()`.
+Implements: `fmt.Stringer`, `sql.Scanner` (pointer), `driver.Valuer`, `json.Marshaler`, `json.Unmarshaler` (pointer), `strfmt.Scannable` (pointer), `nullable.Nullable`, `nullable.NullSetable[Currency]` (pointer). No `MinorUnits`, use `Get().MinorUnits()`.
 
 ## CurrencyAmount and CurrencyDecimalAmount
 
@@ -347,7 +347,7 @@ The `langHints` of all parsers are ignored. Only the pointer types `*AmountParse
 | `DecimalAmount`                                    | The exact decimal string: `"1234.50"`, `"NaN"`, `"Infinity"`, `"-Infinity"`. Fits `numeric`, the literal also works for `float8` and `text`. | `string` and `[]byte` parsed with `ParseDecimalAmount`, `int64` with scale 0, `float64` as shortest decimal. A `float64` too large is an error, one needing more than 18 decimals is rounded, so `1e-300` is 0. NULL is an error. | A JSON number keeping the scale: `1234.50`, `0.00`. `"NaN"`, `"Inf"`, `"-Inf"` as strings. | Numbers including exponents, strings parsed with `ParseDecimalAmount` after decoding escapes, `null` and `""` as 0. Every written value decodes to the same coefficient and scale. |
 | `CentAmount`                                       | No `Valuer`: `database/sql` writes the `int64` cent count, use an integer column. | No `Scanner`: `int64`, integer strings, and `float64` values without fraction. `1.5` and NULL are errors. | No `MarshalJSON`: the cent count, `123450` for 1234.50. | Integers only. `123.45` and `"123.45"` are errors, `null` leaves the value unchanged. |
 | `Currency`                                         | `""` as NULL, else the string unchanged.           | `string` and `[]byte` unchanged, NULL as `""`, other types are errors. No normalization. | No `MarshalJSON`: the string, `""` as `""`.        | Strings unchanged without normalization or validation, `null` leaves the value unchanged. |
-| `NullableCurrency`                                 | Like `Currency`.                                   | Like `Currency`.                                   | `MarshalJSON`: `""` as `null`, else the string.    | No `UnmarshalJSON`: strings unchanged, `null` leaves the value unchanged. |
+| `NullableCurrency`                                 | Null (`""` or whitespace only) as NULL, else the string unchanged. | Like `Currency`, NULL as null.                     | `MarshalJSON`: null (`""` or whitespace only) as `null`, else the string. | `UnmarshalJSON`: `null` sets null, strings unchanged without normalization or validation, other JSON values are errors. |
 | `CurrencyAmount`                                   | `String()`: `"EUR 1234.50"`, `"JPY 1235"`, `"0.00"` without currency. Needs a text column. | `string` and `[]byte` parsed with `ParseCurrencyAmount` with any decimals, `float64` as amount without currency. `int64` and NULL are errors. | No JSON methods: `{"Currency":"EUR","Amount":1234.5}`. | The same object.                                   |
 | `CurrencyDecimalAmount`                            | `String()`: `"EUR 1234.50"` with the amount's scale. Needs a text column. | `string` and `[]byte` parsed with `ParseCurrencyDecimalAmount`, `float64` like `DecimalAmount.Scan` without currency. `int64` and NULL are errors. | No JSON methods: `{"Currency":"EUR","Amount":1234.50}`. | The same object.                                   |
 | `NullableAmount`, `NullableRate`, `NullableCentAmount`, `NullableDecimalAmount` | NULL for null, else the value of the wrapped type: `float64`, `int64`, or the `DecimalAmount` string. | NULL as null. Other values are converted by the `database/sql` rules into the wrapped type, so `"1,5"` is an error for `NullableAmount` and `"19%"` for `NullableRate`, while `NullableDecimalAmount` uses `DecimalAmount.Scan`. | `null` for null, else like the wrapped type.       | `null` as null, else like the wrapped type: `""` is a non-null 0 for `NullableAmount`, `NullableRate`, and `NullableDecimalAmount`. |
@@ -356,14 +356,14 @@ The `langHints` of all parsers are ignored. Only the pointer types `*AmountParse
 
 - **`"1,000"` is 1.00 in every parser.** `ParseAmount`, `ParseDecimalAmount`, `ParseCentAmount`, `ParseRate`, `ParseCurrencyAmount`, the `ScanString` methods, and JSON strings read a single `.` or `,` as decimal separator. Pass `acceptedDecimals` to reject it: `ParseAmount("1,000", 0, 2)` is an error because `"1,000"` has 3 decimals.
 - **`DecimalAmount` `==` compares the packed bits.** `NewDecimalAmount(150, 2) == NewDecimalAmount(15, 1)` is false, and so are map keys, `reflect.DeepEqual`, and testify's `assert.Equal` for them. Use `Equal` or `Cmp`, which also treat NaN as equal to NaN.
-- **`DecimalAmount` precision is limited.** The coefficient has about 18 digits: at scale 2 the largest value is 2882303761517117.43, about 2.88×10^15. Beyond that `Add` yields ±Inf, `Mul` and `Div` round to fewer decimals until the integer part doesn't fit either, `ParseDecimalAmount` returns an error, and `NewDecimalAmount` panics. Use `CentAmount` for larger two-decimal values. The `Rate` methods go through `float64`.
+- **`DecimalAmount` precision is limited.** The coefficient has about 18 digits: at scale 2 the largest value is 2882303761517117.43, about 2.88×10^15. Beyond that `Add` yields ±Inf, `Mul` and `Div` round to fewer decimals until the integer part doesn't fit either, `ParseDecimalAmount` returns an error, and `NewDecimalAmount` panics. Use `CentAmount` for larger two-decimal values. `MultipliedByRate`, `DividedByRate`, and `Percentage` fall back to a `float64` product for a rate with more than 18 decimals.
 - **NaN and Inf.** `ParseAmount`, `ParseRate`, and `ParseDecimalAmount` accept `NaN` and `Inf` without error if no `acceptedDecimals` are passed, and reject them if any are. `json.Marshal` fails on such `Amount` and `Rate` values. `Amount.CentAmount` maps NaN to 0 and clamps Inf. Check `Valid()` after parsing untrusted input.
 - **`CurrencyAmount` needs a text column.** Its `Value` is `"EUR 1234.50"`. A `numeric` column rejects it, and an `int64` from the database can't be scanned.
 - **`CurrencyAmount.String` depends on the currency.** `CurrencyAmountJPY(1234.5)` is `"JPY 1235"` and the stored SQL text is rounded the same way. `MinorUnits`, `Symbol`, and `EnglishName` don't normalize, so `CurrencyAmount{Currency: "jpy", Amount: 1234.5}` is `"jpy 1234.50"`. Normalize the currency first.
 - **`CurrencyAmount.ScanString` is stricter than `Scan`.** `ScanString("EUR 1.234")` is an error, `Scan("EUR 1.234")` assigns 1.234.
 - **`ParseCurrencyAmount` needs a one-word currency.** `"12 Canadian Dollar"` is an error, although `NormalizeCurrency("Canadian Dollar")` is `CAD`. A string without currency parses with an empty `Currency`.
 - **Decoded currencies are unchecked.** JSON and `Scan` assign `"eur"` or `"XYZ"` unchanged. Call `Normalized` or `Validate` after decoding.
-- **JSON `null` keeps the old value** for `CentAmount`, `Currency`, and `NullableCurrency`, which have no `UnmarshalJSON`, while `Amount`, `Rate`, and `DecimalAmount` set 0.
+- **JSON `null` keeps the old value** for `CentAmount` and `Currency`, which have no `UnmarshalJSON`, while `Amount`, `Rate`, and `DecimalAmount` set 0 and `NullableCurrency` sets null.
 - **`Amount.Cents` is undefined for NaN and ±Inf**, the result depends on the platform. Use `CentAmount(mode)`.
 - **`StringIsAmount` and `AmountFinder` only detect 2-decimal amounts.** `"12.5"`, `"(3,00)"`, and `"EUR4,00"` are not found, `Inf` in a text is.
 - **`acceptedDecimals` of `ParseRate` counts before the `%` division.** `ParseRate("19%", 2)` is an error because `"19"` has no decimals.

@@ -21,8 +21,9 @@
 //
 // Methods normalize their input, so a valid but non-normalized Date
 // like "25.12.2023" works everywhere except in == comparisons.
-// No type in this package implements json.Unmarshaler:
-// decoded JSON strings are stored as they are.
+// Decoded JSON strings are stored as they are, without normalization
+// or validation. Only the nullable types implement json.Unmarshaler,
+// to set null for JSON null.
 //
 // See the README.md of this package for the full API,
 // the serialization rules and the gotchas.

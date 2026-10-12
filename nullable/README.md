@@ -16,8 +16,8 @@ Where the zero value is a legal value, like `0` or `false`, use `Type[T]`, a gen
 
 | Identifier                       | Description                                        |
 |----------------------------------|----------------------------------------------------|
-| `Nullable`                       | `IsNull() bool`. Implemented by every type of this package and by the `NullableX` types of the domain packages. |
-| `NullSetable[T]`                 | `Nullable` plus `SetNull()`, `Set(T)`, `Get() T` (panics if null) and `GetOr(T) T`. Implemented by `*Type[T]`, `*Time` (with `time.Time`) and `*uu.NullableID` (with `uu.ID`), not by the two string types, which have no `GetOr`. |
+| `Nullable`                       | `IsNull() bool`. Implemented by every type of this package except the `StringArray` and `BoolArray` aliases, and by the `NullableX` types of the domain packages. |
+| `NullSetable[T]`                 | `Nullable` plus `SetNull()`, `Set(T)`, `Get() T` (panics if null) and `GetOr(T) T`. Implemented by `*Type[T]`, `*Time` (with `time.Time`) and pointers to the `NullableX` types of the domain packages, like `*uu.NullableID` (with `uu.ID`) and `*date.NullableDate` (with `date.Date`). Not implemented by the two string types of this package, which have no `GetOr`. |
 | `Zeroable`                       | `IsZero() bool`, like `time.Time`.                 |
 | `NullableValidator`              | `Nullable` plus `types.Validator` plus `ValidAndNotNull() bool`, for nullable types whose non-null values can be invalid. Implemented by types like `bank.NullableIBAN`, `date.NullableDate` and `vat.NullableID`. |
 | `ReflectIsNull(v reflect.Value)` | True for the zero `reflect.Value`, for a nil pointer, interface, map, slice, channel, function or `unsafe.Pointer` anywhere along a chain of pointers and interfaces, and for values whose `IsNull()` returns true. If `Nullable` is not implemented, `IsZero()` of `Zeroable` decides. Never panics. |
@@ -180,15 +180,15 @@ None of the array types has JSON methods. `encoding/json` encodes them as plain 
 
 Reading:
 
-| Input                 | `Type[T]`                                          | `NonEmptyString`  | `TrimmedString`   | `Time`                  | `JSON`              |
-|-----------------------|----------------------------------------------------|-------------------|-------------------|-------------------------|---------------------|
-| SQL `NULL`            | null                                               | null              | null              | null                    | nil                 |
-| SQL `''`              | valid `""` for `Type[string]`, error for `Type[int]` | error             | null              | error                   | nil                 |
-| SQL text value        | converted                                          | the string        | trimmed           | error, only `time.Time` | copied              |
-| JSON `null`           | null                                               | null              | null              | null                    | nil                 |
-| JSON `""`             | valid `""` for `Type[string]`, error for `Type[int]` | null              | null              | error                   | `JSON("\"\"")`      |
-| Text empty            | no text methods                                    | null              | null              | null                    | no text methods     |
-| Text `null`, any case | no text methods                                    | the string `null` | the string `null` | null                    | no text methods     |
+| Input                 | `Type[T]`                                          | `NonEmptyString`  | `TrimmedString`   | `Time`                  | `JSON`                |
+|-----------------------|----------------------------------------------------|-------------------|-------------------|-------------------------|-----------------------|
+| SQL `NULL`            | null                                               | null              | null              | null                    | nil                   |
+| SQL `''`              | valid `""` for `Type[string]`, error for `Type[int]` | error             | null              | error                   | nil                   |
+| SQL text value        | converted                                          | the string        | trimmed           | error, only `time.Time` | copied, `null` is nil |
+| JSON `null`           | null                                               | null              | null              | null                    | nil                   |
+| JSON `""`             | valid `""` for `Type[string]`, error for `Type[int]` | null              | null              | error                   | `JSON("\"\"")`        |
+| Text empty            | no text methods                                    | null              | null              | null                    | no text methods       |
+| Text `null`, any case | no text methods                                    | the string `null` | the string `null` | null                    | no text methods       |
 
 | Input          | `StringArray` | `BoolArray` | `IntArray`, `FloatArray` | `NullIntArray` and others |
 |----------------|---------------|-------------|--------------------------|---------------------------|

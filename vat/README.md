@@ -125,7 +125,7 @@ const Null NullableID = ""
 | `StringOr(nullString)`             | The raw string (not normalized), or `nullString` if null. |
 | `CountryCode()`                    | Like `ID`, as `country.NullableCode`; `country.Null` if null or invalid. |
 | `IsMOSS()`, `Number()`             | Like `ID`; false and `""` for `Null`.              |
-| `ScanString(source, validate)`     | `""`, `"NULL"`, `"null"` and `"nil"` set `Null`; otherwise like `ID`. |
+| `ScanString(source, validate)`     | `""`, whitespace only, `"NULL"`, `"null"` and `"nil"` set `Null`; otherwise like `ID`. |
 
 Implements: `fmt.Stringer`, `database/sql.Scanner`, `database/sql/driver.Valuer`, `json.Marshaler`, `json.Unmarshaler`, `strfmt.Scannable`, `nullable.NullSetable[ID]` and `JSONSchema()` (the `ID` string or null).
 

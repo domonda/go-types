@@ -91,25 +91,25 @@ Decoding trims whitespace and validates strings with `NumberRegexp`. Numbers (SQ
 
 Writing trims whitespace, and an empty or whitespace only value becomes SQL NULL, JSON `null`, or an empty XML element, for both types.
 
-| Input                    | `Number`                                           | `NullableNumber`                             |
-|--------------------------|----------------------------------------------------|----------------------------------------------|
-| SQL NULL                 | Error                                              | `NumberNull`                                 |
-| SQL `string` or `[]byte` | Trimmed and validated, `""` is an error            | Trimmed and validated, `""` is `NumberNull`  |
-| SQL `int64`              | Decimal string, negative is an error               | Like `Number`, `0` is `NumberNull`           |
-| SQL `float64`            | Non-negative integer only, `-0` gives `"0"`, NaN, infinities, and fractions are errors | Like `Number`, `0` and `-0` are `NumberNull` |
-| Other SQL types          | Error                                              | Error                                        |
-| JSON string              | Trimmed and validated, `""` is an error            | Trimmed and validated, `""` is `NumberNull`  |
-| JSON number              | Non-negative integer as decimal string, else error | Like `Number`                                |
-| JSON `null`              | Error                                              | `NumberNull`                                 |
-| XML element text         | Trimmed and validated, empty is an error           | Trimmed and validated, empty is `NumberNull` |
-| `UnmarshalText`          | Trimmed and validated, `""` is an error            | Trimmed and validated, `""` is `NumberNull`  |
+| Input                    | `Number`                                           | `NullableNumber`                                 |
+|--------------------------|----------------------------------------------------|--------------------------------------------------|
+| SQL NULL                 | Error                                              | `NumberNull`                                     |
+| SQL `string` or `[]byte` | Trimmed and validated, `""` is an error            | Trimmed and validated, `""` is `NumberNull`      |
+| SQL `int64`              | Decimal string, negative is an error               | Like `Number`, `0` is `NumberNull`               |
+| SQL `float64`            | Non-negative integer only, `-0` gives `"0"`, NaN, infinities, and fractions are errors | Like `Number`, `0` and `-0` are `NumberNull`     |
+| Other SQL types          | Error                                              | Error                                            |
+| JSON string              | Trimmed and validated, `""` is an error            | Trimmed and validated, `""` is `NumberNull`      |
+| JSON number              | Non-negative integer as decimal string, else error | Like `Number`, so `0` is `"0"`, not `NumberNull` |
+| JSON `null`              | Error                                              | `NumberNull`                                     |
+| XML element text         | Trimmed and validated, empty is an error           | Trimmed and validated, empty is `NumberNull`     |
+| `UnmarshalText`          | Trimmed and validated, `""` is an error            | Trimmed and validated, `""` is `NumberNull`      |
 
 Neither type has a `MarshalText` method. `JSONSchema` describes `Number` as a string with the `NumberRegexp` pattern and `NullableNumber` as that string or null.
 
 ## Gotchas
 
 - **A `Number` can be written but not read back empty.** `Number("").Value()` writes NULL and `json.Marshal(Number(""))` writes `null`, but `Scan(nil)`, `Scan("")`, JSON `null`, and JSON `""` are errors for `Number`. Use `NullableNumber` for columns and fields that can be empty.
-- **Zero is null for `NullableNumber`.** `NullableNumberFromUint(0)` and `NullableNumber.Scan(int64(0))` give `NumberNull`, while `NumberFromUint(0)` and `Number.Scan(int64(0))` give `"0"`.
+- **Zero is null for `NullableNumber`.** `NullableNumberFromUint(0)` and `NullableNumber.Scan(int64(0))` give `NumberNull`, while `NumberFromUint(0)` and `Number.Scan(int64(0))` give `"0"`. The JSON number `0` is the exception: it gives `"0"` for both types.
 - **`Valid` does not trim, writing does.** `Number(" 123").Valid()` is false, but `Value()`, `MarshalJSON`, and `MarshalXML` write `"123"`. Construct values with `NumberFrom` or `NullableNumberFrom` to get trimmed, validated values.
 - **`Int` never returns a negative number.** The digit check rejects `-1` and `+1` with `ErrAlphanumericNumber`.
 - **`TrimLeadingZeros` can produce an invalid `Number`.** `Number("000").TrimLeadingZeros()` is `""`, which `Validate` rejects.

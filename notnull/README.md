@@ -32,7 +32,7 @@ To keep `NULL` apart from the empty array, use the `nullable` arrays instead.
 | `Bools()`                           | `[]bool` with NULL elements as `false`. Returns nil for an empty array. |
 | `Value()`                           | PostgreSQL array literal: `{"a","b"}` with quoted and escaped elements for `StringArray`, `{1,2}`, `{1.5,2}`, `{t,f,NULL}`. nil and empty write `{}`. |
 | `Scan(src)`                         | Parses a PostgreSQL array literal from a `string` or `[]byte`. nil and `{}` read as an empty slice. |
-| `MarshalJSON()`                     | JSON array, `[]` for nil and empty. NULL elements of `NullBoolArray` as `null`. |
+| `MarshalJSON()`                     | JSON array, `[]` for nil and empty. NULL elements of `NullBoolArray` as `null`. A NaN or ±Inf element of `FloatArray` returns a `*json.UnsupportedValueError`, like `encoding/json` for a `float64`. |
 | `UnmarshalJSON(data)`               | JSON array, `null` reads as an empty slice. `null` elements of `NullBoolArray` read as NULL. |
 
 Every array implements `driver.Valuer`, `sql.Scanner`, `json.Marshaler` and `json.Unmarshaler`. `IntArray`, `FloatArray` and `NullBoolArray` also implement `fmt.Stringer`.
