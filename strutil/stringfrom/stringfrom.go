@@ -2,15 +2,18 @@
 // with safe handling of nil pointers and customizable default values.
 //
 // The package includes:
-// - Safe pointer dereferencing with string conversion
-// - Type-specific conversion functions for common Go types
-// - Customizable default values for nil pointers
-// - Boolean to string conversion with custom true/false strings
-// - Interface reflection-based string conversion
+//   - [Ptr], [TimePtr], [UUIDPtr], [IntPtr], [UintPtr], [Int64Ptr],
+//     [Float64Ptr] and [BoolPtr], which dereference a pointer and format
+//     the value. For a nil pointer they return their strForNil arguments
+//     joined without a separator, or "" if none are passed.
+//     [TimePtr] treats a pointer to the zero time like nil.
+//   - [Bool], which returns one of two passed strings.
+//   - [Interface], which converts any value, or the value a pointer points to:
+//     a value of string kind as is, other values with fmt.Sprint.
+//     It returns "" for nil, a nil pointer,
+//     or a nil map, slice, func, channel or interface value.
 //
-// All functions handle nil pointers gracefully, the *Ptr functions by returning
-// customizable default strings and Interface by returning an empty string,
-// making them safe for use in scenarios where pointers might be nil.
+// None of the functions panics for nil input.
 package stringfrom
 
 import (
