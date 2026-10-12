@@ -1,12 +1,3 @@
-// Package language provides comprehensive language code handling and validation
-// based on ISO 639-1 standards for Go applications.
-//
-// The package includes:
-//   - ISO 639-1 two-character language code validation and normalization
-//   - Language name mapping and retrieval
-//   - Database integration (Scanner/Valuer interfaces)
-//   - JSON Schema definition (Code.JSONSchema)
-//   - Support for common language codes and names
 package language
 
 import (
