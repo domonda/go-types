@@ -126,7 +126,7 @@ Implements: `driver.Valuer`, `sql.Scanner`, `json.Marshaler`, `json.Unmarshaler`
 
 ## JSON
 
-`type JSON []byte` holds raw JSON text, with nil as the null value.
+`type JSON []byte` holds raw JSON text, with nil as the null value. A non-nil empty `JSON` is null too: `IsNull` reports it, `Value` writes SQL `NULL` and `MarshalJSON` writes `null`.
 
 | Function or method    | Description                                        |
 |-----------------------|----------------------------------------------------|
@@ -175,7 +175,7 @@ None of the array types has JSON methods. `encoding/json` encodes them as plain 
 | `NonEmptyString`      | `""`             | `NULL`, the string                           | `null`, string              | no `MarshalText` |
 | `TrimmedString`       | trims to `""`    | `NULL`, trimmed string                       | `null`, trimmed string      | empty            |
 | `Time`                | zero `time.Time` | `NULL`, `time.Time`                          | `null`, RFC 3339 string     | `NULL`           |
-| `JSON`                | nil              | `NULL`, the bytes                            | `null`, the raw JSON        | no text methods  |
+| `JSON`                | nil or empty     | `NULL`, the bytes                            | `null`, the raw JSON        | no text methods  |
 | `IntArray` and others | nil slice        | `NULL`; `'{}'` for an empty slice, `'{1,2}'` | `null`; `[]`, `[1,2]`       | no text methods  |
 
 Reading:

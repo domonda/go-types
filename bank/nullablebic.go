@@ -63,7 +63,9 @@ func (bic NullableBIC) Validate() error {
 	return BIC(bic).Validate()
 }
 
-// ValidAndNormalized returns true if the BIC is valid and already normalized.
+// ValidAndNormalized returns true if the BIC is valid and already normalized,
+// or if it is the empty BICNull. A whitespace-only value is null and valid,
+// but not normalized.
 func (bic NullableBIC) ValidAndNormalized() bool {
 	norm, err := bic.Normalized()
 	return err == nil && bic == norm

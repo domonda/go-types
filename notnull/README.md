@@ -97,7 +97,7 @@ Implements: `driver.Valuer`, `sql.Scanner`, `json.Marshaler`, `json.Unmarshaler`
 | `NullBoolArray{{Valid: true, Bool: true}, {}}` | `'{t,NULL}'`       | `[true,null]` | no text methods |
 | `TrimmedString("")`                            | `''`               | `""`          | empty           |
 | `TrimmedString(" x ")`                         | `'x'`              | `"x"`         | `x`             |
-| `JSON(nil)`                                    | `'{}'` as `[]byte` | `{}`          | no text methods |
+| `JSON(nil)`, `JSON("")`                        | `'{}'` as `[]byte` | `{}`          | no text methods |
 
 | Input          | Arrays                                  | `TrimmedString` | `JSON`              |
 |----------------|-----------------------------------------|-----------------|---------------------|

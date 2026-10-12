@@ -70,7 +70,8 @@ func (iban NullableIBAN) Validate() error {
 }
 
 // ValidAndNormalized returns true if the IBAN is valid and already in normalized form,
-// or if it is null.
+// or if it is the empty IBANNull. A whitespace-only value is null and valid,
+// but not normalized.
 func (iban NullableIBAN) ValidAndNormalized() bool {
 	norm, err := iban.Normalized()
 	return err == nil && iban == norm

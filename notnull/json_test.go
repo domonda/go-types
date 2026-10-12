@@ -198,3 +198,11 @@ func Test_MarshalJSON_Package(t *testing.T) {
 	_, err = MarshalJSON(make(chan int))
 	assert.Error(t, err)
 }
+
+// A non-nil empty JSON is marshalled as {} like nil, so it must also be
+// written as '{}': empty bytes are rejected by a PostgreSQL json column.
+func Test_JSON_EmptyValueIsEmptyObject(t *testing.T) {
+	v, err := JSON("").Value()
+	require.NoError(t, err)
+	require.Equal(t, []byte("{}"), v)
+}

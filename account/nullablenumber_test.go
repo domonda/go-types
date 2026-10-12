@@ -312,3 +312,27 @@ func TestNullableNumber_XML(t *testing.T) {
 	err = xml.Unmarshal([]byte(`<doc><number>1</doc>`), &d)
 	assert.Error(t, err, "XML syntax errors must be propagated")
 }
+
+// Value and MarshalJSON write a whitespace-only NullableNumber as NULL and
+// null, so IsNull must agree, or Get would return a number that is
+// stored as NULL.
+func TestNullableNumber_WhitespaceIsNull(t *testing.T) {
+	n := NullableNumber("  ")
+	assert.True(t, n.IsNull())
+	assert.False(t, n.IsNotNull())
+	v, err := n.Value()
+	require.NoError(t, err)
+	assert.Nil(t, v)
+}
+
+// Scan(int64(0)) and NullableNumberFromUint(0) give NumberNull, so the JSON
+// number 0 must decode to NumberNull too: the same column value must not
+// depend on whether it arrived through SQL or JSON.
+func TestNullableNumber_UnmarshalJSONZeroIsNull(t *testing.T) {
+	n := NullableNumber("123")
+	require.NoError(t, json.Unmarshal([]byte(`0`), &n))
+	assert.Equal(t, NumberNull, n)
+
+	require.NoError(t, json.Unmarshal([]byte(`42`), &n))
+	assert.Equal(t, NullableNumber("42"), n)
+}

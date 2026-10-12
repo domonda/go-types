@@ -71,7 +71,7 @@ Both types have these methods. On `NullableNumber` they return `NullableNumber` 
 
 | Method                               | Description                                  |
 |--------------------------------------|----------------------------------------------|
-| `IsNull() bool`, `IsNotNull() bool`  | `n == ""`, `n != ""`.                        |
+| `IsNull() bool`, `IsNotNull() bool`  | Whether the trimmed number is empty.         |
 | `Get() Number`                       | Panics if null.                              |
 | `GetOr(defaultNumber Number) Number` | Value or the default.                        |
 | `Set(num Number)`, `SetNull()`       | `Set("")` sets null.                         |
@@ -109,7 +109,7 @@ Neither type has a `MarshalText` method. `JSONSchema` describes `Number` as a st
 ## Gotchas
 
 - **A `Number` can be written but not read back empty.** `Number("").Value()` writes NULL and `json.Marshal(Number(""))` writes `null`, but `Scan(nil)`, `Scan("")`, JSON `null`, and JSON `""` are errors for `Number`. Use `NullableNumber` for columns and fields that can be empty.
-- **Zero is null for `NullableNumber`.** `NullableNumberFromUint(0)` and `NullableNumber.Scan(int64(0))` give `NumberNull`, while `NumberFromUint(0)` and `Number.Scan(int64(0))` give `"0"`. The JSON number `0` is the exception: it gives `"0"` for both types.
+- **Zero is null for `NullableNumber`.** `NullableNumberFromUint(0)` and `NullableNumber.Scan(int64(0))` give `NumberNull`, while `NumberFromUint(0)` and `Number.Scan(int64(0))` give `"0"`. The JSON number `0` gives `NumberNull` too, while `Number` reads it as `"0"`.
 - **`Valid` does not trim, writing does.** `Number(" 123").Valid()` is false, but `Value()`, `MarshalJSON`, and `MarshalXML` write `"123"`. Construct values with `NumberFrom` or `NullableNumberFrom` to get trimmed, validated values.
 - **`Int` never returns a negative number.** The digit check rejects `-1` and `+1` with `ErrAlphanumericNumber`.
 - **`TrimLeadingZeros` can produce an invalid `Number`.** `Number("000").TrimLeadingZeros()` is `""`, which `Validate` rejects.

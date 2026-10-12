@@ -26,9 +26,10 @@ func MarshalJSON(source any) (JSON, error) {
 	return json.Marshal(source)
 }
 
-// IsNull returns true if j is nil.
+// IsNull returns true if j is nil or empty.
+// An empty JSON is marshalled as null and written as SQL NULL like nil.
 // IsNull implements the Nullable interface.
-func (j JSON) IsNull() bool { return j == nil }
+func (j JSON) IsNull() bool { return len(j) == 0 }
 
 // MarshalFrom marshals source as JSON and sets it
 // at j when there was no error.

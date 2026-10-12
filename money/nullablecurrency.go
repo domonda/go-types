@@ -93,7 +93,9 @@ func (n NullableCurrency) ValidAndNotNull() bool {
 	return Currency(n).Valid()
 }
 
-// ValidAndNormalized returns true if the NullableCurrency is valid and already normalized.
+// ValidAndNormalized returns true if the NullableCurrency is valid and already normalized,
+// or if it is the empty CurrencyNull. A whitespace-only value is null and valid,
+// but not normalized.
 func (n NullableCurrency) ValidAndNormalized() bool {
 	norm, err := n.Normalized()
 	return err == nil && n == norm

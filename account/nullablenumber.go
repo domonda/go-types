@@ -95,15 +95,16 @@ func (n NullableNumber) ValidateNumeric() error {
 	return nil
 }
 
-// IsNull returns true if the string is empty.
+// IsNull returns true if the string is empty or whitespace only,
+// which Value writes as SQL NULL and MarshalJSON as null.
 // IsNull implements the Nullable interface.
 func (n NullableNumber) IsNull() bool {
-	return n == NumberNull
+	return strings.TrimSpace(string(n)) == ""
 }
 
-// IsNotNull returns true if the string is not empty.
+// IsNotNull returns true if the string is not empty or whitespace only.
 func (n NullableNumber) IsNotNull() bool {
-	return n != NumberNull
+	return !n.IsNull()
 }
 
 // SetNull sets and empty string representing null
@@ -278,10 +279,10 @@ func (n NullableNumber) MarshalJSON() ([]byte, error) {
 }
 
 // UnmarshalJSON implements encoding/json.Unmarshaler.
-// JSON null and an empty or whitespace only JSON string
-// give NumberNull like Scan and UnmarshalText.
+// JSON null, an empty or whitespace only JSON string,
+// and the JSON number 0 give NumberNull like Scan and UnmarshalText.
 func (n *NullableNumber) UnmarshalJSON(j []byte) error {
-	if bytes.Equal(j, []byte(`null`)) {
+	if bytes.Equal(j, []byte(`null`)) || bytes.Equal(bytes.TrimSpace(j), []byte(`0`)) {
 		*n = NumberNull
 		return nil
 	}

@@ -32,7 +32,9 @@ func Test_MarshalJSON(t *testing.T) {
 
 func Test_JSON_IsNull(t *testing.T) {
 	assert.True(t, JSON(nil).IsNull())
-	assert.False(t, JSON("").IsNull(), "non-nil empty JSON is not null")
+	// A non-nil empty JSON marshals as null and is written as SQL NULL,
+	// so it is null too
+	assert.True(t, JSON("").IsNull(), "non-nil empty JSON is null")
 	assert.False(t, JSON("{}").IsNull())
 }
 
@@ -198,4 +200,16 @@ func Test_JSON_Clone(t *testing.T) {
 	assert.Equal(t, orig, clone)
 	clone[1] = 'X'
 	assert.NotEqual(t, orig, clone, "Clone must be independent of original")
+}
+
+// A non-nil empty JSON is marshalled as null, so it must also be null in
+// IsNull and be written as SQL NULL: empty bytes are rejected by a
+// PostgreSQL json column.
+func Test_JSON_EmptyIsNullEverywhere(t *testing.T) {
+	j := JSON("")
+	require.True(t, j.IsNull(), "IsNull")
+	v, err := j.Value()
+	require.NoError(t, err)
+	require.Nil(t, v, "Value must be SQL NULL")
+	require.Equal(t, "null", j.String())
 }

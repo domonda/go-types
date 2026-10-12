@@ -74,8 +74,9 @@ func (j JSON) Valid() bool {
 }
 
 // Value returns j as a SQL value.
+// A nil or empty JSON is written as the empty object {} like MarshalJSON writes it.
 func (j JSON) Value() (driver.Value, error) {
-	if j == nil {
+	if len(j) == 0 {
 		return []byte("{}"), nil
 	}
 	return []byte(j), nil
