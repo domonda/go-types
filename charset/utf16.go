@@ -106,7 +106,8 @@ func DecodeUTF16(b []byte, byteOrder binary.ByteOrder) ([]byte, error) {
 
 // EncodeUTF16 encodes the UTF-8 bytes b to UTF-16 using byteOrder and returns
 // the encoded bytes without a leading BOM.
-// Returns an error if b contains an invalid UTF-8 rune.
+// Returns an error if b contains invalid UTF-8,
+// a valid U+FFFD replacement character is encoded like any other rune.
 func EncodeUTF16(b []byte, byteOrder binary.ByteOrder) ([]byte, error) {
 	if len(b) == 0 {
 		return nil, nil
@@ -116,7 +117,7 @@ func EncodeUTF16(b []byte, byteOrder binary.ByteOrder) ([]byte, error) {
 	u16Bytes := make([]byte, 2)
 	for len(b) > 0 {
 		r, size := utf8.DecodeRune(b)
-		if r == utf8.RuneError {
+		if r == utf8.RuneError && size == 1 {
 			return nil, errors.New("invalid UTF-8 rune")
 		}
 		for _, u16 := range utf16.Encode([]rune{r}) {

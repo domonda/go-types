@@ -45,6 +45,113 @@ func TestGetEncoding(t *testing.T) {
 	}
 }
 
+// TestGetEncoding_EmptyName protects that a missing charset name, like an
+// absent charset parameter of a Content-Type header, is an error. It must
+// not silently resolve to some encoding: it used to return IBM Code Page 037
+// (EBCDIC) with an empty name, which decodes ASCII text to garbage.
+func TestGetEncoding_EmptyName(t *testing.T) {
+	enc, err := GetEncoding("")
+	assert.Error(t, err)
+	assert.Nil(t, enc)
+	assert.Panics(t, func() { MustGetEncoding("") })
+
+	enc, err = GetEncoding(" ")
+	assert.Error(t, err)
+	assert.Nil(t, enc)
+}
+
+// TestGetEncoding_IANALabels protects that the charset labels registered by
+// IANA, which is what HTTP and MIME Content-Type headers contain, resolve
+// case-insensitively. A label of an encoding listed by EncodingNames must
+// return the same Encoding as its display name, so the Encoding name and
+// the encoded bytes don't depend on which label a sender used.
+func TestGetEncoding_IANALabels(t *testing.T) {
+	const text = "Grüße"
+	tests := []struct {
+		label    string
+		wantName string
+	}{
+		{label: "windows-1252", wantName: "Windows 1252"},
+		{label: "WINDOWS-1252", wantName: "Windows 1252"},
+		{label: "ISO-8859-1", wantName: "ISO 8859-1"},
+		{label: "iso-8859-1", wantName: "ISO 8859-1"},
+		{label: "latin1", wantName: "ISO 8859-1"},
+		{label: "Latin1", wantName: "ISO 8859-1"},
+		{label: "ISO-8859-15", wantName: "ISO 8859-15"},
+		{label: "csUTF8", wantName: "UTF-8"},
+		{label: "ISO-8859-6-E", wantName: "ISO-8859-6E"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.label, func(t *testing.T) {
+			enc, err := GetEncoding(tt.label)
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantName, enc.Name())
+
+			byName := MustGetEncoding(tt.wantName)
+			want, wantErr := byName.Encode([]byte(text))
+			got, err := enc.Encode([]byte(text))
+			assert.Equal(t, wantErr != nil, err != nil, "same encoding error as %s", byName)
+			assert.Equal(t, want, got, "same encoded bytes as %s", byName)
+		})
+	}
+}
+
+// TestGetEncoding_IANAOnlyEncodings protects that IANA charsets without
+// an own implementation in this package, including multi-byte ones,
+// are usable and named by their MIME name.
+func TestGetEncoding_IANAOnlyEncodings(t *testing.T) {
+	t.Run("US-ASCII", func(t *testing.T) {
+		for _, label := range []string{"US-ASCII", "us-ascii", "csASCII"} {
+			enc, err := GetEncoding(label)
+			require.NoError(t, err, label)
+			assert.Equal(t, "US-ASCII", enc.Name())
+		}
+		enc := MustGetEncoding("us-ascii")
+		encoded, err := enc.Encode([]byte("Hello"))
+		require.NoError(t, err)
+		assert.Equal(t, []byte("Hello"), encoded)
+		// Data loss must be an error instead of a silent replacement.
+		_, err = enc.Encode([]byte("Grüße"))
+		assert.Error(t, err)
+	})
+
+	t.Run("Shift_JIS", func(t *testing.T) {
+		enc, err := GetEncoding("shift_jis")
+		require.NoError(t, err)
+		assert.Equal(t, "Shift_JIS", enc.Name())
+		encoded, err := enc.Encode([]byte("日本"))
+		require.NoError(t, err)
+		assert.Equal(t, []byte{0x93, 0xFA, 0x96, 0x7B}, encoded)
+		decoded, err := enc.Decode(encoded)
+		require.NoError(t, err)
+		assert.Equal(t, "日本", string(decoded))
+	})
+
+	// RFC 2781: "UTF-16" takes the byte order from a leading BOM
+	// and is big endian without one. Encoding writes a big endian BOM
+	// so the byte order is unambiguous for the receiver.
+	t.Run("UTF-16", func(t *testing.T) {
+		for _, label := range []string{"UTF-16", "utf-16", "utf16"} {
+			enc, err := GetEncoding(label)
+			require.NoError(t, err, label)
+			assert.Equal(t, "UTF-16", enc.Name())
+		}
+		enc := MustGetEncoding("UTF-16")
+		for name, data := range map[string][]byte{
+			"BE BOM": {0xFE, 0xFF, 0x00, 'h', 0x00, 'i'},
+			"LE BOM": {0xFF, 0xFE, 'h', 0x00, 'i', 0x00},
+			"no BOM": {0x00, 'h', 0x00, 'i'},
+		} {
+			decoded, err := enc.Decode(data)
+			require.NoError(t, err, name)
+			assert.Equal(t, "hi", string(decoded), name)
+		}
+		encoded, err := enc.Encode([]byte("hi"))
+		require.NoError(t, err)
+		assert.Equal(t, []byte{0xFE, 0xFF, 0x00, 'h', 0x00, 'i'}, encoded)
+	})
+}
+
 func TestGetEncoding_NotFound(t *testing.T) {
 	for _, name := range []string{"UTF-7", "no such encoding", "Windows 9999"} {
 		t.Run(name, func(t *testing.T) {

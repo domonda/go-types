@@ -3,12 +3,15 @@ package charset
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
 
 	"golang.org/x/text/encoding"
 	"golang.org/x/text/encoding/charmap"
+	"golang.org/x/text/encoding/ianaindex"
+	"golang.org/x/text/encoding/unicode"
 )
 
 // AutoDecode tries to automatically decode the passed data as text.
@@ -69,8 +72,25 @@ func AutoDecode(data []byte, encodings []Encoding, keyWords []string) (text []by
 }
 
 // GetEncoding returns an Encoding for a name or an error.
-// Common variants of the passed name will be considered.
+//
+// The name can be one of EncodingNames, matched case-insensitively
+// and with "UTF" also accepted without the dash, or a charset label
+// registered by IANA as used in HTTP and MIME headers,
+// like "windows-1252", "latin1", "US-ASCII", or "UTF-16".
+//
+// A label of an encoding listed by EncodingNames returns the Encoding
+// with that name, for example "Windows 1252" for "windows-1252".
+// Other IANA charsets supported by golang.org/x/text/encoding,
+// including multi-byte ones like "Shift_JIS", are wrapped as Encoding
+// named by their MIME name, their BOM method returns NoBOM.
+// "UTF-16" decodes with the byte order of a leading BOM
+// (big endian without BOM) and encodes big endian with a BOM.
+//
+// An empty name returns an error.
 func GetEncoding(name string) (Encoding, error) {
+	if name == "" {
+		return nil, errors.New("empty encoding name")
+	}
 	nameUpper := strings.ToUpper(name)
 	if strings.HasPrefix(nameUpper, "UTF") && !strings.HasPrefix(nameUpper, "UTF-") {
 		nameUpper = "UTF-" + nameUpper[3:]
@@ -83,15 +103,40 @@ func GetEncoding(name string) (Encoding, error) {
 			if strings.ToUpper(cm.String()) == nameUpper {
 				return &encodingImpl{name: cm.String(), encoding: e}, nil
 			}
-			if _, other := cm.ID(); other == name {
-				return &encodingImpl{name: name, encoding: e}, nil
-			}
 		}
 	}
 	if e, ok := sharedEncodings[nameUpper]; ok {
 		return &encodingImpl{name: nameUpper, encoding: e}, nil
 	}
-	return nil, fmt.Errorf("encoding not found: %q", name)
+
+	// Resolve charset labels registered by IANA.
+	// The returned encoding is nil for charsets registered by IANA
+	// that are not supported by golang.org/x/text/encoding.
+	e, err := ianaindex.IANA.Encoding(nameUpper)
+	if err != nil || e == nil {
+		return nil, fmt.Errorf("encoding not found: %q", name)
+	}
+	switch e {
+	case unicode.UTF8:
+		return utfEncodings["UTF-8"], nil
+	case unicode.UTF16(unicode.BigEndian, unicode.IgnoreBOM):
+		return utfEncodings["UTF-16BE"], nil
+	case unicode.UTF16(unicode.LittleEndian, unicode.IgnoreBOM):
+		return utfEncodings["UTF-16LE"], nil
+	}
+	for _, c := range charmap.All {
+		if c == e {
+			// The String method of the *charmap.Charmap values
+			// and of the ISO-8859-6E/6I/8E/8I encodings
+			// returns the name listed by EncodingNames.
+			return &encodingImpl{name: fmt.Sprint(c), encoding: c}, nil
+		}
+	}
+	mimeName, err := ianaindex.MIME.Name(e)
+	if err != nil {
+		return nil, fmt.Errorf("encoding not found: %q", name)
+	}
+	return &encodingImpl{name: mimeName, encoding: e}, nil
 }
 
 // MustGetEncoding returns an Encoding for a name or panics.

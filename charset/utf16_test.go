@@ -113,6 +113,22 @@ func TestDecodeUTF16_InvalidSurrogates(t *testing.T) {
 	}
 }
 
+// TestEncodeUTF16_ReplacementCharacter protects that a valid U+FFFD in the
+// input is encoded and not mistaken for invalid UTF-8. DecodeUTF16 itself
+// produces U+FFFD for unpaired surrogates, so text decoded by this package
+// must be encodable again.
+func TestEncodeUTF16_ReplacementCharacter(t *testing.T) {
+	encoded, err := EncodeUTF16([]byte("a�b"), binary.LittleEndian)
+	require.NoError(t, err)
+	assert.Equal(t, []byte{'a', 0x00, 0xFD, 0xFF, 'b', 0x00}, encoded)
+
+	decoded, err := DecodeUTF16([]byte{0x3D, 0xD8, 'a', 0}, binary.LittleEndian)
+	require.NoError(t, err)
+	reencoded, err := EncodeUTF16(decoded, binary.LittleEndian)
+	require.NoError(t, err)
+	assert.Equal(t, []byte{0xFD, 0xFF, 'a', 0x00}, reencoded)
+}
+
 func TestEncodeUTF16_InvalidUTF8(t *testing.T) {
 	// Invalid UTF-8 anywhere in the input is an error, not only at the start
 	for _, in := range []string{"\xff", "abc\xff", "ab\xc3", "a\xed\xa0\x80b"} {

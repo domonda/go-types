@@ -24,6 +24,17 @@ func TestPrintFileWithAllEncodings_FileErrors(t *testing.T) {
 	assert.Error(t, err)
 }
 
+// TestPrintFileWithAllEncodings_NegativeMaxBytes protects that a negative
+// maxBytes means no limit instead of panicking with a slice bounds error,
+// so a debugging helper can't crash the program that calls it.
+func TestPrintFileWithAllEncodings_NegativeMaxBytes(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "utf8bom.txt")
+	require.NoError(t, os.WriteFile(file, []byte("\xEF\xBB\xBFhello"), 0o600))
+	assert.NotPanics(t, func() {
+		assert.NoError(t, PrintFileWithAllEncodings(file, -1))
+	})
+}
+
 // A file with a BOM is only printed in the encoding of the BOM.
 // maxBytes includes the BOM, here it cuts "hi there" to "hi".
 func ExamplePrintFileWithAllEncodings() {
