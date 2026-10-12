@@ -99,9 +99,10 @@ func CompareStringsShorterFirst[T ~string](a, b T) int {
 }
 
 // ConvertSlice converts a slice of one string type
-// type to another string type.
+// to another string type.
 // It does this by reinterpreting the slice's underlying
-// memory using unsafe.Pointer.
+// memory using unsafe.Pointer, so the result shares
+// its elements with s instead of being a copy.
 func ConvertSlice[T, S ~string](s []S) []T {
 	return *(*[]T)(unsafe.Pointer(&s)) //#nosec G103 -- unsafe OK
 }

@@ -42,6 +42,8 @@ func isTrimByte(c byte) bool {
 // trimmable runes removed: any Unicode whitespace, any non-printable rune
 // (including zero-width characters and the BOM), and any byte that does
 // not decode as valid UTF-8.
+// A valid U+FFFD replacement character is trimmed too,
+// because it can't be told apart from invalid UTF-8.
 func TrimSpace[S ~string](s S) S {
 	// Fast path for ASCII like the one of strings.TrimSpace, falling back
 	// to the rune based isTrimRune as soon as a non-ASCII byte is found.
@@ -74,6 +76,8 @@ func TrimSpace[S ~string](s S) S {
 // and trailing trimmable runes removed: any Unicode whitespace, any
 // non-printable rune (including zero-width characters and the BOM), and
 // any byte that does not decode as valid UTF-8.
+// A valid U+FFFD replacement character is trimmed too,
+// because it can't be told apart from invalid UTF-8.
 func TrimSpaceBytes(s []byte) []byte {
 	// Fast path for ASCII, see TrimSpace
 	start := 0
@@ -103,7 +107,7 @@ func TrimSpaceBytes(s []byte) []byte {
 // returning the text before and after sep with all leading and
 // trailing trimmable runes removed (see TrimSpace for the predicate).
 // The found result reports whether sep appears in s.
-// If sep does not appear in s, cut returns s, "", false.
+// If sep does not appear in s, CutTrimSpace returns s untrimmed, "", false.
 func CutTrimSpace[S ~string](s, sep S) (before, after S, found bool) {
 	if i := strings.Index(string(s), string(sep)); i >= 0 {
 		return TrimSpace(s[:i]), TrimSpace(s[i+len(sep):]), true

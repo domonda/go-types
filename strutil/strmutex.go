@@ -10,6 +10,8 @@ import (
 // waiting to be unlocked.
 // This is equivalent to declaring a mutex variable for every key,
 // except that the key and the number of mutexes are dynamic.
+// Like a sync.Mutex it is not reentrant, locking a key again
+// from the goroutine holding it deadlocks.
 type StrMutex struct {
 	locksMtx sync.Mutex
 	locks    map[string]*locker
@@ -45,6 +47,7 @@ func (m *StrMutex) Lock(key string) {
 }
 
 // Unlock the mutex for a given key.
+// It panics if the key is not locked.
 func (m *StrMutex) Unlock(key string) {
 	m.locksMtx.Lock()
 	defer m.locksMtx.Unlock()

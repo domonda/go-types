@@ -26,6 +26,8 @@ type IsRuneFunc func(rune) bool
 
 // SplitAndTrimIndex first splits str into words not containing isSplitRune,
 // then trims the words with isTrimRune.
+// It returns the [start, end) byte index pairs of the trimmed words,
+// words consisting only of trim runes are dropped.
 // Like ranging over a string, every invalid UTF-8 byte
 // is passed to the functions as utf8.RuneError.
 func SplitAndTrimIndex(str []byte, isSplitRune, isTrimRune IsRuneFunc) (indices [][]int) {
@@ -201,7 +203,7 @@ func KeepRunes(str []byte, keepRunes ...IsRuneFunc) []byte {
 }
 
 // RemoveRunesString returns a copy of str with all runes removed
-// where any call to a removeRunes function reeturns true.
+// where any call to a removeRunes function returns true.
 // Like RemoveRunes, every invalid UTF-8 byte is passed
 // to the functions as utf8.RuneError and written as U+FFFD if kept.
 // If no rune was removed and str is valid UTF-8, the string is not copied.
@@ -241,8 +243,10 @@ func RemoveRunesString(str string, removeRunes ...IsRuneFunc) string {
 	return str
 }
 
-// KeepRunesString returns a copy of str where with all runes kept in it
-// where any call to a keepRunes function reeturns true.
+// KeepRunesString returns a copy of str with only those runes kept
+// where any call to a keepRunes function returns true.
+// Like KeepRunes, every invalid UTF-8 byte is passed
+// to the functions as utf8.RuneError and written as U+FFFD if kept.
 func KeepRunesString(str string, keepRunes ...IsRuneFunc) string {
 	var b strings.Builder
 	b.Grow(len(str))
@@ -258,7 +262,9 @@ func KeepRunesString(str string, keepRunes ...IsRuneFunc) string {
 }
 
 // MapRuneIsAfterWordSeparator returns a boolean slice indicating for each byte position
-// in str whether that position comes after a word separator character.
+// in str whether that position comes after a word separator character
+// (see IsWordSeparator). All bytes of a multi-byte rune get the same value,
+// and the first rune counts as coming after a separator.
 func MapRuneIsAfterWordSeparator(str string) []bool {
 	result := make([]bool, len(str))
 	i0 := -1
@@ -327,7 +333,10 @@ func writeSafeFileNameRune(b *strings.Builder, i int, r rune, lastWasPlaceholder
 	return true
 }
 
-// MakeValidFileName replaces invalid filename characters with '_'.
+// MakeValidFileName trims name with TrimSpace and replaces the characters
+// \ / : * " < > | and newline, carriage return and tab with '_'.
+// These characters are removed instead at the start and end of the name,
+// and an empty result is returned as "_".
 // See also SanitizeFileName that does more than just replacing characters.
 func MakeValidFileName(name string) string {
 	name = TrimSpace(name)
@@ -347,7 +356,15 @@ func MakeValidFileName(name string) string {
 }
 
 // SanitizeFileName creates a nice sane filename.
-// It does more than just replacing invalid characters.
+// It does more than just replacing invalid characters:
+//   - trims name with TrimSpace,
+//   - URL-unescapes name if it contains '%' or '+', so "a+b" becomes "a b",
+//   - normalizes the extension with NormalizeExt,
+//   - transliterates the special characters of TransliterateSpecialCharacters,
+//   - keeps ASCII letters, digits, '-' and '_',
+//   - replaces whitespace with '_' and every other rune with '-',
+//     not at the start and only once per run of replaced runes.
+//
 // Never returns an empty string.
 func SanitizeFileName(name string) string {
 	name = TrimSpace(name)
@@ -484,16 +501,22 @@ var transliterations = map[rune]string{
 // TransliterateSpecialCharacters returns the string sanitized
 // as valid UTF-8 with common European special characters
 // transliterated to single or multiple ANSI characters.
+// Invalid UTF-8 bytes and U+FFFD runes are dropped.
+// Runes without a transliteration, like 'ź' or '€', are kept,
+// so the result is not guaranteed to be ASCII.
 func TransliterateSpecialCharacters(str string) string {
 	return TransliterateSpecialCharactersMaxLen(str, -1)
 }
 
 // TransliterateSpecialCharactersMaxLen returns the string sanitized
 // as valid UTF-8 with common European special characters
-// transliterated to single or multiple ANSI characters.
+// transliterated to single or multiple ANSI characters,
+// like TransliterateSpecialCharacters.
 //
 // The maxLen argument limits the number of runes returned.
-// A negative value means no limit.
+// A transliteration that starts below the limit is written completely,
+// so the result can be one rune longer: "Ä" with maxLen 1 returns "Ae".
+// A negative value means no limit, zero returns an empty string.
 func TransliterateSpecialCharactersMaxLen(str string, maxLen int) string {
 	if str == "" || maxLen == 0 {
 		return ""
@@ -699,7 +722,8 @@ func SubStringIn(subString string, strs []string) bool {
 	return false
 }
 
-// StringContainsAny returns if str is a sub string in any of subStrings.
+// StringContainsAny returns if str contains any of subStrings.
+// An empty string in subStrings always matches.
 func StringContainsAny(str string, subStrings []string) bool {
 	for _, subString := range subStrings {
 		if strings.Contains(str, subString) {
@@ -710,7 +734,10 @@ func StringContainsAny(str string, subStrings []string) bool {
 }
 
 // ToSnakeCase converts s to snake case by lower casing everything
-// and inserting '_' before every new upper case character in s.
+// and inserting '_' before every upper case character that follows
+// a character that is neither upper case nor replaced by '_'.
+// A run of upper case characters is not split into words,
+// so "MyHTTPRequest" becomes "my_httprequest".
 // Whitespace, symbol, and punctuation characters will be replaced by '_'.
 func ToSnakeCase(s string) string {
 	var b strings.Builder

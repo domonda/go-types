@@ -4,6 +4,10 @@ import "strings"
 
 // HTMLEscapeSpecialRunes returns str with special Unicode characters
 // replaced by their HTML entity equivalents (e.g., 'ä' becomes '&auml;').
+// The only escaped ASCII character is '&'.
+// The characters <, >, " and the apostrophe are not escaped,
+// so the result is not safe to embed untrusted text in HTML;
+// use html.EscapeString or html/template for that.
 func HTMLEscapeSpecialRunes(str string) string {
 	var b strings.Builder
 	b.Grow(len(str))

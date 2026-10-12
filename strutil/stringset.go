@@ -11,6 +11,8 @@ import (
 )
 
 // StringSet is a set of unique strings implemented as a map.
+// It has no JSON or SQL methods, so encoding/json encodes it
+// like any map as an object, for example {"a":{}}.
 type StringSet map[string]struct{}
 
 // NewStringSet creates and returns a new StringSet containing the provided strings.
@@ -39,6 +41,7 @@ func NewStringSetMergeSlices(slices ...[]string) StringSet {
 }
 
 // Sorted returns all strings in the set as a sorted slice.
+// It returns nil for an empty or nil set.
 func (set StringSet) Sorted() (s []string) {
 	if count := len(set); count > 0 {
 		s = make([]string, 0, count)
