@@ -1,6 +1,7 @@
 package stringfrom
 
 import (
+	"fmt"
 	"math"
 	"testing"
 	"time"
@@ -177,4 +178,35 @@ func TestInterface_NilAndNonPointer(t *testing.T) {
 	same(t, "struct", st, &st)
 	same(t, "nil map", nilMap, &nilMap)
 	same(t, "nil slice", nilSlice, &nilSlice)
+}
+
+// Interface renders values for humans like the other functions of this
+// package, so a non-string value must be formatted like fmt.Sprint does,
+// not as reflect's "<int Value>" placeholder that hides the value.
+func TestInterface_NonStringValues(t *testing.T) {
+	n := 42
+	pn := &n
+	for _, tt := range []struct {
+		name string
+		val  any
+		want string
+	}{
+		{name: "int", val: 42, want: "42"},
+		{name: "pointer to int", val: &n, want: "42"},
+		{name: "float", val: 1.5, want: "1.5"},
+		{name: "bool", val: true, want: "true"},
+		{name: "struct", val: struct{ A int }{1}, want: "{1}"},
+		{name: "map", val: map[string]int{"a": 1}, want: "map[a:1]"},
+		{name: "slice", val: []int{1, 2}, want: "[1 2]"},
+		// fmt.Stringer is used like by fmt.Sprint
+		{name: "Stringer", val: time.Second, want: "1s"},
+		{name: "pointer to Stringer", val: &uu.IDNil, want: uu.IDNil.String()},
+		// Only one pointer level is dereferenced, the inner pointer
+		// is formatted by fmt.Sprint like any other non-nil pointer
+		{name: "pointer to pointer", val: &pn, want: fmt.Sprint(pn)},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, Interface(tt.val))
+		})
+	}
 }

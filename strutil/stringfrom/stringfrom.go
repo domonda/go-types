@@ -14,6 +14,7 @@
 package stringfrom
 
 import (
+	"fmt"
 	"reflect"
 	"strconv"
 	"strings"
@@ -105,9 +106,10 @@ func Bool(boolVal bool, trueString, falseString string) string {
 	return falseString
 }
 
-// Interface converts i, or the value i points to, to a string
-// using reflect.Value.String, so a non-pointer value returns
-// the same string as a pointer to it.
+// Interface converts i, or the value i points to, to a string,
+// so a non-pointer value returns the same string as a pointer to it.
+// A value of string kind is returned as is,
+// other values are formatted with fmt.Sprint.
 // Returns an empty string for nil, a nil pointer,
 // or a nil map, slice, func, channel or interface value.
 func Interface(i any) string {
@@ -118,10 +120,12 @@ func Interface(i any) string {
 	switch v.Kind() {
 	case reflect.Invalid:
 		return ""
+	case reflect.String:
+		return v.String()
 	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice, reflect.UnsafePointer:
 		if v.IsNil() {
 			return ""
 		}
 	}
-	return v.String()
+	return fmt.Sprint(v.Interface())
 }
