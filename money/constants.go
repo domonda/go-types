@@ -215,6 +215,9 @@ var currencyCodeToName = map[Currency]string{ //#nosec G101
 // detect currencies in any text that StringIsCurrency is used on.
 // A name that ISO 4217 uses for more than one code is listed only
 // for the current code: "Bolívar Soberano" for VES and not for VED.
+// Withdrawn codes kept for old data, like ANG, BGN and CUC, keep their
+// former ISO 4217 name unless a current code took it over, like the
+// "Ouguiya" of MRO that is now the single word name of MRU.
 var currencyCodeToISOName = map[Currency]string{
 	AED: "UAE Dirham",
 	AMD: "Armenian Dram",
