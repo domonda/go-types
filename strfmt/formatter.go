@@ -47,6 +47,21 @@ func (format *MoneyFormat) FormatCurrencyAmount(currencyAmount money.CurrencyAmo
 	return currencyAmount.FormatSep(format.CurrencyFirst, format.ThousandsSep, format.DecimalSep, format.Precision)
 }
 
+// FormatCurrencyDecimalAmount formats a currency-tagged decimal amount like
+// FormatCurrencyAmount formats a currency-tagged amount, placing the currency
+// code before or after the number according to format.CurrencyFirst,
+// with the number formatted by FormatDecimalAmount.
+func (format *MoneyFormat) FormatCurrencyDecimalAmount(currencyAmount money.CurrencyDecimalAmount) string {
+	amountStr := format.FormatDecimalAmount(currencyAmount.Amount)
+	if currencyAmount.Currency == "" {
+		return amountStr
+	}
+	if format.CurrencyFirst {
+		return string(currencyAmount.Currency) + " " + amountStr
+	}
+	return amountStr + " " + string(currencyAmount.Currency)
+}
+
 // FormatCentAmount formats a cent amount like FormatAmount formats an amount,
 // see FormatDecimalAmount. A cent amount beyond the DecimalAmount range,
 // which no real money amount reaches, is formatted with its two decimals

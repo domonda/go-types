@@ -111,6 +111,56 @@ func TestFormatConfig_MoneyTypesFormatAlike(t *testing.T) {
 	assert.Equal(t, "NaN", Format(money.DecimalAmountNaN(), NewGermanFormatConfig()))
 }
 
+// TestFormatConfig_CurrencyDecimalAmount checks that money.CurrencyDecimalAmount
+// is formatted with the locale's money format like money.CurrencyAmount.
+// Without its type formatter the String method was used, which ignores the
+// locale, so a German export wrote "EUR 1234.56" for a CurrencyDecimalAmount
+// next to "EUR 1.234,56" for the same amount as CurrencyAmount.
+func TestFormatConfig_CurrencyDecimalAmount(t *testing.T) {
+	tests := []struct {
+		value  money.CurrencyDecimalAmount
+		german string
+		en     string
+	}{
+		{value: money.NewCurrencyDecimalAmount(money.EUR, money.NewDecimalAmount(123456, 2)), german: "EUR 1.234,56", en: "EUR 1,234.56"},
+		{value: money.NewCurrencyDecimalAmount(money.EUR, money.NewDecimalAmount(12345, 3)), german: "EUR 12,35", en: "EUR 12.35"},
+		{value: money.NewCurrencyDecimalAmount(money.USD, money.NewDecimalAmount(5, 0)), german: "USD 5,00", en: "USD 5.00"},
+		{value: money.CurrencyDecimalAmount{Amount: money.NewDecimalAmount(-5, 1)}, german: "-0,50", en: "-0.50"},
+	}
+	for _, tt := range tests {
+		assert.Equal(t, tt.german, Format(tt.value, NewGermanFormatConfig()), "German %v", tt.value)
+		assert.Equal(t, tt.en, Format(tt.value, NewEnglishFormatConfig()), "English %v", tt.value)
+		assert.Equal(t, tt.german, Format(&tt.value, NewGermanFormatConfig()), "German pointer %v", tt.value)
+
+		// Formatted exactly like the CurrencyAmount of the same value
+		currencyAmount := tt.value.CurrencyAmount()
+		assert.Equal(t, Format(currencyAmount, NewGermanFormatConfig()), Format(tt.value, NewGermanFormatConfig()), "German like CurrencyAmount %v", tt.value)
+	}
+}
+
+// TestFormatConfig_NullableMoneyTypes checks that the nullable money types
+// format a non-null value like the money type they wrap and null as the
+// configured Nil string. Without their type formatters a non-null
+// money.NullableAmount was written as the raw struct "{1234.5 true}".
+func TestFormatConfig_NullableMoneyTypes(t *testing.T) {
+	decimal := money.NewDecimalAmount(123450, 2)
+	for _, config := range []*FormatConfig{NewGermanFormatConfig(), NewEnglishFormatConfig()} {
+		config.Nil = "N/A"
+		want := Format(money.Amount(1234.5), config)
+
+		nullableAmount := money.NullableAmountFrom(1234.5)
+		nullableCents := money.NullableCentAmountFrom(123450)
+		nullableDecimal := money.NullableDecimalAmountFromPtr(&decimal)
+		for _, value := range []any{nullableAmount, &nullableAmount, nullableCents, &nullableCents, nullableDecimal, &nullableDecimal} {
+			assert.Equal(t, want, Format(value, config), "Format(%T)", value)
+		}
+
+		for _, value := range []any{money.NullableAmount{}, money.NullableCentAmount{}, money.NullableDecimalAmount{}, (*money.NullableAmount)(nil)} {
+			assert.Equal(t, "N/A", Format(value, config), "Format(null %T)", value)
+		}
+	}
+}
+
 // TestFormatConfig_NilPlaceholder checks that the configured Nil string
 // is used for null time values instead of a formatted zero time like
 // "01.01.0001 00:00:00 UTC", which would look like real data in a report.

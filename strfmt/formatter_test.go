@@ -38,6 +38,36 @@ func TestMoneyFormat_FormatCurrencyAmount(t *testing.T) {
 	assert.Equal(t, "1.234,50", f.FormatCurrencyAmount(noCurrency))
 }
 
+// TestMoneyFormat_FormatCurrencyDecimalAmount checks that a
+// money.CurrencyDecimalAmount is formatted like a money.CurrencyAmount:
+// CurrencyFirst places the currency code, and the amount gets the
+// separators and the precision of the MoneyFormat like FormatDecimalAmount.
+func TestMoneyFormat_FormatCurrencyDecimalAmount(t *testing.T) {
+	amount := money.NewCurrencyDecimalAmount(money.EUR, money.NewDecimalAmount(12345, 1))
+
+	tests := []struct {
+		name   string
+		format MoneyFormat
+		want   string
+	}{
+		{name: "German currency first", format: GermanMoneyFormat(true), want: "EUR 1.234,50"},
+		{name: "German currency last", format: GermanMoneyFormat(false), want: "1.234,50 EUR"},
+		{name: "English currency first", format: EnglishMoneyFormat(true), want: "EUR 1,234.50"},
+		{name: "English currency last", format: EnglishMoneyFormat(false), want: "1,234.50 EUR"},
+		{name: "custom precision without thousands separator", format: MoneyFormat{DecimalSep: '.', Precision: 3}, want: "1234.500 EUR"},
+		{name: "precision -1 keeps the scale", format: MoneyFormat{DecimalSep: ',', Precision: -1}, want: "1234,5 EUR"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, tt.format.FormatCurrencyDecimalAmount(amount))
+		})
+	}
+
+	// Without a currency there is nothing to place before or after the number
+	f := GermanMoneyFormat(true)
+	assert.Equal(t, "1.234,50", f.FormatCurrencyDecimalAmount(money.CurrencyDecimalAmount{Amount: amount.Amount}))
+}
+
 // TestMoneyFormat_FormatCentAndDecimalAmount checks that the exact money
 // types honor the separators and the precision of a MoneyFormat like
 // FormatAmount does for money.Amount, so a custom format applies to all

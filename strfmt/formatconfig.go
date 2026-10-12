@@ -32,7 +32,9 @@ type FormatConfig struct {
 // It pre-registers type-specific formatters for date.Date,
 // date.NullableDate, time.Time, nullable.Time, time.Duration,
 // money.Amount, money.CentAmount, money.DecimalAmount,
-// and money.CurrencyAmount.
+// money.CurrencyAmount, money.CurrencyDecimalAmount,
+// money.NullableAmount, money.NullableCentAmount,
+// and money.NullableDecimalAmount.
 func NewFormatConfig() *FormatConfig {
 	return &FormatConfig{
 		Float:       EnglishFloatFormat(-1),
@@ -44,15 +46,19 @@ func NewFormatConfig() *FormatConfig {
 		True:        "true",
 		False:       "false",
 		TypeFormatters: map[reflect.Type]Formatter{
-			reflect.TypeFor[date.Date]():            FormatterFunc(formatDateString),
-			reflect.TypeFor[date.NullableDate]():    FormatterFunc(formatNullableDateString),
-			reflect.TypeFor[time.Time]():            FormatterFunc(formatTimeString),
-			reflect.TypeFor[nullable.Time]():        FormatterFunc(formatNullableTimeString),
-			reflect.TypeFor[time.Duration]():        FormatterFunc(formatDurationString),
-			reflect.TypeFor[money.Amount]():         FormatterFunc(formatMoneyAmountString),
-			reflect.TypeFor[money.CentAmount]():     FormatterFunc(formatMoneyCentAmountString),
-			reflect.TypeFor[money.DecimalAmount]():  FormatterFunc(formatMoneyDecimalAmountString),
-			reflect.TypeFor[money.CurrencyAmount](): FormatterFunc(formatMoneyCurrencyAmountString),
+			reflect.TypeFor[date.Date]():                   FormatterFunc(formatDateString),
+			reflect.TypeFor[date.NullableDate]():           FormatterFunc(formatNullableDateString),
+			reflect.TypeFor[time.Time]():                   FormatterFunc(formatTimeString),
+			reflect.TypeFor[nullable.Time]():               FormatterFunc(formatNullableTimeString),
+			reflect.TypeFor[time.Duration]():               FormatterFunc(formatDurationString),
+			reflect.TypeFor[money.Amount]():                FormatterFunc(formatMoneyAmountString),
+			reflect.TypeFor[money.CentAmount]():            FormatterFunc(formatMoneyCentAmountString),
+			reflect.TypeFor[money.DecimalAmount]():         FormatterFunc(formatMoneyDecimalAmountString),
+			reflect.TypeFor[money.CurrencyAmount]():        FormatterFunc(formatMoneyCurrencyAmountString),
+			reflect.TypeFor[money.CurrencyDecimalAmount](): FormatterFunc(formatMoneyCurrencyDecimalAmountString),
+			reflect.TypeFor[money.NullableAmount]():        nullableMoneyFormatter((*MoneyFormat).FormatAmount),
+			reflect.TypeFor[money.NullableCentAmount]():    nullableMoneyFormatter((*MoneyFormat).FormatCentAmount),
+			reflect.TypeFor[money.NullableDecimalAmount](): nullableMoneyFormatter((*MoneyFormat).FormatDecimalAmount),
 		},
 	}
 }
@@ -128,4 +134,21 @@ func formatMoneyDecimalAmountString(val reflect.Value, config *FormatConfig) str
 
 func formatMoneyCurrencyAmountString(val reflect.Value, config *FormatConfig) string {
 	return config.MoneyAmount.FormatCurrencyAmount(val.Interface().(money.CurrencyAmount))
+}
+
+func formatMoneyCurrencyDecimalAmountString(val reflect.Value, config *FormatConfig) string {
+	return config.MoneyAmount.FormatCurrencyDecimalAmount(val.Interface().(money.CurrencyDecimalAmount))
+}
+
+// nullableMoneyFormatter returns a Formatter for the nullable.Type of the
+// money type T that formats null as config.Nil and a non-null value with
+// formatMoney using config.MoneyAmount, like T itself is formatted.
+func nullableMoneyFormatter[T any](formatMoney func(*MoneyFormat, T) string) FormatterFunc {
+	return func(val reflect.Value, config *FormatConfig) string {
+		n := val.Interface().(nullable.Type[T])
+		if n.IsNull() {
+			return config.Nil
+		}
+		return formatMoney(&config.MoneyAmount, n.Get())
+	}
 }
