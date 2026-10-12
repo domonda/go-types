@@ -105,8 +105,9 @@ func (m RoundingMode) String() string {
 // the otherwise-unused scale value 31. Arithmetic never panics on overflow or
 // division by zero: overflow yields ±Inf, x/0 yields ±Inf (or NaN for 0/0), and
 // NaN propagates like IEEE floating point. Use Valid/IsFinite/IsNaN/IsInf to
-// test, mirroring Amount. (Explicit misuse — an out-of-range scale or decimals
-// argument — still panics.)
+// test, mirroring Amount, except that IsInf takes a sign argument.
+// (Explicit misuse — an out-of-range scale or decimals argument, or an
+// out-of-range coefficient passed to NewDecimalAmount — still panics.)
 //
 // The zero value is a valid finite amount of 0 with scale 0.
 type DecimalAmount struct {

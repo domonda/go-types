@@ -145,8 +145,11 @@ func (a Amount) DecimalAmount(scale int, rounding RoundingMode) DecimalAmount {
 	return decimalFromFloatRounded(float64(a), 64, scale, rounding)
 }
 
-// WithinOneCent returns true if a and b are equal
-// within a one cent tolerance.
+// WithinOneCent returns true if the whole cents of a and b,
+// as returned by Amount.Cents, differ by at most one cent.
+// Because both amounts are rounded to cents first,
+// the difference of the unrounded amounts can be up to
+// just under two cents, like for 10.004 and 10.0149.
 func (a Amount) WithinOneCent(b Amount) bool {
 	diff := a.Cents() - b.Cents()
 	return diff >= -1 && diff <= 1
