@@ -442,9 +442,35 @@ func TestCurrency_CurrentISO4217Codes(t *testing.T) {
 		assert.Contains(t, enums, code, "Currency(%q) in Enums()", string(code))
 		assert.NotEmpty(t, code.EnglishName(), "Currency(%q).EnglishName()", string(code))
 	}
-	withdrawn := []Currency{"ANG", "HRK", "MRO", "SLL", "STD", "VEF", "ZWD"}
+	withdrawn := []Currency{"ANG", "HRK", "MRO", "SLL", "STD", "VEF", "ZWD", "ZWL"}
 	for _, code := range withdrawn {
 		assert.True(t, code.Valid(), "withdrawn Currency(%q) must stay valid for old data", string(code))
 		assert.Contains(t, enums, code, "withdrawn Currency(%q) in Enums()", string(code))
 	}
+}
+
+// TestCurrency_ZWL protects that the Zimbabwe Dollar used from 2009 until
+// ZWG replaced it in 2024 is a valid currency, because invoices and bank
+// statements of those years carry ZWL. Its name has to differ from the
+// earlier Zimbabwe Dollar ZWD and from ZWG, so that each of the three
+// names normalizes back to its own code.
+func TestCurrency_ZWL(t *testing.T) {
+	assert.Equal(t, Currency("ZWL"), ZWL)
+	assert.True(t, ZWL.ValidAndNormalized())
+	assert.Contains(t, ZWL.Enums(), ZWL)
+	assert.Contains(t, ZWL.EnumStrings(), "ZWL")
+
+	got, err := Currency("zwl").Normalized()
+	assert.NoError(t, err)
+	assert.Equal(t, ZWL, got)
+
+	names := map[Currency]string{ZWD: ZWD.EnglishName(), ZWG: ZWG.EnglishName(), ZWL: ZWL.EnglishName()}
+	for code, name := range names {
+		assert.NotEmpty(t, name, "EnglishName of %s", string(code))
+		normalized, err := Currency(name).Normalized()
+		if assert.NoError(t, err, "Currency(%q).Normalized()", name) {
+			assert.Equal(t, code, normalized, "Currency(%q).Normalized()", name)
+		}
+	}
+	assert.NotEqual(t, ZWD.EnglishName(), ZWL.EnglishName())
 }

@@ -421,6 +421,7 @@ const (
 	ZMW Currency = "ZMW" // Zambia Kwacha
 	ZWD Currency = "ZWD" // Zimbabwe Dollar
 	ZWG Currency = "ZWG" // Zimbabwe Gold
+	ZWL Currency = "ZWL" // Zimbabwe Dollar (2009-2024)
 )
 
 // Enums returns all valid values for Currency
@@ -596,6 +597,7 @@ func (Currency) Enums() []Currency {
 		ZMW,
 		ZWD,
 		ZWG,
+		ZWL,
 	}
 }
 
@@ -772,5 +774,6 @@ func (Currency) EnumStrings() []string {
 		"ZMW",
 		"ZWD",
 		"ZWG",
+		"ZWL",
 	}
 }

@@ -204,6 +204,7 @@ var currencyCodeToName = map[Currency]string{ //#nosec G101
 	ZMW: "Zambia Kwacha",
 	ZWD: "Zimbabwe Dollar",
 	ZWG: "Zimbabwe Gold",
+	ZWL: "Zimbabwe Dollar (2009-2024)",
 }
 
 // currencyCodeToISOName holds the English currency names of the ISO 4217
