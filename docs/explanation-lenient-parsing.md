@@ -115,7 +115,7 @@ func main() {
 }
 ```
 
-The error leaves the decision to code that has more context, like the language of the document or the format of the other amounts in it. `ParseAmount` and `ParseRate` report the same case as `parsing "1,000" returned 3 decimals wich is not in accepted list of [0 2]`.
+The error leaves the decision to code that has more context, like the language of the document or the format of the other amounts in it. `ParseAmount` and `ParseRate` report the same case as `parsing "1,000" returned 3 decimals which is not in accepted list of [0 2]`.
 
 `ParseDecimalAmount` and `ParseCentAmount` match `acceptedDecimals` against the decimals of the result, after an exponent is applied, while `ParseAmount` matches the decimals written in the mantissa. For `1.5e2`, `ParseDecimalAmount` accepts 0 and `ParseAmount` accepts 1.
 

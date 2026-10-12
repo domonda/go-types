@@ -175,7 +175,7 @@ The eight modes differ only on ties and on the direction of truncation. For `2.5
 
 ### What the convention can't fix
 
-The rule recovers the decimal a value was written as. It can't recover the decimal a float calculation was meant to produce. `100 × 0.145` is `14.499999999999998` in `float64`, and that is also its shortest decimal, so it rounds down:
+The rule recovers the decimal a value was written as. It can't recover the decimal a float calculation was meant to produce. `3 × 0.145` is `0.43499999999999994` in `float64`, and that is also its shortest decimal, so the `float64` `Amount` rounds it down. `CentAmount` and `DecimalAmount` take the shortest decimal of the rate, `0.145`, and multiply exactly:
 
 ```go
 package main
@@ -187,21 +187,21 @@ import (
 )
 
 func main() {
-	// Rate math in float64 lands just below the tie
-	fmt.Println(money.CentAmount(100).MultipliedByRate(0.145))
+	// Rate math on a float64 Amount lands just below the tie
+	fmt.Println(money.Amount(3).MultipliedByRate(0.145).CentAmount(money.RoundHalfAwayFromZero))
 
-	// The same calculation in exact decimals
-	amount := money.NewDecimalAmount(100, 2)
-	rate := money.NewDecimalAmount(145, 3)
-	fmt.Println(amount.Mul(rate, money.RoundHalfAwayFromZero).RoundToCents(money.RoundHalfAwayFromZero))
+	// CentAmount and DecimalAmount compute with the rate's decimal exactly
+	fmt.Println(money.CentAmount(300).MultipliedByRate(0.145))
+	fmt.Println(money.NewDecimalAmount(300, 2).MultipliedByRate(0.145))
 
 	// Output:
-	// 0.14
-	// 0.15
+	// 0.43
+	// 0.44
+	// 0.435
 }
 ```
 
-The methods that take a `Rate` or a percentage compute in `float64` on all three amount types: `MultipliedByRate`, `DividedByRate` and `Percentage`. When a percentage or exchange rate must give an exact cent result, put the factor in a `DecimalAmount` and use `Mul` or `Div`.
+On `Amount`, the methods that take a `Rate` or a percentage, `MultipliedByRate`, `DividedByRate` and `Percentage`, compute in `float64`. On `CentAmount` and `DecimalAmount` they convert the rate to its shortest decimal and compute exactly; `CentAmount` rounds the result once, half away from zero. `DecimalAmount` falls back to a `float64` product only for a rate with more than 18 decimals. When a percentage or exchange rate must give an exact cent result, keep the amount in a `CentAmount` or `DecimalAmount`, or put the factor in a `DecimalAmount` and use `Mul` or `Div`.
 
 ## Calculate exactly, round once
 

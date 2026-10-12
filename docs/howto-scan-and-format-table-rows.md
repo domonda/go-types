@@ -25,7 +25,7 @@ The steps build one program. Step 6 shows it complete, with its output.
    }
    ```
 
-2. Pick a format preset and a placeholder for null values. `strfmt.NewEnglishFormatConfig()` and `strfmt.NewGermanFormatConfig()` set the money separators, the date layout and the bool labels. `Nil` is the text written for nil pointers, null values of nullable types and the zero `time.Time`. `date.Date` and `date.NullableDate` have formatters of their own, which write an empty string for an empty or null date:
+2. Pick a format preset and a placeholder for null values. `strfmt.NewEnglishFormatConfig()` and `strfmt.NewGermanFormatConfig()` set the money separators, the date layout and the bool labels. `Nil` is the text written for nil pointers, null values of nullable types, a zero `time.Time` and an empty or null `date.Date` or `date.NullableDate`, and it scans back as null:
 
    | Preset                     | Money      | Date         | Bool           | Float    |
    |----------------------------|------------|--------------|----------------|----------|
@@ -195,10 +195,10 @@ The steps build one program. Step 6 shows it complete, with its output.
    	readCSV([]byte("Muster GmbH;1.234,50;30.02.2023;ja;;-\nACME Ltd.;;08.01.2024;nein;;-\n"), scanConfig, ';')
 
    	// Output:
-   	// Muster GmbH,"1,234.50",25/12/2023,yes,,-
+   	// Muster GmbH,"1,234.50",25/12/2023,yes,-,-
    	// ACME Ltd.,99.00,08/01/2024,no,01/02/2024,second reminder
    	// round trip equal: true
-   	// Muster GmbH;1.234,50;25.12.2023;ja;;-
+   	// Muster GmbH;1.234,50;25.12.2023;ja;-;-
    	// ACME Ltd.;99,00;08.01.2024;nein;01.02.2024;second reminder
    	// round trip equal: true
    	// row 1, Booked: parsing time "2023-02-30": day out of range
@@ -220,8 +220,6 @@ The messages below are the errors `strfmt.Scan` returns, after `errs.UnwrapCallS
 **`can't scan nil string "" into non-optional destination type bool with strict empty string parsing`.** The cell is empty or a `NilStrings` entry, and the field can't hold null. Make the field a pointer, like `*bool`, which scans an empty cell as nil. Or keep `StrictEmptyStringParsing` false, which scans it as the zero value.
 
 **`empty string can't be parsed as float`.** The same case for a `money.Amount` field: with strict parsing, `Amount.ScanString` gets the empty cell and fails. Use `*money.Amount` for an optional amount.
-
-**`can't scan "5,00" as destination type nullable.Type[github.com/domonda/go-types/money.Amount]`.** `strfmt` formats `money.NullableAmount`, `NullableCentAmount` and `NullableDecimalAmount`, but can't scan them back: `nullable.Type` has no `ScanString` method. Only a null cell scans. Use `*money.Amount` instead, or register a scanner as shown below.
 
 **`parsing time "2023-02-30": day out of range`.** The date has a valid shape but doesn't exist. With `ValidateFunc` set to nil, `strfmt.Scan` passes `validate = false` to `ScanString`, and `date.Date` stores such a cell unchanged instead of failing. Keep the default `ValidateFunc` when you scan untrusted files.
 
@@ -282,7 +280,7 @@ func main() {
 
 	// Output:
 	// 2024-05-06 <nil>
-	// 0.00 parsing "1.000" returned 3 decimals wich is not in accepted list of [0 2 4]
+	// 0.00 parsing "1.000" returned 3 decimals which is not in accepted list of [0 2 4]
 }
 ```
 
