@@ -51,8 +51,8 @@ func (j JSON) MarshalJSON() ([]byte, error) {
 }
 
 // UnmarshalJSON sets *j to a copy of sourceJSON.
-// UnarshalJSON implements encoding/json.Unmarshaler
-// See method Unmarshal for unmarshalling into a struct.
+// UnmarshalJSON implements encoding/json.Unmarshaler
+// See method UnmarshalTo for unmarshalling into a struct.
 func (j *JSON) UnmarshalJSON(sourceJSON []byte) error {
 	if j == nil {
 		return errors.New("UnmarshalJSON on nil pointer")
@@ -129,8 +129,12 @@ func (j JSON) PrettyPrint(w io.Writer) (int, error) {
 	return fmt.Fprintf(w, "`%s`", j.String())
 }
 
-// Clone returns a copy of j
+// Clone returns a copy of j.
+// A nil j returns nil, so the clone also encodes as {}.
 func (j JSON) Clone() JSON {
+	if j == nil {
+		return nil
+	}
 	clone := make(JSON, len(j))
 	copy(clone, j)
 	return clone

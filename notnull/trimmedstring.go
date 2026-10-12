@@ -42,7 +42,7 @@ func TrimmedStringFrom(str string) TrimmedString {
 	return TrimmedString(strutil.TrimSpace(str))
 }
 
-// JoinTrimmedStrings joins trimmed strings with the passed separator between them
+// TrimmedStringJoin joins trimmed strings with the passed separator between them
 func TrimmedStringJoin[S ~string](separator string, strs ...S) TrimmedString {
 	var b strings.Builder
 	for i, s := range strs {
@@ -55,15 +55,10 @@ func TrimmedStringJoin[S ~string](separator string, strs ...S) TrimmedString {
 }
 
 // IsEmpty indicates if the trimmed string is empty
-// which is also the case when the underlying
-// string consists only of whitespace.
+// which is also the case when the underlying string
+// consists only of runes removed by strutil.TrimSpace.
 func (s TrimmedString) IsEmpty() bool {
-	for _, r := range s {
-		if !strutil.IsSpace(r) {
-			return false
-		}
-	}
-	return true
+	return s.String() == ""
 }
 
 // String implements the fmt.Stringer interface
@@ -181,7 +176,7 @@ func (s *TrimmedString) Scan(value any) error {
 	}
 }
 
-// UnmarshalText implements the encoding.TextMarshaler interface
+// MarshalText implements the encoding.TextMarshaler interface
 func (s TrimmedString) MarshalText() ([]byte, error) {
 	return []byte(s.String()), nil
 }

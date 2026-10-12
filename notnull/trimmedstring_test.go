@@ -27,6 +27,27 @@ func Test_TrimmedString_IsEmpty(t *testing.T) {
 	assert.False(t, TrimmedString("  x  ").IsEmpty())
 }
 
+// IsEmpty must agree with the value that String, Value and the
+// marshallers write: a string of only runes that TrimSpace removes
+// but IsSpace doesn't report, like the BOM, a zero width joiner
+// or an invalid UTF-8 byte, is written as "" and so is empty.
+func Test_TrimmedString_IsEmptyAgreesWithString(t *testing.T) {
+	for _, s := range []TrimmedString{
+		"\xef\xbb\xbf",                 // BOM U+FEFF
+		"\xe2\x80\x8d",                 // ZERO WIDTH JOINER U+200D
+		"\xe2\x81\xa0",                 // WORD JOINER U+2060
+		"\xff",                         // invalid UTF-8
+		"\x00\x7f",                     // control characters
+		" \xef\xbb\xbf\t\xe2\x80\x8b ", // mixed with whitespace and ZERO WIDTH SPACE
+	} {
+		t.Run(string(s), func(t *testing.T) {
+			require.Equal(t, "", s.String(), "precondition: trimmed form is empty")
+			assert.True(t, s.IsEmpty())
+		})
+	}
+	assert.False(t, TrimmedString("\xef\xbb\xbfvalue\xe2\x80\x8d").IsEmpty())
+}
+
 func Test_TrimmedString_Value(t *testing.T) {
 	v, err := TrimmedString("  abc  ").Value()
 	assert.NoError(t, err)

@@ -148,6 +148,27 @@ func Test_JSON_Clone(t *testing.T) {
 	assert.Equal(t, JSON(`{"a":1}`), original)
 }
 
+// A clone must encode exactly like its original. JSON(nil) stands for
+// the empty object {}, but a non-nil empty clone of it marshalled to
+// zero bytes, which is invalid JSON and made json.Marshal fail.
+func Test_JSON_Clone_Nil(t *testing.T) {
+	clone := JSON(nil).Clone()
+	assert.Nil(t, clone)
+
+	b, err := clone.MarshalJSON()
+	require.NoError(t, err)
+	assert.Equal(t, "{}", string(b))
+
+	b, err = json.Marshal(struct{ J JSON }{J: clone})
+	require.NoError(t, err)
+	assert.Equal(t, `{"J":{}}`, string(b))
+
+	val, err := clone.Value()
+	require.NoError(t, err)
+	assert.Equal(t, []byte("{}"), val)
+	assert.Equal(t, "{}", clone.String())
+}
+
 func Test_MarshalJSON_Package(t *testing.T) {
 	j, err := MarshalJSON(map[string]int{"a": 1})
 	require.NoError(t, err)

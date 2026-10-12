@@ -82,8 +82,9 @@ func (a NullBoolArray) Value() (driver.Value, error) {
 
 // Scan implements the sql.Scanner interface.
 // It parses a PostgreSQL boolean array literal like {t,f,NULL}
-// from a string or []byte; elements other than t and f
-// (including NULL) scan as an invalid sql.NullBool.
+// from a string or []byte. The elements t, f, true and false scan
+// as valid and NULL as an invalid sql.NullBool, all case-insensitive.
+// Any other element returns an error and leaves a unchanged.
 // A nil source (SQL NULL), an empty string, or {} all scan to
 // a non-nil empty slice; a notnull array is never nil.
 func (a *NullBoolArray) Scan(src any) error {
@@ -118,11 +119,15 @@ func (a *NullBoolArray) scanBytes(src []byte) error {
 	elements := strings.Split(string(src[1:len(src)-1]), ",")
 	newArray := make(NullBoolArray, len(elements))
 	for i, elem := range elements {
-		switch elem {
-		case "t":
+		switch strings.ToLower(elem) {
+		case "t", "true":
 			newArray[i] = sql.NullBool{Valid: true, Bool: true}
-		case "f":
+		case "f", "false":
 			newArray[i] = sql.NullBool{Valid: true, Bool: false}
+		case "null":
+			// Stays an invalid sql.NullBool
+		default:
+			return fmt.Errorf("can't parse %q as notnull.NullBoolArray: invalid element %q at index %d", string(src), elem, i)
 		}
 	}
 	*a = newArray
