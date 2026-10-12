@@ -9,10 +9,13 @@ import (
 
 const (
 	// IDMinLength is the minium length of a VAT ID
+	// after removing whitespace and punctuation.
 	IDMinLength = 4
 
 	// IDMaxLength is the maximum length of a VAT ID
-	IDMaxLength = 14 + 2 // allow 2 spaces
+	// after removing whitespace and punctuation,
+	// so formatted input can be longer.
+	IDMaxLength = 14 + 2
 )
 
 // idRegex are matched with the normalized ID string of ID.Normalized()
