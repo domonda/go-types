@@ -181,6 +181,12 @@ func TestNullableDate_Compare(t *testing.T) {
 	assert.Equal(t, 1, d2.Compare(d1))
 	assert.Equal(t, 0, d1.Compare(d1))
 	assert.Equal(t, 0, Null.Compare(Null))
+	// Compare is a sort order, so an invalid date is ordered like Null
+	// (see TestDate_Compare) and not by its raw string.
+	assert.Equal(t, 0, NullableDate("zzz").Compare(Null))
+	assert.Equal(t, 0, NullableDate("bad").Compare("worse"))
+	assert.Equal(t, -1, NullableDate("zzz").Compare(d1))
+	assert.Equal(t, 1, d1.Compare("zzz"))
 }
 
 func TestNullableDate_After(t *testing.T) {
@@ -418,6 +424,16 @@ func TestNullableDate_Normalized(t *testing.T) {
 	normalized, err = Null.Normalized()
 	assert.NoError(t, err)
 	assert.Equal(t, Null, normalized)
+
+	// The normalization contract of the module: on error the receiver
+	// comes back unchanged. An invalid NullableDate must in particular
+	// not come back as Null, which would turn invalid input into a valid
+	// "no date" for a caller that keeps the result.
+	for _, n := range []NullableDate{"foo", "2020-13-01"} {
+		normalized, err = n.Normalized()
+		assert.Error(t, err, "NullableDate(%q).Normalized()", string(n))
+		assert.Equal(t, n, normalized, "NullableDate(%q).Normalized()", string(n))
+	}
 }
 
 func TestNullableDate_NormalizedOrUnchanged(t *testing.T) {

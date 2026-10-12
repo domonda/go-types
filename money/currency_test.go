@@ -251,6 +251,23 @@ func TestCurrency_NullableCurrency(t *testing.T) {
 	assert.True(t, empty.Valid())
 }
 
+// TestCurrency_NormalizedErrorReturnsReceiver pins the normalization
+// contract of the module (see docs/explanation-validation-and-normalization.md):
+// on error the receiver comes back unchanged, for empty and whitespace only
+// input like for an unknown code, so that a caller that keeps the result
+// still has the input.
+func TestCurrency_NormalizedErrorReturnsReceiver(t *testing.T) {
+	for _, c := range []Currency{"", " ", " \t\n", "XYZ", "Atlantean Dollar"} {
+		got, err := c.Normalized()
+		assert.Error(t, err, "Currency(%q).Normalized()", string(c))
+		assert.Equal(t, c, got, "Currency(%q).Normalized()", string(c))
+
+		got, err = NormalizeCurrency(string(c))
+		assert.Error(t, err, "NormalizeCurrency(%q)", string(c))
+		assert.Equal(t, c, got, "NormalizeCurrency(%q)", string(c))
+	}
+}
+
 // TestCurrency_NormalizedOrNull pins that unknown currencies degrade to NULL
 // instead of being stored in their invalid form.
 func TestCurrency_NormalizedOrNull(t *testing.T) {

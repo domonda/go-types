@@ -501,10 +501,11 @@ func (date Date) NormalizedEqual(other Date) bool {
 
 // Compare compares the date with another Date.
 // Returns -1 if date is before other, +1 if after, 0 if equal.
+// An invalid date compares like the empty string: equal to any other
+// invalid date and before every valid date, so Compare is a consistent
+// sort order for slices.SortFunc also for invalid dates.
 func (date Date) Compare(other Date) int {
-	a, _ := date.Normalized()
-	b, _ := other.Normalized()
-	return strings.Compare(string(a), string(b))
+	return strings.Compare(string(date.NormalizedOrNull()), string(other.NormalizedOrNull()))
 }
 
 // After returns true if the date is after the other date.
@@ -813,9 +814,13 @@ func isDateTrimRune(r rune) bool {
 // Normalized returns the date in normalized form,
 // or an error if the format can't be detected.
 // The first given lang argument is used as language hint.
+// Returns the Date unchanged in case of an error.
 func (date Date) Normalized(lang ...language.Code) (Date, error) {
 	normalized, _, err := normalizeAndCheckDate(string(date), getLangHint(lang))
-	return normalized, err
+	if err != nil {
+		return date, err
+	}
+	return normalized, nil
 }
 
 func normalizeAndCheckDate(str string, langHint language.Code) (Date, bool, error) {

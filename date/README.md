@@ -76,7 +76,7 @@ Rules for numeric dates:
 |------------------------------------|----------------------------------------------------|
 | `Valid()`                          | True if `Normalized()` succeeds. No hint, so any parseable form is valid. |
 | `Validate()`                       | The error of `Normalized()`, or nil.               |
-| `Normalized(lang...)`              | The `YYYY-MM-DD` form or an error. The first `lang` is the order hint. |
+| `Normalized(lang...)`              | The `YYYY-MM-DD` form, or the date unchanged and an error. The first `lang` is the order hint. |
 | `ValidAndNormalized()`             | True only if the date is already a valid `YYYY-MM-DD`. |
 | `NormalizedOrUnchanged(lang...)`   | Normalized form, or the date unchanged if it can't be parsed. |
 | `NormalizedOrNull(lang...)`        | Normalized form as `NullableDate`, or `Null`.      |

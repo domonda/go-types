@@ -120,11 +120,13 @@ func (c *Currency) ValidPtr() bool {
 // Sterling as GBP. A unit qualified with anything else is an error
 // instead of a guess, because a dollar, franc or pound of another
 // country is a different currency.
+//
+// Returns the Currency unchanged in case of an error.
 func (c Currency) Normalized() (Currency, error) {
 	str := strutil.TrimSpace(string(c))
 
 	if str == "" {
-		return "", errors.New("empty currency code")
+		return c, errors.New("empty currency code")
 	}
 
 	result, found := currencySymbolToCode[str]

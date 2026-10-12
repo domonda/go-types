@@ -91,6 +91,9 @@ func TestNullableCurrency_Normalized(t *testing.T) {
 			got, err := tt.n.Normalized()
 			if tt.wantErr {
 				assert.Error(t, err)
+				// The normalization contract of the module: on error the
+				// receiver comes back unchanged.
+				assert.Equal(t, tt.n, got, "Normalized must return an invalid value unchanged")
 				assert.Equal(t, NullableCurrency(CurrencyNull), tt.n.NormalizedOrNull())
 				assert.Equal(t, string(tt.n), tt.n.String(), "String must return an unnormalizable value unchanged")
 				return

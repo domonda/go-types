@@ -246,15 +246,8 @@ normalizing a normalized value returns it unchanged. On top of that the module
 follows a convention, introduced for all `Normalized` methods at once in
 January 2025: **on error, return the receiver unchanged together with the
 error**. The error message names the original input, like
-`invalid country.Code: 'XX'`.
-
-Two methods break that convention:
-
-- `date.Date.Normalized` returns `""` with the error. Use
-  `NormalizedOrUnchanged` if you need the input back.
-- `money.Currency.Normalized` returns `""` for empty or whitespace-only input,
-  with the error `empty currency code`. Other invalid input comes back
-  unchanged.
+`invalid country.Code: 'XX'`. `date.Date("foo").Normalized()` returns `"foo"`
+and `money.Currency("  ").Normalized()` returns `"  "`, each with its error.
 
 When an invalid value should simply become null, use `NormalizedOrNull`. It
 exists on `bank.IBAN`, `bank.BIC`, their nullable types, `country.NullableCode`,

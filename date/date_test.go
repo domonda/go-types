@@ -395,10 +395,10 @@ func TestDate_Normalized(t *testing.T) {
 		{name: "3000-01-01", date: "3000-01-01", lang: nil, want: "3000-01-01"},
 		{name: "3000/01/01", date: "3000/01/01", lang: nil, want: "3000-01-01"},
 		{name: "3000.01.01", date: "3000.01.01", lang: nil, want: "3000-01-01"},
-		// Invalid:
-		{name: "empty", date: "", lang: nil, wantErr: true},
-		{name: "invalid year", date: "0000-01-01", lang: nil, wantErr: true},
-		{name: "invalid month", date: "2020-00-01", lang: nil, wantErr: true},
+		// Invalid, returned unchanged with the error:
+		{name: "empty", date: "", lang: nil, want: "", wantErr: true},
+		{name: "invalid year", date: "0000-01-01", lang: nil, want: "0000-01-01", wantErr: true},
+		{name: "invalid month", date: "2020-00-01", lang: nil, want: "2020-00-01", wantErr: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -410,6 +410,28 @@ func TestDate_Normalized(t *testing.T) {
 			if got != tt.want {
 				t.Errorf("Date.Normalized() = %v, want %v", got, tt.want)
 			}
+		})
+	}
+}
+
+func TestDate_NormalizedErrorReturnsReceiver(t *testing.T) {
+	// The normalization contract of the module (see
+	// docs/explanation-validation-and-normalization.md): on error the
+	// receiver comes back unchanged, so a caller that ignores or logs the
+	// error still has the input instead of an empty date.
+	for _, d := range []Date{"foo", "", "  ", "2020-13-01", "0000-00-00"} {
+		t.Run(string(d), func(t *testing.T) {
+			got, err := d.Normalized()
+			require.Error(t, err)
+			assert.Equal(t, d, got)
+
+			got, err = d.Normalized(language.EN)
+			require.Error(t, err)
+			assert.Equal(t, d, got, "with language hint")
+
+			got, err = Normalize(string(d))
+			require.Error(t, err)
+			assert.Equal(t, d, got, "Normalize")
 		})
 	}
 }
@@ -658,6 +680,15 @@ func TestDate_Compare(t *testing.T) {
 		{name: "before", date1: "2023-12-24", date2: "2023-12-25", want: -1},
 		{name: "after", date1: "2023-12-26", date2: "2023-12-25", want: 1},
 		{name: "equal", date1: "2023-12-25", date2: "2023-12-25", want: 0},
+		{name: "equal non-normalized", date1: "25.12.2023", date2: "2023-12-25", want: 0},
+		// Compare is a sort order, so invalid dates must still be ordered
+		// consistently: like the empty string, before every valid date and
+		// equal to each other. Compare must not use the invalid input that
+		// Normalized returns with its error.
+		{name: "invalid before valid", date1: "bad", date2: "0001-01-01", want: -1},
+		{name: "valid after invalid", date1: "2023-12-25", date2: "bad", want: 1},
+		{name: "invalid equals invalid", date1: "bad", date2: "worse", want: 0},
+		{name: "invalid equals empty", date1: "zzz", date2: "", want: 0},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

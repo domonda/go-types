@@ -103,7 +103,8 @@ func (n *NullableCurrency) ValidPtr() bool {
 	return Currency(*n).Valid()
 }
 
-// Normalized normalizes a currency string
+// Normalized normalizes a currency string.
+// Returns the NullableCurrency unchanged in case of an error.
 func (n NullableCurrency) Normalized() (NullableCurrency, error) {
 	if n == CurrencyNull {
 		return n, nil

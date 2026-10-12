@@ -192,6 +192,7 @@ func (n NullableDate) StringOr(nullString string) string {
 // or an error if the format can't be detected.
 // The first given lang argument is used as language hint.
 // if n.IsZero() then Null, nil will be returned.
+// Returns the NullableDate unchanged in case of an error.
 func (n NullableDate) Normalized(lang ...language.Code) (NullableDate, error) {
 	if n.IsZero() {
 		return Null, nil
@@ -257,10 +258,9 @@ func (n NullableDate) NormalizedEqual(other NullableDate) bool {
 // Compare compares the date with another NullableDate.
 // Returns -1 if n is before other, +1 if after, 0 if equal.
 // A null date is always before a non-null date.
+// An invalid date compares like Null, see Date.Compare.
 func (n NullableDate) Compare(other NullableDate) int {
-	a, _ := n.Normalized()
-	b, _ := other.Normalized()
-	return strings.Compare(string(a), string(b))
+	return strings.Compare(string(n.NormalizedOrNull()), string(other.NormalizedOrNull()))
 }
 
 // After returns true if the date is after the other date.
