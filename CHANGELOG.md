@@ -376,6 +376,39 @@ picking the semver baseline.
 - **Breaking:** `email.AddressList.Scan` and `NullableAddressList.Scan` trim
   a plain string like `AddressSet.Scan`, and return an error for a
   whitespace-only one like for `""`.
+- **Breaking:** `float.Parse` and `float.ParseDetails`, and so the `money`
+  parsers, return an error for a number with a sign at both ends. A leading
+  and a trailing sign were both accepted and the trailing one won, so
+  `"+1.5-"` was -1.5 and `"+1+"` was 1.
+- **Breaking:** `money.ParseAmount`, `ParseRate` and `ParseDecimalAmount`
+  return an error for `NaN` and `±Inf` when `acceptedDecimals` are passed,
+  because the allowlist is the caller's guard for real money input. Without
+  `acceptedDecimals` they still parse them. This reaches
+  `ParseCurrencyAmount`, `ParseCurrencyDecimalAmount` and the parsers created
+  with accepted decimals. `CurrencyAmount.ScanString` leaves the decision to
+  its `validate` argument as before.
+- **Breaking:** `money.CentAmount.MultipliedByRate`, `DividedByRate` and
+  `Percentage` and the same `DecimalAmount` methods take the shortest decimal
+  of the rate and compute exactly, rounding once. They multiplied in
+  `float64` first, so `CentAmount(100).MultipliedByRate(0.145)` was 14 cents
+  while `Percentage(14.5)` was 15, and `DecimalAmount` results carried float
+  noise like `0.30000000000000004`. `DecimalAmount` falls back to the
+  `float64` product for a rate with more than 18 decimals. The `Amount`
+  methods still compute in `float64`.
+- **Breaking:** `money.DecimalAmount.Format` ignores the `+` flag of `%v`,
+  which `fmt` uses to print struct field names, so `%+v` of a struct prints
+  `{T:1234.50}` instead of `{T:+1234.50}`. `%+s`, `%+q`, `%+f` and `%+d`
+  still print the sign.
+- **Breaking:** `strfmt` formats a zero `date.Date` and a null
+  `date.NullableDate` as the `FormatConfig.Nil` placeholder like every other
+  null value, instead of `""`.
+- `strfmt.Scan` scans into `nullable.Type[T]` destinations, like
+  `money.NullableAmount`, `NullableCentAmount` and `NullableDecimalAmount`,
+  by scanning into a `T` with its own scanner and setting the value, and a
+  nil string sets null. `strfmt` formatted these types but returned
+  `can't scan "1,5" as destination type nullable.Type[...]` for them. A
+  non-null `nullable.Type[T]` without a registered formatter is formatted
+  like its `T` instead of as `{1234 true}`.
 
 ### Removed
 
@@ -569,6 +602,9 @@ picking the semver baseline.
 - `date` parsing only knew the French, Italian and Spanish names of January,
   so `"2 févr. 2019"` or `"5 luglio 2021"` did not parse. Every month name
   and its usual abbreviation is now known.
+- `money.Amount.UnmarshalJSON` and `money.Rate.UnmarshalJSON` stripped the
+  quotes of a JSON string without decoding its escapes, so `"1\u002c5"`
+  failed while `float.Tolerant` and `DecimalAmount` decode it as 1.5.
 
 ## 2026-09-02
 
