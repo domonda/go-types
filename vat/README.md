@@ -102,14 +102,14 @@ Implements: `fmt.Stringer`, `database/sql.Scanner`, `database/sql/driver.Valuer`
 ```go
 type NullableID string
 
-var Null NullableID // ""
+const Null NullableID = ""
 ```
 
-`NullableID` is `ID` where `Null` (the empty string) is a valid null value.
+`NullableID` is `ID` where `Null` (the empty string) is a valid null value. A whitespace only value is null too, like for `country.NullableCode`.
 
 | Method                             | Description                                        |
 |------------------------------------|----------------------------------------------------|
-| `Normalized()`                     | `Null` for `Null`, otherwise like `ID`.            |
+| `Normalized()`                     | `Null` for null, otherwise like `ID`.              |
 | `NormalizedOrNull()`               | The canonical ID, or `Null` if invalid.            |
 | `NormalizedNotNull()`              | `ID(n).Normalized()`: an error for `Null`.         |
 | `Valid()`, `Validate()`            | `Null` is valid, otherwise like `ID`.              |
@@ -117,7 +117,7 @@ var Null NullableID // ""
 | `ValidAndNormalized()`             | True for `Null` and for a canonical ID.            |
 | `ValidateIsNormalized()`           | Like `ID`, but nil for `Null`.                     |
 | `ValidateIsNormalizedAndNotNull()` | `ID(n).ValidateIsNormalized()`: an error for `Null`. |
-| `IsNull()`, `IsNotNull()`          | Compare with `Null` (`""`).                        |
+| `IsNull()`, `IsNotNull()`          | Null is `""` or whitespace only.                   |
 | `Get()`                            | The `ID`; panics if null.                          |
 | `GetOr(defaultID)`                 | The `ID`, or `defaultID` if null.                  |
 | `Set(id)`, `SetNull()`             | Assign an `ID` or `Null`.                          |
@@ -149,7 +149,7 @@ var IDFinder idFinder
 | `ID("atu 1022 3006")` (valid) | `"ATU10223006"`   | `"atu 1022 3006"`     | `"ATU10223006"` |
 | `ID("ATU10223006")`           | `"ATU10223006"`   | `"ATU10223006"`       | `"ATU10223006"` |
 | `ID("bad")` (invalid)         | `"bad"`, no error | `"bad"`               | `"bad"`         |
-| `NullableID` `Null`           | `NULL`            | `null`                | `""`            |
+| `NullableID` `Null`, `"  "`   | `NULL`            | `null`                | `""`            |
 | `NullableID("atu 1022 3006")` | `"ATU10223006"`   | `"atu 1022 3006"`     | `"ATU10223006"` |
 | `NullableID("bad")` (invalid) | `"bad"`, no error | `"bad"`               | `"bad"`         |
 
@@ -171,10 +171,8 @@ var IDFinder idFinder
 - **`"No."` is not Norway.** Input starting with `"No."` or `"no."` is rejected, because it is far more often the English abbreviation for number.
 - **`ID` is not nullable.** `ID("").Value()` writes an empty string, and `Scan(nil)` returns an error. Use `NullableID` for nullable columns.
 - **Output is only partly normalized.** `Value` writes valid IDs canonical, but JSON encodes the raw string for both types. Normalize before encoding if consumers expect the canonical form.
-- **Whitespace is not null.** `NullableID("  ")` is invalid and not null (unlike `country.NullableCode`), and `Value` writes `"  "`.
 - **`StringOr` is not normalized.** `NullableID("atu 10223006").StringOr("-")` is `"atu 10223006"`.
 - **The finder reads at most three words.** `"DE 167 015 661"` spans four words and is not found; `"DE 167015661"` is.
-- **`Null` is a variable.** `vat.Null` is declared with `var`, unlike the `const` null values of `date`, `country` and `language`. Do not assign to it.
 
 ## Examples
 

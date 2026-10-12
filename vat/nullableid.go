@@ -9,22 +9,25 @@ import (
 
 	"github.com/domonda/go-types/country"
 	"github.com/domonda/go-types/nullable"
+	"github.com/domonda/go-types/strutil"
 )
 
-// Null is an empty string and will be treatet as SQL NULL.
-var Null NullableID
+// Null is an empty string and will be treated as SQL NULL.
+const Null NullableID = ""
 
 // NullableID is identical to ID, except that the Null value (empty string)
 // is considered valid by the Valid() and Validate() methods.
+// A whitespace only NullableID is also null, like for country.NullableCode.
 type NullableID string
 
 // Compile-time check that NullableID implements nullable.NullSetable[ID]
 var _ nullable.NullSetable[ID] = (*NullableID)(nil)
 
 // Normalized returns the id in normalized form,
-// or an error if the VAT ID is not Null and not valid.
+// or an error if the VAT ID is not null and not valid.
+// Returns Null for a null (empty or whitespace only) id, see IsNull.
 func (n NullableID) Normalized() (NullableID, error) {
-	if n == Null {
+	if n.IsNull() {
 		return Null, nil
 	}
 	id, err := ID(n).Normalized()
@@ -47,15 +50,17 @@ func (n NullableID) NormalizedNotNull() (ID, error) {
 	return ID(n).Normalized()
 }
 
-// IsNull returns true if the NullableID is null.
+// IsNull returns true if the NullableID is null,
+// which includes whitespace only like for Normalized.
 // IsNull implements the nullable.Nullable interface.
 func (n NullableID) IsNull() bool {
-	return n == Null
+	return strutil.TrimSpace(n) == Null
 }
 
-// IsNotNull returns true if the NullableID is not null.
+// IsNotNull returns true if the NullableID is not null,
+// see IsNull.
 func (n NullableID) IsNotNull() bool {
-	return n != Null
+	return !n.IsNull()
 }
 
 // Set sets an ID for this NullableID
@@ -110,13 +115,13 @@ func (n NullableID) ValidAndNormalized() bool {
 
 // ValidAndNotNull returns if this is a valid not Null VAIT ID.
 func (n NullableID) ValidAndNotNull() bool {
-	return n != Null && n.Valid()
+	return n.IsNotNull() && n.Valid()
 }
 
-// Validate returns an error if id is not a valid VAT ID or Null,
+// Validate returns an error if id is not a valid VAT ID or null,
 // ignoring normalization.
 func (n NullableID) Validate() error {
-	if n == Null {
+	if n.IsNull() {
 		return nil
 	}
 	return ID(n).Validate()
@@ -220,15 +225,16 @@ func (n *NullableID) Scan(value any) error {
 }
 
 // Value implements the driver database/sql/driver.Valuer interface.
+// Returns nil for SQL NULL if the NullableID is null, see IsNull.
 func (n NullableID) Value() (driver.Value, error) {
-	if n == Null {
+	if n.IsNull() {
 		return nil, nil
 	}
 	return ID(n).Value()
 }
 
 // MarshalJSON implements encoding/json.Marshaler
-// by returning the JSON null value for an empty (null) string.
+// by returning the JSON null value if the NullableID is null, see IsNull.
 func (n NullableID) MarshalJSON() ([]byte, error) {
 	if n.IsNull() {
 		return []byte(`null`), nil

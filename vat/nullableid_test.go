@@ -11,6 +11,11 @@ import (
 	"github.com/domonda/go-types/country"
 )
 
+// Null must be a typed constant like date.Null and country.Null,
+// so that no code can reassign the null value of the package.
+// This declaration does not compile if Null is a variable.
+const _ NullableID = Null
+
 func TestNullableID(t *testing.T) {
 	var n NullableID
 	assert.True(t, n.Valid(), "empty NullableID is valid")
@@ -22,6 +27,14 @@ func TestNullableID(t *testing.T) {
 func TestNullableID_Normalized(t *testing.T) {
 	t.Run("Null is valid and stays Null", func(t *testing.T) {
 		norm, err := Null.Normalized()
+		require.NoError(t, err)
+		assert.Equal(t, Null, norm)
+	})
+	t.Run("whitespace only is Null", func(t *testing.T) {
+		// Like country.NullableCode, a whitespace only value is null,
+		// so it must be valid and normalize to Null instead of
+		// failing as a too short VAT ID.
+		norm, err := NullableID(" \t\n").Normalized()
 		require.NoError(t, err)
 		assert.Equal(t, Null, norm)
 	})
@@ -61,6 +74,16 @@ func TestNullableID_NullHandling(t *testing.T) {
 	assert.False(t, Null.IsNotNull())
 	assert.False(t, NullableID("ATU10223006").IsNull())
 	assert.True(t, NullableID("ATU10223006").IsNotNull())
+	// Normalized returns Null for whitespace only, so IsNull must agree
+	// like for country.NullableCode, else a value that normalizes to Null
+	// is handled as a real VAT ID.
+	for _, n := range []NullableID{" ", "  ", "\t\n", "\u00a0"} {
+		assert.True(t, n.IsNull(), "NullableID(%q).IsNull()", string(n))
+		assert.False(t, n.IsNotNull(), "NullableID(%q).IsNotNull()", string(n))
+		assert.Equal(t, "none", n.StringOr("none"), "NullableID(%q).StringOr", string(n))
+		assert.Equal(t, ID("DE167015661"), n.GetOr("DE167015661"), "NullableID(%q).GetOr", string(n))
+		assert.Panics(t, func() { n.Get() }, "NullableID(%q).Get", string(n))
+	}
 
 	var n NullableID
 	n.Set("ATU10223006")
@@ -98,6 +121,16 @@ func TestNullableID_Validation(t *testing.T) {
 			validAndNormalized:     true,
 			validAndNotNull:        false,
 			isNormalized:           true,
+			isNormalizedAndNotNull: false,
+		},
+		{
+			// Whitespace only is null, but not the normalized Null
+			name:                   "whitespace only",
+			n:                      "  ",
+			valid:                  true,
+			validAndNormalized:     false,
+			validAndNotNull:        false,
+			isNormalized:           false,
 			isNormalizedAndNotNull: false,
 		},
 		{
@@ -235,6 +268,12 @@ func TestNullableID_Value(t *testing.T) {
 	require.NoError(t, err)
 	assert.Nil(t, v)
 
+	// Whitespace only is null, so it must also be written as SQL NULL
+	// instead of storing the whitespace as VAT ID.
+	v, err = NullableID(" \t ").Value()
+	require.NoError(t, err)
+	assert.Nil(t, v)
+
 	v, err = NullableID("at u 1022 3006").Value()
 	require.NoError(t, err)
 	assert.Equal(t, "ATU10223006", v, "valid IDs are written normalized")
@@ -263,6 +302,11 @@ func TestNullableID_JSON(t *testing.T) {
 		var got doc
 		require.NoError(t, json.Unmarshal(data, &got))
 		assert.True(t, got.VAT.IsNull())
+	})
+	t.Run("whitespace only is JSON null", func(t *testing.T) {
+		data, err := json.Marshal(doc{VAT: "  "})
+		require.NoError(t, err)
+		assert.JSONEq(t, `{"vat":null}`, string(data))
 	})
 	t.Run("value round-trip", func(t *testing.T) {
 		data, err := json.Marshal(doc{VAT: "ATU10223006"})
