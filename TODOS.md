@@ -34,11 +34,17 @@ package: every listed behaviour is documented in the package READMEs.
       `country.Code("")` writes SQL NULL and JSON `""`, `bank.IBAN("")`
       writes `""` to both, and `account.Number("")` writes SQL NULL and JSON
       `null` but reads neither back (`Scan(nil)` and JSON `null` are errors).
+      `date.Date`, `language.Code`, `money.Currency`, `vat.ID`, `uu.ID`,
+      `notnull.TrimmedString` and `money.DecimalAmount` differ in the same
+      way; [docs/explanation-null-conventions.md](docs/explanation-null-conventions.md)
+      has the full table.
 - [ ] **`language.NullableCode`.** `language.Code` has no nullable variant,
       and `language.Null.Validate()` fails, so an optional language field
       fails `types.DeepValidate`.
 - [ ] **Naming:** `money.Currency.NullableCurrency()` is called `Nullable()`
-      on every other type.
+      on every other type, and `money.CurrencyNull` is the only untyped null
+      constant; every other package declares its null value as a typed
+      constant.
 - [ ] **`ValidAndNotNull` on every nullable type.** It is missing on
       `uu.NullableID`, `account.NullableNumber` and `email.NullableAddress`,
       and no package asserts `nullable.NullableValidator` at compile time.
