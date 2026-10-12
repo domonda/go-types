@@ -95,15 +95,17 @@ func (n NullableCode) EnglishName() string {
 	return Code(n).EnglishName()
 }
 
-// IsNull returns true if the NullableCode is null.
+// IsNull returns true if the NullableCode is null,
+// which includes whitespace only like for Normalized.
 // IsNull implements the nullable.Nullable interface.
 func (n NullableCode) IsNull() bool {
-	return n == Null
+	return strutil.TrimSpace(n) == Null
 }
 
-// IsNotNull returns true if the NullableCode is not null.
+// IsNotNull returns true if the NullableCode is not null,
+// see IsNull.
 func (n NullableCode) IsNotNull() bool {
-	return n != Null
+	return !n.IsNull()
 }
 
 // Set sets a Code for this NullableCode.
@@ -170,9 +172,9 @@ func (n *NullableCode) Scan(value any) error {
 }
 
 // Value implements the driver database/sql/driver.Valuer interface.
-// Returns nil for SQL NULL if the NullableCode is Null.
+// Returns nil for SQL NULL if the NullableCode is null, see IsNull.
 func (n NullableCode) Value() (driver.Value, error) {
-	if n == Null {
+	if n.IsNull() {
 		return nil, nil
 	}
 	return Code(n).Value()

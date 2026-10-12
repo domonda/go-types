@@ -137,6 +137,13 @@ func TestNullableCode_NullHandling(t *testing.T) {
 	if NullableCode("DE").IsNull() || !NullableCode("DE").IsNotNull() {
 		t.Error("DE must be IsNotNull and not IsNull")
 	}
+	// Normalized returns Null for whitespace only, so IsNull must agree,
+	// else a value that normalizes to Null is handled as a real code.
+	for _, n := range []NullableCode{" ", "  ", "\t\n", " "} {
+		if !n.IsNull() || n.IsNotNull() {
+			t.Errorf("NullableCode(%q) must be IsNull and not IsNotNull like its Normalized value", string(n))
+		}
+	}
 
 	var n NullableCode
 	n.Set(DE)
@@ -248,6 +255,10 @@ func TestNullableCode_Value(t *testing.T) {
 	}{
 		// Null must be written as SQL NULL, not as an empty string.
 		{n: Null, want: nil},
+		// Whitespace only normalizes to Null, so it must also be written
+		// as SQL NULL instead of storing the whitespace as country code.
+		{n: "  ", want: nil},
+		{n: "\t\n", want: nil},
 		{n: "DE", want: "DE"},
 		// Codes are written normalized so equal countries compare equal in SQL.
 		{n: "de", want: "DE"},
@@ -292,6 +303,8 @@ func TestNullableCode_JSON(t *testing.T) {
 	}{
 		// Null is JSON null, not an empty string.
 		{n: Null, wantJSON: `{"country":null}`, wantBack: Null},
+		// Whitespace only normalizes to Null, so it is also JSON null.
+		{n: "  ", wantJSON: `{"country":null}`, wantBack: Null},
 		{n: "DE", wantJSON: `{"country":"DE"}`, wantBack: "DE"},
 		// JSON output is normalized like Code.
 		{n: "de", wantJSON: `{"country":"DE"}`, wantBack: "DE"},
