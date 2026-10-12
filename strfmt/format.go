@@ -93,7 +93,19 @@ func FormatValue(val reflect.Value, config *FormatConfig) string {
 	case reflect.String:
 		return derefVal.String()
 
-	case reflect.Float32, reflect.Float64:
+	case reflect.Float32:
+		// Format with float32 precision because the shortest float64
+		// representation of a float32 shows its binary noise,
+		// like 0.10000000149011612 for float32(0.1)
+		return float.Format(
+			float32(derefVal.Float()),
+			config.Float.ThousandsSep,
+			config.Float.DecimalSep,
+			config.Float.Precision,
+			config.Float.PadPrecision,
+		)
+
+	case reflect.Float64:
 		return float.Format(
 			derefVal.Float(),
 			config.Float.ThousandsSep,

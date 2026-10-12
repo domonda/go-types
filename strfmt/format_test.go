@@ -305,6 +305,35 @@ func TestFormatValueIntegerKinds(t *testing.T) {
 	assert.Equal(t, "4000000", Format(&u32, config), "pointer to uint32 is dereferenced")
 }
 
+// TestFormatValueFloat32 checks that a float32 is formatted with the
+// shortest decimal that parses back to the same float32. Widening it to
+// float64 first exposes the binary noise of the float32 value, which is
+// 0.100000001490116119384765625 for float32(0.1), so "0.10000000149011612"
+// would be written into a CSV or report instead of the "0.1" it holds.
+func TestFormatValueFloat32(t *testing.T) {
+	type namedFloat32 float32
+
+	config := NewFormatConfig()
+	tests := []struct {
+		value any
+		want  string
+	}{
+		{value: float32(0.1), want: "0.1"},
+		{value: float32(-1.1), want: "-1.1"},
+		{value: float32(3.14159), want: "3.14159"},
+		{value: float32(16777216), want: "16777216"},
+		{value: namedFloat32(0.2), want: "0.2"},
+		{value: float32(math.Inf(-1)), want: "-Inf"},
+		{value: float64(0.1), want: "0.1"},
+	}
+	for _, tt := range tests {
+		assert.Equal(t, tt.want, Format(tt.value, config), "Format(%T(%v))", tt.value, tt.value)
+	}
+
+	f := float32(0.3)
+	assert.Equal(t, "0,3", Format(&f, NewGermanFormatConfig()), "pointer to float32 with German decimal comma")
+}
+
 // TestFormatValueStringerThroughPointers checks that a Stringer is still
 // used when the value is passed through more than one level of pointers,
 // where neither the value itself nor its address has the String method in
