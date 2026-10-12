@@ -298,6 +298,53 @@ picking the semver baseline.
 - The default `strfmt.ScanConfig` accepts what the format presets write:
   `ja` and `nein` as booleans and the presets' date and time layouts, so
   formatted values scan back.
+- **Breaking:** `date.NullableDate.ValidAndNotNull`,
+  `NullableYearMonth.ValidAndNotNull` and `NullableYearQuarter.ValidAndNotNull`
+  return false for null and zero values as documented.
+  `NullableDate("0001-01-01").ValidAndNotNull()` was true although the value
+  is null.
+- **Breaking:** `date.YearMonth.DateRange` returns two empty dates for an
+  invalid value, like `YearQuarter.DateRange`, and `NullableYearMonth.DateRange`
+  returns two `Null` dates. `YearMonth("2023-13").DateRange()` returned
+  `"2023-13-01"` and `"0001-01-31"`.
+- **Breaking:** `date.Date.NormalizedEqual` and `NullableDate.NormalizedEqual`
+  report an invalid date as equal to nothing, not even to the identical
+  string, so `EqualOrAfter` and `EqualOrBefore` are false for it.
+  `Date("bad").NormalizedEqual("worse")` was true, and `NullableDate("bad")`
+  was equal to `Null`. `Null` still equals `Null` and the zero dates.
+- **Breaking:** the `AddYears`, `AddMonths` and `AddQuarters` methods of
+  `date.YearMonth` and `date.YearQuarter` return an invalid receiver
+  unchanged, so `Validate` still reports the original value.
+  `YearMonth("bad").AddYears(1)` returned `"0001-00"` and
+  `YearQuarter("bad").AddQuarters(1)` returned `"0000-Q1"`.
+- **Breaking:** an ordinal day suffix decides the order of day and month
+  before a language hint does, so `"1st 02 2003"` is `2003-02-01` with
+  `language.EN` too, not `2003-01-02`.
+- **Breaking:** `date.NullableYearQuarter.Date` returns a `NullableDate` and
+  `NullableYearQuarter.DateRange` two `NullableDate` values, like the
+  `NullableYearMonth` methods, and `Null` for a null or invalid receiver.
+  They returned `Date`.
+- **Breaking:** `vat.Null` is a typed constant like the null values of the
+  `date`, `country` and `language` packages instead of a variable.
+- **Breaking:** `vat.NullableID` treats a whitespace-only value as null, like
+  `country.NullableCode`: `IsNull`, `Valid` and `ValidAndNotNull` report it as
+  null, `Value` writes SQL NULL, `MarshalJSON` writes `null` and `Get` panics.
+- **Breaking:** `email.AddressSet.Scan` trims a plain string that is not a
+  PostgreSQL array like it trims array elements, and returns an error for a
+  whitespace-only one like for `""`.
+- **Breaking:** `nullable.JSON.Scan` scans an empty source as SQL NULL and
+  `notnull.JSON.Scan` as `{}`, like a nil source, and the `MarshalJSON` method
+  of an empty value writes `null` or `{}`. A scanned empty column was a
+  non-nil empty value that marshalled to zero bytes, so `json.Marshal` of a
+  struct containing it failed.
+- **Breaking:** `notnull.FloatArray.MarshalJSON` returns a
+  `*json.UnsupportedValueError` for NaN and infinite elements, like
+  `encoding/json` does for a `float64`. It wrote them as bare `NaN` and `+Inf`
+  tokens, which is not valid JSON.
+- **Breaking:** `strutil/stringfrom.Interface` uses a value's `String`,
+  `Error` or `Format` method also when it has a pointer receiver or the value
+  has a string kind, so `Interface(errors.New("boom"))` is `"boom"` instead of
+  `"{boom}"`.
 
 ### Removed
 
@@ -464,6 +511,27 @@ picking the semver baseline.
   `float32(0.1)` was `"0.10000000149011612"` instead of `"0.1"`.
 - `strfmt.ScanConfig.SetTypeScanner` panicked on a `ScanConfig` not created
   with `NewScanConfig`.
+- `types.Validate` and `types.TryValidate` panicked for a nil
+  `types.ValidatorFunc` or `ValidatErrFunc`, and `types.ValidatErrs` and
+  `types.Validators` for a nil element. Nil funcs and elements are now
+  skipped like in `DeepValidate`.
+- `types.CanMarshalJSON` reported true for a map whose key type only
+  implements `encoding.TextMarshaler` through its pointer type, which
+  `json.Marshal` rejects.
+- `uu.IDSlice` and `uu.IDSet` rejected a JSON array with only whitespace
+  between the brackets, like `[ ]`.
+- `nullable.IntArray` and `nullable.FloatArray` named the `notnull` types in
+  their scan errors.
+- `date.Date.IsToday` and `IsTodayInUTC` compared the raw string with today's
+  date, so a valid date in another format was never today.
+- `date.Date.Scan` and `NullableDate.Scan` rejected a `[]byte`, which some
+  SQL drivers return for `date` and `text` columns.
+- `bank.NullableIBAN.CountryCode` sliced the raw string, so an IBAN with
+  leading whitespace returned `" D"` instead of `"DE"`.
+- `email.NullableAddress.Scan` rejected a `[]byte`, which `AddressList` and
+  `NullableAddressList` accept.
+- `account.NullableNumber.UnmarshalJSON` rejected the JSON string `""`, which
+  `Scan` and `UnmarshalText` read as `NumberNull`.
 
 ## 2026-09-02
 
