@@ -14,15 +14,15 @@ func TestISO6393Name(t *testing.T) {
 		{"eng", "English"},
 		{"deu", "German"},
 		{"fra", "French"},
-		{"aaa", "Ghotuo"},   // first code in the index
+		{"aaa", "Ghotuo"}, // first code in the index
 		{"zzj", "Zuojiang Zhuang"},
-		{"zza", "Dimili"},   // code with several names → primary name
-		{"abq", "Abaza"},    // valid 639-3 without a 639-1 equivalent
+		{"zza", "Dimili"}, // code with several names → primary name
+		{"abq", "Abaza"},  // valid 639-3 without a 639-1 equivalent
 
-		{"", ""},            // empty
-		{"xxx", ""},         // not a known 639-3 code
-		{"DEU", ""},         // case-sensitive: canonical form is lower-case
-		{"de", ""},          // 639-1, not 639-3
+		{"", ""},    // empty
+		{"xxx", ""}, // not a known 639-3 code
+		{"DEU", ""}, // case-sensitive: canonical form is lower-case
+		{"de", ""},  // 639-1, not 639-3
 	}
 	for _, tt := range tests {
 		t.Run(tt.code, func(t *testing.T) {
