@@ -345,6 +345,37 @@ picking the semver baseline.
   `Error` or `Format` method also when it has a pointer receiver or the value
   has a string kind, so `Interface(errors.New("boom"))` is `"boom"` instead of
   `"{boom}"`.
+- **Breaking:** JSON `null` resets the string based nullable types
+  `country.NullableCode`, `bank.NullableIBAN`, `bank.NullableBIC`,
+  `date.NullableDate`, `date.NullableYearMonth`, `date.NullableYearQuarter`,
+  `vat.NullableID` and `money.NullableCurrency` to null. They had no
+  `UnmarshalJSON` method, and `encoding/json` treats `null` as a no-op for
+  such types, so decoding `{"country":null}` into a struct that already held
+  a value kept the old value. A JSON string is stored unchanged as before,
+  any other JSON value is now an error.
+- **Breaking:** `date.Date.Normalized`, `date.Normalize` and
+  `NullableDate.Normalized` return the input unchanged together with the
+  error, like every other `Normalized` method, instead of `""`.
+  `money.Currency.Normalized` and `money.NormalizeCurrency` do the same for
+  whitespace-only input. `Date.Compare` and `NullableDate.Compare` keep
+  sorting invalid dates like `""` and `Null`.
+- **Breaking:** `bank.NullableIBAN`, `bank.NullableBIC`,
+  `money.NullableCurrency`, `email.NullableAddress` and `date.NullableDate`
+  treat a whitespace-only value as null, like `country.NullableCode` and
+  `vat.NullableID`: `IsNull` and `Valid` report it as null, `Value` writes
+  SQL NULL, `MarshalJSON` writes `null` and `Get` panics. `NullableDate.Scan`
+  and `ScanString` store `Null` for whitespace-only input, where `Scan`
+  returned an error.
+- **Breaking:** `date.Date.After`, `Before`, `EqualOrAfter`, `EqualOrBefore`,
+  `WithinIncl`, `BetweenExcl`, `AfterToday`, `BeforeToday`, `AfterTime` and
+  `BeforeTime`, and the same `NullableDate` methods, return false when one of
+  the dates is invalid, where `""` and `"0000-00-00"` count as invalid. They
+  compared the zero time instead, so `Date("2020-01-01").EqualOrAfter("bad")`
+  and `Date("").BeforeToday()` were true. `Null` is still before every valid
+  date.
+- **Breaking:** `email.AddressList.Scan` and `NullableAddressList.Scan` trim
+  a plain string like `AddressSet.Scan`, and return an error for a
+  whitespace-only one like for `""`.
 
 ### Removed
 
@@ -532,6 +563,12 @@ picking the semver baseline.
   `NullableAddressList` accept.
 - `account.NullableNumber.UnmarshalJSON` rejected the JSON string `""`, which
   `Scan` and `UnmarshalText` read as `NumberNull`.
+- `date.Finder` did not find ISO 8601 date-times like
+  `2023-12-25T10:00:00Z`, which `date.Normalize` accepts, because it lower
+  cased the candidates before checking them for the `T`.
+- `date` parsing only knew the French, Italian and Spanish names of January,
+  so `"2 févr. 2019"` or `"5 luglio 2021"` did not parse. Every month name
+  and its usual abbreviation is now known.
 
 ## 2026-09-02
 
