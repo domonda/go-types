@@ -392,3 +392,30 @@ func Test_ParseDetails_separatorsFormatRoundTrip(t *testing.T) {
 		}
 	}
 }
+
+// Test_ParseDetails_oneSign protects the documented rule that a number has
+// at most one sign, either as its first or as its last character.
+// A sign at both ends is a malformed or misread value: taking the trailing
+// one, like "+1.5-" as -1.5, or the leading one, like "-1+" as -1,
+// silently picks one of two contradicting signs, and an agreeing doubled
+// sign like "+1+" or "-1-" is no number format of any locale either.
+func Test_ParseDetails_oneSign(t *testing.T) {
+	invalid := []string{
+		"+1.5-",
+		"-1.5+",
+		"-1+",
+		"+1-",
+		"- 1 +",
+		"+ 1.234,56 -",
+		"+1e5-",
+		"-1.5e-3+",
+		"+1+",
+		"-1-",
+		"-1.5-",
+		"+ 1 +",
+	}
+	for _, str := range invalid {
+		f, _, _, _, err := ParseDetails(str)
+		assert.Error(t, err, "ParseDetails(%q) = %v", str, f)
+	}
+}

@@ -106,6 +106,23 @@ func Test_ParseAmount(t *testing.T) {
 	}
 }
 
+// TestParseAmount_oneSign protects that an amount with a sign at both ends
+// is an error instead of one of the signs winning: reading "+1.5-" as -1.5
+// or "-1+" as -1 books a misread value with a silently chosen sign.
+// One leading or trailing sign stays valid.
+func TestParseAmount_oneSign(t *testing.T) {
+	for _, str := range []string{"+1.5-", "-1.5+", "-1+", "- 1.234,56 +", "+1+", "-1.5-"} {
+		amount, err := ParseAmount(str)
+		assert.Error(t, err, "ParseAmount(%q) = %v", str, amount)
+	}
+	for str, want := range map[string]Amount{"-1.5": -1.5, "1.5-": -1.5, "+1.5": 1.5, "1.5+": 1.5} {
+		amount, err := ParseAmount(str)
+		if assert.NoError(t, err, "ParseAmount(%q)", str) {
+			assert.Equal(t, want, amount, "ParseAmount(%q)", str)
+		}
+	}
+}
+
 var stringTable = map[Amount]string{
 	0:           "0.00",
 	0.99:        "0.99",

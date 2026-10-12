@@ -153,6 +153,23 @@ func TestParseDecimalAmount_errors(t *testing.T) {
 	}
 }
 
+// TestParseDecimalAmount_oneSign protects that an exact amount with a sign
+// at both ends is an error instead of one of the signs winning: reading
+// "+1.5-" as -1.5 or "-1+" as -1 books a misread value with a silently
+// chosen sign. One leading or trailing sign stays valid.
+func TestParseDecimalAmount_oneSign(t *testing.T) {
+	for _, s := range []string{"+1.5-", "-1.5+", "-1+", "- 1.234,56 +", "+1+", "-1.5-"} {
+		a, err := ParseDecimalAmount(s)
+		assert.Error(t, err, "ParseDecimalAmount(%q) = %v", s, a)
+	}
+	for s, want := range map[string]string{"-1.5": "-1.5", "1.5-": "-1.5", "+1.5": "1.5", "1.5+": "1.5"} {
+		a, err := ParseDecimalAmount(s)
+		if assert.NoError(t, err, "ParseDecimalAmount(%q)", s) {
+			assert.Equal(t, want, a.String(), "ParseDecimalAmount(%q)", s)
+		}
+	}
+}
+
 func TestParseDecimalAmount_nonFinite(t *testing.T) {
 	for _, s := range []string{"NaN"} {
 		a, err := ParseDecimalAmount(s)

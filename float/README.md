@@ -42,7 +42,7 @@ Rules of `Parse` and `ParseDetails`:
 
 - Leading and trailing whitespace is trimmed.
 - `NaN`, `Inf`, `+Inf`, and `-Inf` are the only non-finite inputs, matched exactly and case-sensitive. `nan`, `Infinity`, and `-NaN` are errors, and so is an out of range value like `1e999`.
-- One sign, `+` or `-`, is allowed at the start or the end, also separated by a space: `-12`, `- 12`, `12-`, and `12 -` are all -12.
+- One sign, `+` or `-`, is allowed at the start or the end, also separated by a space: `-12`, `- 12`, `12-`, and `12 -` are all -12. A sign at both ends is an error, also if both agree: `+12-` and `-12-` are errors.
 - Scientific notation with `e` or `E` and an optional exponent sign: `1.5e10`, `2E-3`. Separators in the exponent are errors.
 - `.` and `,` are decimal or thousands separators, `'` and space are only thousands separators.
 - A single `.` or `,` is the decimal separator: `"1,234"` and `"1.234"` are 1.234, `"1.000"` is 1.

@@ -23,6 +23,9 @@ func Parse(str string) (float64, error) {
 // and returns the detected integer thousands separator and decimal separator characters.
 // If a separator was not detected, then zero will be returned for thousandsSep or decimalSep.
 //
+// One sign, '+' or '-', may be the first or the last character,
+// but not both, so "+1-" and "-1-" are errors.
+//
 // A single '.' or ',' is the decimal separator, so "1,234" parses as 1.234.
 // The apostrophe and the space are only ever thousands separators,
 // so "1'234" and "1 234" parse as 1234, and one that can't separate
@@ -95,6 +98,9 @@ func ParseDetails(str string) (f float64, thousandsSep, decimalSep rune, decimal
 				return 0, 0, 0, 0, fmt.Errorf("plus can only be used as first or last character: %q", str)
 			}
 		}
+	}
+	if skipFirst != 0 && skipLast != 0 {
+		return 0, 0, 0, 0, fmt.Errorf("only one sign allowed, either as first or last character: %q", str)
 	}
 
 	eIndex = -1
