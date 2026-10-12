@@ -1,15 +1,3 @@
-// Package date provides comprehensive date handling and validation utilities
-// for Go applications with support for multiple date formats and internationalization.
-//
-// The package includes:
-//   - Date type with ISO 8601 format (YYYY-MM-DD) support
-//   - Flexible date parsing with language hints
-//   - Date arithmetic and comparison operations
-//   - Period range calculations (year, quarter, month, week)
-//   - Database integration (Scanner/Valuer interfaces)
-//   - JSON marshalling/unmarshalling
-//   - Nullable date support
-//   - Time zone handling
 package date
 
 import (
@@ -56,8 +44,8 @@ import (
 //   - With weekday prefix (dropped): "Mon Jan 02 2006",
 //     "Fri, 03 Jul 2015", "Wednesday, 28 Feb 2018"
 //   - CJK separators: "2014年04月08日"
-//   - French / Italian / Spanish month abbreviations:
-//     "2 janv. 2019", "23/gen/2019"
+//   - French / Italian / Spanish names of January only:
+//     "2 janv. 2019", "23/gen/2019", "12 enero 2020"
 //
 // 2-digit years map to 2000..2044 (< 45) or 1900..1999 (>= 45).
 //

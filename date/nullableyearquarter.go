@@ -8,8 +8,9 @@ import (
 	"github.com/domonda/go-types/nullable"
 )
 
-// YearQuarterNull is the null/zero value for NullableYearQuarter (empty string),
-// which is treated as SQL NULL.
+// YearQuarterNull is the null value for NullableYearQuarter (empty string).
+// NullableYearQuarter has no SQL methods, so database/sql writes
+// YearQuarterNull as an empty string, not as SQL NULL.
 const YearQuarterNull NullableYearQuarter = ""
 
 // Compile-time check that NullableYearQuarter implements nullable.NullSetable[YearQuarter]
