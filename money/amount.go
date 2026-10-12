@@ -380,9 +380,14 @@ func (a Amount) Percentage(percent float64) Amount {
 }
 
 // SplitEqually divides the amount equally into count amounts
-// that are rounded to cents and sum up to the initial amount rounded to cents.
-// The last amount may slightly differ from the others amounts to guarantee
-// that the sum of the rounded cents equals the rounded cents of the initial amount.
+// that are rounded to cents and sum up to the initial amount rounded
+// half away from zero to cents.
+// Like CentAmount.SplitEqually the cents that can't be divided evenly
+// are handed to the last amounts, so no two amounts ever differ by more
+// than one cent and none has the opposite sign of the initial amount.
+// A count of one returns the amount unrounded.
+// A NaN or infinite amount, or one beyond the CentAmount range where
+// float64 can't represent cents anymore, is divided without rounding.
 func (a Amount) SplitEqually(count int) []Amount {
 	if count < 1 {
 		return nil
@@ -391,20 +396,36 @@ func (a Amount) SplitEqually(count int) []Amount {
 		return []Amount{a} // Don't introduce rounding errors
 	}
 	result := make([]Amount, count)
-	part := (a / Amount(count)).RoundToCents()
-	for i := 0; i < count-1; i++ {
-		result[i] = part
+	cents, ok := a.splitCents()
+	if !ok {
+		for i := range result {
+			result[i] = a / Amount(count)
+		}
+		return result
 	}
-	result[count-1] = (a.RoundToCents() - (part * Amount(count-1))).RoundToCents()
+	for i, part := range cents.SplitEqually(count) {
+		result[i] = part.Amount()
+	}
 	return result
 }
 
-// SplitProportionally splits an amount proportianly
+// SplitProportionally splits an amount proportionally
 // to the passed weights into the same number of amounts
-// that get round to cents and makes sure that the sum
-// is identical to the amount rounded to cents.
-// The passed weights can be positive, negative, or zero,
-// so the result amounts can also be positive, negative, or zero.
+// that are rounded to cents and sum up to the initial amount rounded
+// half away from zero to cents.
+// Only the magnitudes of the weights are used and every result amount
+// gets the sign of the split amount, so the passed weights can be
+// positive, negative, or zero.
+// If all weights are zero then the whole amount ends up
+// in the last result element.
+// A single weight returns the amount unrounded.
+//
+// Like CentAmount.SplitProportionally the cents lost to truncation are
+// handed to the amounts with the largest truncated fraction (the largest
+// remainder method), so every amount is within one cent of its exact share
+// up to the float64 precision of the weight ratios.
+// A NaN or infinite amount or weight, or an amount beyond the CentAmount
+// range where float64 can't represent cents anymore, is split without rounding.
 func (a Amount) SplitProportionally(weights []Amount) []Amount {
 	count := len(weights)
 	if count == 0 {
@@ -413,21 +434,44 @@ func (a Amount) SplitProportionally(weights []Amount) []Amount {
 	if count == 1 {
 		return []Amount{a} // Don't introduce rounding errors
 	}
-	compareSum := Amount(0)
-	for _, amount := range weights {
-		compareSum += amount.Copysign(a)
+	cents, ok := a.splitCents()
+	maxWeight := 0.0
+	for _, weight := range weights {
+		ok = ok && weight.Valid()
+		maxWeight = max(maxWeight, weight.AbsFloat())
 	}
-	scaleFactor := a / compareSum
-
-	compareSum = 0
 	result := make([]Amount, count)
-	for i := 0; i < count-1; i++ {
-		result[i] = (weights[i].Copysign(a) * scaleFactor).RoundToCents()
-		compareSum += result[i]
+	if !ok {
+		totalWeight := Amount(0)
+		for _, weight := range weights {
+			totalWeight += weight.Abs()
+		}
+		for i, weight := range weights {
+			result[i] = a * (weight.Abs() / totalWeight)
+		}
+		return result
 	}
-	result[count-1] = (a.RoundToCents() - compareSum).RoundToCents()
-
+	// CentAmount.SplitProportionally apportions the cents exactly for integer
+	// weights. Scaling the weight magnitudes so that the largest one is 2^53
+	// keeps the full float64 precision of their ratios as integers.
+	intWeights := make([]CentAmount, count)
+	if maxWeight > 0 {
+		for i, weight := range weights {
+			intWeights[i] = CentAmount(math.Round(weight.AbsFloat() / maxWeight * (1 << 53)))
+		}
+	}
+	for i, part := range cents.SplitProportionally(intWeights) {
+		result[i] = part.Amount()
+	}
 	return result
+}
+
+// splitCents returns the amount rounded half away from zero to cents
+// and whether the amount is finite and within the CentAmount range,
+// so that its cents can be apportioned exactly by the CentAmount splits.
+func (a Amount) splitCents() (CentAmount, bool) {
+	cents := a.CentAmount(RoundHalfAwayFromZero)
+	return cents, a.Valid() && cents != MinCentAmount && cents != MaxCentAmount
 }
 
 // Valid returns if the amount is neither infinite nor NaN

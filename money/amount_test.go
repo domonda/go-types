@@ -200,7 +200,11 @@ func Test_Amount_SplitEqually(t *testing.T) {
 		{amount: 100, numAmounts: 3}:     {33.33, 33.33, 33.34},
 		{amount: 0.01, numAmounts: 5}:    {0, 0, 0, 0, 0.01},
 		{amount: 0.05, numAmounts: 5}:    {0.01, 0.01, 0.01, 0.01, 0.01},
-		{amount: 1, numAmounts: 17}:      {0.06, 0.06, 0.06, 0.06, 0.06, 0.06, 0.06, 0.06, 0.06, 0.06, 0.06, 0.06, 0.06, 0.06, 0.06, 0.06, 0.04},
+		// The last amount used to get the whole rounding difference:
+		// 16 times 0.06 and 0.04, which is 1.88 cents off its fair share
+		// of 5.88 cents. The 15 cents that can't be divided evenly
+		// now go to the last 15 amounts like CentAmount.SplitEqually does.
+		{amount: 1, numAmounts: 17}: {0.05, 0.05, 0.06, 0.06, 0.06, 0.06, 0.06, 0.06, 0.06, 0.06, 0.06, 0.06, 0.06, 0.06, 0.06, 0.06, 0.06},
 
 		{amount: -100, numAmounts: 0}:     nil,
 		{amount: -100.005, numAmounts: 1}: {-100.005}, // Single amount won't be rounded to cents
@@ -208,7 +212,7 @@ func Test_Amount_SplitEqually(t *testing.T) {
 		{amount: -100, numAmounts: 3}:     {-33.33, -33.33, -33.34},
 		{amount: -0.01, numAmounts: 5}:    {-0, -0, -0, -0, -0.01},
 		{amount: -0.05, numAmounts: 5}:    {-0.01, -0.01, -0.01, -0.01, -0.01},
-		{amount: -1, numAmounts: 17}:      {-0.06, -0.06, -0.06, -0.06, -0.06, -0.06, -0.06, -0.06, -0.06, -0.06, -0.06, -0.06, -0.06, -0.06, -0.06, -0.06, -0.04},
+		{amount: -1, numAmounts: 17}:      {-0.05, -0.05, -0.06, -0.06, -0.06, -0.06, -0.06, -0.06, -0.06, -0.06, -0.06, -0.06, -0.06, -0.06, -0.06, -0.06, -0.06},
 	}
 	for input, expected := range data {
 		result := input.amount.SplitEqually(input.numAmounts)
@@ -232,7 +236,11 @@ func Test_Amount_SplitProportionally(t *testing.T) {
 		{100, []Amount{1, 2, 3}, []Amount{16.67, 33.33, 50}},
 		{100, []Amount{1, 2, 3, 4}, []Amount{10, 20, 30, 40}},
 		{100, []Amount{-1, +2, -3, +4}, []Amount{10, 20, 30, 40}},
-		{100, []Amount{11, 17, 37}, []Amount{16.92, 26.15, 56.93}},
+		// The exact shares are 16.923, 26.154 and 56.923. The last amount used
+		// to get the whole rounding difference (26.15 and 56.93), now the cent
+		// lost to truncation goes to the largest truncated fraction of 26.154
+		// like CentAmount.SplitProportionally does.
+		{100, []Amount{11, 17, 37}, []Amount{16.92, 26.16, 56.92}},
 		{1, []Amount{11, 17, 37}, []Amount{0.17, 0.26, 0.57}},
 		{100, []Amount{1, 0, 1}, []Amount{50, 0, 50}},
 		{250.00, []Amount{333.33, 83.33, 0.01}, []Amount{200, 50, 0}}, // Note that the 1 cent amount got rounded to 0
@@ -247,7 +255,7 @@ func Test_Amount_SplitProportionally(t *testing.T) {
 		{-100, []Amount{-1, 2, 3}, []Amount{-16.67, -33.33, -50}},
 		{-100, []Amount{-1, 2, 3, 4}, []Amount{-10, -20, -30, -40}},
 		{-100, []Amount{-1, +2, -3, +4}, []Amount{-10, -20, -30, -40}},
-		{-100, []Amount{-11, 17, 37}, []Amount{-16.92, -26.15, -56.93}},
+		{-100, []Amount{-11, 17, 37}, []Amount{-16.92, -26.16, -56.92}},
 		{-1, []Amount{-11, 17, 37}, []Amount{-0.17, -0.26, -0.57}},
 		{-100, []Amount{1, 0, 1}, []Amount{-50, 0, -50}},
 	}
@@ -255,6 +263,128 @@ func Test_Amount_SplitProportionally(t *testing.T) {
 		result := test.amount.SplitProportionally(test.weights)
 		assert.Equal(t, test.expected, result)
 	}
+}
+
+// checkAmountSplit asserts the apportionment contract shared by the Amount
+// and the CentAmount splits for the cents of the split amount and the
+// exact shares of them: the parts sum to the cents of the split amount, no
+// part is a cent or more away from its exact share, and no part has the
+// opposite sign of the split amount.
+func checkAmountSplit(t *testing.T, amount Amount, shares []float64, parts []Amount, msg string) {
+	t.Helper()
+
+	if !assert.Len(t, parts, len(shares), msg) {
+		return
+	}
+	var sum int64
+	for i, part := range parts {
+		cents := part.Cents()
+		sum += cents
+		assert.Equal(t, part, part.RoundToCents(), "%s: part %d is rounded to cents", msg, i)
+		assert.Less(t, math.Abs(float64(cents)-shares[i]), 1.0, "%s: part %d = %v is less than one cent from its share of %v cents", msg, i, part, shares[i])
+		assert.False(t, (amount > 0 && cents < 0) || (amount < 0 && cents > 0), "%s: part %d = %v has the sign of %v", msg, i, part, amount)
+	}
+	assert.Equal(t, amount.Cents(), sum, "%s: parts sum to the cents of the amount", msg)
+}
+
+// TestAmount_SplitEqually_apportionment protects that the parts of an equal
+// split sum to the cents of the amount, are less than one cent from their
+// fair share and never flip the sign. Handing the whole rounding difference
+// to the last part broke the last two: Amount(1).SplitEqually(200) rounded
+// each half cent share up to 0.01, so the last part was 1 - 1.99 = -0.99
+// for an amount that only has positive shares.
+func TestAmount_SplitEqually_apportionment(t *testing.T) {
+	for _, amount := range []Amount{1, -1, 0.01, 100, 100.005, -100.005, 1234.56, 0.07, 99999.99} {
+		for _, count := range []int{2, 3, 7, 17, 200, 1000} {
+			parts := amount.SplitEqually(count)
+			share := float64(amount.Cents()) / float64(count)
+			shares := make([]float64, count)
+			for i := range shares {
+				shares[i] = share
+			}
+			msg := fmt.Sprintf("Amount(%v).SplitEqually(%d)", amount, count)
+			checkAmountSplit(t, amount, shares, parts, msg)
+
+			// Exactly the cents of CentAmount.SplitEqually
+			for i, cents := range amount.CentAmount(RoundHalfAwayFromZero).SplitEqually(count) {
+				assert.Equal(t, cents.Amount(), parts[i], "%s: part %d like CentAmount", msg, i)
+			}
+		}
+	}
+
+	parts := Amount(1).SplitEqually(200)
+	assert.Equal(t, Amount(0), parts[0], "a half cent share rounds down for the first parts")
+	assert.Equal(t, Amount(0.01), parts[199], "and up for the last ones")
+
+	// Without cents to apportion the amount is divided without rounding
+	for _, part := range Amount(math.NaN()).SplitEqually(3) {
+		assert.True(t, part.IsNaN())
+	}
+	assert.Equal(t, []Amount{Amount(math.Inf(-1)), Amount(math.Inf(-1))}, Amount(math.Inf(-1)).SplitEqually(2))
+	assert.Equal(t, []Amount{1e20 / 4, 1e20 / 4, 1e20 / 4, 1e20 / 4}, Amount(1e20).SplitEqually(4), "beyond the CentAmount range")
+}
+
+// TestAmount_SplitProportionally_apportionment protects that the parts of a
+// proportional split sum to the cents of the amount, are less than one cent
+// from their exact share and never flip the sign, because the cents lost to
+// rounding go to the largest truncated fractions. Handing the whole rounding
+// difference to the last part flipped its sign for many small shares that
+// all rounded up, like 200 equal weights of one euro.
+func TestAmount_SplitProportionally_apportionment(t *testing.T) {
+	equalWeights := make([]Amount, 200)
+	for i := range equalWeights {
+		equalWeights[i] = 1
+	}
+	weightSets := [][]Amount{
+		equalWeights,
+		{1, 2},
+		{11, 17, 37},
+		{-11, 17, -37},
+		{333.33, 83.33, 0.01},
+		{0.001, 0.002, 0.003},
+		{1e-300, 1, 1e300},
+		{0, 0, 5},
+		{7, 0, 0, 3},
+		{0.3, 0.3, 0.3, 0.1},
+	}
+	for _, amount := range []Amount{1, -1, 0.01, 100, -100, 1234.56, 0.07, 99999.99, 250} {
+		for _, weights := range weightSets {
+			parts := amount.SplitProportionally(weights)
+			var totalWeight float64
+			for _, weight := range weights {
+				totalWeight += weight.AbsFloat()
+			}
+			shares := make([]float64, len(weights))
+			for i, weight := range weights {
+				shares[i] = float64(amount.Cents()) * weight.AbsFloat() / totalWeight
+			}
+			checkAmountSplit(t, amount, shares, parts, fmt.Sprintf("Amount(%v).SplitProportionally(%v)", amount, weights))
+		}
+	}
+
+	// A half cent share rounds up for one half of the parts
+	// and down for the other half
+	parts := Amount(1).SplitProportionally(equalWeights)
+	numCents := 0
+	for _, part := range parts {
+		if part == 0.01 {
+			numCents++
+		}
+	}
+	assert.Equal(t, 100, numCents, "parts of 0.01 in %v", parts)
+
+	// Weights below a cent of the amount are still proportional
+	assert.Equal(t, []Amount{16.67, 33.33, 50}, Amount(100).SplitProportionally([]Amount{0.001, 0.002, 0.003}))
+
+	// If all weights are zero the whole amount ends up in the last part
+	// like for CentAmount.SplitProportionally instead of NaN parts
+	assert.Equal(t, []Amount{0, 0, 100.01}, Amount(100.005).SplitProportionally([]Amount{0, 0, 0}))
+
+	// Without cents to apportion the amount is split without rounding
+	for _, part := range Amount(1).SplitProportionally([]Amount{1, Amount(math.NaN())}) {
+		assert.True(t, part.IsNaN())
+	}
+	assert.Equal(t, []Amount{2.5e19, 7.5e19}, Amount(1e20).SplitProportionally([]Amount{1, 3}), "beyond the CentAmount range")
 }
 
 func TestAmount_UnmarshalJSON(t *testing.T) {
