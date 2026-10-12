@@ -270,6 +270,34 @@ func TestDecimalAmount_Format(t *testing.T) {
 	assert.NotPanics(t, func() { _ = fmt.Sprintf("%.18f", big) })
 }
 
+// TestDecimalAmount_FormatPlusV protects that the '+' flag of the %v verb
+// means "add field names" like everywhere in fmt, and not a plus sign.
+// fmt passes the flag on to every field of a struct printed with %+v, so a
+// struct with a DecimalAmount field printed as {T:+1234.50} in logs and test
+// failures, unlike the int, float64, Amount, CentAmount and Rate fields next
+// to it. The '+' flag of the other verbs still writes the sign.
+func TestDecimalAmount_FormatPlusV(t *testing.T) {
+	a := NewDecimalAmount(123450, 2)
+	assert.Equal(t, "{T:1234.50}", fmt.Sprintf("%+v", struct{ T DecimalAmount }{a}))
+	assert.Equal(t, "{T:1234.50 A:1234.50 C:1234.50 R:0.19 I:5}", fmt.Sprintf("%+v", struct {
+		T DecimalAmount
+		A Amount
+		C CentAmount
+		R Rate
+		I int
+	}{a, 1234.5, 123450, 0.19, 5}))
+	assert.Equal(t, "1234.50", fmt.Sprintf("%+v", a))
+	assert.Equal(t, "  1234.50", fmt.Sprintf("%+9v", a))
+	assert.Equal(t, "Inf", fmt.Sprintf("%+v", DecimalAmountInf(1)))
+	assert.Equal(t, fmt.Sprintf("% v", 5)[:1]+"1234.50", fmt.Sprintf("% v", a), "the space flag writes a space like for an int")
+
+	assert.Equal(t, "+1234.50", fmt.Sprintf("%+s", a))
+	assert.Equal(t, "+1234.50", fmt.Sprintf("%+f", a))
+	assert.Equal(t, "+1235", fmt.Sprintf("%+d", a))
+	assert.Equal(t, `"+1234.50"`, fmt.Sprintf("%+q", a))
+	assert.Equal(t, "+Inf", fmt.Sprintf("%+f", DecimalAmountInf(1)))
+}
+
 func TestDecimalAmount_CmpEqual(t *testing.T) {
 	// Same value, different scale.
 	a := NewDecimalAmount(150, 2) // 1.50

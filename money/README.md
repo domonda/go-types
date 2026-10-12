@@ -103,7 +103,7 @@ The value is `Coefficient × 10^-Scale`, packed into one `int64`: the low 5 bits
 | `String() string`                                  | Exact digits with the scale and a dot: `"1234.50"`, `"NaN"`, `"Inf"`, `"-Inf"`. |
 | `FormatSep(thousandsSep, decimalSep rune) string`  | Exact digits with separators, 0 for `decimalSep` means `'.'`. |
 | `GoString() string`                                | `money.NewDecimalAmount(123450, 2)`, `money.DecimalAmountNaN()`. |
-| `Format(f fmt.State, verb rune)`                   | `fmt` verbs: `%v` and `%s` like `String`, `%#v` like `GoString`, `%q` quoted, `%f` with the precision as decimals (default: the scale), `%d` rounded to an integer. Flags `+` and space for the sign, `#` groups with `,`, width with `-` and `0`. Display rounding is half away from zero. |
+| `Format(f fmt.State, verb rune)`                   | `fmt` verbs: `%v` and `%s` like `String`, `%#v` like `GoString`, `%q` quoted, `%f` with the precision as decimals (default: the scale), `%d` rounded to an integer. Flags `+` and space for the sign, except `+` for `%v`, which means field names like in `fmt`: `%+v` of a struct prints `{T:1234.50}`. `#` groups with `,`, width with `-` and `0`. Display rounding is half away from zero. |
 | `MarshalJSON`, `UnmarshalJSON`, `MarshalText`, `UnmarshalText`, `Scan`, `Value` | See [Serialization](#serialization).               |
 | `MarshalBinary() ([]byte, error)`, `(*DecimalAmount).UnmarshalBinary(data []byte) error` | The packed `int64` as 8 big-endian bytes.          |
 | `(*DecimalAmount).ScanString(source string, validate bool) error` | `ParseDecimalAmount`, with `validate` non-finite values are errors. |

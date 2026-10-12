@@ -1070,7 +1070,14 @@ func (a DecimalAmount) FormatSep(thousandsSep, decimalSep rune) string {
 // groups the integer part with ',' thousands separators (for %v, %s, %f and
 // %d), and the width with the '-' and '0' flags controls padding. Formatting
 // never panics.
+//
+// For %v the '+' flag is ignored because %+v means "add field names" in fmt,
+// which passes the flag on to the fields of a struct, so a struct with a
+// DecimalAmount field prints as {T:1234.50} like a struct with an int field.
 func (a DecimalAmount) Format(f fmt.State, verb rune) {
+	if verb == 'v' {
+		f = withoutPlusFlag{f}
+	}
 	if !a.IsFinite() {
 		if verb == 'v' && f.Flag('#') {
 			writeStr(f, a.GoString())
@@ -1114,6 +1121,14 @@ func (a DecimalAmount) Format(f fmt.State, verb rune) {
 	default:
 		fmt.Fprintf(f, "%%!%c(money.DecimalAmount=%s)", verb, a.String())
 	}
+}
+
+// withoutPlusFlag is a fmt.State that hides the '+' flag,
+// which DecimalAmount.Format ignores for the %v verb.
+type withoutPlusFlag struct{ fmt.State }
+
+func (s withoutPlusFlag) Flag(c int) bool {
+	return c != '+' && s.State.Flag(c)
 }
 
 // MarshalJSON implements json.Marshaler, encoding a finite amount as an unquoted
