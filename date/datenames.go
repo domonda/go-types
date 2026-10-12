@@ -49,6 +49,12 @@ var monthNameMap = map[string]int{
 	"febr":     2,
 	"februar":  2,
 	"february": 2,
+	"févr":     2, // French (février)
+	"fevr":     2,
+	"février":  2,
+	"fevrier":  2,
+	"febbraio": 2, // Italian
+	"febrero":  2, // Spanish
 
 	"mar":   3,
 	"mär":   3,
@@ -56,9 +62,16 @@ var monthNameMap = map[string]int{
 	"märz":  3,
 	"maerz": 3,
 	"march": 3,
+	"mars":  3, // French
+	"marzo": 3, // Italian, Spanish
 
-	"apr":   4,
-	"april": 4,
+	"apr":    4,
+	"april":  4,
+	"avr":    4, // French (avril)
+	"avril":  4,
+	"aprile": 4, // Italian
+	"abr":    4, // Spanish (abril)
+	"abril":  4,
 
 	"aprij": 4,
 	"apri1": 4,
@@ -67,16 +80,23 @@ var monthNameMap = map[string]int{
 	"apr1j": 4,
 	"apr11": 4,
 
-	"may": 5,
-	"mai": 5,
-	"ma1": 5,
-	"maj": 5,
+	"may":    5,
+	"mai":    5,
+	"ma1":    5,
+	"maj":    5,
+	"mag":    5, // Italian (maggio)
+	"maggio": 5,
+	"mayo":   5, // Spanish
 
-	"jun":  6,
-	"june": 6,
-	"juni": 6,
-	"junj": 6,
-	"jun1": 6,
+	"jun":    6,
+	"june":   6,
+	"juni":   6,
+	"junj":   6,
+	"jun1":   6,
+	"juin":   6, // French
+	"giu":    6, // Italian (giugno)
+	"giugno": 6,
+	"junio":  6, // Spanish
 
 	"iun":  6,
 	"iune": 6,
@@ -86,11 +106,16 @@ var monthNameMap = map[string]int{
 	"1une": 6,
 	"1uni": 6,
 
-	"jul":  7,
-	"july": 7,
-	"juli": 7,
-	"julj": 7,
-	"jul1": 7,
+	"jul":     7,
+	"july":    7,
+	"juli":    7,
+	"julj":    7,
+	"jul1":    7,
+	"juil":    7, // French (juillet)
+	"juillet": 7,
+	"lug":     7, // Italian (luglio)
+	"luglio":  7,
+	"julio":   7, // Spanish
 
 	"iul":  7,
 	"iuly": 7,
@@ -106,10 +131,19 @@ var monthNameMap = map[string]int{
 
 	"aug":    8,
 	"august": 8,
+	"août":   8, // French
+	"aout":   8,
+	"ago":    8, // Italian, Spanish (agosto)
+	"agosto": 8,
 
-	"sep":       9,
-	"sept":      9,
-	"september": 9,
+	"sep":        9,
+	"sept":       9,
+	"september":  9,
+	"septembre":  9, // French
+	"set":        9, // Italian (settembre)
+	"settembre":  9,
+	"septiembre": 9, // Spanish
+	"setiembre":  9,
 
 	"sepl":      9,
 	"seplember": 9,
@@ -122,12 +156,24 @@ var monthNameMap = map[string]int{
 	"oct":     10,
 	"oktober": 10,
 	"october": 10,
+	"octobre": 10, // French
+	"ott":     10, // Italian (ottobre)
+	"ottobre": 10,
+	"octubre": 10, // Spanish
 
-	"nov":      11,
-	"november": 11,
+	"nov":       11,
+	"november":  11,
+	"novembre":  11, // French, Italian
+	"noviembre": 11, // Spanish
 
-	"dec":      12,
-	"dez":      12,
-	"december": 12,
-	"dezember": 12,
+	"dec":       12,
+	"dez":       12,
+	"december":  12,
+	"dezember":  12,
+	"déc":       12, // French (décembre)
+	"décembre":  12,
+	"decembre":  12,
+	"dic":       12, // Italian, Spanish (dicembre, diciembre)
+	"dicembre":  12,
+	"diciembre": 12,
 }

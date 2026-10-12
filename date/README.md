@@ -41,7 +41,7 @@ A `Date` holds whatever string you assign. Methods normalize on demand, so `Date
 - An ISO date followed by a `T` time (`"2006-01-02T15:04:05Z07:00"`) or a trailing `00:00:00` (`"30.11.2023 00:00:00"`). The time is dropped.
 - Numeric day-month-year and month-day-year with 2 or 4 digit years: `"25.12.1975"`, `"25.12.75"`, `"12/25/1975"`.
 - English and German month names and abbreviations: `"jan. 24 2012"`, `"1. Dezember 2016"`, `"Oct 7, 1970"`, `"September 17th, 2012"`, `"Oct 7, '70"`, `"2013-Feb-03"`, `"07-Feb-04"`. Common OCR misreadings like `"1an"` or `"apri1"` are accepted too.
-- French, Italian and Spanish names for January only: `"2 janv. 2019"`, `"23/gen/2019"`, `"12 enero 2020"`. `"2 févr. 2019"` fails.
+- French, Italian and Spanish month names and their usual abbreviations: `"2 janv. 2019"`, `"23/gen/2019"`, `"12 enero 2020"`, `"2 févr. 2019"`, `"5 luglio 2021"`.
 - English ordinals and a leading weekday: `"1st of dec. 2020"`, `"Fri, 03 Jul 2015"`.
 - CJK separators: `"2014年04月08日"`.
 

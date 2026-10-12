@@ -126,7 +126,7 @@ The error leaves the decision to code that has more context, like the language o
 `date.Normalize(str, lang...)` and `Date.Normalized(lang...)` split the input into three parts at spaces, `.`, `/`, `-`, `,`, `'` and the CJK date characters, and decide which part is the day, the month and the year:
 
 - **Text around the date.** A leading weekday (`Fri, 03 Jul 2015`), the filler `of` (`1st of dec. 2020`), a trailing `00:00:00` and a `T` time after an ISO date are dropped.
-- **Month names.** English and German names and abbreviations are accepted in any case, including common OCR misreadings like `1an` and `apri1`. French, Italian and Spanish names are only known for January.
+- **Month names.** English and German names and abbreviations are accepted in any case, including common OCR misreadings like `1an` and `apri1`. French, Italian and Spanish month names and their usual abbreviations are accepted too, like `févr.`, `luglio` and `septiembre`.
 - **ISO order.** A four digit first part means year, month, day: `2023-12-25`.
 - **Day first by default.** `05/06/2024` is 2024-06-05.
 - **Month first when nothing else works.** `12/25/2023` is 2023-12-25, because 25 can't be a month.

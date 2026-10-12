@@ -71,8 +71,6 @@ package: every listed behaviour is documented in the package READMEs.
 - [ ] **Relax `cmp.Ordered` to `comparable`** in `set`, `types.ReduceSet` and
       `types.ReduceSlice`, which never compare order. This is backward
       compatible.
-- [ ] **`date` month names.** The French, Italian and Spanish month tables
-      only contain January, so `"2 févr. 2019"` does not parse.
 - [ ] **`date.YearQuarter.Validate`** requires an upper case `Q` while
       `date.PeriodRange` accepts `q`.
 - [ ] **Move the `NullableYearQuarter` tests** from
