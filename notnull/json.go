@@ -41,11 +41,12 @@ func (j JSON) UnmarshalTo(dest any) error {
 }
 
 // MarshalJSON returns j as the JSON encoding of j.
+// A nil or empty j holds no JSON text and returns {}.
 // MarshalJSON implements encoding/json.Marshaler
 // See the package function MarshalJSON to marshal
 // a struct into JSON
 func (j JSON) MarshalJSON() ([]byte, error) {
-	if j == nil {
+	if len(j) == 0 {
 		return []byte("{}"), nil
 	}
 	return j, nil
@@ -90,19 +91,29 @@ func (j JSON) IsEmpty() bool {
 }
 
 // Scan stores the src in *j. No validation is done.
+// SQL NULL and an empty string or []byte, which hold
+// no JSON text, store the empty object {}.
 func (j *JSON) Scan(src any) error {
 	switch x := src.(type) {
 	case nil:
 		*j = JSON("{}") // should we do this, set nil or error?
 
 	case string:
-		// Converting from string does a copy
-		*j = JSON(x)
+		if x == "" {
+			*j = JSON("{}")
+		} else {
+			// Converting from string does a copy
+			*j = JSON(x)
+		}
 
 	case []byte:
-		// Need to copy because, src will be gone after call.
-		// Use append trick to make a copy of src bytes
-		*j = append(JSON(nil), x...)
+		if len(x) == 0 {
+			*j = JSON("{}")
+		} else {
+			// Need to copy because, src will be gone after call.
+			// Use append trick to make a copy of src bytes
+			*j = append(JSON(nil), x...)
+		}
 
 	default:
 		return errors.New("Incompatible type for JSON")

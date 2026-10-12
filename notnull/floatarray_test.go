@@ -2,6 +2,7 @@ package notnull
 
 import (
 	"encoding/json"
+	"math"
 	"sort"
 	"testing"
 
@@ -35,6 +36,47 @@ func Test_FloatArray_MarshalJSON(t *testing.T) {
 	val, err = json.Marshal(FloatArray([]float64{1, 2, 3}))
 	assert.NoError(t, err, "json.Marshal(FloatArray([]float64{1, 2, 3}))")
 	assert.Equal(t, "[1,2,3]", string(val), "json.Marshal(FloatArray([]float64{1, 2, 3}))")
+}
+
+// JSON has no NaN or infinity, so MarshalJSON must fail for them like
+// encoding/json does for a []float64 instead of writing bare NaN or +Inf
+// tokens, which make the whole document invalid JSON for every reader.
+func Test_FloatArray_MarshalJSON_NonFinite(t *testing.T) {
+	for _, f := range []float64{math.NaN(), math.Inf(1), math.Inf(-1)} {
+		_, wantErr := json.Marshal([]float64{1, f})
+		var wantUnsupported *json.UnsupportedValueError
+		require.ErrorAs(t, wantErr, &wantUnsupported, "encoding/json rejects %v", f)
+
+		b, err := FloatArray{1, f}.MarshalJSON()
+		var unsupported *json.UnsupportedValueError
+		require.ErrorAs(t, err, &unsupported, "MarshalJSON of %v", f)
+		assert.Equal(t, wantUnsupported.Str, unsupported.Str, "error names the value like encoding/json")
+		assert.Nil(t, b)
+
+		_, err = json.Marshal(struct{ A FloatArray }{A: FloatArray{f}})
+		require.ErrorAs(t, err, &unsupported, "json.Marshal of a struct with %v", f)
+	}
+}
+
+// PostgreSQL writes the non-finite float8 values as NaN, Infinity and
+// -Infinity, so Scan must read them, and the values written by Value
+// must scan back to the same floats.
+func Test_FloatArray_Scan_NonFinite(t *testing.T) {
+	var a FloatArray
+	require.NoError(t, a.Scan("{NaN,Infinity,-Infinity}"))
+	require.Len(t, a, 3)
+	assert.True(t, math.IsNaN(a[0]))
+	assert.Equal(t, math.Inf(1), a[1])
+	assert.Equal(t, math.Inf(-1), a[2])
+
+	val, err := FloatArray{math.NaN(), math.Inf(1), math.Inf(-1)}.Value()
+	require.NoError(t, err)
+	var scanned FloatArray
+	require.NoError(t, scanned.Scan(val), "Scan(%q)", val)
+	require.Len(t, scanned, 3)
+	assert.True(t, math.IsNaN(scanned[0]))
+	assert.Equal(t, math.Inf(1), scanned[1])
+	assert.Equal(t, math.Inf(-1), scanned[2])
 }
 
 func Test_FloatArray_UnmarshalJSON(t *testing.T) {

@@ -4,6 +4,8 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
+	"math"
+	"reflect"
 	"slices"
 	"strconv"
 	"strings"
@@ -106,10 +108,18 @@ func (a *FloatArray) scanBytes(src []byte) (err error) {
 // MarshalJSON implements encoding/json.Marshaler.
 // A nil or empty array is encoded as the empty JSON array []
 // instead of null; a notnull array is never null.
+// JSON has no NaN or infinity, so like encoding/json
+// it returns a *json.UnsupportedValueError for them.
 func (a FloatArray) MarshalJSON() ([]byte, error) {
 	b := make([]byte, 1, 32)
 	b[0] = '['
 	for i := range a {
+		if math.IsNaN(a[i]) || math.IsInf(a[i], 0) {
+			return nil, &json.UnsupportedValueError{
+				Value: reflect.ValueOf(a[i]),
+				Str:   strconv.FormatFloat(a[i], 'g', -1, 64),
+			}
+		}
 		if i > 0 {
 			b = append(b, ',')
 		}

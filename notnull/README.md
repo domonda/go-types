@@ -102,7 +102,7 @@ Implements: `driver.Valuer`, `sql.Scanner`, `json.Marshaler`, `json.Unmarshaler`
 | Input          | Arrays                                  | `TrimmedString` | `JSON`              |
 |----------------|-----------------------------------------|-----------------|---------------------|
 | SQL `NULL`     | empty slice                             | error           | `{}`                |
-| SQL `''`       | empty slice, error for `StringArray`    | `""`            | `JSON("")`, not nil |
+| SQL `''`       | empty slice, error for `StringArray`    | `""`            | `{}`                |
 | SQL `'{}'`     | empty slice                             | the string `{}` | `{}`                |
 | `NULL` element | error, NULL element for `NullBoolArray` | not an array    | not an array        |
 | JSON `null`    | empty slice                             | `""`            | the text `null`     |
@@ -113,7 +113,6 @@ Implements: `driver.Valuer`, `sql.Scanner`, `json.Marshaler`, `json.Unmarshaler`
 - Only the arrays turn SQL `NULL` into an empty value. `TrimmedString.Scan(nil)` returns `can't scan <nil> as notnull.TrimmedString`, and `JSON.Scan(nil)` stores `{}`.
 - JSON `null` is not mapped to `{}` by `JSON`: `UnmarshalJSON` stores the text `null`, which `Value` then writes as the JSON value `null`.
 - `JSON(nil)` is written as `{}`, an object, not as `[]`. `JSON(nil).Valid()` is false although its text is the valid `{}`.
-- `JSON.Scan("")` stores a non-nil empty `JSON` whose `MarshalJSON` returns no bytes, so `json.Marshal` of it fails with `unexpected end of JSON input`.
 - `StringArray.Scan("")` returns an error, the other arrays return an empty slice.
 - `NULL` elements fail in `StringArray`, `IntArray` and `FloatArray`: `IntArray.Scan("{1,NULL}")` returns an error. Only `NullBoolArray` has nullable elements, and it accepts `t`, `f`, `true`, `false` and `NULL` in any letter case.
 - `notnull.NullBoolArray` holds `sql.NullBool` elements, `nullable.NullBoolArray` holds `nullable.Type[bool]`. There is no `notnull.BoolArray`, `NullIntArray` or `NullFloatArray`.
