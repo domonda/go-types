@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 
@@ -54,15 +55,15 @@ func NullableNumberFromUint(u uint64) NullableNumber {
 	return NullableNumber(strconv.FormatUint(u, 10))
 }
 
-// Valid returns true if the Number is null
-// or matches the regular expression `^[0-9A-Za-z_]+$`
+// Valid returns true if the NullableNumber is null
+// or matches NumberRegexp (DefaultNumberRegex unless reassigned).
 func (n NullableNumber) Valid() bool {
 	return n == NumberNull || Number(n).Valid()
 }
 
 // Validate returns a wrapped ErrInvalidNumber
-// error if the NullableNumber is not null and
-// does not match the regular expression `^[0-9A-Za-z_]+$`
+// error if the NullableNumber is not null and does not match
+// NumberRegexp (DefaultNumberRegex unless reassigned).
 func (n NullableNumber) Validate() error {
 	if !n.Valid() {
 		return fmt.Errorf("%w: %q", ErrInvalidNumber, n)
@@ -215,7 +216,9 @@ func (n NullableNumber) Value() (driver.Value, error) {
 	return str, nil
 }
 
-// Scan implements the database/sql.Scanner interface
+// Scan implements the database/sql.Scanner interface.
+// A float64 value must be a non-negative integer,
+// NaN, infinities, and fractions return an error.
 func (n *NullableNumber) Scan(value any) error {
 	switch x := value.(type) {
 	case nil:
@@ -250,7 +253,7 @@ func (n *NullableNumber) Scan(value any) error {
 		return nil
 
 	case float64:
-		if x < 0 {
+		if math.IsNaN(x) || math.IsInf(x, 0) || x < 0 || x != math.Trunc(x) {
 			return fmt.Errorf("%w: %v", ErrInvalidNumber, x)
 		}
 		if x == 0 {

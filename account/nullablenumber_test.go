@@ -3,6 +3,7 @@ package account
 import (
 	"encoding/json"
 	"encoding/xml"
+	"math"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -179,6 +180,11 @@ func TestNullableNumber_Scan(t *testing.T) {
 		{name: "invalid bytes", value: []byte("-1"), wantErr: true},
 		{name: "negative int64", value: int64(-1), wantErr: true},
 		{name: "negative float64", value: float64(-0.5), wantErr: true},
+		// Same as for Number: only non-negative integer floats are
+		// account numbers, "NaN" would pass the alphanumeric pattern.
+		{name: "NaN", value: math.NaN(), wantErr: true},
+		{name: "+Inf", value: math.Inf(1), wantErr: true},
+		{name: "non-integer float64", value: float64(1.5), wantErr: true},
 		{name: "unsupported type", value: true, wantErr: true},
 	}
 	for _, tt := range tests {

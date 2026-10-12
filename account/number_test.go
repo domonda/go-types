@@ -259,6 +259,14 @@ func TestNumber_Scan(t *testing.T) {
 		{name: "invalid bytes", value: []byte("-1"), wantErr: true},
 		{name: "negative int64", value: int64(-1), wantErr: true},
 		{name: "negative float64", value: float64(-1), wantErr: true},
+		// A float64 is only an account number if it is a non-negative
+		// integer. "NaN" even matches the alphanumeric number pattern,
+		// so it would be stored as a valid looking account number, and
+		// a fraction means the column does not hold account numbers.
+		{name: "NaN", value: math.NaN(), wantErr: true},
+		{name: "+Inf", value: math.Inf(1), wantErr: true},
+		{name: "-Inf", value: math.Inf(-1), wantErr: true},
+		{name: "non-integer float64", value: float64(1.5), wantErr: true},
 		{name: "NULL", value: nil, wantErr: true},
 		{name: "unsupported type", value: true, wantErr: true},
 	}

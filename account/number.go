@@ -16,6 +16,7 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
+	"math"
 	"regexp"
 	"strconv"
 	"strings"
@@ -205,7 +206,9 @@ func (n Number) Value() (driver.Value, error) {
 	return NullableNumber(n).Value()
 }
 
-// Scan implements the database/sql.Scanner interface
+// Scan implements the database/sql.Scanner interface.
+// A float64 value must be a non-negative integer,
+// NaN, infinities, and fractions return an error.
 func (n *Number) Scan(value any) error {
 	switch x := value.(type) {
 	case string:
@@ -232,7 +235,7 @@ func (n *Number) Scan(value any) error {
 		return nil
 
 	case float64:
-		if x < 0 {
+		if math.IsNaN(x) || math.IsInf(x, 0) || x < 0 || x != math.Trunc(x) {
 			return fmt.Errorf("%w: %v", ErrInvalidNumber, x)
 		}
 		*n = Number(strconv.FormatFloat(x, 'f', -1, 64))
