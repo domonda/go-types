@@ -73,6 +73,112 @@ package: every listed behaviour is documented in the package READMEs.
       go-errs function parameters, so up to 5000 bytes of the raw message
       per wrap level end up in error strings and logs.
 
+## Decisions before v1.0: unfinished or misplaced API
+
+Found in a code audit on 2026-10-12. Each item removes or changes exported
+API or behaviour, so it should be decided before `v1.0.0`. "No caller" means
+none in this module or in the local checkouts of the domonda repos.
+
+- [ ] **`internal/pq`, a vendored copy of `lib/pq` from 2022.** Its README
+      says "until refactored for go-types". Only `StringArray` and
+      `BoolArray` are used, as the aliases `nullable.StringArray` and
+      `nullable.BoolArray` and inside `notnull.StringArray`. The other array
+      types, `NullTime`, the timestamp functions, most of `encode.go` and
+      the `oid` package are dead. Its parser also disagrees with
+      `internal.SplitArray`: `nullable.StringArray.Scan` reads `{a\,b}` as
+      the two elements `a\` and `b`, while `nullable.SplitArrayValues` and
+      PostgreSQL read the single element `a,b`. Options: delete the dead
+      code and keep both parsers, or implement the two types on
+      `internal.SplitArray` and delete `internal/pq`. Recommendation: the
+      second, so every array type parses like PostgreSQL.
+- [ ] **`email.Rule`, `RuleFunc`, `BoolRule`, `AllRule` and `AnyRule`.**
+      Nothing accepts a `Rule` or calls `AppliesToMessage`, and the message
+      filter that `email/doc.go` implies doesn't exist. No caller. Remove
+      them, or add the filter.
+- [ ] **`email.ProviderDomains`.** A hardcoded list of 112 domains,
+      including some that aren't email providers, like `wu.ac.at` and
+      `guest.booking.com`. Its only caller,
+      `email.Address.IsFromKnownEmailProvider`, was removed in fbce477, and
+      domonda-service pulls its own list. No caller. Recommendation: remove.
+- [ ] **`strfmt.ScanConfig.AcceptedMoneyAmountDecimals`.** It defaults to
+      `{0, 2, 4}`, but `Scan` never reads it, and the docs tell callers to
+      pass it to `money.ParseAmount` themselves. Apply it in `Scan` for
+      money destinations, which changes what the default config accepts,
+      or remove it like `FormatConfig.Percent`.
+- [ ] **`types.LenString`.** No caller. Its zero value rejects every
+      non-empty string because min and max are 0, it has no SQL `Scan` and
+      `Value` unlike every other type, and with only pointer receivers a
+      struct field marshalled by value encodes as `{}`. Remove it, or
+      finish it.
+- [ ] **`strfmt.Parser`.** `strfmt/doc.go` calls it "the older interface".
+      Nothing consumes it, ten types document that they implement it.
+      Remove the interface and those doc claims (the `Parse` methods can
+      stay), or give it a consumer.
+- [ ] **`date.Format` and `date.Formatter`.** Both have the same `Format`
+      and `Parse` methods, `date.Format` adds `NilString`, `ZeroString` and
+      `AssignString`. Keep one.
+- [ ] **`strutil` helpers without a caller.** `EqualJSON`,
+      `HTMLEscapeSpecialRunes`, `ParseDomainName` and `RandomStringBytes`
+      aren't used anywhere, and the first two aren't string manipulation.
+      Remove them, or keep them as public API. `DerefPtr` duplicates
+      `types.FromPtr` and `IndexInStrings` duplicates `slices.Index`, but
+      both have callers.
+- [ ] **Two HTML to text converters in `email`.** The hand-written
+      `HTMLToPlaintext`, which domonda-service calls, and the
+      `inbucket/html2text` library used for TNEF bodies. Keep one.
+
+## Cleanup decisions (internal or additive)
+
+From the same audit. These don't remove exported API, so they can land any
+time.
+
+- [ ] **Date formats marked TODO in `date/date_test.go`.** `8/8/71`,
+      `2014-04`, `2014.05`, `2014`, `201412` and `20140601` are
+      commented-out cases that `Normalize` still rejects, while `08/08/71`
+      works. `date.Finder` uses `Normalize`, so accepting digit-only forms
+      would make it report plain numbers like `2014` as dates.
+      Recommendation: support `8/8/71`, decide the digit-only forms with
+      the finder in mind, and drop the year-month cases, which
+      `date.YearMonth` covers.
+- [ ] **TNEF attachments** in `email/parsetnef.go`. `Inline: false, // ??`
+      is an open question, attachments get no `ContentType` although
+      `email.NewAttachment` detects it, and the TNEF attributes holding
+      subject and sender are ignored. Fill them in, or keep the gaps
+      documented in the README.
+- [ ] **Address list with quoted commas.** In
+      `email/parseaddress_test.go`, a commented-out case that
+      `ParseAddressList` splits wrongly is marked "TODO resolve this case",
+      and `numRandomCombinations` is 0, so the random list tests never run.
+- [ ] **`date.Format.AssignString` dead code.** It has a commented-out
+      `loc` parameter and time zone conversion, and `tPtr` starts non-nil,
+      so its three `nil` branches never run (staticcheck SA4031).
+      `date/date.go` also assigns `val0` twice without reading it
+      (SA4006). Implement the time zone or delete the dead parts.
+- [ ] **`charset` `encodingImpl.bom`.** No constructor sets the field, so
+      `BOM()` always returns `NoBOM` as documented, also for
+      `GetEncoding("UTF-16")`, which writes a BOM. Delete the field, or set
+      it for UTF-16.
+- [ ] **Error constructors.** The module calls `errors.New` and
+      `fmt.Errorf` about 340 times and go-errs `errs.New` twice, in
+      `email/message.go` and `email/parsetnef.go`. Decide whether the
+      module follows the go-errs rule. Recommendation: stay with the
+      standard library, the established pattern, and convert the two
+      outliers.
+- [ ] **Commented-out code.** An old implementation after the `return` in
+      `money.Amount.String`, old `From`/`ReplyTo` assignments in
+      `email/parsemime.go`, `email/utils.go`, a debug print in
+      `email/parseaddress.go`, and blocks in `email/parseaddress_test.go`
+      and `uu/nullableid_test.go`.
+- [ ] **Test leftovers.** `TestStandardComparison` in
+      `email/addresslist_test.go` only tests `net/mail`. Bare `// TODO`
+      lines end the tables in `strfmt/scan_test.go` and the `AddMonths`
+      test in `date/date_test.go`. Test comments in
+      `language/code_test.go`, `money/currency_test.go`,
+      `country/code_test.go` and `email/utils_test.go` carry review-tool
+      metadata (`protects=… why_new=… seam=none`, "this branch changed").
+      `charset/encoding_test.go` holds the tests of `utf16.go`, `utf32.go`
+      and `bom.go`, some of them twice.
+
 ## After v1.0
 
 - [ ] **Replace `mapset` with the standard library `container/mapset`** once
