@@ -7,7 +7,12 @@ import (
 	"github.com/domonda/go-types/strutil"
 )
 
-// StringIsAmount returns if str can be parsed as Amount.
+// StringIsAmount returns if str is an amount with exactly two decimal places,
+// a point or comma as decimal separator and optional thousands grouping
+// with the other one, like "1.234,56" or "-1234.56", or one of the
+// non-finite values NaN, Inf, +Inf and -Inf.
+// If acceptInt is true, then an integer without decimal places is accepted too.
+// Other numbers like "12.5" are not detected even though ParseAmount parses them.
 func StringIsAmount(str string, acceptInt bool) bool {
 	return amountRegex.MatchString(str) || (acceptInt && intAmountRegex.MatchString(str))
 }

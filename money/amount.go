@@ -488,7 +488,7 @@ func (a Amount) IsNaN() bool {
 	return math.IsNaN(float64(a))
 }
 
-// IsNaN returns if the amount is positive or negative infinity
+// IsInf returns if the amount is positive or negative infinity
 func (a Amount) IsInf() bool {
 	return math.IsInf(float64(a), 0)
 }

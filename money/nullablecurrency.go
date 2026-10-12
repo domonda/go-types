@@ -31,7 +31,7 @@ func (n NullableCurrency) IsNotNull() bool {
 	return n != CurrencyNull
 }
 
-// Set sets an ID for this NullableCurrency
+// Set sets the passed currency as value of the NullableCurrency
 func (n *NullableCurrency) Set(currency Currency) {
 	*n = NullableCurrency(currency)
 }
@@ -94,7 +94,7 @@ func (n NullableCurrency) ValidAndNormalized() bool {
 	return err == nil && n == norm
 }
 
-// Valid returns true if c is nil, an empty string, or a valid 3 character ISO 4217 alphabetic code.
+// ValidPtr returns true if n is nil, an empty string, or can be normalized to a valid currency.
 // Safe to call on a nil pointer.
 func (n *NullableCurrency) ValidPtr() bool {
 	if n == nil || *n == CurrencyNull {
