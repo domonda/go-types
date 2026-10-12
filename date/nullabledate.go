@@ -112,7 +112,7 @@ func (n NullableDate) Valid() bool {
 
 // ValidAndNotNull returns if the date is valid and not Null or Zero.
 func (n NullableDate) ValidAndNotNull() bool {
-	return Date(n).Valid()
+	return n.IsNotNull() && Date(n).Valid()
 }
 
 // ValidAndNormalized returns if the date is valid and already normalized.
@@ -242,10 +242,16 @@ func (n NullableDate) MidnightInLocation(loc *time.Location) nullable.Time {
 }
 
 // NormalizedEqual returns true if two dates are equal after normalization.
+// Null and the zero dates are equal to each other.
+// An invalid date has no normalized value and is not equal
+// to any date, not even to Null or an identical invalid string.
 func (n NullableDate) NormalizedEqual(other NullableDate) bool {
-	a, _ := n.Normalized()
-	b, _ := other.Normalized()
-	return a == b
+	a, err := n.Normalized()
+	if err != nil {
+		return false
+	}
+	b, err := other.Normalized()
+	return err == nil && a == b
 }
 
 // Compare compares the date with another NullableDate.
@@ -580,7 +586,7 @@ func (n NullableDate) Format(layout string) string {
 }
 
 // Scan implements the database/sql.Scanner interface.
-// Accepts string, time.Time, or nil values.
+// Accepts string, []byte, time.Time, or nil values.
 // Empty strings and zero dates ("0000-00-00", "0001-01-01") are treated as Null.
 func (n *NullableDate) Scan(value any) (err error) {
 	switch x := value.(type) {
@@ -594,6 +600,9 @@ func (n *NullableDate) Scan(value any) (err error) {
 		}
 		*n = d.Nullable()
 		return nil
+
+	case []byte:
+		return n.Scan(string(x))
 
 	case time.Time:
 		*n = OfTime(x).Nullable()

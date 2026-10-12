@@ -73,6 +73,11 @@ func TestNullableDate_ValidAndNotNull(t *testing.T) {
 	assert.False(t, Null.ValidAndNotNull())
 	assert.True(t, NullableDate("2023-12-25").ValidAndNotNull())
 	assert.False(t, NullableDate("invalid").ValidAndNotNull())
+	// The zero dates are null (IsNull, Value writes SQL NULL), so a caller
+	// that uses ValidAndNotNull to require a date must not accept them.
+	assert.True(t, NullableDate("0001-01-01").IsNull())
+	assert.False(t, NullableDate("0001-01-01").ValidAndNotNull())
+	assert.False(t, NullableDate("0000-00-00").ValidAndNotNull())
 }
 
 func TestNullableDate_ValidAndNormalized(t *testing.T) {
@@ -376,6 +381,8 @@ func TestNullableDate_IsToday(t *testing.T) {
 	assert.True(t, today.IsToday())
 	assert.False(t, NullableDate("2020-01-01").IsToday())
 	assert.False(t, Null.IsToday())
+	// A valid but non-normalized today is still today
+	assert.True(t, NullableDate(today.Format("02.01.2006")).IsToday())
 }
 
 func TestNullableDate_IsTodayInUTC(t *testing.T) {
@@ -433,6 +440,15 @@ func TestNullableDate_NormalizedEqual(t *testing.T) {
 	assert.True(t, d1.NormalizedEqual(d2))
 	assert.True(t, Null.NormalizedEqual(Null))
 	assert.False(t, d1.NormalizedEqual(Null))
+	// Zero dates are null, so they normalize to and equal Null
+	assert.True(t, NullableDate("0001-01-01").NormalizedEqual(Null))
+	// An invalid date has no normalized value, so it must not be equal
+	// to anything, in particular not to Null or to another invalid date
+	// (like NaN != NaN), see TestDate_NormalizedEqual.
+	assert.False(t, NullableDate("bad").NormalizedEqual("worse"))
+	assert.False(t, NullableDate("bad").NormalizedEqual("bad"))
+	assert.False(t, NullableDate("bad").NormalizedEqual(Null))
+	assert.False(t, Null.NormalizedEqual("bad"))
 }
 
 func TestNullableDate_Value(t *testing.T) {
@@ -665,6 +681,13 @@ func TestNullableDate_Scan(t *testing.T) {
 		{name: "empty string", value: "", want: Null},
 		{name: "zero date 0000-00-00", value: "0000-00-00", want: Null},
 		{name: "zero date 0001-01-01", value: "0001-01-01", want: Null},
+		// Several SQL drivers return DATE and text columns as []byte,
+		// which must scan exactly like the same string.
+		{name: "[]byte", value: []byte("2023-12-25"), want: "2023-12-25"},
+		{name: "[]byte is normalized", value: []byte("25.12.2023"), want: "2023-12-25"},
+		{name: "empty []byte", value: []byte{}, want: Null},
+		{name: "zero date []byte", value: []byte("0001-01-01"), want: Null},
+		{name: "invalid []byte", value: []byte("invalid"), wantErr: true},
 		{name: "time.Time", value: time.Date(2023, 12, 25, 23, 59, 0, 0, time.UTC), want: "2023-12-25"},
 		{name: "zero time.Time", value: time.Time{}, want: Null},
 		{name: "invalid string", value: "invalid", wantErr: true},

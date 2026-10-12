@@ -24,7 +24,9 @@ import (
 // The first lang argument, if present, is used as a hint to
 // disambiguate dd/mm vs mm/dd ordering when both parts are numeric and
 // both are valid day and month values (e.g. "05/06/2024"). Pass
-// language.EN to bias toward US ordering.
+// language.EN to bias toward US ordering. An English ordinal suffix
+// marks the day and wins over the hint: "1st 02 2003" is 2003-02-01
+// also with language.EN.
 //
 // Accepted input shapes (case-insensitive, lenient whitespace):
 //
@@ -486,10 +488,15 @@ func (date Date) NormalizedOrNull(lang ...language.Code) NullableDate {
 }
 
 // NormalizedEqual returns true if two dates are equal after normalization.
+// An invalid date (including "") has no normalized value and is not equal
+// to any date, not even to an identical invalid string.
 func (date Date) NormalizedEqual(other Date) bool {
-	a, _ := date.Normalized()
-	b, _ := other.Normalized()
-	return a == b
+	a, err := date.Normalized()
+	if err != nil {
+		return false
+	}
+	b, err := other.Normalized()
+	return err == nil && a == b
 }
 
 // Compare compares the date with another Date.
@@ -708,13 +715,15 @@ func (date Date) ISOWeek() (year, week int) {
 }
 
 // IsToday returns true if the date is today in local time.
+// A valid date that is not in the normalized form is normalized first.
 func (date Date) IsToday() bool {
-	return date == OfToday()
+	return date.NormalizedEqual(OfToday())
 }
 
 // IsTodayInUTC returns true if the date is today in UTC time.
+// A valid date that is not in the normalized form is normalized first.
 func (date Date) IsTodayInUTC() bool {
-	return date == OfNowInUTC()
+	return date.NormalizedEqual(OfNowInUTC())
 }
 
 // AfterToday returns true if the date is after today in local time.
@@ -738,7 +747,7 @@ func (date Date) BeforeTodayInUTC() bool {
 }
 
 // Scan implements the database/sql.Scanner interface.
-// Accepts string, time.Time, or nil values.
+// Accepts string, []byte, time.Time, or nil values.
 // Empty strings and zero dates ("0000-00-00", "0001-01-01") are treated as empty Date.
 func (date *Date) Scan(value any) (err error) {
 	switch x := value.(type) {
@@ -752,6 +761,9 @@ func (date *Date) Scan(value any) (err error) {
 		}
 		*date = d
 		return nil
+
+	case []byte:
+		return date.Scan(string(x))
 
 	case time.Time:
 		*date = OfTime(x)
@@ -966,9 +978,11 @@ func normalizeDate(str string, langHint language.Code) (string, bool, error) {
 	case len0 == 2 && len1 == 2 && len2 == 4:
 		monthMustBeFirst := validMonth(val0) && !validMonth(val1)
 		// The ordinal day hint and the language hint only decide
-		// the order if both numbers could be the month
+		// the order if both numbers could be the month.
+		// An ordinal suffix in the input marks the day explicitly,
+		// so the language hint only applies without one.
 		ambiguous := validMonth(val0) && validMonth(val1)
-		if monthMustBeFirst || (ambiguous && (dayHint == 1 || langHint == "en")) {
+		if monthMustBeFirst || (ambiguous && (dayHint == 1 || (dayHint == -1 && langHint == "en"))) {
 			// MM DD YYYY
 			parts[0], parts[1] = parts[1], parts[0]
 			val0, val1 = val1, val0

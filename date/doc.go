@@ -5,7 +5,8 @@
 // "Dec 25, 2023" or "1. Dezember 2016" into "2023-12-25".
 // Numeric dates are read day first. An English language hint
 // (language.EN, "en-US") switches to month first, but only for dates
-// like "05/06/2024" where both orders are valid.
+// like "05/06/2024" where both orders are valid and no ordinal suffix
+// like "1st" marks the day.
 // Two-digit years below 45 are read as 20xx, all others as 19xx.
 //
 // The package includes:
@@ -19,8 +20,7 @@
 //   - [Parser], [Formatter] and [Format] for the strfmt package
 //
 // Methods normalize their input, so a valid but non-normalized Date
-// like "25.12.2023" works everywhere except in == comparisons
-// and [Date.IsToday].
+// like "25.12.2023" works everywhere except in == comparisons.
 // No type in this package implements json.Unmarshaler:
 // decoded JSON strings are stored as they are.
 //

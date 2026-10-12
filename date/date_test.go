@@ -786,6 +786,11 @@ func TestDate_Scan(t *testing.T) {
 		wantErr bool
 	}{
 		{name: "string", value: "2023-12-25", want: "2023-12-25"},
+		// Several SQL drivers return DATE and text columns as []byte,
+		// which must scan exactly like the same string.
+		{name: "[]byte", value: []byte("2023-12-25"), want: "2023-12-25"},
+		{name: "[]byte is normalized", value: []byte("25.12.2023"), want: "2023-12-25"},
+		{name: "invalid []byte", value: []byte("invalid"), wantErr: true},
 		{name: "time.Time", value: time.Date(2023, 12, 25, 0, 0, 0, 0, time.UTC), want: "2023-12-25"},
 		{name: "nil", value: nil, want: ""},
 		{name: "invalid type", value: 123, wantErr: true},
@@ -1055,6 +1060,15 @@ func TestDate_NormalizedOrNull(t *testing.T) {
 func TestDate_NormalizedEqual(t *testing.T) {
 	assert.True(t, Date("2023-12-25").NormalizedEqual("25.12.2023"))
 	assert.False(t, Date("2023-12-25").NormalizedEqual("2023-12-26"))
+	// An invalid date has no normalized value, so it must not be equal
+	// to anything: two different garbage strings are not the same date,
+	// and neither is an identical invalid string (like NaN != NaN).
+	assert.False(t, Date("bad").NormalizedEqual("worse"))
+	assert.False(t, Date("bad").NormalizedEqual("bad"))
+	assert.False(t, Date("bad").NormalizedEqual("2023-12-25"))
+	assert.False(t, Date("2023-12-25").NormalizedEqual("bad"))
+	// "" is Invalid for Date, see NullableDate for a valid empty date
+	assert.False(t, Date("").NormalizedEqual(""))
 }
 
 // Additional comparison tests
@@ -1181,11 +1195,17 @@ func TestDate_IsToday(t *testing.T) {
 	today := OfToday()
 	assert.True(t, today.IsToday())
 	assert.False(t, Date("2020-01-01").IsToday())
+	// Like After and Before, IsToday compares the date, not its spelling:
+	// a valid but non-normalized today is still today.
+	assert.True(t, Date(today.Format("02.01.2006")).IsToday())
+	assert.False(t, Date("invalid").IsToday())
 }
 
 func TestDate_IsTodayInUTC(t *testing.T) {
 	today := OfNowInUTC()
 	assert.True(t, today.IsTodayInUTC())
+	// A valid but non-normalized today is still today, see TestDate_IsToday
+	assert.True(t, Date(today.Format("02.01.2006")).IsTodayInUTC())
 }
 
 func TestDate_AfterToday(t *testing.T) {
@@ -1281,6 +1301,14 @@ func TestNormalize_HintOnlyDecidesAmbiguousOrder(t *testing.T) {
 		{name: "DE hint, ambiguous", str: "05/06/2024", lang: []language.Code{language.DE}, want: "2024-06-05"},
 		{name: "no hint, ambiguous", str: "05/06/2024", want: "2024-06-05"},
 		{name: "ordinal day, ambiguous", str: "02 1st 2003", want: "2003-02-01"},
+		// The ordinal suffix is written into the input and marks the day
+		// explicitly, while the language hint is only a guess about the
+		// whole document, so the suffix must win over the hint in both orders.
+		{name: "ordinal day first, ambiguous", str: "1st 02 2003", want: "2003-02-01"},
+		{name: "ordinal day first, ambiguous, EN hint", str: "1st 02 2003", lang: []language.Code{language.EN}, want: "2003-02-01"},
+		{name: "ordinal day second, ambiguous, EN hint", str: "02 1st 2003", lang: []language.Code{language.EN}, want: "2003-02-01"},
+		{name: "ordinal day first, ambiguous, DE hint", str: "1st 02 2003", lang: []language.Code{language.DE}, want: "2003-02-01"},
+		{name: "ordinal day second, ambiguous, DE hint", str: "02 1st 2003", lang: []language.Code{language.DE}, want: "2003-02-01"},
 		// The ordinal suffix marks "1st" as the day, but 13 can't be the
 		// month, so the only valid reading is the 13th of January.
 		// The suffix is just a hint like the language, and a hint must not

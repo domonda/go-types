@@ -31,7 +31,7 @@ const (
 )
 ```
 
-A `Date` holds whatever string you assign. Methods normalize on demand, so `Date("25.12.2023")` is valid and behaves like `"2023-12-25"` in every method except `==`, `IsToday` and `IsTodayInUTC`. Normalize once at the boundary (`Normalize`, `ScanString`, `Scan`) to store the canonical form.
+A `Date` holds whatever string you assign. Methods normalize on demand, so `Date("25.12.2023")` is valid and behaves like `"2023-12-25"` in every method except `==`. Normalize once at the boundary (`Normalize`, `ScanString`, `Scan`) to store the canonical form.
 
 ### Parsing
 
@@ -52,7 +52,7 @@ Rules for numeric dates:
 - **Day first by default.** `"05/06/2024"` is 2024-06-05.
 - **Language hint.** The first `lang` argument is a hint. Only its first two letters count, normalized, so `language.EN`, `"EN"`, `"en-US"` and `"eng"` all mean English. Only English changes the result: it reads month first.
 - **The hint only decides ambiguous dates.** It applies only when both numbers are 1 to 12. `"15.06.2024"` and `"06/15/2024"` both give 2024-06-15 with any hint. The separator never matters.
-- **Ordinal suffix.** A suffix like `"1st"` marks the day for ambiguous dates: `"02 1st 2003"` is 2003-02-01.
+- **Ordinal suffix.** A suffix like `"1st"` marks the day for ambiguous dates and wins over the hint: `"02 1st 2003"` and `"1st 02 2003"` are 2003-02-01, also with `language.EN`.
 - **Two-digit years.** 00 to 44 become 2000 to 2044, 45 to 99 become 1945 to 1999.
 
 ### Functions
@@ -114,13 +114,13 @@ Rules for numeric dates:
 | Method                                             | Description                                        |
 |----------------------------------------------------|----------------------------------------------------|
 | `Compare(other)`                                   | -1, 0 or +1 comparing the normalized strings. Invalid dates compare like `""`. |
-| `NormalizedEqual(other)`                           | True if both normalize to the same string (two invalid dates are equal). |
+| `NormalizedEqual(other)`                           | True if both normalize to the same string. False if either is invalid, even for identical strings. |
 | `After(other)`, `Before(other)`                    | Strict order of the UTC midnights. Zero and invalid dates count as the zero time. |
 | `EqualOrAfter(other)`, `EqualOrBefore(other)`      | Inclusive variants.                                |
 | `WithinIncl(from, until)`                          | `from <= date <= until`.                           |
 | `BetweenExcl(after, before)`                       | `after < date < before`.                           |
 | `AfterTime(t)`, `BeforeTime(t)`                    | Compares midnight of the date in `t`'s location with `t`. |
-| `IsToday()`, `IsTodayInUTC()`                      | `date == OfToday()` / `date == OfNowInUTC()`, a raw string comparison. |
+| `IsToday()`, `IsTodayInUTC()`                      | `NormalizedEqual(OfToday())` / `NormalizedEqual(OfNowInUTC())`. |
 | `AfterToday()`, `AfterTodayInUTC()`, `BeforeToday()`, `BeforeTodayInUTC()` | `After` / `Before` today in the local time zone or UTC. |
 
 ### Arithmetic and period boundaries
@@ -163,7 +163,7 @@ const Null NullableDate = ""
 | `Date()`                                           | Plain conversion to `Date`, no null check.         |
 | `Set(d)`, `SetNull()`                              | Assign a `Date` or `Null`.                         |
 | `Valid()`, `Validate()`                            | Null is valid, otherwise like `Date`.              |
-| `ValidAndNotNull()`                                | `Date(n).Valid()`. True for `"0001-01-01"` although it is null. |
+| `ValidAndNotNull()`                                | Valid and not null, so false for the zero dates.   |
 | `ValidAndNormalized()`                             | True for `Null` and for a valid `YYYY-MM-DD` that is not a zero date. |
 | `Normalized(lang...)`                              | `Null` for null input, otherwise like `Date`.      |
 | `NormalizedOrNull(lang...)`, `NormalizedOrUnchanged(lang...)` | As for `Date`.                                     |
@@ -223,14 +223,14 @@ const YearMonthNull NullableYearMonth = ""
 | `String()`                           | The raw string.                                    |
 | `Year()`, `Month()`                  | The parts, 0 if invalid.                           |
 | `Date(day)`                          | `"YYYY-MM-DD"` for `day`, without validation (`Date(30)` of February is invalid). |
-| `DateRange()`                        | First and last day of the month. Check `Valid` first, see Gotchas. |
+| `DateRange()`                        | First and last day of the month; `""`, `""` if invalid. |
 | `Format(layout)`                     | `""` if empty; `YearMonthLayout` returns the string as is; other layouts format the 1st of the month. |
-| `AddYears(n)`, `AddMonths(n)`        | Arithmetic; months roll over into years.           |
+| `AddYears(n)`, `AddMonths(n)`        | Arithmetic; months roll over into years. Invalid values are returned unchanged. |
 | `ContainsTime(t)`, `ContainsDate(d)` | True if `t` or `d` falls in the month (local time zone midnights). |
 | `Compare(other)`                     | String comparison.                                 |
 | `Nullable()`                         | Plain conversion to `NullableYearMonth`.           |
 
-`NullableYearMonth` has the same methods (null returns 0, `""`, `false` or null) plus `IsNull()` (only `""`; `"0000-00"` is zero but not null), `IsNotNull()`, `ValidAndNotNull()`, `Get()` (panics if null), `GetOr(defaultYearMonth)`, `Set(ym)`, `SetNull()` and `StringOr(nullString)`. Its `Date` and `DateRange` return `NullableDate`. Implements `nullable.NullSetable[YearMonth]`.
+`NullableYearMonth` has the same methods (null returns 0, `""`, `false` or null) plus `IsNull()` (only `""`; `"0000-00"` is zero but not null), `IsNotNull()`, `ValidAndNotNull()` (false for null and zero values), `Get()` (panics if null), `GetOr(defaultYearMonth)`, `Set(ym)`, `SetNull()` and `StringOr(nullString)`. Its `Date` and `DateRange` return `NullableDate`. Implements `nullable.NullSetable[YearMonth]`.
 
 ## YearQuarter and NullableYearQuarter
 
@@ -253,12 +253,12 @@ const YearQuarterNull NullableYearQuarter = ""
 | `FirstMonth()`                                     | January, April, July or October; 0 if invalid.     |
 | `Date(monthInQuarter, day)`                        | Date in the quarter via `Of`, so values roll over; `""` if invalid. |
 | `DateRange()`                                      | First and last day of the quarter; `""`, `""` if invalid. |
-| `AddYears(n)`, `AddQuarters(n)`                    | Arithmetic; quarters roll over into years.         |
+| `AddYears(n)`, `AddQuarters(n)`                    | Arithmetic; quarters roll over into years. Invalid values are returned unchanged. |
 | `ContainsTime(t)`, `ContainsDate(d)`, `ContainsYearMonth(ym)` | True if the value falls in the quarter.            |
 | `Compare(other)`                                   | String comparison.                                 |
 | `Nullable()`                                       | Plain conversion to `NullableYearQuarter`.         |
 
-`NullableYearQuarter` has the same methods plus the same null helpers as `NullableYearMonth`. Its `Date` and `DateRange` return `Date`, not `NullableDate`. Implements `nullable.NullSetable[YearQuarter]`.
+`NullableYearQuarter` has the same methods plus the same null helpers as `NullableYearMonth`. Its `Date` and `DateRange` return `NullableDate`. Implements `nullable.NullSetable[YearQuarter]`.
 
 ## Format, Formatter and Parser
 
@@ -317,8 +317,9 @@ Reading values:
 | `Scan(nil)`                                | `""`                      | `Null`                      |
 | `Scan("")`, `"0000-00-00"`, `"0001-01-01"` | stored as is              | `Null`                      |
 | `Scan` other `string`                      | normalized, or an error   | normalized, or an error     |
+| `Scan([]byte)`                             | like `string`             | like `string`               |
 | `Scan(time.Time)`                          | `OfTime(t)`, `""` if zero | `OfTime(t)`, `Null` if zero |
-| `Scan([]byte)` and other types             | error                     | error                       |
+| `Scan` of other types                      | error                     | error                       |
 | JSON string                                | stored as is, not checked | stored as is, not checked   |
 | JSON `null`                                | field left unchanged      | field left unchanged        |
 
@@ -327,18 +328,15 @@ No type in this package has `UnmarshalJSON`, so `encoding/json` stores any JSON 
 ## Gotchas
 
 - **Valid, Validate, Normalized, ValidAndNormalized.** `Valid` and `Validate` accept any parseable form: `Date("25.12.2023").Valid()` is true. `Normalized` returns the canonical form. `ValidAndNormalized` is true only for an exact `YYYY-MM-DD`. `Date("")` is invalid, `NullableDate("")` is valid.
-- **`==` compares raw strings.** `Date("25.12.2023") != Date("2023-12-25")`. Use `NormalizedEqual` or `Compare`, or normalize on input. `IsToday` and `IsTodayInUTC` use `==`, so they are false for a non-normalized today.
+- **`==` compares raw strings.** `Date("25.12.2023") != Date("2023-12-25")`. Use `NormalizedEqual` or `Compare`, or normalize on input.
 - **Zero dates.** `"0001-01-01"` is `Valid()` and `IsZero()`. `"0000-00-00"` is `IsZero()` but not valid. Both are written as SQL NULL and read back as `""`. `Date` encodes them in JSON as they are, `NullableDate` as `null`.
 - **Day first.** `"05/06/2024"` is June 5 unless the hint is English. The hint never changes a date that has only one valid reading. Only the first `lang` argument is used.
 - **Two-digit years** pivot at 45: `"25.12.44"` is 2044-12-25, `"25.12.45"` is 1945-12-25.
 - **Invalid and zero dates become the zero time.** `Date("bad").Format("02.01.2006")` returns `"01.01.0001"`, `Date("").AddDays(1)` returns `"0001-01-02"`, and `Date("bad").Before("2024-01-01")` is true. Check `Valid` (or `IsZero`) before formatting or doing arithmetic. `Format(Layout)` instead returns an invalid date unchanged.
 - **JSON is not normalized.** `Date` and `NullableDate` encode the raw string, and decoding does not validate. Normalize before encoding if consumers expect `YYYY-MM-DD`.
-- **`Scan` rejects `[]byte`.** Drivers that return dates as `[]byte` need a `time.Time` or `string` column type.
 - **Null ordering.** `Null` is before every date: `Null.Before(d)` and `d.After(Null)` are true, `Null.BeforeToday()` is true.
-- **`ValidAndNotNull` and zero values.** `NullableDate("0001-01-01").ValidAndNotNull()` is true although `IsNull()` is true. The same holds for `NullableYearMonth("0001-01")` and `NullableYearQuarter("0001-Q1")`. Combine `IsNotNull()` with `Valid()` if zero values must count as null.
 - **Upper-case `Q`.** `YearQuarter("2024-q1").Valid()` is false, while `PeriodRange("2024-q1")` works.
-- **`YearMonth.DateRange` does not validate.** `YearMonth("2023-13").DateRange()` returns `"2023-13-01"` and `"0001-01-31"`. `YearQuarter.DateRange` returns empty dates for invalid input.
-- **Nullable period types differ.** `NullableYearMonth.DateRange` returns `NullableDate`, `NullableYearQuarter.DateRange` returns `Date`. Their `IsNull` is only `""`, while `NullableDate.IsNull` also covers the zero dates.
+- **Nullable period types differ from `NullableDate`.** The `IsNull` of `NullableYearMonth` and `NullableYearQuarter` is only `""`, while `NullableDate.IsNull` also covers the zero dates.
 - **`Format.AssignString` with empty input** assigns a non-nil pointer to the zero time to a `*time.Time` destination, not nil.
 - **`ParseTimeDefaultLayouts` is a shared package variable.** Pass layouts to `ParseTime` instead of changing it.
 

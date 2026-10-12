@@ -130,13 +130,21 @@ func (yq YearQuarter) Nullable() NullableYearQuarter {
 }
 
 // AddYears returns a new year-quarter with the specified number of years added.
+// Returns the year-quarter unchanged if it is not valid.
 func (yq YearQuarter) AddYears(years int) YearQuarter {
+	if !yq.Valid() {
+		return yq
+	}
 	return YearQuarterFrom(yq.Year()+years, yq.Quarter())
 }
 
 // AddQuarters returns a new year-quarter with the specified number of quarters added.
 // Handles quarter overflow by adjusting the year accordingly.
+// Returns the year-quarter unchanged if it is not valid.
 func (yq YearQuarter) AddQuarters(quarters int) YearQuarter {
+	if !yq.Valid() {
+		return yq
+	}
 	year := yq.Year()
 	quarter := yq.Quarter()
 

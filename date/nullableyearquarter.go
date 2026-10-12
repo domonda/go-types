@@ -33,9 +33,10 @@ func (yq NullableYearQuarter) Valid() bool {
 	return yq.Validate() == nil
 }
 
-// ValidAndNotNull returns if the year-quarter is valid and not Null or Zero.
+// ValidAndNotNull returns if the year-quarter is valid and not Null or Zero,
+// so it is false for "0001-Q1" although IsNull is false, see IsZero.
 func (yq NullableYearQuarter) ValidAndNotNull() bool {
-	return YearQuarter(yq).Valid()
+	return !yq.IsZero() && YearQuarter(yq).Valid()
 }
 
 // IsZero returns true when the year-quarter is any of ["", "0000-Q0", "0001-Q1"].
@@ -132,26 +133,28 @@ func (yq NullableYearQuarter) FirstMonth() time.Month {
 	return YearQuarter(yq).FirstMonth()
 }
 
-// Date returns a Date for the given month (1-3 within quarter) and day.
-// Returns an empty Date if the NullableYearQuarter is null.
-func (yq NullableYearQuarter) Date(monthInQuarter, day int) Date {
+// Date returns a NullableDate for the given month (1-3 within quarter) and day.
+// Returns Null if the NullableYearQuarter is null or not valid.
+func (yq NullableYearQuarter) Date(monthInQuarter, day int) NullableDate {
 	if yq.IsNull() {
-		return ""
+		return Null
 	}
-	return YearQuarter(yq).Date(monthInQuarter, day)
+	return NullableDate(YearQuarter(yq).Date(monthInQuarter, day))
 }
 
-// DateRange returns the first and last date of the quarter.
-// Returns empty dates if the NullableYearQuarter is null.
-func (yq NullableYearQuarter) DateRange() (fromDate, untilDate Date) {
+// DateRange returns the first and last NullableDate of the quarter.
+// Returns Null dates if the NullableYearQuarter is null or not valid.
+func (yq NullableYearQuarter) DateRange() (fromDate, untilDate NullableDate) {
 	if yq.IsNull() {
-		return "", ""
+		return Null, Null
 	}
-	return YearQuarter(yq).DateRange()
+	from, until := YearQuarter(yq).DateRange()
+	return NullableDate(from), NullableDate(until)
 }
 
 // AddYears returns a new NullableYearQuarter with the specified number of years added.
-// Returns null if the NullableYearQuarter is null.
+// Returns null if the NullableYearQuarter is null
+// and an invalid NullableYearQuarter unchanged.
 func (yq NullableYearQuarter) AddYears(years int) NullableYearQuarter {
 	if yq.IsNull() {
 		return YearQuarterNull
@@ -160,7 +163,8 @@ func (yq NullableYearQuarter) AddYears(years int) NullableYearQuarter {
 }
 
 // AddQuarters returns a new NullableYearQuarter with the specified number of quarters added.
-// Returns null if the NullableYearQuarter is null.
+// Returns null if the NullableYearQuarter is null
+// and an invalid NullableYearQuarter unchanged.
 // Handles quarter overflow by adjusting the year accordingly.
 func (yq NullableYearQuarter) AddQuarters(quarters int) NullableYearQuarter {
 	if yq.IsNull() {

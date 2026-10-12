@@ -278,6 +278,11 @@ func TestYearQuarter_AddYears(t *testing.T) {
 		{name: "add 5 years", yq: "2020-Q3", years: 5, want: "2025-Q3"},
 		{name: "subtract 1 year", yq: "2023-Q2", years: -1, want: "2022-Q2"},
 		{name: "add 0 years", yq: "2023-Q2", years: 0, want: "2023-Q2"},
+		// An invalid year-quarter has no year to add to. It must stay
+		// unchanged, so it stays invalid and Validate reports the original
+		// value, instead of becoming a bogus year-quarter like "0001-Q0".
+		{name: "invalid unchanged", yq: "bad", years: 1, want: "bad"},
+		{name: "invalid quarter unchanged", yq: "2023-Q5", years: 1, want: "2023-Q5"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -301,6 +306,9 @@ func TestYearQuarter_AddQuarters(t *testing.T) {
 		{name: "quarter underflow", yq: "2023-Q1", quarters: -1, want: "2022-Q4"},
 		{name: "add 0 quarters", yq: "2023-Q2", quarters: 0, want: "2023-Q2"},
 		{name: "add 2 years worth", yq: "2023-Q2", quarters: 8, want: "2025-Q2"},
+		// Invalid stays unchanged like in AddYears, not "0000-Q1"
+		{name: "invalid unchanged", yq: "bad", quarters: 1, want: "bad"},
+		{name: "invalid quarter unchanged", yq: "2023-Q5", quarters: 1, want: "2023-Q5"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -451,6 +459,9 @@ func TestNullableYearQuarter_ValidAndNotNull(t *testing.T) {
 		{name: "valid", yq: "2023-Q2", want: true},
 		{name: "null", yq: YearQuarterNull, want: false},
 		{name: "invalid", yq: "2023-Q5", want: false},
+		// Documented as "not Null or Zero": "0001-Q1" is the year-quarter of
+		// the zero time.Time, a placeholder and not a real reporting period.
+		{name: "zero 0001-Q1", yq: "0001-Q1", want: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -674,16 +685,20 @@ func TestNullableYearQuarter_FirstMonth(t *testing.T) {
 }
 
 func TestNullableYearQuarter_Date(t *testing.T) {
+	// Like NullableYearMonth.Date, the date of a nullable period is a
+	// NullableDate, so a null period gives a null date that is written
+	// as SQL and JSON null instead of an empty Date.
 	tests := []struct {
 		name           string
 		yq             NullableYearQuarter
 		monthInQuarter int
 		day            int
-		want           Date
+		want           NullableDate
 	}{
 		{name: "first day", yq: "2023-Q2", monthInQuarter: 1, day: 1, want: "2023-04-01"},
 		{name: "mid quarter", yq: "2023-Q2", monthInQuarter: 2, day: 15, want: "2023-05-15"},
-		{name: "null", yq: YearQuarterNull, monthInQuarter: 1, day: 15, want: ""},
+		{name: "null", yq: YearQuarterNull, monthInQuarter: 1, day: 15, want: Null},
+		{name: "invalid", yq: "2023-Q5", monthInQuarter: 1, day: 15, want: Null},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -694,14 +709,17 @@ func TestNullableYearQuarter_Date(t *testing.T) {
 }
 
 func TestNullableYearQuarter_DateRange(t *testing.T) {
+	// Like NullableYearMonth.DateRange, the range of a nullable period is
+	// a pair of NullableDate, so a null period gives null bounds.
 	tests := []struct {
 		name      string
 		yq        NullableYearQuarter
-		wantFrom  Date
-		wantUntil Date
+		wantFrom  NullableDate
+		wantUntil NullableDate
 	}{
 		{name: "Q2 2023", yq: "2023-Q2", wantFrom: "2023-04-01", wantUntil: "2023-06-30"},
-		{name: "null", yq: YearQuarterNull, wantFrom: "", wantUntil: ""},
+		{name: "null", yq: YearQuarterNull, wantFrom: Null, wantUntil: Null},
+		{name: "invalid", yq: "2023-Q5", wantFrom: Null, wantUntil: Null},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

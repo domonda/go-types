@@ -33,9 +33,10 @@ func (ym NullableYearMonth) Valid() bool {
 	return ym.Validate() == nil
 }
 
-// ValidAndNotNull returns if the year-month is valid and not Null or Zero.
+// ValidAndNotNull returns if the year-month is valid and not Null or Zero,
+// so it is false for "0001-01" although IsNull is false, see IsZero.
 func (ym NullableYearMonth) ValidAndNotNull() bool {
-	return YearMonth(ym).Valid()
+	return !ym.IsZero() && YearMonth(ym).Valid()
 }
 
 // IsZero returns true when the year-month is any of ["", "0000-00", "0001-01"].
@@ -134,7 +135,7 @@ func (ym NullableYearMonth) Date(day int) NullableDate {
 }
 
 // DateRange returns the first and last NullableDate of the month.
-// Returns Null dates if the NullableYearMonth is null.
+// Returns Null dates if the NullableYearMonth is null or not valid.
 // Returns the date range [fromDate, untilDate] representing the entire month.
 func (ym NullableYearMonth) DateRange() (fromDate, untilDate NullableDate) {
 	if ym.IsNull() {
@@ -156,7 +157,8 @@ func (ym NullableYearMonth) Format(layout string) string {
 }
 
 // AddYears returns a new NullableYearMonth with the specified number of years added.
-// Returns null if the NullableYearMonth is null.
+// Returns null if the NullableYearMonth is null
+// and an invalid NullableYearMonth unchanged.
 func (ym NullableYearMonth) AddYears(years int) NullableYearMonth {
 	if ym.IsNull() {
 		return YearMonthNull
@@ -165,7 +167,8 @@ func (ym NullableYearMonth) AddYears(years int) NullableYearMonth {
 }
 
 // AddMonths returns a new NullableYearMonth with the specified number of months added.
-// Returns null if the NullableYearMonth is null.
+// Returns null if the NullableYearMonth is null
+// and an invalid NullableYearMonth unchanged.
 // Handles month overflow by adjusting the year accordingly.
 func (ym NullableYearMonth) AddMonths(months int) NullableYearMonth {
 	if ym.IsNull() {

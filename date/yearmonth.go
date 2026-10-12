@@ -105,7 +105,11 @@ func (ym YearMonth) Nullable() NullableYearMonth {
 // DateRange returns the first and last date of the month.
 // Returns the date range [fromDate, untilDate] representing the entire month
 // where untilDate is the last day of the month.
+// Returns empty dates if the year-month is not valid.
 func (ym YearMonth) DateRange() (fromDate, untilDate Date) {
+	if !ym.Valid() {
+		return "", ""
+	}
 	fromDate = ym.Date(1)
 	untilDate = Date(fromDate.Midnight().
 		AddDate(0, 1, 0).
@@ -130,13 +134,21 @@ func (ym YearMonth) Format(layout string) string {
 }
 
 // AddYears returns a new year-month with the specified number of years added.
+// Returns the year-month unchanged if it is not valid.
 func (ym YearMonth) AddYears(years int) YearMonth {
+	if !ym.Valid() {
+		return ym
+	}
 	return YearMonthFrom(ym.Year()+years, ym.Month())
 }
 
 // AddMonths returns a new year-month with the specified number of months added.
 // Handles month overflow by adjusting the year accordingly.
+// Returns the year-month unchanged if it is not valid.
 func (ym YearMonth) AddMonths(months int) YearMonth {
+	if !ym.Valid() {
+		return ym
+	}
 	return YearMonthOfTime(ym.Date(1).AddMonths(months).Midnight())
 }
 

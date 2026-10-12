@@ -240,6 +240,19 @@ func TestYearMonth_DateRange(t *testing.T) {
 	}
 }
 
+func TestYearMonth_DateRange_Invalid(t *testing.T) {
+	// An invalid year-month has no month to span, so like
+	// YearQuarter.DateRange it must give an empty range instead of
+	// dates computed from non-existent months that look like real bounds.
+	for _, ym := range []YearMonth{"2023-13", "2023-00", "bad", ""} {
+		t.Run(string(ym), func(t *testing.T) {
+			gotFrom, gotUntil := ym.DateRange()
+			require.Equal(t, Date(""), gotFrom)
+			require.Equal(t, Date(""), gotUntil)
+		})
+	}
+}
+
 func TestYearMonth_Format(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -273,6 +286,11 @@ func TestYearMonth_AddYears(t *testing.T) {
 		{name: "add 5 years", ym: "2020-06", years: 5, want: "2025-06"},
 		{name: "subtract 1 year", ym: "2023-03", years: -1, want: "2022-03"},
 		{name: "add 0 years", ym: "2023-03", years: 0, want: "2023-03"},
+		// An invalid year-month has no year to add to. It must stay
+		// unchanged, so it stays invalid and Validate reports the original
+		// value, instead of becoming a bogus year-month like "0001-00".
+		{name: "invalid unchanged", ym: "bad", years: 1, want: "bad"},
+		{name: "invalid month unchanged", ym: "2023-13", years: 1, want: "2023-13"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -295,6 +313,9 @@ func TestYearMonth_AddMonths(t *testing.T) {
 		{name: "subtract 1 month", ym: "2023-03", months: -1, want: "2023-02"},
 		{name: "month underflow", ym: "2023-01", months: -1, want: "2022-12"},
 		{name: "add 0 months", ym: "2023-03", months: 0, want: "2023-03"},
+		// Invalid stays unchanged like in AddYears, not "0001-02"
+		{name: "invalid unchanged", ym: "bad", months: 1, want: "bad"},
+		{name: "invalid month unchanged", ym: "2023-13", months: 1, want: "2023-13"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
