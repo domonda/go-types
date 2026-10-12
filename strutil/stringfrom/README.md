@@ -26,7 +26,7 @@ Every `*Ptr` function takes a pointer and optional `strForNil ...string` argumen
 | Function                                           | Description                                        |
 |----------------------------------------------------|----------------------------------------------------|
 | `Bool(boolVal bool, trueString, falseString string) string` | `trueString` if `boolVal` is true, else `falseString`. |
-| `Interface(i any) string`                          | Converts `i`, or the value `i` points to: a value of string kind as is, any other value with `fmt.Sprint`. A non-pointer value gives the same string as a pointer to it. Returns `""` for nil, a nil pointer, and a nil map, slice, func, channel or interface value. |
+| `Interface(i any) string`                          | Converts `i`, or the value `i` points to: a value with a `Format`, `Error` or `String` method, also one with a pointer receiver, with that method, a value of string kind as is, any other value with `fmt.Sprint`. A non-pointer value gives the same string as a pointer to it. Returns `""` for nil, a nil pointer, and a nil map, slice, func, channel or interface value. |
 
 None of the functions panics for nil input.
 
@@ -34,8 +34,6 @@ None of the functions panics for nil input.
 
 - `TimePtr` uses `time.Time.String`, which is not RFC 3339 and includes the monotonic clock reading for times from `time.Now()`, like `"2026-10-12 14:15:32.261641 +0200 CEST m=+0.000682459"`. Call `Round(0)` on the time or format it yourself if you need a stable layout.
 - `UUIDPtr` does not treat `uu.IDNil` as nil, unlike `TimePtr` with the zero time.
-- `Interface` dereferences one pointer level before formatting, so methods with a pointer receiver are lost: a type whose `String` method has a pointer receiver prints as its fields, like `"{1}"`, and `Interface(errors.New("boom"))` gives `"{boom}"`. Pass `err.Error()` or call `fmt.Sprint` yourself for such values.
-- `Interface` returns values of string kind without calling their `String` method: for `type color string` with a `String` method, `Interface(color("red"))` is `"red"`.
 - `Interface` dereferences only one level: a pointer to a non-nil pointer prints as an address.
 
 ## Example

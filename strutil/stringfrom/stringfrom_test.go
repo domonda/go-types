@@ -1,6 +1,7 @@
 package stringfrom
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"testing"
@@ -207,6 +208,65 @@ func TestInterface_NonStringValues(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			assert.Equal(t, tt.want, Interface(tt.val))
+		})
+	}
+}
+
+// ptrStringer implements fmt.Stringer with a pointer receiver.
+type ptrStringer struct{ n int }
+
+func (p *ptrStringer) String() string { return fmt.Sprintf("ptrStringer %d", p.n) }
+
+// ptrFormatter implements fmt.Formatter with a pointer receiver.
+type ptrFormatter struct{ n int }
+
+func (p *ptrFormatter) Format(f fmt.State, verb rune) { fmt.Fprintf(f, "ptrFormatter %d", p.n) }
+
+// color is of string kind and implements fmt.Stringer with a value receiver.
+type color string
+
+func (c color) String() string { return "color " + string(c) }
+
+// errCode is of string kind and implements error with a value receiver.
+type errCode string
+
+func (e errCode) Error() string { return "error code " + string(e) }
+
+// A type's own String or Error method is how it wants to be shown to
+// humans, so Interface must use it like fmt.Sprint does, also if the
+// method has a pointer receiver, like the one of the error returned by
+// errors.New, or if the type is of string kind. Formatting the fields
+// of the dereferenced value instead, like "{boom}", hides the message.
+// A value still returns the same string as a pointer to it,
+// and the nil handling stays: a nil pointer returns "" and its method
+// is not called.
+func TestInterface_FormattingMethods(t *testing.T) {
+	c := color("red")
+	for _, tt := range []struct {
+		name string
+		val  any
+		want string
+	}{
+		{name: "errors.New", val: errors.New("boom"), want: "boom"},
+		{name: "wrapped error", val: fmt.Errorf("outer: %w", errors.New("inner")), want: "outer: inner"},
+		{name: "pointer receiver Stringer", val: &ptrStringer{n: 1}, want: "ptrStringer 1"},
+		{name: "pointer receiver Stringer by value", val: ptrStringer{n: 2}, want: "ptrStringer 2"},
+		{name: "pointer receiver Formatter", val: &ptrFormatter{n: 3}, want: "ptrFormatter 3"},
+		{name: "string kind value receiver Stringer", val: color("red"), want: "color red"},
+		{name: "pointer to string kind value receiver Stringer", val: &c, want: "color red"},
+		{name: "string kind value receiver error", val: errCode("E1"), want: "error code E1"},
+		{name: "nil pointer receiver Stringer", val: (*ptrStringer)(nil), want: ""},
+		{name: "nil pointer to string kind Stringer", val: (*color)(nil), want: ""},
+		// Values without formatting methods are unchanged
+		{name: "int", val: 42, want: "42"},
+		{name: "string", val: "plain", want: "plain"},
+		{name: "struct", val: struct{ A int }{1}, want: "{1}"},
+		{name: "pointer to struct", val: &struct{ A int }{1}, want: "{1}"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			require.NotPanics(t, func() {
+				assert.Equal(t, tt.want, Interface(tt.val))
+			})
 		})
 	}
 }

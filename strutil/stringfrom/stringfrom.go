@@ -9,7 +9,9 @@
 //     [TimePtr] treats a pointer to the zero time like nil.
 //   - [Bool], which returns one of two passed strings.
 //   - [Interface], which converts any value, or the value a pointer points to:
-//     a value of string kind as is, other values with fmt.Sprint.
+//     a value with a Format, Error or String method, also one with a pointer
+//     receiver, with that method, a value of string kind as is,
+//     other values with fmt.Sprint.
 //     It returns "" for nil, a nil pointer,
 //     or a nil map, slice, func, channel or interface value.
 //
@@ -111,8 +113,11 @@ func Bool(boolVal bool, trueString, falseString string) string {
 
 // Interface converts i, or the value i points to, to a string,
 // so a non-pointer value returns the same string as a pointer to it.
-// A value of string kind is returned as is,
-// other values are formatted with fmt.Sprint.
+// If the value or a pointer to it has a Format, Error or String method,
+// the value is formatted with fmt.Sprint through a pointer to it,
+// so methods with a pointer receiver are used too.
+// Otherwise a value of string kind is returned as is,
+// and other values are formatted with fmt.Sprint.
 // Returns an empty string for nil, a nil pointer,
 // or a nil map, slice, func, channel or interface value.
 func Interface(i any) string {
@@ -123,12 +128,29 @@ func Interface(i any) string {
 	switch v.Kind() {
 	case reflect.Invalid:
 		return ""
-	case reflect.String:
-		return v.String()
 	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice, reflect.UnsafePointer:
 		if v.IsNil() {
 			return ""
 		}
 	}
+	// The method set of a pointer includes the methods with a value receiver
+	if ptrType := reflect.PointerTo(v.Type()); ptrType.Implements(formatterType) || ptrType.Implements(errorType) || ptrType.Implements(stringerType) {
+		if !v.CanAddr() {
+			// v is not a pointer target, format a pointer to a copy
+			ptr := reflect.New(v.Type())
+			ptr.Elem().Set(v)
+			v = ptr.Elem()
+		}
+		return fmt.Sprint(v.Addr().Interface())
+	}
+	if v.Kind() == reflect.String {
+		return v.String()
+	}
 	return fmt.Sprint(v.Interface())
 }
+
+var (
+	formatterType = reflect.TypeFor[fmt.Formatter]()
+	errorType     = reflect.TypeFor[error]()
+	stringerType  = reflect.TypeFor[fmt.Stringer]()
+)
