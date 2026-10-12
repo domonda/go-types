@@ -401,6 +401,17 @@ func TestID_CountryCode(t *testing.T) {
 	}
 }
 
+func TestID_CountryCode_GreeceIsEU(t *testing.T) {
+	// Greek VAT IDs use the EU's own code EL instead of the ISO 3166-1
+	// code GR and CountryCode returns it unchanged. EU membership checks
+	// on the country of a VAT ID must still treat Greece like every
+	// other member state.
+	id := ID("EL094019245")
+	require.True(t, id.Valid())
+	assert.Equal(t, country.EL, id.CountryCode())
+	assert.True(t, id.CountryCode().IsEU(), "CountryCode().IsEU()")
+}
+
 func TestID_IsMOSS(t *testing.T) {
 	assert.True(t, ID("EU372008134").IsMOSS())
 	assert.True(t, ID("eu 372 008 134").IsMOSS(), "IsMOSS normalizes first")

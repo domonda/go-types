@@ -15,7 +15,7 @@ const (
 	IDMaxLength = 14 + 2 // allow 2 spaces
 )
 
-// idRegex are matched with the result of ID.NormalizedUnchecked()
+// idRegex are matched with the normalized ID string of ID.Normalized()
 // that uppercases everything and removes spaces and punctuation
 // https://de.wikipedia.org/wiki/Umsatzsteuer-Identifikationsnummer
 // http://www.pruefziffernberechnung.de/U/USt-IdNr.shtml

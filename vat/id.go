@@ -33,9 +33,10 @@ const NorthernIrelandVATCountryCode = "XI"
 const ErrInvalidID errs.Sentinel = "invalid VAT ID"
 
 // ID is a european VAT ID.
-// ID implements the database/sql.Scanner and database/sql/driver.Valuer interfaces,
-// returning errors when the ID is not valid and can't be normalized.
-// Use NullableID to read and write SQL NULL values.
+// ID implements the database/sql.Scanner and database/sql/driver.Valuer interfaces
+// without validating the ID: Scan assigns the value as is and Value returns
+// the normalized ID, or the unchanged string if the ID can't be normalized.
+// Scanning SQL NULL returns an error, use NullableID to read and write SQL NULL values.
 type ID string
 
 // NormalizeVATID returns str as normalized VAT ID or an error.
