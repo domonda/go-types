@@ -526,6 +526,100 @@ func TestAmount_Cents(t *testing.T) {
 	}
 }
 
+// TestAmount_RoundingConventionAgrees pins that every way of rounding or
+// formatting an Amount to cents gives the same result for half cent ties.
+//
+// The contract is to round the shortest decimal representation of the
+// float64, which is the decimal a human typed or a JSON number literal
+// carried, half away from zero. The binary value of most such literals is
+// slightly off: 0.145 is stored as 0.14499999999999999001, 2.675 as
+// 2.67499999999999982236. Rounding the binary value (or multiplying it by
+// 100 first) turns those into 0.14 and 2.67, so the same invoice amount
+// would have 15 cents in one place and 14 in another, depending on which
+// method computed it.
+func TestAmount_RoundingConventionAgrees(t *testing.T) {
+	tests := []struct {
+		amount Amount
+		cents  int64
+		str    string
+	}{
+		{amount: 0.145, cents: 15, str: "0.15"},
+		{amount: -0.145, cents: -15, str: "-0.15"},
+		{amount: 0.125, cents: 13, str: "0.13"}, // exactly representable tie
+		{amount: -0.125, cents: -13, str: "-0.13"},
+		{amount: 1.005, cents: 101, str: "1.01"},
+		{amount: 2.675, cents: 268, str: "2.68"},
+		{amount: -2.675, cents: -268, str: "-2.68"},
+		{amount: 0.285, cents: 29, str: "0.29"},
+		{amount: 1.115, cents: 112, str: "1.12"},
+		{amount: 8.345, cents: 835, str: "8.35"},
+		{amount: 1234.565, cents: 123457, str: "1234.57"},
+		{amount: 0.144999, cents: 14, str: "0.14"}, // not a tie
+		{amount: 0.1 + 0.2, cents: 30, str: "0.30"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.str, func(t *testing.T) {
+			a := tt.amount
+			rounded := Amount(tt.cents) / 100 // the float64 nearest to the rounded decimal
+			assert.Equal(t, tt.cents, a.Cents(), "Cents")
+			assert.Equal(t, CentAmount(tt.cents), a.CentAmount(RoundHalfAwayFromZero), "CentAmount")
+			assert.Equal(t, rounded, a.RoundToCents(), "RoundToCents")
+			assert.Equal(t, rounded, a.RoundToDecimals(2), "RoundToDecimals(2)")
+			assert.Equal(t, NewDecimalAmount(tt.cents, 2), a.DecimalAmount(2, RoundHalfAwayFromZero), "DecimalAmount(2)")
+			assert.Equal(t, NewDecimalAmount(tt.cents, 2), DecimalAmountFrom(a).RoundToCents(RoundHalfAwayFromZero), "DecimalAmountFrom")
+			assert.Equal(t, tt.str, a.String(), "String")
+			assert.Equal(t, tt.str, a.FormatSep(0, '.', 2), "FormatSep")
+			assert.Equal(t, strings.Replace(tt.str, ".", ",", 1), a.FormatSep(0, ',', 2), "FormatSep decimal comma")
+			assert.Equal(t, "EUR "+tt.str, CurrencyAmount{Currency: EUR, Amount: a}.String(), "CurrencyAmount.String")
+			assert.Equal(t, tt.str+" EUR", CurrencyAmount{Currency: EUR, Amount: a}.FormatSep(false, 0, '.', 2), "CurrencyAmount.FormatSep")
+			assert.Equal(t, Rate(rounded), Rate(a).RoundToDecimals(2), "Rate.RoundToDecimals(2)")
+			assert.Equal(t, tt.str, Rate(a).FormatSep(0, '.', 2), "Rate.FormatSep")
+		})
+	}
+}
+
+// TestAmount_RoundingOtherDecimals pins that RoundToDecimals, FormatSep
+// and DecimalAmount round the shortest decimal representation at any
+// number of decimal places, not only at cents, and that the non-finite
+// values pass through every method unchanged.
+func TestAmount_RoundingOtherDecimals(t *testing.T) {
+	// 1.0005 is stored as 1.000499999999999989, 1.45 as 1.4499999999999999556
+	assert.Equal(t, Amount(1.001), Amount(1.0005).RoundToDecimals(3))
+	assert.Equal(t, "1.001", Amount(1.0005).FormatSep(0, '.', 3))
+	assert.Equal(t, NewDecimalAmount(1001, 3), Amount(1.0005).DecimalAmount(3, RoundHalfAwayFromZero))
+	assert.Equal(t, Amount(1.5), Amount(1.45).RoundToDecimals(1))
+	assert.Equal(t, "1.5", Amount(1.45).FormatSep(0, '.', 1))
+	assert.Equal(t, "2", Amount(1.5).FormatSep(0, '.', 0), "FormatSep must round half away from zero, not to even")
+	assert.Equal(t, "-3", Amount(-2.5).FormatSep(0, '.', 0))
+	assert.Equal(t, "1,234.57", Amount(1234.565).FormatSep(',', '.', 2))
+	// Values with fewer decimals are padded, not rounded
+	assert.Equal(t, "0.1450", Amount(0.145).FormatSep(0, '.', 4))
+	assert.Equal(t, "0.145", Amount(0.145).FormatSep(0, '.', -1))
+	// Rounding modes other than half away from zero also see the decimal
+	assert.Equal(t, NewDecimalAmount(14, 2), Amount(0.145).DecimalAmount(2, RoundHalfToEven))
+	assert.Equal(t, NewDecimalAmount(15, 2), Amount(0.141).DecimalAmount(2, RoundUp))
+	assert.Equal(t, NewDecimalAmount(-15, 2), Amount(-0.141).DecimalAmount(2, RoundFloor))
+	assert.Equal(t, NewDecimalAmount(0, 2), Amount(0.001).DecimalAmount(2, RoundDown))
+	// Negative zero keeps its sign like math.Round does
+	assert.True(t, Amount(-0.001).RoundToCents().Signbit(), "-0.001 rounds to -0")
+
+	nan, posInf, negInf := Amount(math.NaN()), Amount(math.Inf(1)), Amount(math.Inf(-1))
+	assert.True(t, nan.RoundToCents().IsNaN())
+	assert.True(t, nan.RoundToDecimals(3).IsNaN())
+	assert.Equal(t, posInf, posInf.RoundToCents())
+	assert.Equal(t, negInf, negInf.RoundToDecimals(-2))
+	assert.Equal(t, "NaN", nan.String())
+	assert.Equal(t, "+Inf", posInf.String())
+	assert.Equal(t, "-Inf", negInf.FormatSep(',', '.', 2))
+	assert.True(t, nan.DecimalAmount(2, RoundHalfAwayFromZero).IsNaN())
+	assert.True(t, negInf.DecimalAmount(2, RoundHalfAwayFromZero).IsInf(-1))
+	// Beyond the DecimalAmount range a finite Amount maps to ±Inf
+	assert.True(t, Amount(1e300).DecimalAmount(0, RoundHalfAwayFromZero).IsInf(1))
+	assert.True(t, Amount(-1e17).DecimalAmount(2, RoundHalfAwayFromZero).IsInf(-1))
+	assert.Panics(t, func() { Amount(1).DecimalAmount(MaxDecimalAmountScale+1, RoundHalfAwayFromZero) })
+	assert.Panics(t, func() { Amount(1).DecimalAmount(-1, RoundHalfAwayFromZero) })
+}
+
 // TestAmount_WithinOneCent pins the tolerance used to compare amounts
 // from different sources (e.g. invoice total vs. sum of line items)
 // where rounding of intermediate results can differ by one cent.

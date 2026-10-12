@@ -81,11 +81,17 @@ func (a *Amount) ScanString(source string, validate bool) error {
 	return nil
 }
 
-// Cents returns the amount rounded to cents.
+// Cents returns the amount rounded half away from zero to whole cents.
+// Like Amount.CentAmount it rounds the shortest decimal representation
+// of the float64 value, so Amount(0.145) has 15 cents.
 // The result is undefined for infinite and NaN amounts,
 // see Amount.CentAmount for a conversion that handles them.
 func (a Amount) Cents() int64 {
-	return int64(math.Round(float64(a) * 100))
+	if !a.Valid() {
+		// Keep the platform dependent conversion of non-finite values
+		return int64(math.Round(float64(a) * 100))
+	}
+	return int64(a.CentAmount(RoundHalfAwayFromZero))
 }
 
 // CentAmount returns the amount rounded to whole cents
@@ -128,12 +134,15 @@ func (a Amount) CentAmount(rounding RoundingMode) CentAmount {
 
 // DecimalAmount converts the float64 Amount to an exact fixed-point
 // DecimalAmount rounded to the given scale with the given rounding mode.
+// Like Amount.CentAmount it rounds the shortest decimal representation
+// of the float64 value, so Amount(0.145) rounds half away from zero
+// to 0.15 and not to the 0.14 of its binary value.
 // A NaN or infinite Amount maps to the corresponding non-finite DecimalAmount
 // and an out-of-range value maps to ±Inf; it panics only if scale is out of
 // range. See DecimalAmountFrom for a conversion that keeps the full float64
 // precision instead of rounding to a fixed scale.
 func (a Amount) DecimalAmount(scale int, rounding RoundingMode) DecimalAmount {
-	return mustDecimalFromFloat(float64(a), scale, rounding)
+	return decimalFromFloatRounded(float64(a), 64, scale, rounding)
 }
 
 // WithinOneCent returns true if a and b are equal
@@ -148,16 +157,48 @@ func (a Amount) RoundToInt() Amount {
 	return Amount(math.Round(float64(a)))
 }
 
-// RoundToCents returns the amount rounded to cents (2 decimal places)
+// RoundToCents returns the amount rounded half away from zero
+// to cents (2 decimal places), see Amount.RoundToDecimals.
 func (a Amount) RoundToCents() Amount {
-	return Amount(math.Round(float64(a)*100) / 100)
+	return a.RoundToDecimals(2)
 }
 
-// RoundToDecimals returns the amount rounded
+// RoundToDecimals returns the amount rounded half away from zero
 // to the passed number of decimal places.
+// Negative decimals round to tens, hundreds, and so on.
+// Like Amount.CentAmount it rounds the shortest decimal representation
+// of the float64 value, so Amount(0.145).RoundToDecimals(2) is 0.15
+// and not the 0.14 of its binary value.
+// NaN and infinite amounts are returned unchanged.
 func (a Amount) RoundToDecimals(decimals int) Amount {
-	pow := math.Pow10(decimals)
-	return Amount(math.Round(float64(a)*pow) / pow)
+	return Amount(roundShortestDecimal(float64(a), decimals))
+}
+
+// roundShortestDecimal returns f rounded half away from zero to the passed
+// number of decimal places, where negative decimals round to tens, hundreds,
+// and so on. It rounds the shortest decimal representation of f, which is
+// the decimal literal that parses back to f, instead of its binary value.
+// NaN and ±Inf are returned unchanged.
+func roundShortestDecimal(f float64, decimals int) float64 {
+	if math.IsNaN(f) || math.IsInf(f, 0) {
+		return f
+	}
+	intDigits, fracDigits, _ := strings.Cut(strconv.FormatFloat(math.Abs(f), 'f', -1, 64), ".")
+	if len(fracDigits) <= decimals {
+		return f // nothing to round
+	}
+	digits := roundDecimalDigits(intDigits, fracDigits, decimals, math.Signbit(f), RoundHalfAwayFromZero)
+	if digits == "" {
+		digits = "0"
+	}
+	str := digits + "e" + strconv.Itoa(-decimals)
+	if math.Signbit(f) {
+		str = "-" + str
+	}
+	// A result beyond the float64 range parses as ±Inf with a range error,
+	// which is the infinity that rounding with float64 math also yields
+	rounded, _ := strconv.ParseFloat(str, 64)
+	return rounded
 }
 
 // String returns the amount rounded to two decimal places
@@ -257,14 +298,21 @@ func (ptr *Amount) AmountOr(defaultVal Amount) Amount {
 // Valid values for decimalSep are '.' and ','.
 // If thousandsSep is not zero, then the integer part of the number is grouped
 // with thousandsSep between every group of 3 digits.
-// Valid values for thousandsSep are [0, ',', '.']
+// Valid values for thousandsSep are 0 (no grouping), ',', '.', ' '
+// and the apostrophe,
 // and thousandsSep must be different from decimalSep.
-// The precision argument controls the number of digits (excluding the exponent).
-// Note that the last digit is not rounded!
+// The precision argument is the number of decimal places, padded with zeros.
+// The amount is rounded to them half away from zero like Amount.RoundToDecimals
+// does, so Amount(0.125) and Amount(0.145) format as "0.13" and "0.15"
+// with precision 2.
 // The special precision -1 uses the smallest number of digits
-// necessary such that ParseFloat will return f exactly.
+// necessary such that ParseFloat will return the amount exactly.
 func (a Amount) FormatSep(thousandsSep, decimalSep rune, precision int) string {
-	return float.Format(float64(a), thousandsSep, decimalSep, precision, true)
+	f := float64(a)
+	if precision >= 0 {
+		f = roundShortestDecimal(f, precision)
+	}
+	return float.Format(f, thousandsSep, decimalSep, precision, true)
 }
 
 // BigFloat returns m as a new big.Float

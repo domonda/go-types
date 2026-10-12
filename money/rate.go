@@ -114,11 +114,15 @@ func (r Rate) RoundToInt() Rate {
 	return Rate(math.Round(float64(r)))
 }
 
-// RoundToDecimals returns the value rounded
+// RoundToDecimals returns the value rounded half away from zero
 // to the passed number of decimal places.
+// Negative decimals round to tens, hundreds, and so on.
+// Like Amount.RoundToDecimals it rounds the shortest decimal
+// representation of the float64 value, so Rate(0.145).RoundToDecimals(2)
+// is 0.15 and not the 0.14 of its binary value.
+// NaN and infinite rates are returned unchanged.
 func (r Rate) RoundToDecimals(decimals int) Rate {
-	pow := math.Pow10(decimals)
-	return Rate(math.Round(float64(r)*pow) / pow)
+	return Rate(roundShortestDecimal(float64(r), decimals))
 }
 
 // FormatSep formats the Rate similar to strconv.FormatFloat with the 'f' format option,
@@ -127,14 +131,20 @@ func (r Rate) RoundToDecimals(decimals int) Rate {
 // Valid values for decimalSep are '.' and ','.
 // If thousandsSep is not zero, then the integer part of the number is grouped
 // with thousandsSep between every group of 3 digits.
-// Valid values for thousandsSep are [0, ',', '.']
+// Valid values for thousandsSep are 0 (no grouping), ',', '.', ' '
+// and the apostrophe,
 // and thousandsSep must be different from decimalSep.
-// The precision argument controls the number of digits (excluding the exponent).
-// Note that the last digit is not rounded!
+// The precision argument is the number of decimal places, padded with zeros.
+// The rate is rounded to them half away from zero like Rate.RoundToDecimals
+// does, so Rate(0.145) formats as "0.15" with precision 2.
 // The special precision -1 uses the smallest number of digits
-// necessary such that ParseFloat will return f exactly.
+// necessary such that ParseFloat will return the rate exactly.
 func (r Rate) FormatSep(thousandsSep, decimalSep rune, precision int) string {
-	return float.Format(float64(r), thousandsSep, decimalSep, precision, true)
+	f := float64(r)
+	if precision >= 0 {
+		f = roundShortestDecimal(f, precision)
+	}
+	return float.Format(f, thousandsSep, decimalSep, precision, true)
 }
 
 // StringOr returns strconv.FormatFloat the pointed to rate or defaultVal if ptr is nil.

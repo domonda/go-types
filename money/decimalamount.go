@@ -151,30 +151,6 @@ const (
 	maxDecimalAmountDigits = 18
 )
 
-// pow5[i] == 5^i for i in 0..MaxDecimalAmountScale (5^18 < 2^42), used by the
-// int128 float-to-decimal conversion.
-var pow5 = [MaxDecimalAmountScale + 1]int64{
-	1,
-	5,
-	25,
-	125,
-	625,
-	3125,
-	15625,
-	78125,
-	390625,
-	1953125,
-	9765625,
-	48828125,
-	244140625,
-	1220703125,
-	6103515625,
-	30517578125,
-	152587890625,
-	762939453125,
-	3814697265625,
-}
-
 // decimalPow10[i] == 10^i for i in 0..MaxDecimalAmountScale.
 // 10^18 is the largest power of ten that fits in an int64.
 var decimalPow10 = [MaxDecimalAmountScale + 1]int64{
@@ -1360,18 +1336,6 @@ func (a DecimalAmount) formatBody(f fmt.State, prec int) string {
 	return b.String()
 }
 
-// mustDecimalFromFloat converts f to a DecimalAmount rounded to scale with the
-// given rounding mode. NaN, infinity and overflow yield the corresponding
-// non-finite value; it panics only on an out-of-range scale (a programmer
-// error).
-func mustDecimalFromFloat(f float64, scale int, rounding RoundingMode) DecimalAmount {
-	d, err := decimalFromFloatRounded(f, scale, rounding)
-	if err != nil {
-		panic(fmt.Sprintf("money.DecimalAmount from float %v: %s", f, err))
-	}
-	return d
-}
-
 // decimalFromFloatShortest converts f to the DecimalAmount given exactly by
 // the shortest decimal representation that round-trips to f at the given
 // bitSize (32 or 64), so no float precision is lost. A value whose shortest
@@ -1383,7 +1347,81 @@ func decimalFromFloatShortest(f float64, bitSize int) DecimalAmount {
 	if parsed, err := ParseDecimalAmount(strconv.FormatFloat(f, 'f', -1, bitSize)); err == nil {
 		return parsed
 	}
-	return mustDecimalFromFloat(f, MaxDecimalAmountScale, RoundHalfAwayFromZero)
+	return decimalFromFloatRounded(f, bitSize, MaxDecimalAmountScale, RoundHalfAwayFromZero)
+}
+
+// decimalFromFloatRounded converts f to a DecimalAmount at the given scale by
+// rounding the shortest decimal representation of f at the given bitSize
+// (32 or 64) with the given rounding mode. The shortest decimal is the literal
+// that parses back to f, so Amount(0.145) rounds to the 0.15 of its literal
+// and not to the 0.14 of its binary value 0.14499999999999999001.
+// A NaN or infinite f maps to the corresponding non-finite DecimalAmount and an
+// out-of-range value maps to ±Inf. It panics only for an out-of-range scale
+// (a programmer error).
+func decimalFromFloatRounded(f float64, bitSize, scale int, rounding RoundingMode) DecimalAmount {
+	if scale < 0 || scale > MaxDecimalAmountScale {
+		panic(fmt.Sprintf("money.DecimalAmount from float %v: scale %d out of range [0, %d]", f, scale, MaxDecimalAmountScale))
+	}
+	switch {
+	case math.IsNaN(f):
+		return DecimalAmountNaN()
+	case math.IsInf(f, 0):
+		return decimalInf(math.Signbit(f))
+	}
+	negative := math.Signbit(f)
+	intDigits, fracDigits, _ := strings.Cut(strconv.FormatFloat(math.Abs(f), 'f', -1, bitSize), ".")
+	digits := strings.TrimLeft(roundDecimalDigits(intDigits, fracDigits, scale, negative, rounding), "0")
+	var magnitude uint64
+	if digits != "" {
+		var err error
+		magnitude, err = strconv.ParseUint(digits, 10, 64)
+		if err != nil || magnitude > uint64(maxDecimalAmountCoefficient) {
+			return decimalInf(negative) // ParseUint only fails for too many digits
+		}
+	}
+	coeff := int64(magnitude) //#nosec G115 -- bounded by maxDecimalAmountCoefficient
+	if negative {
+		coeff = -coeff
+	}
+	return packDecimalAmount(coeff, scale)
+}
+
+// roundDecimalDigits rounds the non-negative decimal number with the integer
+// digits intDigits and the fractional digits fracDigits to the given number of
+// decimal places with the rounding mode, where negative decimals round to tens,
+// hundreds, and so on. negative is the sign of the number for the rounding
+// modes that depend on it. It returns the digits of the rounded number times
+// 10^decimals, which may have leading zeros and are empty for zero.
+// Rounding the digits instead of a binary float keeps ties like 0.145 exact.
+func roundDecimalDigits(intDigits, fracDigits string, decimals int, negative bool, rounding RoundingMode) string {
+	digits := intDigits + fracDigits
+	keep := len(intDigits) + decimals // number of leading digits to keep
+	if keep >= len(digits) {
+		return digits + strings.Repeat("0", keep-len(digits))
+	}
+	kept, cut := "", "0"+digits // every digit is cut, after -keep zeros if keep < 0
+	switch {
+	case keep == 0:
+		cut = digits
+	case keep > 0:
+		kept, cut = digits[:keep], digits[keep:]
+	}
+	halfCmp, nonZero := compareCutFractionToHalf(cut)
+	odd := kept != "" && (kept[len(kept)-1]-'0')%2 == 1
+	if !nonZero || !roundAwayFromZero(rounding, negative, odd, halfCmp) {
+		return kept
+	}
+	// Add one to the last kept digit, carrying over nines
+	b := []byte(kept)
+	i := len(b) - 1
+	for ; i >= 0 && b[i] == '9'; i-- {
+		b[i] = '0'
+	}
+	if i < 0 {
+		return "1" + string(b)
+	}
+	b[i]++
+	return string(b)
 }
 
 // decimalDigits splits abs(coeff) into integer and fractional digit strings for
@@ -1723,130 +1761,6 @@ func roundAwayFromZero(mode RoundingMode, negative, quotientOdd bool, halfCmp in
 		return negative
 	default: // RoundHalfAwayFromZero
 		return true
-	}
-}
-
-// decimalFromFloatRounded converts f to a DecimalAmount at the given scale using
-// the exact value of the binary float64 and the given rounding mode, computed in
-// 128-bit integer arithmetic without heap allocation. A NaN or infinite f maps
-// to the corresponding non-finite DecimalAmount and an out-of-range value maps to
-// ±Inf. It returns an error only for an out-of-range scale (a programmer error).
-func decimalFromFloatRounded(f float64, scale int, rounding RoundingMode) (DecimalAmount, error) {
-	if scale < 0 || scale > MaxDecimalAmountScale {
-		return DecimalAmount{}, fmt.Errorf("money.DecimalAmount scale %d out of range [0, %d]", scale, MaxDecimalAmountScale)
-	}
-	switch {
-	case math.IsNaN(f):
-		return DecimalAmountNaN(), nil
-	case math.IsInf(f, 0):
-		return decimalInf(math.Signbit(f)), nil
-	case f == 0:
-		return packDecimalAmount(0, scale), nil
-	}
-	// Decompose |f| exactly as m·2^e with m a 53-bit integer mantissa. Then
-	// value·10^scale = m·2^e·10^scale = (m·5^scale)·2^(e+scale). Since m ≤ 2^53
-	// and 5^scale < 2^42, the product m·5^scale fits in 128 bits, and the
-	// remaining factor is a pure power of two, i.e. a shift.
-	negative := math.Signbit(f)
-	frac, exp := math.Frexp(f) // f = frac·2^exp, 0.5 ≤ |frac| < 1
-	m := uint64(math.Ldexp(math.Abs(frac), 53))
-	hi, lo := bits.Mul64(m, uint64(pow5[scale])) //#nosec G115 -- 5^scale is a positive int64
-	var mag uint64
-	var over bool
-	if s := (exp - 53) + scale; s >= 0 {
-		mag, over = shiftLeft128(hi, lo, s) // exact, no rounding
-	} else {
-		mag, over = shiftRightRound128(hi, lo, -s, negative, rounding)
-	}
-	if over || mag > uint64(maxDecimalAmountCoefficient) {
-		return decimalInf(negative), nil
-	}
-	coeff := int64(mag)
-	if negative {
-		coeff = -coeff
-	}
-	return packDecimalAmount(coeff, scale), nil
-}
-
-// shiftLeft128 returns ((hi,lo) << n) as a uint64, reporting overflow if the
-// result does not fit in 64 bits (the coefficient range is below 2^64).
-func shiftLeft128(hi, lo uint64, n int) (uint64, bool) {
-	if hi != 0 {
-		return 0, true // value ≥ 2^64, shifting left only grows it
-	}
-	if n >= 64 {
-		return 0, lo != 0
-	}
-	r := lo << n
-	if r>>n != lo {
-		return 0, true // high bits shifted out
-	}
-	return r, false
-}
-
-// shiftRightRound128 returns round((hi,lo) / 2^k) as a uint64 using the rounding
-// mode and sign, reporting overflow if the quotient does not fit in 64 bits.
-func shiftRightRound128(hi, lo uint64, k int, negative bool, rounding RoundingMode) (uint64, bool) {
-	var qHi, qLo uint64
-	switch {
-	case k == 0:
-		qHi, qLo = hi, lo
-	case k < 64:
-		qLo = lo>>k | hi<<(64-k)
-		qHi = hi >> k
-	case k < 128:
-		qLo = hi >> (k - 64)
-	}
-	if qHi != 0 {
-		return 0, true
-	}
-	// The bits shifted out determine rounding: the round bit is bit k-1 and the
-	// sticky bit is any set bit below it.
-	roundBit := bit128(hi, lo, k-1)
-	sticky := lowBitsNonzero128(hi, lo, k-1)
-	if roundBit == 0 && !sticky {
-		return qLo, false // exact
-	}
-	halfCmp := -1 // remainder below the halfway point
-	if roundBit != 0 {
-		if sticky {
-			halfCmp = +1 // above halfway
-		} else {
-			halfCmp = 0 // exactly halfway
-		}
-	}
-	if roundAwayFromZero(rounding, negative, qLo&1 == 1, halfCmp) {
-		qLo++
-		if qLo == 0 { // wrapped past uint64
-			return 0, true
-		}
-	}
-	return qLo, false
-}
-
-// bit128 returns bit i (0-based) of the 128-bit value (hi,lo), or 0 out of range.
-func bit128(hi, lo uint64, i int) uint64 {
-	switch {
-	case i < 0 || i >= 128:
-		return 0
-	case i < 64:
-		return lo >> i & 1
-	default:
-		return hi >> (i - 64) & 1
-	}
-}
-
-// lowBitsNonzero128 reports whether any of bits [0, n) of (hi,lo) are set.
-func lowBitsNonzero128(hi, lo uint64, n int) bool {
-	switch {
-	case n <= 0:
-		return false
-	case n >= 128:
-		return hi != 0 || lo != 0
-	case n <= 64:
-		return lo&(1<<n-1) != 0
-	default:
-		return lo != 0 || hi&(1<<(n-64)-1) != 0
 	}
 }
 

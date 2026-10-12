@@ -8,6 +8,7 @@ import (
 	"math"
 	"math/big"
 	"math/rand"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -758,7 +759,15 @@ func TestDecimalAmount_nonFiniteNoPanic(t *testing.T) {
 }
 
 // floatToDecimalOracle is an independent big.Rat reference for
-// decimalFromFloatRounded, used to validate the int128 implementation.
+// decimalFromFloatRounded, used to validate its digit string implementation.
+//
+// It rounds the shortest decimal representation of f, not the exact binary
+// value that big.Rat.SetFloat64 would give. The shortest decimal is the
+// literal a human typed or a JSON number carried, and the one that parses
+// back to f, so it is the value the amount was meant to have: 0.145 has to
+// round to 0.15 even though its float64 is 0.14499999999999999001. Rounding
+// the binary value made Amount.DecimalAmount disagree with Amount.CentAmount,
+// Cents, RoundToCents and the formatting methods on such ties.
 func floatToDecimalOracle(f float64, scale int, mode RoundingMode) DecimalAmount {
 	switch {
 	case math.IsNaN(f):
@@ -766,7 +775,10 @@ func floatToDecimalOracle(f float64, scale int, mode RoundingMode) DecimalAmount
 	case math.IsInf(f, 0):
 		return decimalInf(math.Signbit(f))
 	}
-	r := new(big.Rat).SetFloat64(f)
+	r, ok := new(big.Rat).SetString(strconv.FormatFloat(f, 'g', -1, 64))
+	if !ok {
+		panic("big.Rat can't parse the shortest decimal of " + strconv.FormatFloat(f, 'g', -1, 64))
+	}
 	pow := new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(scale)), nil)
 	r.Mul(r, new(big.Rat).SetInt(pow))
 	num, den := r.Num(), r.Denom()
@@ -797,6 +809,8 @@ func TestDecimalAmount_FromFloatOracle(t *testing.T) {
 	values := []float64{
 		0, math.Copysign(0, -1), 1, -1, 0.5, -0.5, 0.25, 0.125, 0.0625,
 		1.5, 2.5, 12.5, 0.375, 2.675, 1.005, 100.0 / 3, 1.0 / 3, 2.0 / 3,
+		// Ties of the shortest decimal whose binary value is below the tie
+		0.145, -0.145, 0.285, 1.115, 8.345, 1.0005, 1.45, -2.675,
 		1234.56, -99.99, 0.1, 0.2, 0.3, 9.99999999, 123456789.123456,
 		1e-9, 1e-15, 1e-18, 1e-19, 1e-20, 5e-10,
 		1e6, 1e12, 1e15, 1e17, 2.8e17, 1e18, 1e19, 1e30,
@@ -816,8 +830,7 @@ func TestDecimalAmount_FromFloatOracle(t *testing.T) {
 		for scale := 0; scale <= MaxDecimalAmountScale; scale++ {
 			for _, mode := range modes {
 				want := floatToDecimalOracle(f, scale, mode)
-				got, err := decimalFromFloatRounded(f, scale, mode)
-				require.NoError(t, err)
+				got := decimalFromFloatRounded(f, 64, scale, mode)
 				if want != got {
 					t.Fatalf("fromFloat(%v, %d, %s) = %s (packed %d), want %s (packed %d)",
 						f, scale, mode, got, got, want, want)
@@ -987,8 +1000,10 @@ func TestDecimalAmount_AmountInterop(t *testing.T) {
 	got := DecimalAmountFrom(Amount(1234.567)).RoundToDecimals(2, RoundHalfAwayFromZero)
 	assert.Equal(t, "1234.57", got.String())
 
-	// Amount.DecimalAmount rounds the exact binary float64 value directly.
+	// Amount.DecimalAmount rounds the same shortest decimal in one step,
+	// so both agree also on ties whose binary value is below the tie.
 	assert.Equal(t, "1234.57", Amount(1234.567).DecimalAmount(2, RoundHalfAwayFromZero).String())
+	assert.Equal(t, "0.15", Amount(0.145).DecimalAmount(2, RoundHalfAwayFromZero).String())
 	// A non-finite Amount maps to the matching sentinel instead of panicking.
 	assert.True(t, Amount(math.Inf(1)).DecimalAmount(2, RoundHalfAwayFromZero).IsInf(1))
 	assert.True(t, Amount(math.NaN()).DecimalAmount(2, RoundHalfAwayFromZero).IsNaN())
