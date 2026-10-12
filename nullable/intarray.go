@@ -4,6 +4,8 @@ import (
 	"database/sql/driver"
 	"fmt"
 	"slices"
+	"strconv"
+	"strings"
 
 	"github.com/domonda/go-types/notnull"
 )
@@ -51,11 +53,46 @@ func (a IntArray) Value() (driver.Value, error) {
 // scans to a non-nil slice: {} to an empty slice, otherwise the
 // parsed PostgreSQL integer array literal like {1,2,3}.
 func (a *IntArray) Scan(src any) error {
-	if src == nil {
+	switch src := src.(type) {
+	case []byte:
+		return a.scanBytes(src)
+
+	case string:
+		return a.scanBytes([]byte(src))
+
+	case nil:
 		*a = nil
 		return nil
 	}
-	return (*notnull.IntArray)(a).Scan(src)
+
+	return fmt.Errorf("can't convert %T to nullable.IntArray", src)
+}
+
+func (a *IntArray) scanBytes(src []byte) (err error) {
+	if len(src) == 0 {
+		// Reached only for a non-nil empty string or []byte,
+		// because Scan maps an untyped nil source to a nil slice.
+		*a = IntArray{}
+		return nil
+	}
+	if src[0] != '{' || src[len(src)-1] != '}' {
+		return fmt.Errorf("can't parse %q as nullable.IntArray", string(src))
+	}
+	if len(src) == 2 { // src == "{}"
+		*a = IntArray{}
+		return nil
+	}
+
+	elements := strings.Split(string(src[1:len(src)-1]), ",")
+	newArray := make(IntArray, len(elements))
+	for i, elem := range elements {
+		newArray[i], err = strconv.ParseInt(elem, 10, 64)
+		if err != nil {
+			return fmt.Errorf("can't parse %q as nullable.IntArray because of: %w", string(src), err)
+		}
+	}
+	*a = newArray
+	return nil
 }
 
 // Len is the number of elements in the collection.

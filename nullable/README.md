@@ -183,7 +183,7 @@ Reading:
 | Input                 | `Type[T]`                                          | `NonEmptyString`  | `TrimmedString`   | `Time`                  | `JSON`              |
 |-----------------------|----------------------------------------------------|-------------------|-------------------|-------------------------|---------------------|
 | SQL `NULL`            | null                                               | null              | null              | null                    | nil                 |
-| SQL `''`              | valid `""` for `Type[string]`, error for `Type[int]` | error             | null              | error                   | `JSON("")`, not nil |
+| SQL `''`              | valid `""` for `Type[string]`, error for `Type[int]` | error             | null              | error                   | nil                 |
 | SQL text value        | converted                                          | the string        | trimmed           | error, only `time.Time` | copied              |
 | JSON `null`           | null                                               | null              | null              | null                    | nil                 |
 | JSON `""`             | valid `""` for `Type[string]`, error for `Type[int]` | null              | null              | error                   | `JSON("\"\"")`      |
@@ -213,8 +213,7 @@ Reading:
 - `Time.UnmarshalJSON` returns an error for `""`. `Time.UnmarshalText` treats `null` in any letter case as null, `TimeParse` only `null` and `NULL`.
 - The promoted `time.Time` methods ignore null: `nullable.Time{}.Before(t)` compares the zero instant.
 - `MarshalJSON(nil)` returns `JSON("null")`, which is not nil, so `IsNull()` is false. `MarshalFrom(nil)` sets nil.
-- `JSON.Scan("")` stores a non-nil empty `JSON` whose `MarshalJSON` returns no bytes, so `json.Marshal` of it fails with `unexpected end of JSON input`.
-- `IntArray` and `FloatArray` scan through `notnull`, so their errors name `notnull.IntArray` and `notnull.FloatArray`. They reject `NULL` elements: `{1,NULL,3}` fails, use `NullIntArray` or `NullFloatArray`.
+- `IntArray` and `FloatArray` reject `NULL` elements: `{1,NULL,3}` fails, use `NullIntArray` or `NullFloatArray`.
 - `StringArray.Scan("")` and `BoolArray.Scan("")` return an error, the other arrays return an empty slice.
 - `StringArray.Scan` follows `lib/pq` and reads the unquoted `{a\,b}` as two elements, PostgreSQL reads it as `a,b`. `SplitArrayValues` follows PostgreSQL.
 - `String()` formats differ: `IntArray{1, 2}` prints `IntArray{1,2}` and nil prints `IntArray<nil>`, `FloatArray{1.5, 2}` prints `[1.5, 2]` and nil prints `NULL`.
@@ -319,7 +318,7 @@ func main() {
 	// NullIntArray{1,null}     SQL "{1,NULL}" JSON [1,null] err <nil>
 	// can't scan empty string as nullable.NonEmptyString
 	// <nil> true
-	// can't parse "{1,NULL,3}" as notnull.IntArray because of: strconv.ParseInt: parsing "NULL": invalid syntax
+	// can't parse "{1,NULL,3}" as nullable.IntArray because of: strconv.ParseInt: parsing "NULL": invalid syntax
 	// <nil> NullIntArray{1,NULL,3} [1 0 3]
 }
 ```

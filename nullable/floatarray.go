@@ -2,6 +2,7 @@ package nullable
 
 import (
 	"database/sql/driver"
+	"fmt"
 	"slices"
 	"strconv"
 	"strings"
@@ -72,11 +73,46 @@ func (a FloatArray) Value() (driver.Value, error) {
 // scans to a non-nil slice: {} to an empty slice, otherwise the
 // parsed PostgreSQL float array literal like {1.5,2,3}.
 func (a *FloatArray) Scan(src any) error {
-	if src == nil {
+	switch src := src.(type) {
+	case []byte:
+		return a.scanBytes(src)
+
+	case string:
+		return a.scanBytes([]byte(src))
+
+	case nil:
 		*a = nil
 		return nil
 	}
-	return (*notnull.FloatArray)(a).Scan(src)
+
+	return fmt.Errorf("can't convert %T to nullable.FloatArray", src)
+}
+
+func (a *FloatArray) scanBytes(src []byte) (err error) {
+	if len(src) == 0 {
+		// Reached only for a non-nil empty string or []byte,
+		// because Scan maps an untyped nil source to a nil slice.
+		*a = FloatArray{}
+		return nil
+	}
+	if src[0] != '{' || src[len(src)-1] != '}' {
+		return fmt.Errorf("can't parse %q as nullable.FloatArray", string(src))
+	}
+	if len(src) == 2 { // src == "{}"
+		*a = FloatArray{}
+		return nil
+	}
+
+	elements := strings.Split(string(src[1:len(src)-1]), ",")
+	newArray := make(FloatArray, len(elements))
+	for i, elem := range elements {
+		newArray[i], err = strconv.ParseFloat(elem, 64)
+		if err != nil {
+			return fmt.Errorf("can't parse %q as nullable.FloatArray because of: %w", string(src), err)
+		}
+	}
+	*a = newArray
+	return nil
 }
 
 // Len is the number of elements in the collection.

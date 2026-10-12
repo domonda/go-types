@@ -52,11 +52,12 @@ func (j JSON) UnmarshalTo(dest any) error {
 }
 
 // MarshalJSON returns j as the JSON encoding of j.
+// A nil or empty j holds no JSON text and returns null.
 // MarshalJSON implements encoding/json.Marshaler
 // See the package function MarshalJSON to marshal
 // a struct into JSON
 func (j JSON) MarshalJSON() ([]byte, error) {
-	if j.IsNull() {
+	if len(j) == 0 {
 		return []byte("null"), nil
 	}
 	return j, nil
@@ -104,13 +105,15 @@ func (j JSON) IsEmpty() bool {
 }
 
 // Scan stores the src in *j. No validation is done.
+// SQL NULL, the text null, and an empty string or []byte,
+// which hold no JSON text, store nil.
 func (j *JSON) Scan(src any) error {
 	switch x := src.(type) {
 	case nil:
 		*j = nil
 
 	case string:
-		if x == "null" {
+		if x == "" || x == "null" {
 			*j = nil
 		} else {
 			// Converting from string does a copy
@@ -118,7 +121,7 @@ func (j *JSON) Scan(src any) error {
 		}
 
 	case []byte:
-		if bytes.Equal(x, []byte("null")) {
+		if len(x) == 0 || bytes.Equal(x, []byte("null")) {
 			*j = nil
 		} else {
 			// Need to copy because, src will be gone after call.

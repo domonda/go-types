@@ -148,6 +148,26 @@ func Test_JSON_Scan(t *testing.T) {
 	assert.Error(t, j.Scan(123))
 }
 
+// An empty database value holds no JSON text, so it must scan to null like
+// SQL NULL, and any empty JSON must marshal like the nil JSON, because zero
+// bytes are invalid JSON and made json.Marshal of a struct holding the
+// scanned value fail with "unexpected end of JSON input".
+func Test_JSON_EmptyIsNull(t *testing.T) {
+	for _, src := range []any{"", []byte{}} {
+		j := JSON(`{"old":1}`)
+		require.NoError(t, j.Scan(src), "Scan(%#v)", src)
+		assert.Nil(t, j, "Scan(%#v) stores null like Scan(nil)", src)
+	}
+
+	b, err := JSON{}.MarshalJSON()
+	require.NoError(t, err)
+	assert.Equal(t, "null", string(b), "non-nil empty JSON marshals like JSON(nil)")
+
+	b, err = json.Marshal(struct{ J JSON }{J: JSON("")})
+	require.NoError(t, err)
+	assert.Equal(t, `{"J":null}`, string(b))
+}
+
 func Test_JSON_String(t *testing.T) {
 	assert.Equal(t, "null", JSON(nil).String())
 	assert.Equal(t, `{"a":1}`, JSON(`{"a":1}`).String())

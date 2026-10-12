@@ -3,6 +3,7 @@ package nullable
 import (
 	"database/sql"
 	"encoding/json"
+	"math"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -60,6 +61,35 @@ func Test_NullFloatArray_Scan(t *testing.T) {
 	assert.Error(t, a.Scan("not an array"))
 	assert.Error(t, a.Scan("{notanumber}"))
 	assert.Error(t, a.Scan(123))
+}
+
+// PostgreSQL writes the non-finite float8 values as NaN, Infinity and
+// -Infinity, so Scan must read them next to NULL elements, and the values
+// written by Value must scan back to the same floats. JSON has no NaN or
+// infinity, so json.Marshal must fail for them instead of writing invalid JSON.
+func Test_NullFloatArray_NonFinite(t *testing.T) {
+	var a NullFloatArray
+	require.NoError(t, a.Scan("{NaN,NULL,Infinity,-Infinity}"))
+	require.Len(t, a, 4)
+	assert.True(t, math.IsNaN(a[0].Get()))
+	assert.True(t, a[1].IsNull())
+	assert.Equal(t, math.Inf(1), a[2].Get())
+	assert.Equal(t, math.Inf(-1), a[3].Get())
+
+	val, err := NullFloatArray{TypeFrom(math.NaN()), TypeFrom(math.Inf(1)), TypeFrom(math.Inf(-1))}.Value()
+	require.NoError(t, err)
+	var scanned NullFloatArray
+	require.NoError(t, scanned.Scan(val), "Scan(%q)", val)
+	require.Len(t, scanned, 3)
+	assert.True(t, math.IsNaN(scanned[0].Get()))
+	assert.Equal(t, math.Inf(1), scanned[1].Get())
+	assert.Equal(t, math.Inf(-1), scanned[2].Get())
+
+	for _, f := range []float64{math.NaN(), math.Inf(1), math.Inf(-1)} {
+		_, err := json.Marshal(NullFloatArray{TypeFrom(1.0), TypeFrom(f)})
+		var unsupported *json.UnsupportedValueError
+		assert.ErrorAs(t, err, &unsupported, "json.Marshal of %v", f)
+	}
 }
 
 func Test_NullFloatArray_RoundTrip(t *testing.T) {
