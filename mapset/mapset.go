@@ -20,6 +20,19 @@
 // Insert, InsertAll, UnionWith and SymmetricDifferenceWith panic on a nil
 // set if they actually have to store an element, exactly like an assignment
 // to a nil Go map.
+//
+// # Operand types
+//
+// Union, Intersection, Difference, SymmetricDifference and UnionWith accept
+// two different map types, including a mix of map[K]struct{} and
+// map[K]bool, and return the type of their first operand. Intersects
+// accepts two different map types with the same value type. Equal,
+// IntersectionWith, DifferenceWith and SymmetricDifferenceWith require the
+// same map type for both operands.
+//
+// See the [README] for a table of all functions.
+//
+// [README]: https://github.com/domonda/go-types/blob/master/mapset/README.md
 package mapset
 
 import (
