@@ -114,7 +114,7 @@ func (n NullableID) ValidAndNormalized() bool {
 	return err == nil && n == norm
 }
 
-// ValidAndNotNull returns if this is a valid not Null VAIT ID.
+// ValidAndNotNull returns if this is a valid not Null VAT ID.
 func (n NullableID) ValidAndNotNull() bool {
 	return n.IsNotNull() && n.Valid()
 }
