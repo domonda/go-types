@@ -1,5 +1,7 @@
 package money
 
+import "strings"
+
 // CurrencyNull represents the SQL NULL for Currency and NullableCurrency.
 // Currency(CurrencyNull).Valid() == false
 // NullableCurrency(CurrencyNull).Valid() == true
@@ -203,3 +205,141 @@ var currencyCodeToName = map[Currency]string{ //#nosec G101
 	ZWD: "Zimbabwe Dollar",
 	ZWG: "Zimbabwe Gold",
 }
+
+// currencyCodeToISOName holds the English currency names of the ISO 4217
+// list like "Canadian Dollar", which often differ from the names of
+// currencyCodeToName like "Canada Dollar".
+//
+// Only names of two or more words are listed. Single word names like
+// "Rand", "Won" or "Sol" are also common words, so accepting them would
+// detect currencies in any text that StringIsCurrency is used on.
+// A name that ISO 4217 uses for more than one code is listed only
+// for the current code: "Bolívar Soberano" for VES and not for VED.
+var currencyCodeToISOName = map[Currency]string{
+	AED: "UAE Dirham",
+	AMD: "Armenian Dram",
+	ANG: "Netherlands Antillean Guilder",
+	ARS: "Argentine Peso",
+	AUD: "Australian Dollar",
+	AWG: "Aruban Florin",
+	AZN: "Azerbaijan Manat",
+	BAM: "Convertible Mark",
+	BBD: "Barbados Dollar",
+	BGN: "Bulgarian Lev",
+	BHD: "Bahraini Dinar",
+	BIF: "Burundi Franc",
+	BMD: "Bermudian Dollar",
+	BND: "Brunei Dollar",
+	BRL: "Brazilian Real",
+	BSD: "Bahamian Dollar",
+	BYN: "Belarusian Ruble",
+	BZD: "Belize Dollar",
+	CAD: "Canadian Dollar",
+	CDF: "Congolese Franc",
+	CHF: "Swiss Franc",
+	CLP: "Chilean Peso",
+	CNY: "Yuan Renminbi",
+	COP: "Colombian Peso",
+	CRC: "Costa Rican Colon",
+	CUC: "Peso Convertible",
+	CUP: "Cuban Peso",
+	CVE: "Cabo Verde Escudo",
+	CZK: "Czech Koruna",
+	DJF: "Djibouti Franc",
+	DKK: "Danish Krone",
+	DOP: "Dominican Peso",
+	DZD: "Algerian Dinar",
+	EGP: "Egyptian Pound",
+	ETB: "Ethiopian Birr",
+	FJD: "Fiji Dollar",
+	FKP: "Falkland Islands Pound",
+	GBP: "Pound Sterling",
+	GHS: "Ghana Cedi",
+	GIP: "Gibraltar Pound",
+	GNF: "Guinean Franc",
+	GYD: "Guyana Dollar",
+	HKD: "Hong Kong Dollar",
+	ILS: "New Israeli Sheqel",
+	INR: "Indian Rupee",
+	IQD: "Iraqi Dinar",
+	IRR: "Iranian Rial",
+	ISK: "Iceland Krona",
+	JMD: "Jamaican Dollar",
+	JOD: "Jordanian Dinar",
+	KES: "Kenyan Shilling",
+	KMF: "Comorian Franc",
+	KPW: "North Korean Won",
+	KWD: "Kuwaiti Dinar",
+	KYD: "Cayman Islands Dollar",
+	LAK: "Lao Kip",
+	LBP: "Lebanese Pound",
+	LKR: "Sri Lanka Rupee",
+	LRD: "Liberian Dollar",
+	LYD: "Libyan Dinar",
+	MAD: "Moroccan Dirham",
+	MDL: "Moldovan Leu",
+	MGA: "Malagasy Ariary",
+	MUR: "Mauritius Rupee",
+	MWK: "Malawi Kwacha",
+	MXN: "Mexican Peso",
+	MYR: "Malaysian Ringgit",
+	MZN: "Mozambique Metical",
+	NAD: "Namibia Dollar",
+	NIO: "Cordoba Oro",
+	NOK: "Norwegian Krone",
+	NPR: "Nepalese Rupee",
+	NZD: "New Zealand Dollar",
+	OMR: "Rial Omani",
+	PHP: "Philippine Peso",
+	PKR: "Pakistan Rupee",
+	QAR: "Qatari Rial",
+	RON: "Romanian Leu",
+	RSD: "Serbian Dinar",
+	RUB: "Russian Ruble",
+	RWF: "Rwanda Franc",
+	SAR: "Saudi Riyal",
+	SBD: "Solomon Islands Dollar",
+	SCR: "Seychelles Rupee",
+	SDG: "Sudanese Pound",
+	SEK: "Swedish Krona",
+	SGD: "Singapore Dollar",
+	SHP: "Saint Helena Pound",
+	SOS: "Somali Shilling",
+	SRD: "Surinam Dollar",
+	SSP: "South Sudanese Pound",
+	SVC: "El Salvador Colon",
+	SYP: "Syrian Pound",
+	TMT: "Turkmenistan New Manat",
+	TND: "Tunisian Dinar",
+	TRY: "Turkish Lira",
+	TTD: "Trinidad and Tobago Dollar",
+	TWD: "New Taiwan Dollar",
+	TZS: "Tanzanian Shilling",
+	UGX: "Uganda Shilling",
+	USD: "US Dollar",
+	UYU: "Peso Uruguayo",
+	UZS: "Uzbekistan Sum",
+	VES: "Bolívar Soberano",
+	XAF: "CFA Franc BEAC",
+	XCD: "East Caribbean Dollar",
+	XCG: "Caribbean Guilder",
+	XDR: "SDR (Special Drawing Right)",
+	XOF: "CFA Franc BCEAO",
+	XPF: "CFP Franc",
+	YER: "Yemeni Rial",
+	ZMW: "Zambian Kwacha",
+	ZWG: "Zimbabwe Gold",
+}
+
+// currencyNameToCode maps the upper case names of currencyCodeToName
+// and currencyCodeToISOName to their currency for Currency.Normalized.
+var currencyNameToCode = func() map[string]Currency {
+	m := make(map[string]Currency, len(currencyCodeToName)+len(currencyCodeToISOName))
+	for code, name := range currencyCodeToName {
+		m[strings.ToUpper(name)] = code
+	}
+	for code, name := range currencyCodeToISOName {
+		m[strings.ToUpper(name)] = code
+	}
+	return m
+}()

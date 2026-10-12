@@ -4,7 +4,9 @@ import (
 	"database/sql/driver"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
+	"unicode"
 
 	"github.com/domonda/go-types"
 	"github.com/domonda/go-types/strutil"
@@ -103,7 +105,21 @@ func (c *Currency) ValidPtr() bool {
 	return c != nil && c.Valid()
 }
 
-// Normalized normalizes a currency string
+// Normalized normalizes a currency string.
+//
+// Besides the ISO 4217 code in any letter case it accepts the currency
+// symbols like € or $, the English names returned by EnglishName,
+// and the ISO 4217 currency names of two or more words like
+// "Canadian Dollar", all compared case-insensitively.
+//
+// Other strings are guessed by the unit or the country they name:
+// anything containing EUR as EUR, an unqualified "Dollar(s)" or one
+// qualified as US, U.S., USA or United States as USD, an unqualified
+// "Franc(s)" or "Franken" or one qualified as Swiss, Schweizer or suisse
+// as CHF, and an unqualified "Pound(s)" or one qualified as British or
+// Sterling as GBP. A unit qualified with anything else is an error
+// instead of a guess, because a dollar, franc or pound of another
+// country is a different currency.
 func (c Currency) Normalized() (Currency, error) {
 	str := strutil.TrimSpace(string(c))
 
@@ -119,14 +135,20 @@ func (c Currency) Normalized() (Currency, error) {
 	str = strings.ToUpper(str)
 
 	if len(str) > 3 {
+		if result, found = currencyNameToCode[str]; found {
+			return result, nil
+		}
+		// Words of letters only, so "U.S." becomes "US"
+		// and "US-Dollar" the two words "US" and "DOLLAR"
+		words := strings.FieldsFunc(strings.ReplaceAll(str, ".", ""), func(r rune) bool { return !unicode.IsLetter(r) })
 		switch {
 		case strings.Contains(str, "EUR"):
 			return "EUR", nil
-		case strings.Contains(str, "SWISS") || strings.Contains(str, "SCHWEITZ") || strings.Contains(str, "FRANC"):
+		case containsAnyOf(str, "SWISS", "SCHWEIZ", "SCHWEITZ", "SUISSE") || onlyWordsOf(words, "FRANC", "FRANCS", "FRANKEN"):
 			return "CHF", nil
-		case strings.Contains(str, "POUND") || strings.Contains(str, "BRITISH") || strings.Contains(str, "STERLING"):
+		case containsAnyOf(str, "BRITISH", "STERLING") || onlyWordsOf(words, "POUND", "POUNDS"):
 			return "GBP", nil
-		case strings.Contains(str, "U.S.") || strings.Contains(str, "DOLLAR"):
+		case slices.Contains(words, "US") || slices.Contains(words, "USA") || strings.Contains(str, "UNITED STATES") || onlyWordsOf(words, "DOLLAR", "DOLLARS"):
 			return "USD", nil
 		}
 	}
@@ -136,6 +158,17 @@ func (c Currency) Normalized() (Currency, error) {
 	}
 
 	return Currency(str), nil
+}
+
+// containsAnyOf returns if str contains any of the substrings.
+func containsAnyOf(str string, substrings ...string) bool {
+	return slices.ContainsFunc(substrings, func(sub string) bool { return strings.Contains(str, sub) })
+}
+
+// onlyWordsOf returns if there is at least one word
+// and all words are one of the allowed words.
+func onlyWordsOf(words []string, allowed ...string) bool {
+	return len(words) > 0 && !slices.ContainsFunc(words, func(word string) bool { return !slices.Contains(allowed, word) })
 }
 
 // NormalizedOrNull returns the normalized currency or CurrencyNull

@@ -323,6 +323,102 @@ func TestCurrency_SymbolAndEnglishName(t *testing.T) {
 	}
 }
 
+// TestCurrency_NormalizedNames pins how written currency names normalize.
+// A name has to resolve to the currency it names: "Canadian Dollar" is not
+// a US Dollar and "Burundi Franc" is not a Swiss Franc, so a qualified name
+// of another currency must never fall through to the USD, CHF or GBP
+// guesses. Those guesses are only for the unqualified unit (as in a
+// "Dollar" column of an US invoice) or for a qualifier that names the
+// country. A qualified name of an unknown currency is an error instead of
+// a wrong currency, because a wrong currency silently corrupts the amount.
+func TestCurrency_NormalizedNames(t *testing.T) {
+	tests := []struct {
+		in   string
+		want Currency
+	}{
+		// ISO 4217 names
+		{in: "Canadian Dollar", want: CAD},
+		{in: "Burundi Franc", want: BIF},
+		{in: "Egyptian Pound", want: EGP},
+		{in: "Australian Dollar", want: AUD},
+		{in: "Hong Kong Dollar", want: HKD},
+		{in: "Danish Krone", want: DKK},
+		{in: "CFA Franc BEAC", want: XAF},
+		{in: "South Sudanese Pound", want: SSP},
+		{in: "  canadian DOLLAR ", want: CAD},
+		// English names as returned by EnglishName
+		{in: "Canada Dollar", want: CAD},
+		{in: "Egypt Pound", want: EGP},
+		{in: "United States Dollar", want: USD},
+		{in: "Switzerland Franc", want: CHF},
+		{in: "United Kingdom Pound", want: GBP},
+		// US Dollar guesses
+		{in: "US Dollar", want: USD},
+		{in: "U.S. Dollar", want: USD},
+		{in: "US-Dollar", want: USD},
+		{in: "Dollar US", want: USD},
+		{in: "USA Dollars", want: USD},
+		{in: "Dollar", want: USD},
+		{in: "dollars", want: USD},
+		// Swiss Franc guesses
+		{in: "Swiss Franc", want: CHF},
+		{in: "Swiss Francs", want: CHF},
+		{in: "Schweizer Franken", want: CHF},
+		{in: "Franc suisse", want: CHF},
+		{in: "Franken", want: CHF},
+		{in: "Franc", want: CHF},
+		{in: "Francs", want: CHF},
+		// British Pound guesses
+		{in: "Pound Sterling", want: GBP},
+		{in: "British Pound", want: GBP},
+		{in: "Sterling", want: GBP},
+		{in: "Pound", want: GBP},
+		{in: "Pounds", want: GBP},
+		// Euro guesses
+		{in: "Euro", want: EUR},
+		{in: "Euros", want: EUR},
+	}
+	for _, tt := range tests {
+		got, err := Currency(tt.in).Normalized()
+		if assert.NoError(t, err, "Currency(%q).Normalized()", tt.in) {
+			assert.Equal(t, tt.want, got, "Currency(%q).Normalized()", tt.in)
+		}
+	}
+
+	for _, in := range []string{
+		"Atlantean Dollar",
+		"Martian Franc",
+		"Lunar Pound",
+		"Burundi-Franken",
+		"Dollar Franc",
+	} {
+		got, err := Currency(in).Normalized()
+		assert.Error(t, err, "Currency(%q).Normalized() = %q must fail instead of guessing", in, string(got))
+	}
+}
+
+// TestCurrency_NamesResolveToTheirCurrency pins that every English name
+// and every ISO 4217 name in the tables normalizes back to its own
+// currency. Two currencies sharing a name, or a name mapped to a code
+// that is no enum value, would break this.
+func TestCurrency_NamesResolveToTheirCurrency(t *testing.T) {
+	enums := Currency("").Enums()
+	for _, code := range enums {
+		name := code.EnglishName()
+		got, err := Currency(name).Normalized()
+		if assert.NoError(t, err, "EnglishName %q of %s", name, string(code)) {
+			assert.Equal(t, code, got, "EnglishName %q of %s", name, string(code))
+		}
+	}
+	for code, name := range currencyCodeToISOName {
+		assert.Contains(t, enums, code, "ISO name %q of %s", name, string(code))
+		got, err := Currency(name).Normalized()
+		if assert.NoError(t, err, "ISO name %q of %s", name, string(code)) {
+			assert.Equal(t, code, got, "ISO name %q of %s", name, string(code))
+		}
+	}
+}
+
 // TestCurrency_CurrentISO4217Codes pins that the codes ISO 4217 introduced
 // for redenominations and new currencies are valid enum values with an
 // English name, because invoices in those currencies must not be rejected

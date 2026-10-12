@@ -224,6 +224,30 @@ func TestCurrencyAmount_FormatParseRoundTrip(t *testing.T) {
 	}
 }
 
+// TestParseCurrencyAmount_currencyWord pins that a currency written as
+// one word before or after the amount is normalized like NormalizeCurrency
+// does it, so "Franken" on a Swiss receipt is CHF. ParseCurrencyAmount cuts
+// the currency at the first or last separator, so a qualified name like
+// "Canadian Dollar" can't be passed as a whole and must not turn into USD
+// through its last word.
+func TestParseCurrencyAmount_currencyWord(t *testing.T) {
+	for str, want := range map[string]CurrencyAmount{
+		"12,50 Franken": {Currency: CHF, Amount: 12.5},
+		"Dollar 12.00":  {Currency: USD, Amount: 12},
+		"12.00 Euro":    {Currency: EUR, Amount: 12},
+		"Pounds 3.50":   {Currency: GBP, Amount: 3.5},
+	} {
+		got, err := ParseCurrencyAmount(str)
+		if assert.NoError(t, err, "ParseCurrencyAmount(%q)", str) {
+			assert.Equal(t, want, got, "ParseCurrencyAmount(%q)", str)
+		}
+	}
+	for _, str := range []string{"12.00 Canadian Dollar", "Canadian Dollar 12.00", "12.00 Burundi-Franken"} {
+		got, err := ParseCurrencyAmount(str)
+		assert.Error(t, err, "ParseCurrencyAmount(%q) = %v", str, got)
+	}
+}
+
 // TestParseCurrencyAmount_invalid pins that an unknown currency or a
 // malformed amount is reported as an error instead of being silently
 // dropped and returning just the amount.
