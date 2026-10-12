@@ -149,6 +149,13 @@ func TestYearQuarter_Year(t *testing.T) {
 		{name: "different year", yq: "1999-Q4", want: 1999},
 		{name: "zero year", yq: "0000-Q0", want: 0},
 		{name: "invalid", yq: "invalid", want: 0},
+		// Documented to return 0 for invalid values like YearMonth.Year,
+		// a value with the right length but an invalid quarter or format
+		// must not return a year that callers take as valid
+		{name: "invalid quarter 5", yq: "2023-Q5", want: 0},
+		{name: "invalid quarter 0", yq: "2023-Q0", want: 0},
+		{name: "invalid format", yq: "2023/Q1", want: 0},
+		{name: "year only", yq: "2023", want: 0},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -169,6 +176,13 @@ func TestYearQuarter_Quarter(t *testing.T) {
 		{name: "Q3", yq: "2023-Q3", want: 3},
 		{name: "Q4", yq: "2023-Q4", want: 4},
 		{name: "invalid", yq: "invalid", want: 0},
+		// Documented to return 0 for invalid values, a quarter outside
+		// 1-4 must not be returned because FirstMonth, DateRange and
+		// AddQuarters would compute months that don't exist from it
+		{name: "invalid quarter 5", yq: "2023-Q5", want: 0},
+		{name: "invalid quarter 9", yq: "2023-Q9", want: 0},
+		{name: "invalid format", yq: "2023/Q1", want: 0},
+		{name: "invalid year", yq: "abcd-Q1", want: 0},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -200,11 +214,11 @@ func TestYearQuarter_FirstMonth(t *testing.T) {
 
 func TestYearQuarter_Date(t *testing.T) {
 	tests := []struct {
-		name            string
-		yq              YearQuarter
+		name           string
+		yq             YearQuarter
 		monthInQuarter int
-		day             int
-		want            Date
+		day            int
+		want           Date
 	}{
 		{name: "Q1 first month", yq: "2023-Q1", monthInQuarter: 1, day: 1, want: "2023-01-01"},
 		{name: "Q1 second month", yq: "2023-Q1", monthInQuarter: 2, day: 15, want: "2023-02-15"},
@@ -231,6 +245,9 @@ func TestYearQuarter_DateRange(t *testing.T) {
 		{name: "Q3 2023", yq: "2023-Q3", wantFrom: "2023-07-01", wantUntil: "2023-09-30"},
 		{name: "Q4 2023", yq: "2023-Q4", wantFrom: "2023-10-01", wantUntil: "2023-12-31"},
 		{name: "Q1 2020 (leap)", yq: "2020-Q1", wantFrom: "2020-01-01", wantUntil: "2020-03-31"},
+		// An invalid quarter must give an empty range,
+		// not a range computed from non-existent months
+		{name: "invalid quarter 5", yq: "2023-Q5", wantFrom: "", wantUntil: ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -514,10 +531,10 @@ func TestNullableYearQuarter_Get(t *testing.T) {
 
 func TestNullableYearQuarter_GetOr(t *testing.T) {
 	tests := []struct {
-		name    string
-		yq      NullableYearQuarter
+		name     string
+		yq       NullableYearQuarter
 		default_ YearQuarter
-		want    YearQuarter
+		want     YearQuarter
 	}{
 		{name: "valid value", yq: "2023-Q2", default_: "2020-Q1", want: "2023-Q2"},
 		{name: "null value", yq: YearQuarterNull, default_: "2020-Q1", want: "2020-Q1"},
@@ -658,11 +675,11 @@ func TestNullableYearQuarter_FirstMonth(t *testing.T) {
 
 func TestNullableYearQuarter_Date(t *testing.T) {
 	tests := []struct {
-		name            string
-		yq              NullableYearQuarter
+		name           string
+		yq             NullableYearQuarter
 		monthInQuarter int
-		day             int
-		want            Date
+		day            int
+		want           Date
 	}{
 		{name: "first day", yq: "2023-Q2", monthInQuarter: 1, day: 1, want: "2023-04-01"},
 		{name: "mid quarter", yq: "2023-Q2", monthInQuarter: 2, day: 15, want: "2023-05-15"},

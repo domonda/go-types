@@ -72,7 +72,7 @@ func (yq YearQuarter) String() string {
 // Year returns the year component of the year-quarter.
 // Returns 0 if the year-quarter is not valid.
 func (yq YearQuarter) Year() int {
-	if len(yq) < 4 {
+	if !yq.Valid() {
 		return 0
 	}
 	year, _ := strconv.Atoi(string(yq)[:4])
@@ -82,7 +82,7 @@ func (yq YearQuarter) Year() int {
 // Quarter returns the quarter component of the year-quarter (1-4).
 // Returns 0 if the year-quarter is not valid.
 func (yq YearQuarter) Quarter() int {
-	if len(yq) < 7 {
+	if !yq.Valid() {
 		return 0
 	}
 	quarter, _ := strconv.Atoi(string(yq)[6:7])

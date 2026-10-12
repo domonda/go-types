@@ -1281,6 +1281,11 @@ func TestNormalize_HintOnlyDecidesAmbiguousOrder(t *testing.T) {
 		{name: "DE hint, ambiguous", str: "05/06/2024", lang: []language.Code{language.DE}, want: "2024-06-05"},
 		{name: "no hint, ambiguous", str: "05/06/2024", want: "2024-06-05"},
 		{name: "ordinal day, ambiguous", str: "02 1st 2003", want: "2003-02-01"},
+		// The ordinal suffix marks "1st" as the day, but 13 can't be the
+		// month, so the only valid reading is the 13th of January.
+		// The suffix is just a hint like the language, and a hint must not
+		// turn an unambiguous date into an error.
+		{name: "ordinal day, unambiguous other order", str: "13 1st 2024", want: "2024-01-13"},
 		{name: "EN hint, no valid ordering", str: "13/13/2024", lang: []language.Code{language.EN}, wantErr: true},
 	}
 	for _, tt := range tests {
