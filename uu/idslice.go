@@ -264,9 +264,11 @@ func (s *IDSlice) UnmarshalText(text []byte) error {
 }
 
 // Scan implements the database/sql.Scanner interface
-// with the nil map value used as SQL NULL.
-// Does *s = make(Slice) if *s == nil
-// so it can be used with an not initialized Slice variable
+// with the nil slice value used as SQL NULL.
+// SQL NULL and an empty source value set *s = nil,
+// the empty array "{}" sets an empty non-nil slice.
+// A new slice is assigned to *s, so it can be used
+// with an uninitialized IDSlice variable.
 func (s *IDSlice) Scan(value any) (err error) {
 	switch x := value.(type) {
 	case string:
@@ -311,7 +313,8 @@ func (s *IDSlice) scanBytes(src []byte) (err error) {
 }
 
 // Value implements the driver database/sql/driver.Valuer interface
-// with the nil map value used as SQL NULL
+// with the nil slice value used as SQL NULL
+// and an empty non-nil slice as the empty array "{}".
 func (s IDSlice) Value() (driver.Value, error) {
 	if s == nil {
 		return nil, nil

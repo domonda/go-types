@@ -74,19 +74,25 @@ func (m *IDMutex) Unlock(id ID) {
 	lock.Unlock()
 }
 
+// onLockCallback calls m.onLock and ignores any panic from it,
+// so a broken callback can't prevent the locking.
 func (m *IDMutex) onLockCallback(id ID) {
 	if m.onLock == nil {
 		return
 	}
-	defer recover()
+	// recover only stops a panic when called directly by a deferred function
+	defer func() { recover() }()
 	m.onLock(id)
 }
 
+// onUnlockCallback calls m.onUnlock and ignores any panic from it,
+// so a broken callback can't prevent the unlocking.
 func (m *IDMutex) onUnlockCallback(id ID) {
 	if m.onUnlock == nil {
 		return
 	}
-	defer recover()
+	// recover only stops a panic when called directly by a deferred function
+	defer func() { recover() }()
 	m.onUnlock(id)
 }
 

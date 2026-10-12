@@ -97,8 +97,8 @@ func NullableIDFromPtr(ptr *ID) NullableID {
 // if the conversion is not possible or the ID is not valid.
 //
 // Supported types:
-//   - string: parsed using NullableIDFromString (supports all format variations)
-//   - []byte: parsed using NullableIDFromBytes (supports all format variations)
+//   - string: parsed using NullableIDFromString (supports all format variations) and validated
+//   - []byte: parsed using NullableIDFromBytes (supports all format variations) and validated
 //   - ID, NullableID, [16]byte: validated and converted
 //   - nil: returns IDNull with no error
 //
@@ -114,9 +114,17 @@ func NullableIDFromPtr(ptr *ID) NullableID {
 func NullableIDFromAny(val any) (NullableID, error) {
 	switch x := val.(type) {
 	case string:
-		return NullableIDFromString(x)
+		id, err := NullableIDFromString(x)
+		if err != nil {
+			return IDNull, err
+		}
+		return id, id.Validate()
 	case []byte:
-		return NullableIDFromBytes(x)
+		id, err := NullableIDFromBytes(x)
+		if err != nil {
+			return IDNull, err
+		}
+		return id, id.Validate()
 	case ID:
 		return NullableID(x), NullableID(x).Validate()
 	case NullableID:
@@ -134,8 +142,8 @@ func NullableIDFromAny(val any) (NullableID, error) {
 // if the conversion is not possible or the ID is not valid.
 //
 // Supported types (via IDSource constraint):
-//   - string: parsed using NullableIDFromString (supports all format variations)
-//   - []byte: parsed using NullableIDFromBytes (supports all format variations)
+//   - string: parsed using NullableIDFromString (supports all format variations) and validated
+//   - []byte: parsed using NullableIDFromBytes (supports all format variations) and validated
 //   - ID, NullableID, [16]byte: validated and converted
 //
 // For string and []byte inputs, supports:
@@ -154,10 +162,16 @@ func NullableIDMust[T IDSource](val T) NullableID {
 		if err != nil {
 			panic(err)
 		}
+		if err := id.Validate(); err != nil {
+			panic(err)
+		}
 		return id
 	case []byte:
 		id, err := NullableIDFromBytes(x)
 		if err != nil {
+			panic(err)
+		}
+		if err := id.Validate(); err != nil {
 			panic(err)
 		}
 		return id

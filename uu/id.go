@@ -13,7 +13,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"unsafe"
 
 	"github.com/invopop/jsonschema"
 )
@@ -109,12 +108,15 @@ func IDv7() ID {
 // containing a sortable timestamp created from the passed time
 // and random data after the version and variant information.
 //
+// The timestamp is the big-endian Unix Epoch in milliseconds
+// as specified by RFC 9562, so IDs sort by time as bytes and strings.
 // Note that the precision is only milliseconds.
 //
 // See [ID.V7Time] for the reverse operation.
 func IDv7WithTime(t time.Time) ID {
 	var id ID
-	*(*int64)(unsafe.Pointer(&id[0])) = t.UnixMilli() //#nosec G103 -- unsafe OK
+	// Shift the lower 48 bits of the timestamp into the first 6 bytes
+	binary.BigEndian.PutUint64(id[0:8], uint64(t.UnixMilli())<<16) //#nosec G115 -- integer conversion OK, only 48 bits used
 	safeRandom(id[6:])
 	id.SetVersion(7)
 	id.SetVariant()
@@ -124,6 +126,8 @@ func IDv7WithTime(t time.Time) ID {
 // V7Time returns the timestamp of a version 7 UUID and true.
 // If the UUID is not a version 7 UUID, a zero time and false are returned.
 //
+// The timestamp is read as the big-endian Unix Epoch in milliseconds
+// from the first 48 bits as specified by RFC 9562.
 // Note that the precision is only milliseconds.
 //
 // See [IDv7WithTime] for the reverse operation.
@@ -131,19 +135,21 @@ func (id ID) V7Time() (t time.Time, ok bool) {
 	if id.Version() != 7 {
 		return time.Time{}, false
 	}
-	u := *(*uint64)(unsafe.Pointer(&id[0]))                    //#nosec G103 -- unsafe OK
-	return time.UnixMilli(int64(u & 0x0000ffffffffffff)), true //#nosec G115 -- integer conversion OK
+	unixMilli := binary.BigEndian.Uint64(id[0:8]) >> 16
+	return time.UnixMilli(int64(unixMilli)), true //#nosec G115 -- integer conversion OK, only 48 bits
 }
 
 // IDv7Deterministic returns a version 7 ID with
 // the first 48 bits containing passed unixMilli timestamp
+// in big-endian byte order as specified by RFC 9562
 // and no random data.
 //
 // Intended for generating deterministic UUIDs for testing,
 // see also IDv7DeterministicFunc.
 func IDv7Deterministic(unixMilli int64) ID {
 	var id ID
-	*(*int64)(unsafe.Pointer(&id[0])) = unixMilli //#nosec G103 -- unsafe OK
+	// Shift the lower 48 bits of the timestamp into the first 6 bytes
+	binary.BigEndian.PutUint64(id[0:8], uint64(unixMilli)<<16) //#nosec G115 -- integer conversion OK, only 48 bits used
 	id.SetVersion(7)
 	id.SetVariant()
 	return id
@@ -331,8 +337,8 @@ func IDFromPtr(ptr *ID, defaultVal ID) ID {
 // if the conversion is not possible or the ID is not valid.
 //
 // Supported types:
-//   - string: parsed using IDFromString (supports all format variations)
-//   - []byte: parsed using IDFromBytes (supports all format variations)
+//   - string: parsed using IDFromString (supports all format variations) and validated
+//   - []byte: parsed using IDFromBytes (supports all format variations) and validated
 //   - ID, NullableID, [16]byte: validated and converted
 //   - nil: returns IDNil with ErrNilID
 //
@@ -346,9 +352,17 @@ func IDFromPtr(ptr *ID, defaultVal ID) ID {
 func IDFromAny(val any) (ID, error) {
 	switch x := val.(type) {
 	case string:
-		return IDFromString(x)
+		id, err := IDFromString(x)
+		if err != nil {
+			return IDNil, err
+		}
+		return id, id.Validate()
 	case []byte:
-		return IDFromBytes(x)
+		id, err := IDFromBytes(x)
+		if err != nil {
+			return IDNil, err
+		}
+		return id, id.Validate()
 	case ID:
 		return x, x.Validate()
 	case NullableID:
@@ -405,8 +419,8 @@ func IDFrom[T IDSource](val T) ID {
 // if the conversion is not possible or the ID is not valid.
 //
 // Supported types (via IDSource constraint):
-//   - string: parsed using IDFromString (supports all format variations)
-//   - []byte: parsed using IDFromBytes (supports all format variations)
+//   - string: parsed using IDFromString (supports all format variations) and validated
+//   - []byte: parsed using IDFromBytes (supports all format variations) and validated
 //   - ID, NullableID, [16]byte: validated and converted
 //
 // For string and []byte inputs, supports:
@@ -423,10 +437,16 @@ func IDMust[T IDSource](val T) ID {
 		if err != nil {
 			panic(err)
 		}
+		if err := id.Validate(); err != nil {
+			panic(err)
+		}
 		return id
 	case []byte:
 		id, err := IDFromBytes(x)
 		if err != nil {
+			panic(err)
+		}
+		if err := id.Validate(); err != nil {
 			panic(err)
 		}
 		return id
@@ -702,10 +722,12 @@ func getStorage() (uint64, uint16, []byte) {
 
 // Less returns true if the 128 bit unsigned integer value
 // of the id is less than the passed rhs.
+//
+// The bytes are interpreted big-endian like in the canonical
+// string format, so the order is the same as comparing the bytes
+// with [bytes.Compare] or the strings returned by [ID.String].
 func (id ID) Less(rhs ID) bool {
-	l := (*[2]uint64)(unsafe.Pointer(&id[0]))  //#nosec G103 -- unsafe OK
-	r := (*[2]uint64)(unsafe.Pointer(&rhs[0])) //#nosec G103 -- unsafe OK
-	return l[1] < r[1] || (l[1] == r[1] && l[0] < r[0])
+	return bytes.Compare(id[:], rhs[:]) < 0
 }
 
 func parseDashedFormat(text, original []byte) (newID ID, err error) {

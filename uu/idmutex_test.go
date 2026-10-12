@@ -189,3 +189,31 @@ func TestNewIDMutexWithCallbacks(t *testing.T) {
 	m.Unlock(a)
 	assert.False(t, m.IsLocked(a))
 }
+
+func TestNewIDMutexWithCallbacks_PanickingCallbacks(t *testing.T) {
+	// The callbacks are only meant for debugging and logging,
+	// so a panic in them must not break the locking (see commit 2c54036).
+	// A panic escaping Lock would skip locking the ID,
+	// and one escaping Unlock would leave the ID locked forever.
+	id := IDMust("946521d6-9aef-4bb1-8a19-e0fc0c7e3665")
+	m := NewIDMutexWithCallbacks(
+		func(ID) { panic("onLock") },
+		func(ID) { panic("onUnlock") },
+	)
+
+	require.NotPanics(t, func() { m.Lock(id) }, "Lock")
+	assert.True(t, m.IsLocked(id), "locked despite panicking onLock")
+
+	require.NotPanics(t, func() { m.Unlock(id) }, "Unlock")
+	assert.False(t, m.IsLocked(id), "unlocked despite panicking onUnlock")
+	assert.Empty(t, m.locks, "no per-ID mutex is leaked")
+
+	// The ID can be locked again, the mutex is not stuck
+	done := make(chan struct{})
+	go func() {
+		m.Lock(id)
+		m.Unlock(id)
+		close(done)
+	}()
+	waitOrFail(t, done, "ID could not be locked again after panicking callbacks")
+}

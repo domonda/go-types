@@ -205,6 +205,25 @@ func TestIDSet_StringAndPrettyString(t *testing.T) {
 	}
 }
 
+// TestIDSet_StringMatchesStringsOrder checks that String, which sorts
+// with ID.Less, lists the IDs in the same order as Strings, which sorts
+// the ID strings, so the two representations of a set never disagree.
+// The IDs differ in their first and last bytes so that only the
+// canonical byte order puts them in string order.
+func TestIDSet_StringMatchesStringsOrder(t *testing.T) {
+	set := MakeIDSet(
+		IDMustFromString("00000000-0000-4000-8000-0000000000ff"),
+		IDMustFromString("ff000000-0000-4000-8000-000000000000"),
+		IDMustFromString("0000ff00-0000-4000-8000-000000000001"),
+		testIDA,
+		testIDB,
+		testIDC,
+	)
+	if got, want := set.String(), "set["+strings.Join(set.Strings(), ",")+"]"; got != want {
+		t.Errorf("String() = %s, want order of Strings() %s", got, want)
+	}
+}
+
 func TestIDSet_GetOne(t *testing.T) {
 	if got := MakeIDSet(testIDA).GetOne(); got != testIDA {
 		t.Errorf("GetOne() of a one element set = %s, want %s", got, testIDA)

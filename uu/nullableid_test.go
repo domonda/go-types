@@ -517,6 +517,13 @@ func TestNullableIDFromAny(t *testing.T) {
 		{name: "invalid version ID", val: invalidVersion, want: invalidVersion.Nullable(), wantErr: true},
 		{name: "invalid version NullableID", val: invalidVersion.Nullable(), want: invalidVersion.Nullable(), wantErr: true},
 		{name: "invalid version [16]byte", val: [16]byte(invalidVersion), want: invalidVersion.Nullable(), wantErr: true},
+		// Parsed strings and bytes must be validated like the typed IDs:
+		// only the Nil UUID is a valid NULL, other invalid UUIDs are errors
+		{name: "Nil UUID []byte text", val: []byte("00000000-0000-0000-0000-000000000000"), want: IDNull},
+		{name: "Nil UUID []byte binary", val: make([]byte, 16), want: IDNull},
+		{name: "invalid version string", val: invalidVersion.String(), want: invalidVersion.Nullable(), wantErr: true},
+		{name: "invalid version []byte text", val: []byte(invalidVersion.String()), want: invalidVersion.Nullable(), wantErr: true},
+		{name: "invalid version []byte binary", val: invalidVersion.Bytes(), want: invalidVersion.Nullable(), wantErr: true},
 		{name: "empty string", val: "", want: IDNull, wantErr: true},
 		{name: "invalid string", val: "not-a-uuid", want: IDNull, wantErr: true},
 		{name: "unsupported type", val: 42, want: IDNull, wantErr: true},
@@ -548,6 +555,8 @@ func TestNullableIDMust(t *testing.T) {
 
 	// NULL is a valid NullableID and must not panic
 	require.Equal(t, IDNull, NullableIDMust("00000000-0000-0000-0000-000000000000"))
+	require.Equal(t, IDNull, NullableIDMust([]byte("00000000-0000-0000-0000-000000000000")))
+	require.Equal(t, IDNull, NullableIDMust(make([]byte, 16)))
 	require.Equal(t, IDNull, NullableIDMust(IDNull))
 	require.Equal(t, IDNull, NullableIDMust([16]byte{}))
 
@@ -558,6 +567,10 @@ func TestNullableIDMust(t *testing.T) {
 	require.Panics(t, func() { NullableIDMust(invalidVersion) })
 	require.Panics(t, func() { NullableIDMust(invalidVersion.Nullable()) })
 	require.Panics(t, func() { NullableIDMust([16]byte(invalidVersion)) })
+	// A parsed non-NULL UUID must be valid like the typed IDs
+	require.Panics(t, func() { NullableIDMust(invalidVersion.String()) })
+	require.Panics(t, func() { NullableIDMust([]byte(invalidVersion.String())) })
+	require.Panics(t, func() { NullableIDMust(invalidVersion.Bytes()) })
 }
 
 func TestNullableID_ValidateAndVersion(t *testing.T) {

@@ -2,6 +2,7 @@ package uu
 
 import (
 	"context"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -45,9 +46,44 @@ func TestIDFromContext(t *testing.T) {
 	require.Equal(t, c[0], IDFromContext(ctx, &testIDFromContextCtxKeys.c))
 	require.Equal(t, c[1], IDFromContext(ctx, &testIDFromContextCtxKeys.c))
 	require.Equal(t, c[2], IDFromContext(ctx, &testIDFromContextCtxKeys.c))
-	// IDNil is returned when the sequence is exhausted
-	require.Equal(t, IDNil, IDFromContext(ctx, &testIDFromContextCtxKeys.c))
-	require.Equal(t, IDNil, IDFromContext(ctx, &testIDFromContextCtxKeys.c))
+	// An exhausted sequence panics instead of returning IDNil,
+	// because IDFromContext must never yield the invalid IDNil
+	// and a test using more IDs than it defined is wrong.
+	require.Panics(t, func() { IDFromContext(ctx, &testIDFromContextCtxKeys.c) })
+	require.Panics(t, func() { IDFromContext(ctx, &testIDFromContextCtxKeys.c) }, "stays exhausted")
+}
+
+func TestContextWithIDSequence_Concurrent(t *testing.T) {
+	// The context is shared by all goroutines handling a request,
+	// so concurrent IDFromContext calls must hand out every ID
+	// of the sequence exactly once (go test -race detects
+	// an unsynchronized sequence index).
+	const goroutines, perGoroutine = 8, 50
+	ids := make(IDSlice, goroutines*perGoroutine)
+	for i := range ids {
+		ids[i] = IDv7Deterministic(int64(i))
+	}
+	ctx := ContextWithIDSequence(context.Background(), &testIDFromContextCtxKeys.c, ids...)
+
+	results := make(chan ID, len(ids))
+	var wg sync.WaitGroup
+	for range goroutines {
+		wg.Go(func() {
+			for range perGoroutine {
+				results <- IDFromContext(ctx, &testIDFromContextCtxKeys.c)
+			}
+		})
+	}
+	wg.Wait()
+	close(results)
+
+	seen := make(IDSet)
+	for id := range results {
+		require.True(t, seen.Insert(id), "ID %s handed out twice", id)
+	}
+	require.True(t, seen.Equal(ids.AsSet()), "every ID of the sequence handed out")
+
+	require.Panics(t, func() { IDFromContext(ctx, &testIDFromContextCtxKeys.c) }, "exhausted")
 }
 
 func TestNewID(t *testing.T) {

@@ -1,6 +1,10 @@
 package uu
 
-import "context"
+import (
+	"context"
+	"fmt"
+	"sync"
+)
 
 var newIDFuncCtxKey int
 
@@ -47,13 +51,24 @@ func ContextWithID(ctx context.Context, id ID, keys ...any) context.Context {
 // to override random generation with a
 // deterministic series using IDFromContext
 // to retrieve the IDs with the given key.
+//
+// The ID generating function is safe for concurrent use
+// and panics when called after all passed IDs have been returned,
+// because using more IDs than defined is a bug in the test
+// and the invalid IDNil must never be returned instead.
 func ContextWithIDSequence(ctx context.Context, key any, ids ...ID) context.Context {
-	index := 0
+	var (
+		mutex sync.Mutex
+		index int
+	)
 	return ContextWithIDFunc(
 		ctx,
 		func() ID {
+			mutex.Lock()
+			defer mutex.Unlock()
+
 			if index >= len(ids) {
-				return IDNil
+				panic(fmt.Sprintf("uu.ContextWithIDSequence: all %d IDs of the sequence have already been used", len(ids)))
 			}
 			id := ids[index]
 			index++
