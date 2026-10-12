@@ -11,6 +11,7 @@ import (
 
 	"github.com/domonda/go-types/language"
 	"github.com/domonda/go-types/nullable"
+	"github.com/domonda/go-types/strutil"
 )
 
 // Null is an empty string and will be treated as SQL NULL.
@@ -20,7 +21,7 @@ const Null NullableDate = ""
 // NullableDate is identical to Date, except that IsZero() is considered valid
 // by the Valid() and Validate() methods.
 // NullableDate implements the database/sql.Scanner and database/sql/driver.Valuer interfaces,
-// and treats an empty/zero Date string as SQL NULL value.
+// and treats an empty, whitespace only or zero Date string as SQL NULL value.
 // The main difference between Date and NullableDate is:
 // Date("").Valid() == false
 // NullableDate("").Valid() == true
@@ -66,10 +67,11 @@ func (n NullableDate) IsZero() bool {
 	return Date(n).IsZero()
 }
 
-// IsNull returns true if the NullableDate is null or zero.
+// IsNull returns true if the NullableDate is null or zero,
+// which includes whitespace only like for country.NullableCode.
 // IsNull implements the nullable.Nullable interface.
 func (n NullableDate) IsNull() bool {
-	return n.IsZero()
+	return n.IsZero() || strutil.TrimSpace(n) == Null
 }
 
 // IsNotNull returns true if the NullableDate is not null.
@@ -105,7 +107,7 @@ func (n NullableDate) GetOr(defaultDate Date) Date {
 }
 
 // Valid returns if the format of the date is correct, see Format.
-// n.IsZero() is valid.
+// A null date is valid, see IsNull.
 func (n NullableDate) Valid() bool {
 	return n.Validate() == nil
 }
@@ -122,9 +124,9 @@ func (n NullableDate) ValidAndNormalized() bool {
 }
 
 // Validate returns an error if the date is not in a valid, normalizable format.
-// n.IsZero() is valid.
+// A null date is valid, see IsNull.
 func (n NullableDate) Validate() error {
-	if n.IsZero() {
+	if n.IsNull() {
 		return nil
 	}
 	return Date(n).Validate()
@@ -154,9 +156,9 @@ func (n *NullableDate) ScanString(source string, validate bool) error {
 // ScanStringWithLang parses and assigns the source string as a NullableDate using the given language hint.
 // Returns wasNormalized to indicate if the source was already in normalized form,
 // monthMustBeFirst to indicate if the date format requires month-first ordering,
-// and an error if parsing fails. Empty or zero values are treated as Null.
+// and an error if parsing fails. Null values (empty, whitespace only or zero) are treated as Null.
 func (n *NullableDate) ScanStringWithLang(source string, lang language.Code) (wasNormalized bool, monthMustBeFirst bool, err error) {
-	if NullableDate(source).IsZero() {
+	if NullableDate(source).IsNull() {
 		*n = Null
 		return false, false, nil
 	}
@@ -191,10 +193,10 @@ func (n NullableDate) StringOr(nullString string) string {
 // Normalized returns the date in normalized form,
 // or an error if the format can't be detected.
 // The first given lang argument is used as language hint.
-// if n.IsZero() then Null, nil will be returned.
+// If n.IsNull() then Null, nil will be returned.
 // Returns the NullableDate unchanged in case of an error.
 func (n NullableDate) Normalized(lang ...language.Code) (NullableDate, error) {
-	if n.IsZero() {
+	if n.IsNull() {
 		return Null, nil
 	}
 	d, err := Date(n).Normalized(lang...)
@@ -587,16 +589,19 @@ func (n NullableDate) Format(layout string) string {
 
 // Scan implements the database/sql.Scanner interface.
 // Accepts string, []byte, time.Time, or nil values.
-// Empty strings and zero dates ("0000-00-00", "0001-01-01") are treated as Null.
+// Empty and whitespace only strings and zero dates ("0000-00-00", "0001-01-01")
+// are treated as Null, see IsNull.
 func (n *NullableDate) Scan(value any) (err error) {
 	switch x := value.(type) {
 	case string:
 		d := Date(x)
-		if !d.IsZero() {
-			d, err = d.Normalized()
-			if err != nil {
-				return err
-			}
+		if NullableDate(x).IsNull() {
+			*n = Null
+			return nil
+		}
+		d, err = d.Normalized()
+		if err != nil {
+			return err
 		}
 		*n = d.Nullable()
 		return nil
@@ -617,9 +622,9 @@ func (n *NullableDate) Scan(value any) (err error) {
 }
 
 // Value implements the database/sql/driver.Valuer interface.
-// Returns nil for zero/null dates, otherwise returns the normalized date string.
+// Returns nil for null dates (see IsNull), otherwise returns the normalized date string.
 func (n NullableDate) Value() (driver.Value, error) {
-	if n.IsZero() {
+	if n.IsNull() {
 		return nil, nil
 	}
 	normalized, err := Date(n).Normalized()
@@ -630,7 +635,7 @@ func (n NullableDate) Value() (driver.Value, error) {
 }
 
 // MarshalJSON implements encoding/json.Marshaler.
-// Returns the JSON null value for empty/null dates, otherwise returns the date as a JSON string.
+// Returns the JSON null value for null dates (see IsNull), otherwise returns the date as a JSON string.
 func (n NullableDate) MarshalJSON() ([]byte, error) {
 	if n.IsNull() {
 		return []byte(`null`), nil

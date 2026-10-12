@@ -11,11 +11,13 @@ import (
 	"github.com/invopop/jsonschema"
 
 	"github.com/domonda/go-types/nullable"
+	"github.com/domonda/go-types/strutil"
 )
 
 // NullableAddress is a string containing a non-normalized email-address
 // with an optional name part before the mandatory address part.
-// An empty string represents the SQL/JSON null value.
+// An empty or whitespace only string represents the SQL/JSON null value,
+// like for country.NullableCode.
 type NullableAddress string
 
 // Compile-time check that NullableAddress implements nullable.NullSetable[Address]
@@ -35,7 +37,7 @@ func NullableAddressFrom(a *mail.Address) NullableAddress {
 // NormalizedNullableAddress parses an email address less strict
 // than the standard net/mail.ParseAddress function
 // fixing malformed addresses and lower cases the address part.
-// An empty string is interpreted as valid NULL address.
+// An empty or whitespace only string is interpreted as valid NULL address.
 func NormalizedNullableAddress(addr string) (normalized NullableAddress, err error) {
 	return NullableAddress(addr).Normalized()
 }
@@ -67,10 +69,11 @@ func (n NullableAddress) ValidAndNormalized() bool {
 // Normalized parses an email address less strict
 // than the standard net/mail.ParseAddress function
 // fixing malformed addresses and lower cases the address part.
-// An empty string is interpreted as valid NULL address.
+// An empty or whitespace only string is interpreted as valid NULL address
+// and returned as AddressNull, see IsNull.
 func (n NullableAddress) Normalized() (NullableAddress, error) {
 	if n.IsNull() {
-		return n, nil
+		return AddressNull, nil
 	}
 	norm, err := Address(n).Normalized()
 	return NullableAddress(norm), err
@@ -113,14 +116,17 @@ func (n NullableAddress) DomainPart() string {
 	return Address(n).DomainPart()
 }
 
-// IsNull returns true if the string n is empty.
+// IsNull returns true if the string n is empty or whitespace only
+// like for Normalized.
+// IsNull implements the nullable.Nullable interface.
 func (n NullableAddress) IsNull() bool {
-	return n == ""
+	return strutil.TrimSpace(n) == AddressNull
 }
 
-// IsNotNull returns true if the string n is not empty.
+// IsNotNull returns true if the NullableAddress is not null,
+// see IsNull.
 func (n NullableAddress) IsNotNull() bool {
-	return n != ""
+	return !n.IsNull()
 }
 
 // StringOr returns the string value of n or the passed nullString if n.IsNull()
@@ -184,6 +190,7 @@ func (n *NullableAddress) Scan(value any) error {
 }
 
 // Value implements the driver database/sql/driver.Valuer interface.
+// Returns nil for SQL NULL if the NullableAddress is null, see IsNull.
 func (n NullableAddress) Value() (driver.Value, error) {
 	if n.IsNull() {
 		return nil, nil
@@ -208,7 +215,8 @@ func (n *NullableAddress) UnmarshalJSON(data []byte) error {
 	return json.Unmarshal(data, (*string)(n))
 }
 
-// MarshalJSON implements the json.Marshaler interface.
+// MarshalJSON implements the json.Marshaler interface
+// by returning the JSON null value if the NullableAddress is null, see IsNull.
 func (n NullableAddress) MarshalJSON() ([]byte, error) {
 	if n.IsNull() {
 		return []byte(`null`), nil
@@ -232,7 +240,11 @@ func (NullableAddress) JSONSchema() *jsonschema.Schema {
 }
 
 // AsList converts the NullableAddress to a NullableAddressList
-// containing this single address.
+// containing this single address,
+// or the null NullableAddressList if n is null, see IsNull.
 func (n NullableAddress) AsList() NullableAddressList {
+	if n.IsNull() {
+		return ""
+	}
 	return NullableAddressList(n)
 }

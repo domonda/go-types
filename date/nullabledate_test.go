@@ -2,6 +2,7 @@ package date
 
 import (
 	"encoding/json"
+	"fmt"
 	"testing"
 	"time"
 
@@ -48,6 +49,54 @@ func TestNullableDate_IsNull(t *testing.T) {
 	assert.True(t, NullableDate("").IsNull())
 	assert.True(t, Null.IsNull())
 	assert.False(t, NullableDate("2023-12-25").IsNull())
+}
+
+func TestNullableDate_WhitespaceIsNull(t *testing.T) {
+	// Like country.NullableCode and vat.NullableID, a whitespace only
+	// value is null, else a value that carries no date would be handled
+	// as an invalid date: written to JSON as whitespace and failing
+	// Value, Scan and validation.
+	for _, n := range []NullableDate{" ", "  ", "\t\n", " "} {
+		t.Run(fmt.Sprintf("%q", string(n)), func(t *testing.T) {
+			assert.True(t, n.IsNull())
+			assert.False(t, n.IsNotNull())
+			assert.True(t, n.Valid())
+			assert.NoError(t, n.Validate())
+			assert.False(t, n.ValidAndNotNull())
+			assert.False(t, n.ValidAndNormalized(), "whitespace is null, but not the normalized Null")
+
+			norm, err := n.Normalized()
+			require.NoError(t, err)
+			assert.Equal(t, Null, norm)
+			assert.Equal(t, Null, n.NormalizedOrNull())
+			assert.True(t, n.NormalizedEqual(Null))
+
+			assert.Equal(t, "", n.String())
+			assert.Equal(t, "N/A", n.StringOr("N/A"))
+			assert.Equal(t, Date("2020-01-01"), n.GetOr("2020-01-01"))
+			assert.Equal(t, Date("2020-01-01"), n.DateOr("2020-01-01"))
+			assert.Panics(t, func() { n.Get() })
+
+			v, err := n.Value()
+			require.NoError(t, err)
+			assert.Nil(t, v, "must be written as SQL NULL instead of an error")
+			j, err := json.Marshal(n)
+			require.NoError(t, err)
+			assert.Equal(t, `null`, string(j))
+
+			// Reading whitespace gives Null like reading "" does
+			scanned := NullableDate("2000-01-01")
+			require.NoError(t, scanned.Scan(string(n)))
+			assert.Equal(t, Null, scanned, "Scan")
+			scanned = NullableDate("2000-01-01")
+			require.NoError(t, scanned.ScanString(string(n), true))
+			assert.Equal(t, Null, scanned, "ScanString")
+			scanned = NullableDate("2000-01-01")
+			_, _, err = scanned.ScanStringWithLang(string(n), language.EN)
+			require.NoError(t, err)
+			assert.Equal(t, Null, scanned, "ScanStringWithLang")
+		})
+	}
 }
 
 func TestNullableDate_IsNotNull(t *testing.T) {

@@ -377,11 +377,13 @@ current code:
 - **`language.Code` has no nullable type.** `language.Null` writes SQL NULL,
   but `language.Null.Validate()` returns an error, so an optional language
   field fails `types.DeepValidate`.
-- **Whitespace-only input.** `country.NullableCode("  ")` and
-  `nullable.TrimmedString("  ")` are null. `bank.NullableIBAN`,
-  `bank.NullableBIC`, `money.NullableCurrency`, `vat.NullableID`,
-  `email.NullableAddress` and `date.NullableDate` treat `"  "` as an invalid
-  non-null value.
+- **Whitespace-only input.** `"  "` is null for `country.NullableCode`,
+  `bank.NullableIBAN`, `bank.NullableBIC`, `money.NullableCurrency`,
+  `vat.NullableID`, `email.NullableAddress`, `date.NullableDate` and
+  `nullable.TrimmedString`. `email.NullableAddressList`,
+  `account.NullableNumber` (although its `MarshalJSON` writes `null`),
+  `nullable.NonEmptyString`, `date.NullableYearMonth` and
+  `date.NullableYearQuarter` treat it as a non-null value.
 - **JSON `""` into a nullable type.** For the string based `NullableX` types
   and `nullable.NonEmptyString` it means null. For `money.NullableAmount`,
   `NullableDecimalAmount` and `NullableRate` it decodes as a present zero,

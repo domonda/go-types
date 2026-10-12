@@ -2,6 +2,7 @@ package bank
 
 import (
 	"encoding/json"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -48,9 +49,43 @@ func TestNullableBIC_Valid(t *testing.T) {
 	assert.Equal(t, string(normBIC), normBIC.StringOr("default"))
 }
 
+func TestNullableBIC_WhitespaceIsNull(t *testing.T) {
+	// Like country.NullableCode and vat.NullableID, a whitespace only
+	// value is null, else a value that carries no BIC would be handled
+	// as an invalid BIC and written to SQL and JSON as whitespace.
+	for _, bic := range []NullableBIC{" ", "  ", "\t\n", "\u00a0"} {
+		t.Run(fmt.Sprintf("%q", string(bic)), func(t *testing.T) {
+			assert.True(t, bic.IsNull())
+			assert.False(t, bic.IsNotNull())
+			assert.True(t, bic.Valid())
+			assert.NoError(t, bic.Validate())
+			assert.False(t, bic.ValidAndNotNull())
+			assert.False(t, bic.ValidAndNormalized(), "whitespace is null, but not the normalized BICNull")
+
+			norm, err := bic.Normalized()
+			require.NoError(t, err)
+			assert.Equal(t, BICNull, norm)
+			assert.Equal(t, BICNull, bic.NormalizedOrNull())
+
+			assert.Equal(t, "", bic.String())
+			assert.Equal(t, "default", bic.StringOr("default"))
+			assert.Equal(t, BIC("BELADEBEXXX"), bic.GetOr("BELADEBEXXX"))
+			assert.Panics(t, func() { bic.Get() })
+
+			v, err := bic.Value()
+			require.NoError(t, err)
+			assert.Nil(t, v, "must be written as SQL NULL instead of the whitespace")
+			j, err := json.Marshal(bic)
+			require.NoError(t, err)
+			assert.Equal(t, `null`, string(j))
+		})
+	}
+}
+
 func TestNullableBIC_Invalid(t *testing.T) {
-	// Only the empty string is NULL, everything else must be a valid BIC
-	for _, bic := range []NullableBIC{" ", "NULL", "DEUTZZFF", "AMTSGERICHT"} {
+	// Only the empty or whitespace only string is NULL,
+	// everything else must be a valid BIC
+	for _, bic := range []NullableBIC{"NULL", "DEUTZZFF", "AMTSGERICHT"} {
 		t.Run(string(bic), func(t *testing.T) {
 			assert.False(t, bic.IsNull())
 			assert.False(t, bic.Valid())

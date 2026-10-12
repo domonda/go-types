@@ -2,6 +2,7 @@ package bank
 
 import (
 	"encoding/json"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -65,9 +66,47 @@ func TestNullableIBAN_Valid(t *testing.T) {
 	assert.Equal(t, spacedIBAN, spaced)
 }
 
+func TestNullableIBAN_WhitespaceIsNull(t *testing.T) {
+	// Like country.NullableCode and vat.NullableID, a whitespace only
+	// value is null, else a value that carries no IBAN would be handled
+	// as an invalid IBAN and written to SQL and JSON as whitespace.
+	for _, iban := range []NullableIBAN{" ", "  ", "\t\n", "\u00a0"} {
+		t.Run(fmt.Sprintf("%q", string(iban)), func(t *testing.T) {
+			assert.True(t, iban.IsNull())
+			assert.False(t, iban.IsNotNull())
+			assert.True(t, iban.Valid())
+			assert.NoError(t, iban.Validate())
+			assert.False(t, iban.ValidAndNotNull())
+			assert.False(t, iban.ValidAndNormalized(), "whitespace is null, but not the normalized IBANNull")
+			assert.Equal(t, country.Code(""), iban.CountryCode())
+
+			norm, err := iban.Normalized()
+			require.NoError(t, err)
+			assert.Equal(t, IBANNull, norm)
+			spaced, err := iban.NormalizedWithSpaces()
+			require.NoError(t, err)
+			assert.Equal(t, IBANNull, spaced)
+			assert.Equal(t, IBANNull, iban.NormalizedOrNull())
+
+			assert.Equal(t, "", iban.String())
+			assert.Equal(t, "default", iban.StringOr("default"))
+			assert.Equal(t, IBAN("DE89370400440532013000"), iban.GetOr("DE89370400440532013000"))
+			assert.Panics(t, func() { iban.Get() })
+
+			v, err := iban.Value()
+			require.NoError(t, err)
+			assert.Nil(t, v, "must be written as SQL NULL instead of the whitespace")
+			j, err := json.Marshal(iban)
+			require.NoError(t, err)
+			assert.Equal(t, `null`, string(j))
+		})
+	}
+}
+
 func TestNullableIBAN_Invalid(t *testing.T) {
-	// Only the empty string is NULL, everything else must be a valid IBAN
-	for _, iban := range []NullableIBAN{" ", "NULL", "DE89370400440532013001", "XX89370400440532013000"} {
+	// Only the empty or whitespace only string is NULL,
+	// everything else must be a valid IBAN
+	for _, iban := range []NullableIBAN{"NULL", "DE89370400440532013001", "XX89370400440532013000"} {
 		t.Run(string(iban), func(t *testing.T) {
 			assert.False(t, iban.IsNull())
 			assert.False(t, iban.Valid())

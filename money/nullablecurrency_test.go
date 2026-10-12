@@ -28,6 +28,30 @@ func TestNullableCurrency_Null(t *testing.T) {
 	assert.Equal(t, NullableCurrency(CurrencyNull), n)
 }
 
+// TestNullableCurrency_WhitespaceIsNull pins that a whitespace only value
+// is null like for country.NullableCode and vat.NullableID, else a value
+// that carries no currency would be handled as an invalid currency and
+// written to SQL and JSON as whitespace.
+func TestNullableCurrency_WhitespaceIsNull(t *testing.T) {
+	for _, n := range []NullableCurrency{" ", "  ", "\t\n", "\u00a0"} {
+		t.Run(fmt.Sprintf("%q", string(n)), func(t *testing.T) {
+			assert.True(t, n.IsNull())
+			assert.False(t, n.IsNotNull())
+			assert.Panics(t, func() { n.Get() })
+			assert.Equal(t, EUR, n.GetOr(EUR))
+			assert.Equal(t, "none", n.StringOr("none"))
+			assert.Equal(t, "", n.String())
+
+			v, err := n.Value()
+			require.NoError(t, err)
+			assert.Nil(t, v, "must be written as SQL NULL instead of the whitespace")
+			j, err := json.Marshal(n)
+			require.NoError(t, err)
+			assert.Equal(t, `null`, string(j))
+		})
+	}
+}
+
 // TestNullableCurrency_GetOrStringOr pins the fallbacks for NULL values:
 // GetOr also falls back for invalid currencies so that callers always
 // get a usable Currency, while StringOr only falls back for NULL.
@@ -55,7 +79,10 @@ func TestNullableCurrency_Validity(t *testing.T) {
 		{n: "eur", valid: true, validAndNotNull: true, validAndNormalized: false},
 		{n: "€", valid: true, validAndNotNull: true, validAndNormalized: false},
 		{n: "XYZ", valid: false, validAndNotNull: false, validAndNormalized: false},
-		{n: " ", valid: false, validAndNotNull: false, validAndNormalized: false},
+		// Whitespace only is null like for country.NullableCode,
+		// but not the normalized CurrencyNull
+		{n: " ", valid: true, validAndNotNull: false, validAndNormalized: false},
+		{n: " \t\n", valid: true, validAndNotNull: false, validAndNormalized: false},
 	}
 	for _, tt := range tests {
 		t.Run(fmt.Sprintf("%q", string(tt.n)), func(t *testing.T) {
@@ -81,6 +108,8 @@ func TestNullableCurrency_Normalized(t *testing.T) {
 		wantErr bool
 	}{
 		{n: "", want: ""},
+		// Whitespace only is null and normalizes to CurrencyNull
+		{n: "  ", want: CurrencyNull},
 		{n: "EUR", want: "EUR"},
 		{n: " eur ", want: "EUR"},
 		{n: "£", want: "GBP"},

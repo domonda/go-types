@@ -6,12 +6,13 @@ import (
 	"fmt"
 
 	"github.com/domonda/go-types/nullable"
+	"github.com/domonda/go-types/strutil"
 )
 
 // NullableCurrency holds a 3 character ISO 4217 alphabetic code,
 // or an empty string as valid value representing NULL in SQL databases.
 // NullableCurrency implements the database/sql.Scanner and database/sql/driver.Valuer interfaces,
-// and will treat an empty NullableCurrency string as SQL NULL value.
+// and will treat an empty or whitespace only NullableCurrency string as SQL NULL value.
 // The main difference between Currency and NullableCurrency is:
 // Currency("").Valid() == false
 // NullableCurrency("").Valid() == true
@@ -20,15 +21,17 @@ type NullableCurrency string
 // Compile-time check that NullableCurrency implements nullable.NullSetable[Currency]
 var _ nullable.NullSetable[Currency] = (*NullableCurrency)(nil)
 
-// IsNull returns true if the NullableCurrency is null.
+// IsNull returns true if the NullableCurrency is null,
+// which includes whitespace only like for country.NullableCode.
 // IsNull implements the nullable.Nullable interface.
 func (n NullableCurrency) IsNull() bool {
-	return n == CurrencyNull
+	return strutil.TrimSpace(n) == CurrencyNull
 }
 
-// IsNotNull returns true if the NullableCurrency is not null.
+// IsNotNull returns true if the NullableCurrency is not null,
+// see IsNull.
 func (n NullableCurrency) IsNotNull() bool {
-	return n != CurrencyNull
+	return !n.IsNull()
 }
 
 // Set sets the passed currency as value of the NullableCurrency
@@ -69,15 +72,16 @@ func (n NullableCurrency) StringOr(defaultString string) string {
 	return string(n)
 }
 
-// Valid returns true if n is an empty string, or can be normalized to a valid currency.
+// Valid returns true if n is null (empty or whitespace only),
+// or can be normalized to a valid currency.
 func (n NullableCurrency) Valid() bool {
-	return n == CurrencyNull || Currency(n).Valid()
+	return n.IsNull() || Currency(n).Valid()
 }
 
-// Validate returns an error if n is not an empty string and
-// can not be normalized to a valid currency.
+// Validate returns an error if n is not null (empty or whitespace only)
+// and can not be normalized to a valid currency.
 func (n NullableCurrency) Validate() error {
-	if n == CurrencyNull {
+	if n.IsNull() {
 		return nil
 	}
 	return Currency(n).Validate()
@@ -94,20 +98,22 @@ func (n NullableCurrency) ValidAndNormalized() bool {
 	return err == nil && n == norm
 }
 
-// ValidPtr returns true if n is nil, an empty string, or can be normalized to a valid currency.
+// ValidPtr returns true if n is nil, null (empty or whitespace only),
+// or can be normalized to a valid currency.
 // Safe to call on a nil pointer.
 func (n *NullableCurrency) ValidPtr() bool {
-	if n == nil || *n == CurrencyNull {
+	if n == nil || n.IsNull() {
 		return true
 	}
 	return Currency(*n).Valid()
 }
 
 // Normalized normalizes a currency string.
+// Returns CurrencyNull for a null (empty or whitespace only) currency, see IsNull.
 // Returns the NullableCurrency unchanged in case of an error.
 func (n NullableCurrency) Normalized() (NullableCurrency, error) {
-	if n == CurrencyNull {
-		return n, nil
+	if n.IsNull() {
+		return CurrencyNull, nil
 	}
 	norm, err := Currency(n).Normalized()
 	return NullableCurrency(norm), err
@@ -165,8 +171,9 @@ func (n *NullableCurrency) Scan(value any) error {
 }
 
 // Value implements the driver database/sql/driver.Valuer interface.
+// Returns nil for SQL NULL if the NullableCurrency is null, see IsNull.
 func (n NullableCurrency) Value() (driver.Value, error) {
-	if n == CurrencyNull {
+	if n.IsNull() {
 		return nil, nil
 	}
 	return string(n), nil
@@ -204,7 +211,7 @@ func (n NullableCurrency) String() string {
 }
 
 // MarshalJSON implements encoding/json.Marshaler
-// by returning the JSON null value for an empty (null) string.
+// by returning the JSON null value if the NullableCurrency is null, see IsNull.
 func (n NullableCurrency) MarshalJSON() ([]byte, error) {
 	if n.IsNull() {
 		return []byte(`null`), nil

@@ -55,24 +55,24 @@ type NullableIBAN string
 const IBANNull NullableIBAN = ""
 ```
 
-An `IBAN` where `""` is the null value. Null counts as valid.
+An `IBAN` where `""` is the null value. A whitespace only value is null too, like for `country.NullableCode`. Null counts as valid.
 
 | Method                                          | Description                                        |
 |-------------------------------------------------|----------------------------------------------------|
-| `Normalized() (NullableIBAN, error)`            | Like `IBAN.Normalized`, null stays null without error. |
-| `NormalizedWithSpaces() (NullableIBAN, error)`  | Like `IBAN.NormalizedWithSpaces`, null stays null. |
+| `Normalized() (NullableIBAN, error)`            | Like `IBAN.Normalized`, `IBANNull` for null without error. |
+| `NormalizedWithSpaces() (NullableIBAN, error)`  | Like `IBAN.NormalizedWithSpaces`, `IBANNull` for null. |
 | `NormalizedOrNull() NullableIBAN`               | Normalized, or `IBANNull` if null or invalid.      |
 | `Valid() bool`, `Validate() error`              | Null or a valid IBAN.                              |
 | `ValidAndNotNull() bool`                        | Not null and valid.                                |
 | `ValidAndNormalized() bool`                     | Null, or valid and in compact form.                |
 | `CountryCode() country.Code`                    | Like `IBAN.CountryCode`, `""` for null or invalid values. |
-| `IsNull() bool`, `IsNotNull() bool`             | `iban == ""`, `iban != ""`.                        |
+| `IsNull() bool`, `IsNotNull() bool`             | Null is `""` or whitespace only.                   |
 | `Get() IBAN`                                    | Panics if null.                                    |
 | `GetOr(defaultIBAN IBAN) IBAN`                  | Value or the default.                              |
 | `StringOr(defaultString) string`                | Value unchanged, or the default if null.           |
 | `String() string`                               | Normalized if valid, else unchanged, `""` for null. |
 | `Set(IBAN)`, `SetNull()`                        | `Set("")` sets null.                               |
-| `ScanString(source, validate) error`            | `""`, `NULL`, `null`, and `nil` set null, other values like `IBAN.ScanString`. |
+| `ScanString(source, validate) error`            | `""`, whitespace only, `NULL`, `null`, and `nil` set null, other values like `IBAN.ScanString`. |
 | `Scan(value) error`, `Value()`, `MarshalJSON()` | See [Serialization](#serialization).               |
 | `JSONSchema()`                                  | `IBANRegex` string or null.                        |
 
@@ -122,22 +122,22 @@ type NullableBIC string
 const BICNull NullableBIC = ""
 ```
 
-A `BIC` where `""` is the null value. Null counts as valid.
+A `BIC` where `""` is the null value. A whitespace only value is null too, like for `country.NullableCode`. Null counts as valid.
 
 | Method                                          | Description                                        |
 |-------------------------------------------------|----------------------------------------------------|
-| `Normalized() (NullableBIC, error)`             | Like `BIC.Normalized`, null stays null without error. |
+| `Normalized() (NullableBIC, error)`             | Like `BIC.Normalized`, `BICNull` for null without error. |
 | `NormalizedOrNull() NullableBIC`                | Normalized, or `BICNull` if null or invalid.       |
 | `Valid() bool`, `Validate() error`              | Null or a valid BIC.                               |
 | `ValidAndNotNull() bool`                        | Not null and valid.                                |
 | `ValidAndNormalized() bool`                     | Null, or the valid 11 character form.              |
-| `IsNull() bool`, `IsNotNull() bool`             | `bic == ""`, `bic != ""`.                          |
+| `IsNull() bool`, `IsNotNull() bool`             | Null is `""` or whitespace only.                   |
 | `Get() BIC`                                     | Panics if null.                                    |
 | `GetOr(defaultBIC BIC) BIC`                     | Value or the default.                              |
 | `StringOr(defaultString) string`                | Value unchanged, or the default if null.           |
 | `String() string`                               | Normalized if valid, else unchanged, `""` for null. |
 | `Set(BIC)`, `SetNull()`                         | `Set("")` sets null.                               |
-| `ScanString(source, validate) error`            | `""`, `NULL`, `null`, and `nil` set null, other values like `BIC.ScanString`. |
+| `ScanString(source, validate) error`            | `""`, whitespace only, `NULL`, `null`, and `nil` set null, other values like `BIC.ScanString`. |
 | `Scan(value) error`, `Value()`, `MarshalJSON()` | See [Serialization](#serialization).               |
 | `JSONSchema()`                                  | `BICRegex` string or null.                         |
 
@@ -233,7 +233,7 @@ The tag paths start below the root element, which is not checked.
 | Type                          | `Value()` writes                             | `Scan` accepts                                     | JSON                                               | Text                                               |
 |-------------------------------|----------------------------------------------|----------------------------------------------------|----------------------------------------------------|----------------------------------------------------|
 | `IBAN`, `BIC`                 | The string unchanged, `""` as `""`, not NULL | `string` and `[]byte` unchanged, NULL as `""`, other types are errors | No methods: plain string, `""` as `""`, `null` leaves the value unchanged | No text methods, `ScanString` for `strfmt`         |
-| `NullableIBAN`, `NullableBIC` | `""` as NULL, else the string unchanged      | Like `IBAN`, NULL is null                          | `MarshalJSON` writes `""` as `null`, else the string unchanged. No `UnmarshalJSON`: strings are assigned unchanged, `null` leaves the value unchanged | No text methods, `ScanString` for `strfmt`         |
+| `NullableIBAN`, `NullableBIC` | Null (`""` or whitespace only) as NULL, else the string unchanged | Like `IBAN`, NULL is null                          | `MarshalJSON` writes null as `null`, else the string unchanged. No `UnmarshalJSON`: strings are assigned unchanged, `null` leaves the value unchanged | No text methods, `ScanString` for `strfmt`         |
 | `Account`                     | No `Valuer`, marshal to JSON yourself        | `string` or `[]byte` with JSON or an IBAN, see `UnmarshalJSON`. NULL is an error. | Marshal: `{"iban":"...","bic":"...","currency":"...","holder":"..."}`, `iban` always, the others omitted when empty. Unmarshal: a JSON object is assigned without normalization or validation, a JSON string must be a valid IBAN and is normalized, `BIC`, `Currency`, and `Holder` become null. `null` leaves the account unchanged. | `UnmarshalText` like `UnmarshalJSON` after trimming, also for an unquoted IBAN |
 
 ## Gotchas

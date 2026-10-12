@@ -103,20 +103,20 @@ type NullableAddress string
 const AddressNull NullableAddress = ""
 ```
 
-An `Address` where `""` is SQL NULL and JSON null. Null counts as valid.
+An `Address` where `""` is SQL NULL and JSON null. A whitespace only value is null too, like for `country.NullableCode`. Null counts as valid.
 
 | Function / Method                                  | Description                                        |
 |----------------------------------------------------|----------------------------------------------------|
 | `NullableAddressFrom(*mail.Address) NullableAddress` | Like `AddressFrom`, nil gives `AddressNull`.       |
-| `NormalizedNullableAddress(str) (NullableAddress, error)` | `""` is a valid null, otherwise like `NormalizedAddress`. |
+| `NormalizedNullableAddress(str) (NullableAddress, error)` | `""` and whitespace only give `AddressNull`, otherwise like `NormalizedAddress`. |
 | `n.Parse() (*mail.Address, error)`                 | `nil, nil` for null.                               |
 | `n.Normalized()`, `n.Validate()`, `n.ValidAndNormalized()` | Like `Address`, null is valid and normalizes to null. |
 | `n.NamePart()`, `n.AddressPart()`, `n.LocalPart()`, `n.DomainPart()` | Like `Address`, `""` for null.                     |
-| `n.IsNull()`, `n.IsNotNull()`                      | `n == ""`, `n != ""`.                              |
+| `n.IsNull()`, `n.IsNotNull()`                      | Null is `""` or whitespace only.                   |
 | `n.Get() Address`                                  | Panics if null.                                    |
 | `n.GetOr(def Address) Address`, `n.StringOr(nullString) string` | Value or the default.                              |
 | `n.Set(Address)`, `n.SetNull()`                    | `Set("")` sets null.                               |
-| `n.AsList() NullableAddressList`                   | List containing only `n`.                          |
+| `n.AsList() NullableAddressList`                   | List containing only `n`, the null list if `n` is null. |
 
 Implements: `sql.Scanner`, `driver.Valuer`, `json.Marshaler`, `json.Unmarshaler`, `encoding.TextUnmarshaler`, `JSONSchema()` (email string or null), `nullable.NullSetable[Address]`. There is no `Valid()` method, use `Validate() == nil`.
 
@@ -266,7 +266,7 @@ None of the `Scan` or `Unmarshal*` methods validate or normalize.
 | `Address`             | No `Valuer`, `database/sql` writes the string, `""` as `""` | No `Scanner`, `database/sql` assigns `string` and `[]byte`, NULL is an error | Plain string, `""` as `""`                         | No methods                                         |
 | `AddressList`         | No `Valuer`, `database/sql` writes the string      | `string` or `[]byte`: a `{...}` PostgreSQL array literal is decoded, elements trimmed, empty ones skipped, joined with `", "` (so `{}` gives `""`). Any other string as is. NULL and `""` are errors. | Plain string                                       | No methods                                         |
 | `AddressSet`          | nil: NULL. Empty: `{}`. Else sorted array literal `{"a@example.com","b@example.com"}` | NULL: nil set. `{...}` array literal: elements trimmed, empty ones skipped, a `NULL` element or a nested array is an error. Any other string: a single element set, trimmed. `""` and whitespace only are errors. `[]byte` like `string`. | No methods: nil is `null`, a set is a JSON object `{"a@example.com":{}}`, which also unmarshals | No methods                                         |
-| `NullableAddress`     | `""`: NULL. Else the string                        | NULL: null. A non-empty `string` or `[]byte` as is. `""` is an error. | `""` marshals as `null`. `null` and `""` unmarshal to null | `UnmarshalText` assigns the text as is, no `MarshalText` |
+| `NullableAddress`     | Null (`""` or whitespace only): NULL. Else the string | NULL: null. A non-empty `string` or `[]byte` as is. `""` is an error. | Null marshals as `null`. `null` and `""` unmarshal to null | `UnmarshalText` assigns the text as is, no `MarshalText` |
 | `NullableAddressList` | `""`: NULL. Else the string                        | NULL: null. `string` and `[]byte` like `AddressList`. `""` is an error. | `""` marshals as `null`. `null` and `""` unmarshal to null | `UnmarshalText` assigns the text as is, no `MarshalText` |
 
 The array literals written by `AddressSet` and read by the `Scan` methods of `AddressSet`, `AddressList`, and `NullableAddressList` need PostgreSQL or an array-compatible database like CockroachDB or YugabyteDB. `NullableAddressList.Value` writes a plain string that works with any database.

@@ -3,6 +3,7 @@ package email
 import (
 	"database/sql/driver"
 	"encoding/json"
+	"fmt"
 	"net/mail"
 	"testing"
 
@@ -48,6 +49,43 @@ func TestNullableAddress_Null(t *testing.T) {
 	assert.Equal(t, Address("default@example.com"), n.GetOr("default@example.com"))
 	assert.Equal(t, NullableAddressList(""), n.AsList(), "NULL address must become the NULL list")
 	assert.Panics(t, func() { n.Get() }, "Get on NULL must panic instead of returning an invalid Address")
+}
+
+// TestNullableAddress_WhitespaceIsNull protects that a whitespace only
+// value is null like for country.NullableCode and vat.NullableID, else
+// a value that carries no address would be handled as an invalid address
+// and written to SQL and JSON as whitespace.
+func TestNullableAddress_WhitespaceIsNull(t *testing.T) {
+	for _, n := range []NullableAddress{" ", "  ", "\t\n", "\u00a0"} {
+		t.Run(fmt.Sprintf("%q", string(n)), func(t *testing.T) {
+			assert.True(t, n.IsNull())
+			assert.False(t, n.IsNotNull())
+			assert.NoError(t, n.Validate())
+			assert.False(t, n.ValidAndNormalized(), "whitespace is null, but not the normalized AddressNull")
+
+			normalized, err := n.Normalized()
+			require.NoError(t, err)
+			assert.Equal(t, AddressNull, normalized)
+			normalized, err = NormalizedNullableAddress(string(n))
+			require.NoError(t, err)
+			assert.Equal(t, AddressNull, normalized)
+			parsed, err := n.Parse()
+			require.NoError(t, err)
+			assert.Nil(t, parsed)
+
+			assert.Equal(t, "<none>", n.StringOr("<none>"))
+			assert.Equal(t, Address("default@example.com"), n.GetOr("default@example.com"))
+			assert.Panics(t, func() { n.Get() })
+			assert.Equal(t, NullableAddressList(""), n.AsList(), "a null address must become the NULL list")
+
+			v, err := n.Value()
+			require.NoError(t, err)
+			assert.Nil(t, v, "must be written as SQL NULL instead of the whitespace")
+			j, err := json.Marshal(n)
+			require.NoError(t, err)
+			assert.Equal(t, `null`, string(j))
+		})
+	}
 }
 
 // TestNullableAddress_NotNull protects that a non-NULL value behaves

@@ -10,12 +10,14 @@ import (
 	"github.com/domonda/go-types"
 	"github.com/domonda/go-types/country"
 	"github.com/domonda/go-types/nullable"
+	"github.com/domonda/go-types/strutil"
 )
 
 // IBANNull is an empty string and will be treated as SQL NULL.
 const IBANNull NullableIBAN = ""
 
 // NullableIBAN is a IBAN value which can hold an empty string ("") as the null value.
+// A whitespace only NullableIBAN is also null, like for country.NullableCode.
 type NullableIBAN string
 
 // Compile-time check that NullableIBAN implements nullable.NullSetable[IBAN]
@@ -85,10 +87,11 @@ func (iban NullableIBAN) CountryCode() country.Code {
 
 // Normalized returns the iban in normalized form,
 // or an error if the format can't be detected.
+// Returns IBANNull for a null (empty or whitespace only) iban, see IsNull.
 // Returns the NullableIBAN unchanged in case of an error.
 func (iban NullableIBAN) Normalized() (NullableIBAN, error) {
 	if iban.IsNull() {
-		return iban, nil
+		return IBANNull, nil
 	}
 	normalized, err := IBAN(iban).Normalized()
 	if err != nil {
@@ -109,10 +112,11 @@ func (iban NullableIBAN) NormalizedOrNull() NullableIBAN {
 
 // NormalizedWithSpaces returns the iban in normalized form with spaces every 4 characters,
 // or an error if the format can't be detected.
+// Returns IBANNull for a null (empty or whitespace only) iban, see IsNull.
 // Returns the NullableIBAN unchanged in case of an error.
 func (iban NullableIBAN) NormalizedWithSpaces() (NullableIBAN, error) {
 	if iban.IsNull() {
-		return iban, nil
+		return IBANNull, nil
 	}
 	normalized, err := IBAN(iban).NormalizedWithSpaces()
 	if err != nil {
@@ -137,6 +141,7 @@ func (iban *NullableIBAN) Scan(value any) error {
 }
 
 // Value implements the driver database/sql/driver.Valuer interface.
+// Returns nil for SQL NULL if the NullableIBAN is null, see IsNull.
 func (iban NullableIBAN) Value() (driver.Value, error) {
 	if iban.IsNull() {
 		return nil, nil
@@ -182,15 +187,17 @@ func (iban NullableIBAN) StringOr(defaultString string) string {
 	return string(iban)
 }
 
-// IsNull returns true if the NullableIBAN is null.
+// IsNull returns true if the NullableIBAN is null,
+// which includes whitespace only like for Normalized.
 // IsNull implements the nullable.Nullable interface.
 func (iban NullableIBAN) IsNull() bool {
-	return iban == IBANNull
+	return strutil.TrimSpace(iban) == IBANNull
 }
 
-// IsNotNull returns true if the NullableIBAN is not null.
+// IsNotNull returns true if the NullableIBAN is not null,
+// see IsNull.
 func (iban NullableIBAN) IsNotNull() bool {
-	return iban != IBANNull
+	return !iban.IsNull()
 }
 
 // String returns the normalized IBAN string if possible,
@@ -205,7 +212,7 @@ func (iban NullableIBAN) String() string {
 }
 
 // MarshalJSON implements encoding/json.Marshaler
-// by returning the JSON null value for an empty (null) string.
+// by returning the JSON null value if the NullableIBAN is null, see IsNull.
 func (iban NullableIBAN) MarshalJSON() ([]byte, error) {
 	if iban.IsNull() {
 		return []byte(`null`), nil

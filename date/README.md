@@ -146,7 +146,7 @@ Implements: `fmt.Stringer`, `database/sql.Scanner`, `database/sql/driver.Valuer`
 const Null NullableDate = ""
 ```
 
-`NullableDate` has the same string form as `Date`. `Null` and the zero dates `"0000-00-00"` and `"0001-01-01"` are null, valid, and written as SQL NULL and JSON `null`.
+`NullableDate` has the same string form as `Date`. `Null`, whitespace only (like for `country.NullableCode`) and the zero dates `"0000-00-00"` and `"0001-01-01"` are null, valid, and written as SQL NULL and JSON `null`.
 
 | Function                          | Description                                        |
 |-----------------------------------|----------------------------------------------------|
@@ -156,7 +156,8 @@ const Null NullableDate = ""
 
 | Method                                             | Description                                        |
 |----------------------------------------------------|----------------------------------------------------|
-| `IsNull()`, `IsZero()`                             | True for `Null` and the zero dates.                |
+| `IsNull()`                                         | True for `Null`, whitespace only and the zero dates. |
+| `IsZero()`                                         | True for `Null` and the zero dates.                |
 | `IsNotNull()`                                      | `!IsNull()`.                                       |
 | `Get()`                                            | The `Date`; panics if null.                        |
 | `GetOr(defaultDate)`, `DateOr(useIfNull)`          | The `Date`, or the argument if null.               |
@@ -169,8 +170,8 @@ const Null NullableDate = ""
 | `NormalizedOrNull(lang...)`, `NormalizedOrUnchanged(lang...)` | As for `Date`.                                     |
 | `String()`                                         | `""` for null, else like `Date`.                   |
 | `StringOr(nullString)`                             | `String()`, or `nullString` if null.               |
-| `ScanString(source, validate)`                     | `""`, `"NULL"`, `"null"` and `"nil"` set `Null`; otherwise like `Date`. |
-| `ScanStringWithLang(source, lang)`                 | A zero `source` sets `Null`; otherwise like `Date`. |
+| `ScanString(source, validate)`                     | `""`, `"NULL"`, `"null"`, `"nil"` and whitespace only set `Null`; otherwise like `Date`. |
+| `ScanStringWithLang(source, lang)`                 | A null `source` sets `Null`; otherwise like `Date`. |
 | `MidnightUTC()`, `Midnight()`, `MidnightInLocation(loc)` | Return `nullable.Time`, null for null or invalid dates. |
 
 These methods mirror `Date` and add null rules:
@@ -316,6 +317,7 @@ Reading values:
 |--------------------------------------------|---------------------------|-----------------------------|
 | `Scan(nil)`                                | `""`                      | `Null`                      |
 | `Scan("")`, `"0000-00-00"`, `"0001-01-01"` | stored as is              | `Null`                      |
+| `Scan` whitespace only                     | an error                  | `Null`                      |
 | `Scan` other `string`                      | normalized, or an error   | normalized, or an error     |
 | `Scan([]byte)`                             | like `string`             | like `string`               |
 | `Scan(time.Time)`                          | `OfTime(t)`, `""` if zero | `OfTime(t)`, `Null` if zero |
