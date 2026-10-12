@@ -315,6 +315,34 @@ func TestNullableDate_NullOrdering(t *testing.T) {
 	assert.Equal(t, 1, d.Compare(Null))
 }
 
+func TestNullableDate_ComparisonWithInvalidDate(t *testing.T) {
+	// An invalid date has no position in time, so every comparison with
+	// it must be false in both directions, like NormalizedEqual and
+	// Date.After. Not even Null is before an invalid date, else an
+	// invalid date would sort after Null like a real date.
+	d := NullableDate("2020-01-01")
+	tm := time.Date(2020, 1, 1, 12, 0, 0, 0, time.UTC)
+	for _, invalid := range []NullableDate{"bad", "2020-13-01"} {
+		t.Run(string(invalid), func(t *testing.T) {
+			for _, other := range []NullableDate{d, Null} {
+				assert.False(t, other.After(invalid), "%q.After(%q)", other, invalid)
+				assert.False(t, other.Before(invalid), "%q.Before(%q)", other, invalid)
+				assert.False(t, invalid.After(other), "%q.After(%q)", invalid, other)
+				assert.False(t, invalid.Before(other), "%q.Before(%q)", invalid, other)
+				assert.False(t, other.EqualOrAfter(invalid), "%q.EqualOrAfter(%q)", other, invalid)
+				assert.False(t, other.EqualOrBefore(invalid), "%q.EqualOrBefore(%q)", other, invalid)
+				assert.False(t, invalid.EqualOrAfter(other), "%q.EqualOrAfter(%q)", invalid, other)
+				assert.False(t, invalid.EqualOrBefore(other), "%q.EqualOrBefore(%q)", invalid, other)
+			}
+			assert.False(t, invalid.AfterTime(tm), "AfterTime")
+			assert.False(t, invalid.AfterTime(time.Time{}), "AfterTime zero time")
+			assert.False(t, invalid.BeforeTime(tm), "BeforeTime")
+			assert.False(t, invalid.AfterToday(), "AfterToday")
+			assert.False(t, invalid.BeforeToday(), "BeforeToday")
+		})
+	}
+}
+
 func TestNullableDate_NonNormalizedValidInput(t *testing.T) {
 	// A valid NullableDate that is not in the normalized YYYY-MM-DD form
 	// must behave like its normalized form, like Date does,

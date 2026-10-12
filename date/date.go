@@ -351,7 +351,11 @@ func (date Date) String() string {
 }
 
 // WithinIncl returns true if the date is within the inclusive range [from, until].
+// Returns false if any of the dates is not valid, see After.
 func (date Date) WithinIncl(from, until Date) bool {
+	if !date.Valid() || !from.Valid() || !until.Valid() {
+		return false
+	}
 	t := date.MidnightUTC()
 	tFrom := from.MidnightUTC()
 	tUntil := until.MidnightUTC()
@@ -359,7 +363,11 @@ func (date Date) WithinIncl(from, until Date) bool {
 }
 
 // BetweenExcl returns true if the date is strictly between (exclusive) after and before.
+// Returns false if any of the dates is not valid, see After.
 func (date Date) BetweenExcl(after, before Date) bool {
+	if !date.Valid() || !after.Valid() || !before.Valid() {
+		return false
+	}
 	t := date.MidnightUTC()
 	return t.After(after.MidnightUTC()) && t.Before(before.MidnightUTC())
 }
@@ -509,8 +517,11 @@ func (date Date) Compare(other Date) int {
 }
 
 // After returns true if the date is after the other date.
+// An invalid date (including "") has no position in time,
+// so After returns false if either date is not valid,
+// like NormalizedEqual returns false for an invalid date.
 func (date Date) After(other Date) bool {
-	return date.MidnightUTC().After(other.MidnightUTC())
+	return date.Valid() && other.Valid() && date.MidnightUTC().After(other.MidnightUTC())
 }
 
 // EqualOrAfter returns true if the date is equal to or after the other date.
@@ -519,8 +530,9 @@ func (date Date) EqualOrAfter(other Date) bool {
 }
 
 // Before returns true if the date is before the other date.
+// Returns false if either date is not valid, see After.
 func (date Date) Before(other Date) bool {
-	return date.MidnightUTC().Before(other.MidnightUTC())
+	return date.Valid() && other.Valid() && date.MidnightUTC().Before(other.MidnightUTC())
 }
 
 // EqualOrBefore returns true if the date is equal to or before the other date.
@@ -529,13 +541,15 @@ func (date Date) EqualOrBefore(other Date) bool {
 }
 
 // AfterTime returns true if midnight of the date (in the location of the passed time) is after the time.
+// Returns false if the date is not valid, see After.
 func (date Date) AfterTime(other time.Time) bool {
-	return date.MidnightInLocation(other.Location()).After(other)
+	return date.Valid() && date.MidnightInLocation(other.Location()).After(other)
 }
 
 // BeforeTime returns true if midnight of the date (in the location of the passed time) is before the time.
+// Returns false if the date is not valid, see After.
 func (date Date) BeforeTime(other time.Time) bool {
-	return date.MidnightInLocation(other.Location()).Before(other)
+	return date.Valid() && date.MidnightInLocation(other.Location()).Before(other)
 }
 
 // AddDate returns a new date with the specified years, months, and days added.

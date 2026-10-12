@@ -115,11 +115,11 @@ Rules for numeric dates:
 |----------------------------------------------------|----------------------------------------------------|
 | `Compare(other)`                                   | -1, 0 or +1 comparing the normalized strings. Invalid dates compare like `""`. |
 | `NormalizedEqual(other)`                           | True if both normalize to the same string. False if either is invalid, even for identical strings. |
-| `After(other)`, `Before(other)`                    | Strict order of the UTC midnights. Zero and invalid dates count as the zero time. |
+| `After(other)`, `Before(other)`                    | Strict order of the UTC midnights. False if either date is invalid, also `""`, like `NormalizedEqual`. |
 | `EqualOrAfter(other)`, `EqualOrBefore(other)`      | Inclusive variants.                                |
-| `WithinIncl(from, until)`                          | `from <= date <= until`.                           |
-| `BetweenExcl(after, before)`                       | `after < date < before`.                           |
-| `AfterTime(t)`, `BeforeTime(t)`                    | Compares midnight of the date in `t`'s location with `t`. |
+| `WithinIncl(from, until)`                          | `from <= date <= until`. False if any date is invalid. |
+| `BetweenExcl(after, before)`                       | `after < date < before`. False if any date is invalid. |
+| `AfterTime(t)`, `BeforeTime(t)`                    | Compares midnight of the date in `t`'s location with `t`. False for an invalid date. |
 | `IsToday()`, `IsTodayInUTC()`                      | `NormalizedEqual(OfToday())` / `NormalizedEqual(OfNowInUTC())`. |
 | `AfterToday()`, `AfterTodayInUTC()`, `BeforeToday()`, `BeforeTodayInUTC()` | `After` / `Before` today in the local time zone or UTC. |
 
@@ -181,9 +181,9 @@ These methods mirror `Date` and add null rules:
 | `AddDate`, `AddYears`, `AddMonths`, `AddDays`, `Add`, `BeginningOf*`, `EndOf*`, `LastMonday`, `NextSunday` | Return `NullableDate`; `Null` stays `Null`.        |
 | `Year`, `Month`, `Day`, `YearMonthDay`, `Weekday`, `ISOWeek` | Zeros for null.                                    |
 | `Format(layout)`                                   | `""` for `Null`.                                   |
-| `Compare`, `NormalizedEqual`, `After`, `Before`, `EqualOrAfter`, `EqualOrBefore` | Null is before every non-null date.                |
-| `AfterTime(t)`                                     | False for null. True for a non-null date if `t` is zero. |
-| `BeforeTime(t)`                                    | For null: true unless `t` is zero.                 |
+| `Compare`, `NormalizedEqual`, `After`, `Before`, `EqualOrAfter`, `EqualOrBefore` | Null is before every valid non-null date. An invalid date is neither before nor after any date, also not `Null`, but `Compare` sorts it like `Null`. |
+| `AfterTime(t)`                                     | False for null and invalid dates. True for a valid non-null date if `t` is zero. |
+| `BeforeTime(t)`                                    | For null: true unless `t` is zero. False for an invalid date. |
 | `Sub(other)`                                       | 0 if either is null.                               |
 | `IsToday`, `IsTodayInUTC`, `AfterToday`, `AfterTodayInUTC` | False for null.                                    |
 | `BeforeToday`, `BeforeTodayInUTC`                  | True for null.                                     |
@@ -335,7 +335,7 @@ Reading values:
 - **Zero dates.** `"0001-01-01"` is `Valid()` and `IsZero()`. `"0000-00-00"` is `IsZero()` but not valid. Both are written as SQL NULL and read back as `""`. `Date` encodes them in JSON as they are, `NullableDate` as `null`.
 - **Day first.** `"05/06/2024"` is June 5 unless the hint is English. The hint never changes a date that has only one valid reading. Only the first `lang` argument is used.
 - **Two-digit years** pivot at 45: `"25.12.44"` is 2044-12-25, `"25.12.45"` is 1945-12-25.
-- **Invalid and zero dates become the zero time.** `Date("bad").Format("02.01.2006")` returns `"01.01.0001"`, `Date("").AddDays(1)` returns `"0001-01-02"`, and `Date("bad").Before("2024-01-01")` is true. Check `Valid` (or `IsZero`) before formatting or doing arithmetic. `Format(Layout)` instead returns an invalid date unchanged.
+- **Invalid and zero dates become the zero time.** `Date("bad").Format("02.01.2006")` returns `"01.01.0001"` and `Date("").AddDays(1)` returns `"0001-01-02"`. Check `Valid` (or `IsZero`) before formatting or doing arithmetic. `Format(Layout)` instead returns an invalid date unchanged. Comparisons don't use the zero time: `After`, `Before`, `WithinIncl`, `BetweenExcl`, `AfterTime` and `BeforeTime` are false for an invalid date, so `Date("bad").Before("2024-01-01")` and `Date("2024-01-01").EqualOrAfter("bad")` are false.
 - **JSON is not normalized.** `Date` and `NullableDate` encode the raw string, and decoding does not validate. Normalize before encoding if consumers expect `YYYY-MM-DD`.
 - **Null ordering.** `Null` is before every date: `Null.Before(d)` and `d.After(Null)` are true, `Null.BeforeToday()` is true.
 - **Upper-case `Q`.** `YearQuarter("2024-q1").Valid()` is false, while `PeriodRange("2024-q1")` works.

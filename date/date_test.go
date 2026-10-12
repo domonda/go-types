@@ -749,6 +749,44 @@ func TestDate_BetweenExcl(t *testing.T) {
 	}
 }
 
+func TestDate_ComparisonWithInvalidDate(t *testing.T) {
+	// An invalid date has no position in time, so every comparison with
+	// it must be false in both directions, like NormalizedEqual. Treating
+	// it as the zero time made "2020-01-01" equal to or after "bad", so an
+	// unparsable deadline passed every "is it reached yet" check.
+	valid := Date("2020-01-01")
+	tm := time.Date(2020, 1, 1, 12, 0, 0, 0, time.UTC)
+	for _, invalid := range []Date{"bad", "", "0000-00-00", "2020-13-01"} {
+		t.Run(string(invalid), func(t *testing.T) {
+			assert.False(t, valid.After(invalid), "valid.After")
+			assert.False(t, valid.Before(invalid), "valid.Before")
+			assert.False(t, invalid.After(valid), "invalid.After")
+			assert.False(t, invalid.Before(valid), "invalid.Before")
+			assert.False(t, valid.EqualOrAfter(invalid), "valid.EqualOrAfter")
+			assert.False(t, valid.EqualOrBefore(invalid), "valid.EqualOrBefore")
+			assert.False(t, invalid.EqualOrAfter(valid), "invalid.EqualOrAfter")
+			assert.False(t, invalid.EqualOrBefore(valid), "invalid.EqualOrBefore")
+			assert.False(t, invalid.EqualOrAfter(invalid), "invalid.EqualOrAfter(invalid)")
+
+			assert.False(t, valid.WithinIncl(invalid, "2030-01-01"), "WithinIncl invalid from")
+			assert.False(t, valid.WithinIncl("2010-01-01", invalid), "WithinIncl invalid until")
+			assert.False(t, invalid.WithinIncl("0001-01-01", "9999-12-31"), "invalid.WithinIncl")
+			assert.False(t, valid.BetweenExcl(invalid, "2030-01-01"), "BetweenExcl invalid after")
+			assert.False(t, valid.BetweenExcl("2010-01-01", invalid), "BetweenExcl invalid before")
+			assert.False(t, invalid.BetweenExcl("0001-01-01", "9999-12-31"), "invalid.BetweenExcl")
+
+			assert.False(t, invalid.AfterTime(tm), "AfterTime")
+			assert.False(t, invalid.BeforeTime(tm), "BeforeTime")
+			assert.False(t, invalid.AfterToday(), "AfterToday")
+			assert.False(t, invalid.BeforeToday(), "BeforeToday")
+		})
+	}
+	// The zero time.Time date "0001-01-01" is valid and stays comparable
+	assert.True(t, Date("0001-01-01").Before(valid))
+	assert.True(t, valid.After("0001-01-01"))
+	assert.True(t, Date("0001-01-01").BeforeTime(tm))
+}
+
 // Arithmetic tests
 func TestDate_AddDate(t *testing.T) {
 	d := Date("2023-12-25")

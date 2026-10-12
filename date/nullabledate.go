@@ -270,8 +270,9 @@ func (n NullableDate) Compare(other NullableDate) int {
 // A null date is always before any non-null date,
 // so any non-null date is after a null date
 // and a null date is never after any date.
+// Returns false if either date is not null and not valid, see Date.After.
 func (n NullableDate) After(other NullableDate) bool {
-	if n.IsNull() {
+	if n.IsNull() || !n.Valid() || !other.Valid() {
 		return false
 	}
 	if other.IsNull() {
@@ -287,8 +288,9 @@ func (n NullableDate) EqualOrAfter(other NullableDate) bool {
 
 // Before returns true if the date is before the other date.
 // A null date is always before any non-null date.
+// Returns false if either date is not null and not valid, see Date.After.
 func (n NullableDate) Before(other NullableDate) bool {
-	if other.IsNull() {
+	if other.IsNull() || !n.Valid() || !other.Valid() {
 		return false
 	}
 	if n.IsNull() {
@@ -303,24 +305,22 @@ func (n NullableDate) EqualOrBefore(other NullableDate) bool {
 }
 
 // AfterTime returns true if midnight of the date (in the location of the passed time) is after the time.
-// Returns false if the date is null.
+// Returns false if the date is null or not valid, see Date.After.
 func (n NullableDate) AfterTime(other time.Time) bool {
 	if n.IsNull() {
 		return false
 	}
-	if other.IsZero() {
-		return true
-	}
-	return n.MidnightInLocation(other.Location()).After(other)
+	return Date(n).AfterTime(other)
 }
 
 // BeforeTime returns true if midnight of the date (in the location of the passed time) is before the time.
-// Returns true if the date is null.
+// Returns true if the date is null and the time is not zero,
+// and false if the date is not valid, see Date.After.
 func (n NullableDate) BeforeTime(other time.Time) bool {
 	if n.IsNull() {
 		return !other.IsZero()
 	}
-	return n.MidnightInLocation(other.Location()).Before(other)
+	return Date(n).BeforeTime(other)
 }
 
 // AddDate returns a new date with the specified years, months, and days added.
