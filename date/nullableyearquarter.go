@@ -17,8 +17,6 @@ var _ nullable.NullSetable[YearQuarter] = (*NullableYearQuarter)(nil)
 
 // NullableYearQuarter is a year-quarter string in YYYY-Q# format (e.g. "2024-Q3")
 // that can also represent a NULL value as an empty string.
-// It implements the database/sql.Scanner and database/sql/driver.Valuer interfaces,
-// treating empty string as SQL NULL.
 type NullableYearQuarter string
 
 // Validate returns nil if the year-quarter is in valid YYYY-Q# format.
@@ -46,7 +44,8 @@ func (yq NullableYearQuarter) IsZero() bool {
 	return YearQuarter(yq).IsZero()
 }
 
-// IsNull returns true if the NullableYearQuarter is null or zero.
+// IsNull returns true if the NullableYearQuarter is null (an empty string).
+// Zero values like "0000-Q0" are not null, see IsZero.
 // IsNull implements the nullable.Nullable interface.
 func (yq NullableYearQuarter) IsNull() bool {
 	return yq == YearQuarterNull

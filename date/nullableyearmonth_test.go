@@ -287,20 +287,16 @@ func TestNullableYearMonth_DateRange(t *testing.T) {
 		wantFrom  NullableDate
 		wantUntil NullableDate
 	}{
-		{name: "march 2023", ym: "2023-03", wantFrom: NullableDate("2023-03-01"), wantUntil: NullableDate("2023-03")},
+		{name: "march 2023", ym: "2023-03", wantFrom: NullableDate("2023-03-01"), wantUntil: NullableDate("2023-03-31")},
+		{name: "february 2024 (leap)", ym: "2024-02", wantFrom: NullableDate("2024-02-01"), wantUntil: NullableDate("2024-02-29")},
 		{name: "null", ym: YearMonthNull, wantFrom: Null, wantUntil: Null},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			gotFrom, gotUntil := tt.ym.DateRange()
 			require.Equal(t, tt.wantFrom, gotFrom)
-			if tt.ym.IsNull() {
-				require.Equal(t, tt.wantUntil, gotUntil)
-			} else {
-				// DateRange implementation has an issue, returns "YYYY-MM" instead of last day
-				// This test documents the actual behavior
-				require.True(t, gotUntil.Valid() || len(gotUntil) == 7)
-			}
+			// untilDate is the inclusive last day of the month, not "YYYY-MM"
+			require.Equal(t, tt.wantUntil, gotUntil)
 		})
 	}
 }

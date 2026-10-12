@@ -148,6 +148,12 @@ func TestYearMonth_Year(t *testing.T) {
 		{name: "different year", ym: "1999-12", want: 1999},
 		{name: "zero year", ym: "0000-00", want: 0},
 		{name: "invalid", ym: "invalid", want: 0},
+		// Documented to return 0 for invalid values, so calling it
+		// on unvalidated input must not panic on a short string.
+		{name: "empty", ym: "", want: 0},
+		{name: "too short", ym: "2023-1", want: 0},
+		{name: "year only", ym: "2023", want: 0},
+		{name: "invalid month", ym: "2023-13", want: 0},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -167,6 +173,11 @@ func TestYearMonth_Month(t *testing.T) {
 		{name: "january", ym: "2023-01", want: time.January},
 		{name: "december", ym: "2023-12", want: time.December},
 		{name: "invalid", ym: "invalid", want: 0},
+		// Documented to return 0 for invalid values, so calling it
+		// on unvalidated input must not panic on a short string.
+		{name: "empty", ym: "", want: 0},
+		{name: "too short", ym: "2023-1", want: 0},
+		{name: "invalid month", ym: "2023-13", want: 0},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -210,18 +221,21 @@ func TestYearMonth_DateRange(t *testing.T) {
 		wantFrom  Date
 		wantUntil Date
 	}{
-		{name: "march 2023", ym: "2023-03", wantFrom: "2023-03-01", wantUntil: "2023-03"},
-		{name: "february 2020 (leap)", ym: "2020-02", wantFrom: "2020-02-01", wantUntil: "2020-02"},
-		{name: "february 2021", ym: "2021-02", wantFrom: "2021-02-01", wantUntil: "2021-02"},
-		{name: "december", ym: "2023-12", wantFrom: "2023-12-01", wantUntil: "2023-12"},
+		{name: "march 2023", ym: "2023-03", wantFrom: "2023-03-01", wantUntil: "2023-03-31"},
+		{name: "february 2020 (leap)", ym: "2020-02", wantFrom: "2020-02-01", wantUntil: "2020-02-29"},
+		{name: "february 2021", ym: "2021-02", wantFrom: "2021-02-01", wantUntil: "2021-02-28"},
+		{name: "april", ym: "2023-04", wantFrom: "2023-04-01", wantUntil: "2023-04-30"},
+		{name: "december", ym: "2023-12", wantFrom: "2023-12-01", wantUntil: "2023-12-31"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			gotFrom, gotUntil := tt.ym.DateRange()
 			require.Equal(t, tt.wantFrom, gotFrom)
-			// Note: DateRange implementation has an issue, it returns "YYYY-MM" instead of last day
-			// This test documents the actual behavior
-			require.True(t, gotUntil.Valid() || len(gotUntil) == 7)
+			// Both ends of the range are used as inclusive Date bounds
+			// (e.g. in SQL BETWEEN), so untilDate must be a full valid Date
+			// of the last day of the month, not the "YYYY-MM" year-month.
+			require.Equal(t, tt.wantUntil, gotUntil)
+			require.True(t, gotUntil.ValidAndNormalized())
 		})
 	}
 }

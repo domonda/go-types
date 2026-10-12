@@ -74,6 +74,9 @@ func (ym YearMonth) String() string {
 // Year returns the year component of the year-month.
 // Returns 0 if the year-month is not valid.
 func (ym YearMonth) Year() int {
+	if !ym.Valid() {
+		return 0
+	}
 	year, _ := strconv.Atoi(string(ym)[:4])
 	return year
 }
@@ -81,6 +84,9 @@ func (ym YearMonth) Year() int {
 // Month returns the month component of the year-month.
 // Returns 0 if the year-month is not valid.
 func (ym YearMonth) Month() time.Month {
+	if !ym.Valid() {
+		return 0
+	}
 	month, _ := strconv.Atoi(string(ym)[5:7])
 	return time.Month(month)
 }
@@ -104,7 +110,7 @@ func (ym YearMonth) DateRange() (fromDate, untilDate Date) {
 	untilDate = Date(fromDate.Midnight().
 		AddDate(0, 1, 0).
 		AddDate(0, 0, -1).
-		Format(YearMonthLayout),
+		Format(Layout),
 	)
 	return fromDate, untilDate
 }

@@ -27,7 +27,7 @@ type Finder struct {
 // At most n results are returned; pass n < 0 to return all matches.
 // The returned slice is nil when no dates are found.
 func (df *Finder) FindAllIndex(str []byte, n int) (indices [][]int) {
-	if len(str) < MinLength {
+	if n == 0 || len(str) < MinLength {
 		return nil
 	}
 	s := string(str)
@@ -46,17 +46,20 @@ func (df *Finder) FindAllIndex(str []byte, n int) (indices [][]int) {
 		for endSpace := begSpace + 1; endSpace < begSpace+4 && endSpace < len(spacePos); endSpace++ {
 			beg := spacePos[begSpace] + 1
 			end := spacePos[endSpace]
-			for r, n := utf8.DecodeRune(str[beg:end]); r != utf8.RuneError && isDateTrimRune(r); {
-				beg += n
-				r, n = utf8.DecodeRune(str[beg:end])
+			for r, size := utf8.DecodeRune(str[beg:end]); r != utf8.RuneError && isDateTrimRune(r); {
+				beg += size
+				r, size = utf8.DecodeRune(str[beg:end])
 			}
-			for r, n := utf8.DecodeLastRune(str[beg:end]); r != utf8.RuneError && isDateTrimRune(r); {
-				end -= n
-				r, n = utf8.DecodeLastRune(str[beg:end])
+			for r, size := utf8.DecodeLastRune(str[beg:end]); r != utf8.RuneError && isDateTrimRune(r); {
+				end -= size
+				r, size = utf8.DecodeLastRune(str[beg:end])
 			}
 			_, _, err := normalizeAndCheckDate(strings.ToLower(s[beg:end]), df.LangHint)
 			if err == nil {
 				indices = append(indices, []int{beg, end})
+				if n > 0 && len(indices) == n {
+					return indices
+				}
 				break
 			}
 		}

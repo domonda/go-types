@@ -266,6 +266,11 @@ func Test_PeriodRange(t *testing.T) {
 		"2019-W1":  {"2018-12-31", "2019-01-06"},
 		"2019-W01": {"2018-12-31", "2019-01-06"},
 		"2019-W02": {"2019-01-07", "2019-01-13"},
+		// January 1st on a Friday or Saturday belongs to the last
+		// week of the previous year, so week 1 starts after it.
+		"2020-W53": {"2020-12-28", "2021-01-03"},
+		"2021-W01": {"2021-01-04", "2021-01-10"},
+		"2022-W01": {"2022-01-03", "2022-01-09"},
 	}
 
 	for period, expected := range periodDates {
@@ -420,8 +425,11 @@ func TestYearWeekRange(t *testing.T) {
 		wantMonday Date
 		wantSunday Date
 	}{
-		{name: "2021/-1", args: args{year: 2021, week: -1}, wantMonday: "2020-12-14", wantSunday: "2020-12-20"},
-		{name: "2021/0", args: args{year: 2021, week: 0}, wantMonday: "2020-12-21", wantSunday: "2020-12-27"},
+		// Weeks outside of 1..53 count from the Monday of ISO week 1 (2021-01-04),
+		// so week 0 of 2021 is ISO week 2020-W53.
+		{name: "2021/-1", args: args{year: 2021, week: -1}, wantMonday: "2020-12-21", wantSunday: "2020-12-27"},
+		{name: "2021/0", args: args{year: 2021, week: 0}, wantMonday: "2020-12-28", wantSunday: "2021-01-03"},
+		{name: "2021/1", args: args{year: 2021, week: 1}, wantMonday: "2021-01-04", wantSunday: "2021-01-10"},
 		{name: "2020/52", args: args{year: 2020, week: 52}, wantMonday: "2020-12-21", wantSunday: "2020-12-27"},
 		{name: "2020/53", args: args{year: 2020, week: 53}, wantMonday: "2020-12-28", wantSunday: "2021-01-03"},
 		{name: "2020/54", args: args{year: 2020, week: 54}, wantMonday: "2021-01-04", wantSunday: "2021-01-10"},
@@ -851,20 +859,49 @@ func TestOfTomorrow(t *testing.T) {
 }
 
 func TestYearWeekMonday(t *testing.T) {
+	// ISO 8601 week 1 is the week containing January 4th. Depending on the
+	// weekday of January 1st its Monday is in December of the previous year
+	// or in the first days of January. A wrong Monday shifts every week
+	// period of the year (YearWeekRange, PeriodRange("YYYY-Wnn")) by a week.
 	tests := []struct {
 		name string
 		year int
 		week int
 		want Date
 	}{
-		{name: "2021 week 1", year: 2021, week: 1, want: "2020-12-28"},
+		{name: "2018 week 1, Jan 1 is a Monday", year: 2018, week: 1, want: "2018-01-01"},
+		{name: "2019 week 1, Jan 1 is a Tuesday", year: 2019, week: 1, want: "2018-12-31"},
+		{name: "2020 week 1, Jan 1 is a Wednesday", year: 2020, week: 1, want: "2019-12-30"},
+		{name: "2015 week 1, Jan 1 is a Thursday", year: 2015, week: 1, want: "2014-12-29"},
+		{name: "2021 week 1, Jan 1 is a Friday", year: 2021, week: 1, want: "2021-01-04"},
+		{name: "2022 week 1, Jan 1 is a Saturday", year: 2022, week: 1, want: "2022-01-03"},
+		{name: "2023 week 1, Jan 1 is a Sunday", year: 2023, week: 1, want: "2023-01-02"},
 		{name: "2020 week 53", year: 2020, week: 53, want: "2020-12-28"},
+		{name: "2021 week 52", year: 2021, week: 52, want: "2021-12-27"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := YearWeekMonday(tt.year, tt.week)
 			assert.Equal(t, tt.want, got)
+			assert.Equal(t, time.Monday, got.Weekday())
+			year, week := got.MidnightUTC().ISOWeek()
+			assert.Equal(t, tt.year, year, "time.Time.ISOWeek year")
+			assert.Equal(t, tt.week, week, "time.Time.ISOWeek week")
 		})
+	}
+
+	// Cross-check every week of a range of years covering all weekdays
+	// of January 1st (and leap years) against the standard library.
+	for year := 1999; year <= 2040; year++ {
+		// December 28th is always in the last ISO week of its year
+		_, lastWeek := time.Date(year, 12, 28, 0, 0, 0, 0, time.UTC).ISOWeek()
+		for week := 1; week <= lastWeek; week++ {
+			monday := YearWeekMonday(year, week)
+			gotYear, gotWeek := monday.MidnightUTC().ISOWeek()
+			if gotYear != year || gotWeek != week || monday.Weekday() != time.Monday {
+				t.Errorf("YearWeekMonday(%d, %d) = %s which is a %s in ISO week %d-W%02d", year, week, monday, monday.Weekday(), gotYear, gotWeek)
+			}
+		}
 	}
 }
 
@@ -1200,6 +1237,9 @@ func TestDate_ScanStringWithLang(t *testing.T) {
 		{name: "ambiguous with EN hint", source: "05/06/2024", lang: language.EN, want: "2024-05-06"},
 		{name: "ambiguous with DE hint", source: "05/06/2024", lang: language.DE, want: "2024-06-05"},
 		{name: "ambiguous with upper case EN hint", source: "05/06/2024", lang: "EN", want: "2024-05-06"},
+		// The EN hint must not reinterpret a day that can't be a month
+		{name: "unambiguous day first with EN hint", source: "15.06.2024", lang: language.EN, want: "2024-06-15"},
+		{name: "unambiguous US order with EN hint", source: "06/15/2024", lang: language.EN, want: "2024-06-15", wantMonthMustBeFirst: true},
 		{name: "empty", source: "", wantErr: true},
 		{name: "invalid", source: "invalid", wantErr: true},
 	}
@@ -1218,6 +1258,88 @@ func TestDate_ScanStringWithLang(t *testing.T) {
 			assert.Equal(t, tt.wantMonthMustBeFirst, monthMustBeFirst, "monthMustBeFirst")
 		})
 	}
+}
+
+func TestNormalize_HintOnlyDecidesAmbiguousOrder(t *testing.T) {
+	// A language hint (or an ordinal suffix marking the day) can only
+	// choose between dd/mm and mm/dd when both numbers are valid months.
+	// If only one ordering is a valid date, that date must be returned
+	// no matter the hint, a hint must never turn a valid date into an error.
+	tests := []struct {
+		name    string
+		str     string
+		lang    []language.Code
+		want    Date
+		wantErr bool
+	}{
+		{name: "EN hint, unambiguous day first", str: "15.06.2024", lang: []language.Code{language.EN}, want: "2024-06-15"},
+		{name: "EN hint, unambiguous day first, short year", str: "15.06.24", lang: []language.Code{language.EN}, want: "2024-06-15"},
+		{name: "EN hint, unambiguous month first", str: "06/15/2024", lang: []language.Code{language.EN}, want: "2024-06-15"},
+		{name: "EN hint, ambiguous", str: "05/06/2024", lang: []language.Code{language.EN}, want: "2024-05-06"},
+		{name: "DE hint, unambiguous day first", str: "15.06.2024", lang: []language.Code{language.DE}, want: "2024-06-15"},
+		{name: "DE hint, unambiguous month first", str: "06/15/2024", lang: []language.Code{language.DE}, want: "2024-06-15"},
+		{name: "DE hint, ambiguous", str: "05/06/2024", lang: []language.Code{language.DE}, want: "2024-06-05"},
+		{name: "no hint, ambiguous", str: "05/06/2024", want: "2024-06-05"},
+		{name: "ordinal day, ambiguous", str: "02 1st 2003", want: "2003-02-01"},
+		{name: "EN hint, no valid ordering", str: "13/13/2024", lang: []language.Code{language.EN}, wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := Normalize(tt.str, tt.lang...)
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestDate_NonNormalizedValidInput(t *testing.T) {
+	// A valid Date that is not in the normalized YYYY-MM-DD form must
+	// behave like its normalized form in every method. Year, Month, Day
+	// and Compare already normalize, the methods converting to time.Time
+	// must agree with them instead of silently using the zero time.Time.
+	d := Date("25.12.2023") // Monday
+	norm := Date("2023-12-25")
+
+	assert.Equal(t, norm.MidnightUTC(), d.MidnightUTC(), "MidnightUTC")
+	assert.Equal(t, norm.Midnight(), d.Midnight(), "Midnight")
+	assert.Equal(t, norm.MidnightInLocation(time.UTC), d.MidnightInLocation(time.UTC), "MidnightInLocation")
+
+	assert.Equal(t, "25.12.2023", d.Format("02.01.2006"), "Format")
+	assert.Equal(t, "2023-12-25", d.Format(Layout), "Format(Layout)")
+
+	assert.True(t, d.After("2023-12-24"), "After")
+	assert.True(t, Date("2023-12-26").After(d), "After non-normalized other")
+	assert.True(t, d.Before("2023-12-26"), "Before")
+	assert.True(t, d.EqualOrAfter("2023-12-24"), "EqualOrAfter")
+	assert.True(t, d.EqualOrBefore("2023-12-26"), "EqualOrBefore")
+	assert.True(t, d.WithinIncl("2023-12-01", "31.12.2023"), "WithinIncl")
+	assert.True(t, d.BetweenExcl("2023-12-24", "2023-12-26"), "BetweenExcl")
+	assert.True(t, d.AfterTime(time.Date(2023, 12, 24, 12, 0, 0, 0, time.UTC)), "AfterTime")
+	assert.True(t, d.BeforeTime(time.Date(2023, 12, 25, 12, 0, 0, 0, time.UTC)), "BeforeTime")
+
+	assert.Equal(t, Date("2023-12-26"), d.AddDays(1), "AddDays")
+	assert.Equal(t, Date("2024-01-25"), d.AddMonths(1), "AddMonths")
+	assert.Equal(t, Date("2024-12-25"), d.AddYears(1), "AddYears")
+	assert.Equal(t, Date("2024-01-26"), d.AddDate(0, 1, 1), "AddDate")
+	assert.Equal(t, Date("2023-12-26"), d.Add(24*time.Hour), "Add")
+	assert.Equal(t, 24*time.Hour, d.Sub("2023-12-24"), "Sub")
+
+	assert.Equal(t, time.Monday, d.Weekday(), "Weekday")
+	year, week := d.ISOWeek()
+	assert.Equal(t, 2023, year, "ISOWeek year")
+	assert.Equal(t, 52, week, "ISOWeek week")
+	assert.Equal(t, Date("2023-12-25"), d.LastMonday(), "LastMonday")
+	assert.Equal(t, Date("2023-12-31"), d.NextSunday(), "NextSunday")
+	assert.Equal(t, Date("2023-12-24"), d.BeginningOfWeek(time.Sunday), "BeginningOfWeek")
+	assert.Equal(t, Date("2023-12-31"), d.EndOfWeek(time.Monday), "EndOfWeek")
+
+	// A non-normalized zero date still has no time
+	assert.True(t, Date("01.01.0001").MidnightUTC().IsZero(), "zero date MidnightUTC")
+	assert.True(t, Date("01.01.0001").MidnightInLocation(time.Local).IsZero(), "zero date MidnightInLocation")
 }
 
 func TestDate_ZeroDateHasNoTime(t *testing.T) {

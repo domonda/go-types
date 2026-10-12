@@ -185,6 +185,7 @@ func TestNullableDate_After(t *testing.T) {
 	assert.False(t, d1.After(d2))
 	assert.True(t, d2.After(d1))
 	assert.False(t, Null.After(d1))
+	assert.True(t, d1.After(Null)) // any date is after null
 }
 
 func TestNullableDate_Before(t *testing.T) {
@@ -195,6 +196,57 @@ func TestNullableDate_Before(t *testing.T) {
 	assert.False(t, d2.Before(d1))
 	assert.True(t, Null.Before(d1))    // null is always before any non-null date
 	assert.False(t, Null.Before(Null)) // null is not before null
+}
+
+func TestNullableDate_NullOrdering(t *testing.T) {
+	// Null is always before any date (see Compare and Before),
+	// so After must be the mirror of Before: sorting or range checks
+	// must not depend on which operand a null value is passed as.
+	d := NullableDate("2023-12-25")
+
+	assert.True(t, Null.Before(d), "Null.Before(d)")
+	assert.True(t, d.After(Null), "d.After(Null)")
+	assert.False(t, d.Before(Null), "d.Before(Null)")
+	assert.False(t, Null.After(d), "Null.After(d)")
+
+	assert.True(t, d.EqualOrAfter(Null), "d.EqualOrAfter(Null)")
+	assert.True(t, Null.EqualOrBefore(d), "Null.EqualOrBefore(d)")
+	assert.False(t, Null.EqualOrAfter(d), "Null.EqualOrAfter(d)")
+	assert.False(t, d.EqualOrBefore(Null), "d.EqualOrBefore(Null)")
+
+	// Null is neither before nor after itself
+	assert.False(t, Null.Before(Null), "Null.Before(Null)")
+	assert.False(t, Null.After(Null), "Null.After(Null)")
+	assert.True(t, Null.EqualOrAfter(Null), "Null.EqualOrAfter(Null)")
+	assert.True(t, Null.EqualOrBefore(Null), "Null.EqualOrBefore(Null)")
+
+	// Consistent with Compare
+	assert.Equal(t, -1, Null.Compare(d))
+	assert.Equal(t, 1, d.Compare(Null))
+}
+
+func TestNullableDate_NonNormalizedValidInput(t *testing.T) {
+	// A valid NullableDate that is not in the normalized YYYY-MM-DD form
+	// must behave like its normalized form, like Date does,
+	// instead of being treated like an invalid date (or panicking in After).
+	n := NullableDate("25.12.2023")
+	norm := NullableDate("2023-12-25")
+
+	assert.Equal(t, norm.MidnightUTC(), n.MidnightUTC(), "MidnightUTC")
+	assert.Equal(t, norm.Midnight(), n.Midnight(), "Midnight")
+	assert.Equal(t, "25.12.2023", n.Format("02.01.2006"), "Format")
+	assert.Equal(t, "2023-12-25", n.Format(Layout), "Format(Layout)")
+	assert.True(t, n.After("2023-12-24"), "After")
+	assert.True(t, NullableDate("2023-12-26").After(n), "After non-normalized other")
+	assert.True(t, n.Before("2023-12-26"), "Before")
+	assert.True(t, n.AfterTime(time.Date(2023, 12, 24, 12, 0, 0, 0, time.UTC)), "AfterTime")
+	assert.True(t, n.BeforeTime(time.Date(2023, 12, 25, 12, 0, 0, 0, time.UTC)), "BeforeTime")
+	assert.Equal(t, NullableDate("2023-12-26"), n.AddDays(1), "AddDays")
+	assert.Equal(t, time.Monday, n.Weekday(), "Weekday")
+
+	// Invalid dates still have no time and are not after anything
+	assert.True(t, NullableDate("invalid").MidnightUTC().IsNull(), "invalid MidnightUTC")
+	assert.False(t, NullableDate("invalid").After("2023-12-24"), "invalid After")
 }
 
 func TestNullableDate_EqualOrAfter(t *testing.T) {

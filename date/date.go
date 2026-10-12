@@ -2,14 +2,14 @@
 // for Go applications with support for multiple date formats and internationalization.
 //
 // The package includes:
-// - Date type with ISO 8601 format (YYYY-MM-DD) support
-// - Flexible date parsing with language hints
-// - Date arithmetic and comparison operations
-// - Period range calculations (year, quarter, month, week)
-// - Database integration (Scanner/Valuer interfaces)
-// - JSON marshalling/unmarshalling
-// - Nullable date support
-// - Time zone handling
+//   - Date type with ISO 8601 format (YYYY-MM-DD) support
+//   - Flexible date parsing with language hints
+//   - Date arithmetic and comparison operations
+//   - Period range calculations (year, quarter, month, week)
+//   - Database integration (Scanner/Valuer interfaces)
+//   - JSON marshalling/unmarshalling
+//   - Nullable date support
+//   - Time zone handling
 package date
 
 import (
@@ -173,21 +173,23 @@ func Parse(layout, value string) (Date, error) {
 }
 
 // PeriodRange returns the dates [from, until] for a period defined in one of the following formats:
-// - period of a ISO 8601 week of a year: YYYY-Wnn
-// - period of a month of a year: YYYY-MM
-// - period of a quarter of a year: YYYY-Qn
-// - period of a half year: YYYY-Hn
-// - period of full year: YYYY
+//   - period of a ISO 8601 week of a year: YYYY-Wnn
+//   - period of a month of a year: YYYY-MM
+//   - period of a quarter of a year: YYYY-Qn
+//   - period of a half year: YYYY-Hn
+//   - period of full year: YYYY
 //
-// The returned from Date is the first day of the month of the period,
-// the returned until Date is the last day of the month of the period.
+// The returned from Date is the first day of the period,
+// the returned until Date is the last day of the period.
+// For a week these are the Monday and the Sunday of the ISO 8601 week,
+// which can fall into the previous or next year.
 //
 // Examples:
-// - Period of June 2018: PeriodRange("2018-06") == Date("2018-06-01"), Date("2018-06-30"), nil
-// - Period of Q3 2018: PeriodRange("2018-Q3") == Date("2018-07-01"), Date("2018-09-30"), nil
-// - Period of second half of 2018: PeriodRange("2018-H2") == Date("2018-07-01"), Date("2018-12-31"), nil
-// - Period of year 2018: PeriodRange("2018") == Date("2018-01-01"), Date("2018-12-31"), nil
-// - Period of week 1 2019: PeriodRange("2019-W01") == Date("2018-12-31"), Date("2019-01-06"), nil
+//   - Period of June 2018: PeriodRange("2018-06") == Date("2018-06-01"), Date("2018-06-30"), nil
+//   - Period of Q3 2018: PeriodRange("2018-Q3") == Date("2018-07-01"), Date("2018-09-30"), nil
+//   - Period of second half of 2018: PeriodRange("2018-H2") == Date("2018-07-01"), Date("2018-12-31"), nil
+//   - Period of year 2018: PeriodRange("2018") == Date("2018-01-01"), Date("2018-12-31"), nil
+//   - Period of week 1 2019: PeriodRange("2019-W01") == Date("2018-12-31"), Date("2019-01-06"), nil
 func PeriodRange(period string) (from, until Date, err error) {
 	if len(period) != 4 && len(period) != 7 && len(period) != 8 {
 		return "", "", fmt.Errorf("invalid period format length: %q", period)
@@ -259,11 +261,12 @@ func YearRange(year int) (from, until Date) {
 
 // YearWeekMonday returns the date of Monday of an ISO 8601 week.
 func YearWeekMonday(year, week int) (monday Date) {
-	// January 1st of the year
-	t := time.Date(year, 1, 1, 0, 0, 0, 0, time.UTC)
+	// January 4th is always in week 1 of the ISO 8601 year
+	t := time.Date(year, 1, 4, 0, 0, 0, 0, time.UTC)
 
-	// Go back to Monday of week
-	t = t.AddDate(0, 0, int(time.Monday-t.Weekday()))
+	// Go back to Monday of week 1
+	daysSinceMonday := (int(t.Weekday()) + 6) % 7
+	t = t.AddDate(0, 0, -daysSinceMonday)
 
 	// Add week days
 	t = t.AddDate(0, 0, (week-1)*7)
@@ -321,7 +324,7 @@ func FromUntilFromYearAndMonths(year, months string) (fromDate, untilDate Date, 
 // If validate is false and the source string can still be assigned in some non-normalized way,
 // it will be assigned without returning an error.
 //
-// This method is part of the types.StringScanner interface.
+// This method is part of the strfmt.Scannable interface.
 func (date *Date) ScanString(source string, validate bool) error {
 	newDate, err := Date(source).Normalized()
 	if err != nil {
@@ -405,7 +408,9 @@ func (date Date) ValidAndNormalized() bool {
 }
 
 // Time returns a time.Time for the date at the specified hour, minute, and second in the given location.
-// Returns a zero time.Time if the date is zero or invalid.
+// Returns a zero time.Time if the date is zero.
+// An invalid date is not detected and results in a meaningless time
+// before year 1 (from time.Date(0, 0, 0, ...)), use Valid to check the date first.
 func (date Date) Time(hour, minute, second int, location *time.Location) time.Time {
 	if date.IsZero() {
 		return time.Time{}
@@ -415,29 +420,22 @@ func (date Date) Time(hour, minute, second int, location *time.Location) time.Ti
 }
 
 // TimeLocal returns a time.Time for the date at the specified hour, minute, and second in local time.
-// Returns a zero time.Time if the date is zero or invalid.
+// Returns a zero time.Time if the date is zero, see Time for invalid dates.
 func (date Date) TimeLocal(hour, minute, second int) time.Time {
 	return date.Time(hour, minute, second, time.Local)
 }
 
 // TimeUTC returns a time.Time for the date at the specified hour, minute, and second in UTC.
-// Returns a zero time.Time if the date is zero or invalid.
+// Returns a zero time.Time if the date is zero, see Time for invalid dates.
 func (date Date) TimeUTC(hour, minute, second int) time.Time {
 	return date.Time(hour, minute, second, time.UTC)
 }
 
 // MidnightUTC returns the midnight (00:00) time.Time of the date in UTC,
-// or a zero time.Time value if the date is not valid.
+// or a zero time.Time value if the date is zero or not valid.
+// A valid date that is not in the normalized form is normalized first.
 func (date Date) MidnightUTC() time.Time {
-	if date.IsZero() {
-		return time.Time{}
-	}
-	// time.Parse uses UTC
-	t, err := time.Parse(Layout, string(date))
-	if err != nil {
-		return time.Time{}
-	}
-	return t
+	return date.MidnightInLocation(time.UTC)
 }
 
 // Midnight returns the midnight (00:00) time.Time of the date in the local time zone.
@@ -447,27 +445,34 @@ func (date Date) Midnight() time.Time {
 }
 
 // MidnightInLocation returns the midnight (00:00) time.Time of the date in the given location.
-// Returns a zero time.Time if the date is not valid.
+// Returns a zero time.Time if the date is zero or not valid.
+// A valid date that is not in the normalized form is normalized first.
 func (date Date) MidnightInLocation(loc *time.Location) time.Time {
 	if date.IsZero() {
 		return time.Time{}
 	}
 	t, err := time.ParseInLocation(Layout, string(date), loc)
+	if err == nil {
+		return t
+	}
+	// Not in the normalized YYYY-MM-DD form, but might still be valid
+	norm, err := date.Normalized()
 	if err != nil {
 		return time.Time{}
 	}
-	return t
+	return norm.MidnightInLocation(loc)
 }
 
 // Format formats the date using the given layout string (see time.Time.Format).
 // Returns an empty string if date or layout are empty.
-// If layout equals Layout constant, returns the date as-is for efficiency.
+// If layout equals Layout constant, returns the normalized date
+// without a time conversion, or the date unchanged if it is not valid.
 func (date Date) Format(layout string) string {
 	if date == "" || layout == "" {
 		return ""
 	}
 	if layout == Layout {
-		return string(date)
+		return date.String()
 	}
 	return date.MidnightUTC().Format(layout)
 }
@@ -972,7 +977,10 @@ func normalizeDate(str string, langHint language.Code) (string, bool, error) {
 
 	case len0 == 2 && len1 == 2 && len2 == 4:
 		monthMustBeFirst := validMonth(val0) && !validMonth(val1)
-		if (!validMonth(val1) && validMonth(val0)) || dayHint == 1 || langHint == "en" {
+		// The ordinal day hint and the language hint only decide
+		// the order if both numbers could be the month
+		ambiguous := validMonth(val0) && validMonth(val1)
+		if monthMustBeFirst || (ambiguous && (dayHint == 1 || langHint == "en")) {
 			// MM DD YYYY
 			parts[0], parts[1] = parts[1], parts[0]
 			val0, val1 = val1, val0

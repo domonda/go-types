@@ -12,13 +12,11 @@ import (
 // which is treated as SQL NULL.
 const YearMonthNull NullableYearMonth = ""
 
-// Compile-time check that NullableYearMonth implements nullable.NullSetable[Date]
+// Compile-time check that NullableYearMonth implements nullable.NullSetable[YearMonth]
 var _ nullable.NullSetable[YearMonth] = (*NullableYearMonth)(nil)
 
 // NullableYearMonth is a year-month string in YYYY-MM format that
 // can also represent a NULL value as an empty string.
-// It implements the database/sql.Scanner and database/sql/driver.Valuer interfaces,
-// treating empty string as SQL NULL.
 type NullableYearMonth string
 
 // Validate returns nil if the year-month is in valid YYYY-MM format.
@@ -46,7 +44,8 @@ func (ym NullableYearMonth) IsZero() bool {
 	return YearMonth(ym).IsZero()
 }
 
-// IsNull returns true if the NullableYearMonth is null or zero.
+// IsNull returns true if the NullableYearMonth is null (an empty string).
+// Zero values like "0000-00" are not null, see IsZero.
 // IsNull implements the nullable.Nullable interface.
 func (ym NullableYearMonth) IsNull() bool {
 	return ym == YearMonthNull

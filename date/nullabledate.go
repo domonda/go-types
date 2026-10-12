@@ -60,7 +60,7 @@ func (n NullableDate) DateOr(useIfNull Date) Date {
 	return Date(n)
 }
 
-// IsZero returns true when the date is any of ["", "0000-00-00", "0001-01-01", "null", "NULL"]
+// IsZero returns true when the date is any of ["", "0000-00-00", "0001-01-01"].
 // "0001-01-01" is treated as zero because it's the zero value of time.Time.
 func (n NullableDate) IsZero() bool {
 	return Date(n).IsZero()
@@ -221,16 +221,10 @@ func (n NullableDate) NormalizedOrUnchanged(lang ...language.Code) NullableDate 
 }
 
 // MidnightUTC returns the midnight (00:00) nullable.Time of the date in UTC,
-// or a null nullable.Time value if the date is not valid.
+// or a null nullable.Time value if the date is null or not valid.
+// A valid date that is not in the normalized form is normalized first.
 func (n NullableDate) MidnightUTC() nullable.Time {
-	if n.IsZero() {
-		return nullable.TimeNull
-	}
-	t, err := nullable.TimeParse(Layout, string(n))
-	if err != nil {
-		return nullable.TimeNull
-	}
-	return t
+	return nullable.TimeFrom(Date(n).MidnightUTC())
 }
 
 // Midnight returns the midnight (00:00) nullable.Time of the date
@@ -242,15 +236,9 @@ func (n NullableDate) Midnight() nullable.Time {
 
 // MidnightInLocation returns the midnight (00:00) nullable.Time of the date in the given location.
 // Returns a null nullable.Time if the date is not valid or null.
+// A valid date that is not in the normalized form is normalized first.
 func (n NullableDate) MidnightInLocation(loc *time.Location) nullable.Time {
-	if n.IsZero() {
-		return nullable.TimeNull
-	}
-	t, err := nullable.TimeParseInLocation(Layout, string(n), loc)
-	if err != nil {
-		return nullable.TimeNull
-	}
-	return t
+	return nullable.TimeFrom(Date(n).MidnightInLocation(loc))
 }
 
 // NormalizedEqual returns true if two dates are equal after normalization.
@@ -270,12 +258,17 @@ func (n NullableDate) Compare(other NullableDate) int {
 }
 
 // After returns true if the date is after the other date.
-// Returns false if either date is null.
+// A null date is always before any non-null date,
+// so any non-null date is after a null date
+// and a null date is never after any date.
 func (n NullableDate) After(other NullableDate) bool {
-	if n.IsNull() || other.IsNull() {
+	if n.IsNull() {
 		return false
 	}
-	return n.MidnightUTC().Get().After(other.MidnightUTC().Get())
+	if other.IsNull() {
+		return true
+	}
+	return Date(n).After(Date(other))
 }
 
 // EqualOrAfter returns true if the date is equal to or after the other date.
@@ -574,12 +567,14 @@ func (n NullableDate) BeforeTodayInUTC() bool {
 
 // Format returns n.MidnightUTC().Format(layout),
 // or an empty string if n is Null or layout is an empty string.
+// If layout equals Layout constant, returns the normalized date
+// without a time conversion, or the date unchanged if it is not valid.
 func (n NullableDate) Format(layout string) string {
 	if n == Null || layout == "" {
 		return ""
 	}
 	if layout == Layout {
-		return string(n)
+		return Date(n).String()
 	}
 	return n.MidnightUTC().Format(layout)
 }
