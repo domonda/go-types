@@ -107,6 +107,27 @@ func TestCompareReflectValue_Interface(t *testing.T) {
 	})
 }
 
+// TestCompareReflectValue_Invalid checks that the zero reflect.Value,
+// which has no type, is ordered before every valid value instead of
+// panicking, like a nil interface value is ordered before non-nil ones.
+// The function is documented as safe to use as compare function
+// for sorting arbitrary reflect.Values, and reflect.ValueOf(nil)
+// or the Elem of a nil interface return the zero reflect.Value.
+func TestCompareReflectValue_Invalid(t *testing.T) {
+	var invalid reflect.Value
+	for _, valid := range []reflect.Value{reflect.ValueOf(0), reflect.ValueOf(""), reflect.ValueOf((*int)(nil))} {
+		if got := CompareReflectValue(invalid, valid); got != -1 {
+			t.Errorf("CompareReflectValue(invalid, %#v) = %d, want -1", valid, got)
+		}
+		if got := CompareReflectValue(valid, invalid); got != +1 {
+			t.Errorf("CompareReflectValue(%#v, invalid) = %d, want +1", valid, got)
+		}
+	}
+	if got := CompareReflectValue(invalid, reflect.ValueOf(nil)); got != 0 {
+		t.Errorf("CompareReflectValue(invalid, invalid) = %d, want 0", got)
+	}
+}
+
 // TestCompareReflectValue_Chan checks that channels are ordered by address
 // as documented instead of all comparing as equal.
 func TestCompareReflectValue_Chan(t *testing.T) {

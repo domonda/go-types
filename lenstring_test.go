@@ -253,3 +253,48 @@ func TestLenString_UnmarshalJSON_NullAndInvalid(t *testing.T) {
 		}
 	}
 }
+
+// TestLenString_UnmarshalJSON checks that a JSON string is assigned when its
+// length is valid and rejected otherwise, leaving the previous value intact,
+// because JSON is how untrusted input (e.g. API requests) gets in and a
+// LenString must never hold a string outside of its length bounds.
+func TestLenString_UnmarshalJSON(t *testing.T) {
+	tests := []struct {
+		name     string
+		min, max int
+		valid    string
+		invalid  []string
+	}{
+		{name: "min>0", min: 2, max: 4, valid: "xyz", invalid: []string{"", "a", "abcde"}},
+		{name: "min==0", min: 0, max: 4, valid: "xyz", invalid: []string{"abcde"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := MustLenString("abc", tt.min, tt.max)
+			if err := s.UnmarshalJSON([]byte(`"` + tt.valid + `"`)); err != nil {
+				t.Fatalf("UnmarshalJSON(%q) = %v, want nil", tt.valid, err)
+			}
+			if s.String() != tt.valid {
+				t.Errorf("after UnmarshalJSON(%q) String() = %q, want %q", tt.valid, s.String(), tt.valid)
+			}
+
+			for _, invalid := range tt.invalid {
+				if err := s.UnmarshalJSON([]byte(`"` + invalid + `"`)); err == nil {
+					t.Errorf("UnmarshalJSON(%q) = nil, want error", invalid)
+				}
+				if s.String() != tt.valid {
+					t.Errorf("after rejected UnmarshalJSON(%q) String() = %q, want unchanged %q", invalid, s.String(), tt.valid)
+				}
+			}
+
+			// Same through encoding/json as struct field
+			v := struct{ S *LenString }{S: &s}
+			if err := json.Unmarshal([]byte(`{"S":"ab"}`), &v); err != nil {
+				t.Fatalf("json.Unmarshal(struct) error: %v", err)
+			}
+			if s.String() != "ab" {
+				t.Errorf("after json.Unmarshal(struct) String() = %q, want %q", s.String(), "ab")
+			}
+		})
+	}
+}

@@ -12,6 +12,9 @@ import (
 // on slices of mixed or non-orderable [reflect.Value]s (the order of such
 // elements is left unchanged).
 //
+// The invalid zero reflect.Value, which has no type,
+// is ordered before all valid values.
+//
 // Orderable kinds are:
 //   - all integer, unsigned integer, and float kinds (compared by value)
 //   - strings (compared lexicographically)
@@ -26,6 +29,18 @@ import (
 //
 // This is used for sorting map keys in DeepValidate.
 func CompareReflectValue(a, b reflect.Value) int {
+	aValid, bValid := a.IsValid(), b.IsValid()
+	if !aValid || !bValid {
+		// Order invalid first like nil interface values
+		switch {
+		case !aValid && !bValid:
+			return 0
+		case !aValid:
+			return -1
+		default:
+			return 1
+		}
+	}
 	if a.Type() != b.Type() {
 		return 0
 	}
