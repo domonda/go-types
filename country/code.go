@@ -1,13 +1,3 @@
-// Package country provides comprehensive country code handling and validation
-// based on ISO 3166-1 alpha-2 standards for Go applications.
-//
-// The package includes:
-//   - ISO 3166-1 alpha-2 country code validation and normalization
-//   - Alternative country code mappings (ITU codes, German names, etc.)
-//   - European Union membership checking
-//   - Database integration (Scanner/Valuer interfaces)
-//   - JSON marshalling/unmarshalling
-//   - Nullable country code support
 package country
 
 import (

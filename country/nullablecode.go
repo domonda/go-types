@@ -20,7 +20,7 @@ var _ nullable.NullSetable[Code] = (*NullableCode)(nil)
 // NullableCode represents a country code according to ISO 3166-1 alpha-2 standard
 // where an empty string represents NULL.
 // NullableCode implements the database/sql.Scanner and database/sql/driver.Valuer interfaces,
-// and treats an empty NullableCode string as SQL NULL.
+// and treats an empty or whitespace only NullableCode string as SQL NULL.
 // Null.Valid() or NullableCode("").Valid() will return true.
 type NullableCode string
 
@@ -181,7 +181,7 @@ func (n NullableCode) Value() (driver.Value, error) {
 }
 
 // MarshalJSON implements encoding/json.Marshaler by returning the JSON null value
-// for an empty (null) string.
+// if the NullableCode is null, see IsNull, else the normalized code as JSON string.
 func (n NullableCode) MarshalJSON() ([]byte, error) {
 	if n.IsNull() {
 		return []byte(`null`), nil
