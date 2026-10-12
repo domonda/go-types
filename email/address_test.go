@@ -183,6 +183,11 @@ func TestAddress_DomainPart(t *testing.T) {
 		{addr: "john@example.com\r\n", want: `example.com`},
 		// The last @ wins, so an address in the name part is ignored.
 		{addr: `"john@old.example.org" <john@new.example.com>`, want: `new.example.com`},
+		// Without an @ there is no domain. Returning the whole string
+		// would make arbitrary text look like a sender domain.
+		{addr: ``, want: ``},
+		{addr: `example.com`, want: ``},
+		{addr: ` not an address `, want: ``},
 	}
 	for _, tt := range tests {
 		t.Run(string(tt.addr), func(t *testing.T) {

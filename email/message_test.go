@@ -4,7 +4,10 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"net/mail"
 	"os"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -137,6 +140,13 @@ func TestMessage_ReferencesMessageIDs(t *testing.T) {
 		{name: "single", references: "<a@example.com>", want: []string{"<a@example.com>"}},
 		// Empty entries from stray separators must not become message IDs.
 		{name: "comma separated", references: "<a@example.com>, ,<b@example.com>,", want: []string{"<a@example.com>", "<b@example.com>"}},
+		// RFC 5322 3.6.4 separates the message IDs with whitespace (CFWS),
+		// which is what mail clients send, including folded header lines.
+		// Without splitting on whitespace the whole thread history would
+		// be returned as one unusable message ID.
+		{name: "space separated", references: "<a@example.com> <b@example.com>", want: []string{"<a@example.com>", "<b@example.com>"}},
+		{name: "folded", references: "<a@example.com>\r\n <b@example.com>\t<c@example.com>", want: []string{"<a@example.com>", "<b@example.com>", "<c@example.com>"}},
+		{name: "mixed separators", references: "<a@example.com>, <b@example.com> <c@example.com>", want: []string{"<a@example.com>", "<b@example.com>", "<c@example.com>"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -305,6 +315,35 @@ func TestParseMessage_JSON(t *testing.T) {
 	require.Error(t, err, "invalid JSON must be reported, not parsed as MIME")
 }
 
+// TestParseMessage_JSONWhitespace protects that JSON is detected independent
+// of surrounding whitespace: json.Encoder terminates its output with a
+// newline and stored files or HTTP bodies often carry extra whitespace.
+// Such data must be unmarshalled and not be misparsed as MIME message.
+func TestParseMessage_JSONWhitespace(t *testing.T) {
+	want := &email.Message{
+		MessageID: "<id@example.com>",
+		From:      "a@example.com",
+		To:        "b@example.com",
+		Subject:   "Subject",
+		Body:      "Body",
+	}
+	var encoded strings.Builder
+	require.NoError(t, json.NewEncoder(&encoded).Encode(want))
+	compact, err := json.Marshal(want)
+	require.NoError(t, err)
+
+	for name, data := range map[string]string{
+		"json.Encoder output":    encoded.String(),
+		"surrounding whitespace": " \r\n\t" + string(compact) + "\r\n ",
+	} {
+		t.Run(name, func(t *testing.T) {
+			got, err := email.ParseMessage([]byte(data))
+			require.NoError(t, err)
+			require.Equal(t, want, got)
+		})
+	}
+}
+
 // replyTextTemplate and replyHTMLTemplate quote the original message
 // the way a typical mail client does.
 const (
@@ -354,6 +393,69 @@ func TestMessage_NewReplyMessage_Threading(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, email.AddressList(`"Support" <support@example.com>`), re.To, "Reply-To must be preferred over From")
 	require.Equal(t, original.Attachments, re.Attachments)
+}
+
+// TestMessage_NewReplyMessage_Subject protects RFC 5322 3.6.5: a reply
+// subject carries only one "Re: " prefix. Replying to a reply must not
+// stack prefixes to "Re: Re: ...", which clutters the subject with every
+// round trip of the conversation.
+func TestMessage_NewReplyMessage_Subject(t *testing.T) {
+	tests := []struct {
+		subject string
+		want    string
+	}{
+		{subject: "Invoice", want: "Re: Invoice"},
+		{subject: "", want: "Re: "},
+		{subject: "Re: Invoice", want: "Re: Invoice"},
+		// Mail clients vary the case and spacing of the prefix.
+		{subject: "RE: Invoice", want: "RE: Invoice"},
+		{subject: "re:Invoice", want: "re:Invoice"},
+		{subject: "  Re: Invoice", want: "  Re: Invoice"},
+		// Only the "Re:" prefix counts, not a word starting with "Re".
+		{subject: "Reminder", want: "Re: Reminder"},
+		{subject: "Re Invoice", want: "Re: Re Invoice"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.subject, func(t *testing.T) {
+			original := newOriginalMessage()
+			original.Subject = tt.subject
+			re, err := original.NewReplyMessage("me@example.com", "Thanks", "", false, replyTextTemplate, replyHTMLTemplate)
+			require.NoError(t, err)
+			require.Equal(t, tt.want, re.Subject)
+		})
+	}
+}
+
+// TestMessage_NewReplyMessage_References protects RFC 5322 3.6.4: the
+// References of a reply are the parent's References followed by the
+// parent's Message-ID. Mail clients use the full chain to thread a
+// conversation, with only the parent's Message-ID a reply to a reply
+// loses its connection to the start of the thread.
+func TestMessage_NewReplyMessage_References(t *testing.T) {
+	tests := []struct {
+		name       string
+		messageID  nullable.TrimmedString
+		references nullable.TrimmedString
+		want       nullable.TrimmedString
+	}{
+		{name: "first reply", messageID: "<c@example.com>", want: "<c@example.com>"},
+		{name: "reply to reply", messageID: "<c@example.com>", references: "<a@example.com> <b@example.com>", want: "<a@example.com> <b@example.com> <c@example.com>"},
+		// The result uses the RFC 5322 whitespace separator.
+		{name: "comma separated parent", messageID: "<c@example.com>", references: "<a@example.com>, <b@example.com>", want: "<a@example.com> <b@example.com> <c@example.com>"},
+		{name: "parent without Message-ID", references: "<a@example.com> <b@example.com>", want: "<a@example.com> <b@example.com>"},
+		{name: "parent without IDs", want: ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			original := newOriginalMessage()
+			original.MessageID = tt.messageID
+			original.References = tt.references
+			re, err := original.NewReplyMessage("me@example.com", "Thanks", "", false, replyTextTemplate, replyHTMLTemplate)
+			require.NoError(t, err)
+			require.Equal(t, tt.want, re.References)
+			require.Equal(t, tt.messageID, re.InReplyTo)
+		})
+	}
 }
 
 // TestMessage_NewReplyMessage_Body protects how the reply body is rendered:
@@ -503,6 +605,80 @@ func TestBuildRawMessage_Bodies(t *testing.T) {
 				require.Equal(t, want.Content, got.Content)
 			}
 		})
+	}
+}
+
+// TestBuildRawMessage_RecipientHeadersOnce protects RFC 5322 3.6.3:
+// the To, Cc and Bcc header fields may each occur at most once and list
+// all their addresses comma separated. Overwriting the header per address
+// silently sends the message to fewer recipients than intended, and a
+// repeated header field makes receivers keep only one of the lists.
+func TestBuildRawMessage_RecipientHeadersOnce(t *testing.T) {
+	msg := &email.Message{
+		From: "from@example.com",
+		To:   `a@example.com, "Doe, John" <john@example.com>, c@example.com`,
+		Cc:   `cc1@example.com, cc2@example.com`,
+		Bcc:  `bcc1@example.com, "Bcc Two" <bcc2@example.com>`,
+		Body: "Body",
+	}
+	raw, err := msg.BuildRawMessage()
+	require.NoError(t, err)
+
+	header, err := mail.ReadMessage(strings.NewReader(string(raw)))
+	require.NoError(t, err)
+	for _, key := range []string{"To", "Cc", "Bcc"} {
+		require.Len(t, header.Header[key], 1, "exactly one %s header field", key)
+	}
+
+	parsed, err := email.ParseMIMEMessage(strings.NewReader(string(raw)))
+	require.NoError(t, err)
+	require.Equal(t, msg.To, parsed.To)
+	require.Equal(t, msg.Cc, parsed.Cc)
+	require.Equal(t, msg.Bcc, parsed.Bcc)
+}
+
+// TestBuildRawMessage_InlineParts protects that inline parts like images
+// referenced from the HTML body via "cid:" stay inline parts with their
+// Content-ID. Sent as regular attachments, the HTML body would show broken
+// images and mail clients would list the images as extra attached files.
+func TestBuildRawMessage_InlineParts(t *testing.T) {
+	logo := &email.Attachment{
+		ContentID:   "logo@example.com",
+		ContentType: "image/png",
+		Inline:      true,
+		Filename:    "logo.png",
+		Content:     []byte("\x89PNG\r\n\x1a\n"),
+	}
+	invoice := &email.Attachment{
+		ContentType: "application/pdf",
+		Filename:    "invoice.pdf",
+		Content:     []byte("%PDF-1.7"),
+	}
+	msg := &email.Message{
+		From:        "from@example.com",
+		To:          "to@example.com",
+		Body:        "Body",
+		BodyHTML:    `<p>Body</p><img src="cid:logo@example.com">`,
+		Attachments: []*email.Attachment{logo, invoice},
+	}
+	raw, err := msg.BuildRawMessage()
+	require.NoError(t, err)
+	require.Contains(t, string(raw), "Content-Disposition: inline; filename=logo.png")
+	require.Contains(t, string(raw), "Content-Id: <logo@example.com>")
+
+	parsed, err := email.ParseMIMEMessage(strings.NewReader(string(raw)))
+	require.NoError(t, err)
+	require.Equal(t, msg.Body, parsed.Body)
+	require.Equal(t, msg.BodyHTML, parsed.BodyHTML)
+	require.Len(t, parsed.Attachments, 2)
+	for _, want := range msg.Attachments {
+		i := slices.IndexFunc(parsed.Attachments, func(a *email.Attachment) bool { return a.Filename == want.Filename })
+		require.NotEqual(t, -1, i, "attachment %s not found", want.Filename)
+		got := parsed.Attachments[i]
+		require.Equal(t, want.Inline, got.Inline, "Inline of %s", want.Filename)
+		require.Equal(t, want.ContentID, got.ContentID, "ContentID of %s", want.Filename)
+		require.Equal(t, want.ContentType, got.ContentType, "ContentType of %s", want.Filename)
+		require.Equal(t, want.Content, got.Content, "Content of %s", want.Filename)
 	}
 }
 

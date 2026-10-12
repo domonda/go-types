@@ -3,6 +3,7 @@ package email
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"net/mail"
 	"regexp"
 	"slices"
@@ -71,36 +72,20 @@ func FindAllAddresses(text string) []Address {
 	return *(*[]Address)(unsafe.Pointer(&found)) //#nosec G103 -- unsafe OK
 }
 
-// UniqueNormalizedAddressSlice returns the passed
-// Address slice modified to only contain the sorted unique
-// normalized address parts (address without name part)
-// of the passed addresses.
+// UniqueNormalizedAddressSlice returns a new slice
+// containing the sorted unique normalized address parts
+// (address without name part) of the passed addresses.
+// Addresses that can't be parsed are skipped.
+// Returns nil if there is no valid address.
+// The passed slice is not modified.
 func UniqueNormalizedAddressSlice(addrs []Address) []Address {
-	switch len(addrs) {
-	case 0:
-		return nil
-	case 1:
-		norm, err := addrs[0].AddressPart()
-		if err != nil {
-			return nil
-		}
-		addrs[0] = norm
-		return addrs
-	}
-	m := make(map[Address]struct{}, len(addrs))
+	unique := make(map[Address]struct{}, len(addrs))
 	for _, addr := range addrs {
 		if norm, err := addr.AddressPart(); err == nil {
-			m[norm] = struct{}{}
+			unique[norm] = struct{}{}
 		}
 	}
-	addrs = addrs[:len(m)]
-	i := 0
-	for addr := range m {
-		addrs[i] = addr
-		i++
-	}
-	slices.Sort(addrs)
-	return addrs
+	return slices.Sorted(maps.Keys(unique))
 }
 
 // ParseAddress parses an email address less strict

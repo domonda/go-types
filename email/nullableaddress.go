@@ -26,11 +26,10 @@ const AddressNull NullableAddress = ""
 
 // NullableAddressFrom creates a NullableAddress from a parsed mail.Address.
 // A nil address results in the NULL value.
+// Like AddressFrom, an address without a name part is returned
+// as just the address part without angle brackets.
 func NullableAddressFrom(a *mail.Address) NullableAddress {
-	if a == nil {
-		return ""
-	}
-	return NullableAddress(a.String())
+	return AddressFrom(a).Nullable()
 }
 
 // NormalizedNullableAddress parses an email address less strict

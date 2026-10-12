@@ -15,7 +15,9 @@ var _ types.NormalizableValidator[AddressList] = AddressList("")
 // NormalizeAddressList parses a comma-separated email address list using lenient validation
 // that fixes common malformations and normalizes address parts to lowercase.
 // Duplicate addresses (based on normalized address parts) are automatically removed.
-// Returns an error if the list does not contain at least one valid address.
+// Returns an error if any address of the list can't be parsed.
+// An empty list (or an "undisclosed-recipients" placeholder)
+// returns nil without an error.
 func NormalizeAddressList(list string) (normalized []string, err error) {
 	addrs, err := ParseAddressList(list)
 	if err != nil {
@@ -37,8 +39,10 @@ func NormalizeAddressList(list string) (normalized []string, err error) {
 }
 
 // AddressList represents a comma-separated list of email addresses.
-// The list must contain at least one valid email address.
-// Use NullableAddressList for lists that can be empty.
+// The list is meant to contain at least one email address,
+// use NullableAddressList for lists that can be empty.
+// Note that only Scan rejects an empty string,
+// Validate and Valid accept an empty list.
 type AddressList string
 
 // AddressListJoin creates an AddressList by joining multiple Address values

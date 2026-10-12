@@ -118,6 +118,15 @@ func TestNullableAddressFrom(t *testing.T) {
 	// With a name part the result must be the same as for the non-nullable type.
 	addr := &mail.Address{Name: "Doe, John", Address: "john@example.com"}
 	assert.Equal(t, AddressFrom(addr).Nullable(), NullableAddressFrom(addr))
+
+	// Without a name part the result must also match the non-nullable type:
+	// the bare address without angle brackets, which is the normalized form.
+	// Otherwise the same address converted via both types would not
+	// compare equal and the nullable value would not be normalized.
+	addr = &mail.Address{Address: "john@example.com"}
+	assert.Equal(t, NullableAddress("john@example.com"), NullableAddressFrom(addr))
+	assert.Equal(t, AddressFrom(addr).Nullable(), NullableAddressFrom(addr))
+	assert.True(t, NullableAddressFrom(addr).ValidAndNormalized())
 }
 
 func TestNullableAddress_SetAndSetNull(t *testing.T) {

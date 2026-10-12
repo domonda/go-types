@@ -103,7 +103,7 @@ func (a Address) NamePart() (string, error) {
 }
 
 // AddressPartString returns the normalized lowercase address part
-// (the part after the @ symbol) from an email address.
+// (local-part@domain without the display name) from an email address.
 // This strips any display name and returns just the email address.
 func (a Address) AddressPartString() (string, error) {
 	parsed, err := a.Parse()
@@ -114,7 +114,7 @@ func (a Address) AddressPartString() (string, error) {
 }
 
 // AddressPart returns the normalized lowercase address part
-// (the part after the @ symbol) as an Address type.
+// (local-part@domain without the display name) as an Address type.
 // This strips any display name and returns just the email address.
 func (a Address) AddressPart() (Address, error) {
 	addr, err := a.AddressPartString()
@@ -136,8 +136,11 @@ func (a Address) LocalPart() (string, error) {
 // Returns an empty string if no @ symbol is found.
 func (a Address) DomainPart() string {
 	s := string(a)
-	s = s[strings.LastIndexByte(s, '@')+1:]
-	return strings.TrimRight(s, "> \t\r\n")
+	i := strings.LastIndexByte(s, '@')
+	if i < 0 {
+		return ""
+	}
+	return strings.TrimRight(s[i+1:], "> \t\r\n")
 }
 
 // AsList converts the Address to an AddressList containing this single address.

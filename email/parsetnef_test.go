@@ -92,6 +92,31 @@ func TestParseTNEFMessageBytes(t *testing.T) {
 	assert.Equal(t, &Attachment{PartID: "TNEF1", Filename: "readme.txt", Content: []byte("Hello")}, msg.Attachments[1])
 }
 
+// TestParseTNEFMessageBytes_HTMLOnly protects that an Outlook message
+// without a usable plain text body gets its Body converted from the HTML
+// body, while BodyHTML keeps the original HTML. Consumers that only read
+// the plain text Body would otherwise get an empty message, and the
+// formatted HTML body would be lost.
+func TestParseTNEFMessageBytes_HTMLOnly(t *testing.T) {
+	const html = "<p>Please find the <b>invoice</b> attached.</p>"
+	tests := []struct {
+		name  string
+		props map[uint16]string
+	}{
+		{name: "no plain body", props: map[uint16]string{mapiBodyHTML: html}},
+		// A single byte plain body is a placeholder, not the message text.
+		{name: "1 byte plain body", props: map[uint16]string{mapiBody: "\n", mapiBodyHTML: html}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			msg, err := ParseTNEFMessageBytes(tnefMessage(tnefStringProps(tt.props)))
+			require.NoError(t, err)
+			assert.Equal(t, "Please find the *invoice* attached.", msg.Body)
+			assert.Equal(t, html, string(msg.BodyHTML))
+		})
+	}
+}
+
 func TestParseTNEFMessageBytes_NoContent(t *testing.T) {
 	// A TNEF stream with just the header is an empty but valid message.
 	msg, err := ParseTNEFMessageBytes(tnefMessage())

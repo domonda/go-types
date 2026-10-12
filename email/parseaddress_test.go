@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/mail"
 	"reflect"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -420,7 +421,11 @@ func TestUniqueNormalizedAddressSlice(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			input := slices.Clone(tt.addrs)
 			assert.Equal(t, tt.want, UniqueNormalizedAddressSlice(tt.addrs))
+			// The caller's slice must not be modified, it typically still
+			// holds the original recipients with their display names.
+			assert.Equal(t, input, tt.addrs, "input slice modified")
 		})
 	}
 }
