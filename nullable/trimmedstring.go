@@ -98,16 +98,14 @@ func (s TrimmedString) Ptr() *string {
 	return (*string)(&s)
 }
 
-// IsNull returns true if the string is empty.
+// IsNull returns true if the trimmed string is empty,
+// which is also the case when the underlying string consists
+// only of runes removed by strutil.TrimSpace.
+// Value, MarshalJSON and MarshalText write such a string as null.
 //
 // IsNull implements the Nullable interface.
 func (s TrimmedString) IsNull() bool {
-	for _, r := range s {
-		if !strutil.IsSpace(r) {
-			return false
-		}
-	}
-	return true
+	return s.String() == ""
 }
 
 // IsNotNull returns true if the string is not empty.
@@ -263,7 +261,7 @@ func (s *TrimmedString) Scan(value any) error {
 	}
 }
 
-// UnmarshalText implements the encoding.TextMarshaler interface
+// MarshalText implements the encoding.TextMarshaler interface
 func (s TrimmedString) MarshalText() ([]byte, error) {
 	if s.IsNull() {
 		return nil, nil

@@ -20,7 +20,8 @@ import (
 type JSON []byte
 
 // MarshalJSON marshals source as JSON and returns it as a nullable JSON value.
-// The result is nil (null) if source marshals to the JSON "null" value.
+// If source marshals to the JSON "null" value, the result is JSON("null")
+// and not nil; use the method JSON.MarshalFrom to get nil in that case.
 func MarshalJSON(source any) (JSON, error) {
 	return json.Marshal(source)
 }
@@ -60,8 +61,8 @@ func (j JSON) MarshalJSON() ([]byte, error) {
 }
 
 // UnmarshalJSON sets *j to a copy of sourceJSON.
-// UnarshalJSON implements encoding/json.Unmarshaler
-// See method Unmarshal for unmarshalling into a struct.
+// UnmarshalJSON implements encoding/json.Unmarshaler
+// See method UnmarshalTo for unmarshalling into a struct.
 func (j *JSON) UnmarshalJSON(sourceJSON []byte) error {
 	if j == nil {
 		return errors.New("UnmarshalJSON on nil pointer")

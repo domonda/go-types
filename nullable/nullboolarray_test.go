@@ -82,12 +82,43 @@ func Test_NullBoolArray_Scan(t *testing.T) {
 	require.NoError(t, a.Scan([]byte("{f,t}")))
 	assert.Equal(t, NullBoolArray{TypeFrom(false), TypeFrom(true)}, a)
 
-	// Unrecognized elements are treated as null (not an error).
-	require.NoError(t, a.Scan("{x}"))
-	assert.Equal(t, NullBoolArray{Type[bool]{}}, a)
-
 	assert.Error(t, a.Scan("not an array"))
 	assert.Error(t, a.Scan(123))
+}
+
+// Scan must never turn an element it does not understand into a null:
+// a silent null can't be told apart from a real NULL element and loses
+// the value, for example {true,false} used to scan as {NULL,NULL}.
+// PostgreSQL itself writes t and f, but accepts true and false in any
+// case as boolean input and NULL in any case as array element,
+// so all of those are accepted and any other element is an error.
+func Test_NullBoolArray_Scan_Elements(t *testing.T) {
+	valid := []struct {
+		src  string
+		want NullBoolArray
+	}{
+		{src: "{t,f}", want: NullBoolArray{TypeFrom(true), TypeFrom(false)}},
+		{src: "{true,false}", want: NullBoolArray{TypeFrom(true), TypeFrom(false)}},
+		{src: "{T,F,TRUE,False}", want: NullBoolArray{TypeFrom(true), TypeFrom(false), TypeFrom(true), TypeFrom(false)}},
+		{src: "{NULL,null,Null}", want: NullBoolArray{{}, {}, {}}},
+		{src: "{true,NULL,f}", want: NullBoolArray{TypeFrom(true), {}, TypeFrom(false)}},
+	}
+	for _, tt := range valid {
+		t.Run(tt.src, func(t *testing.T) {
+			var a NullBoolArray
+			require.NoError(t, a.Scan(tt.src))
+			assert.Equal(t, tt.want, a)
+		})
+	}
+
+	for _, src := range []string{"{x}", "{t,x}", "{maybe}", "{NULLx}", "{,}", "{t,}"} {
+		t.Run(src, func(t *testing.T) {
+			a := NullBoolArray{TypeFrom(true)}
+			assert.Error(t, a.Scan(src))
+			// No partially scanned array on error
+			assert.Equal(t, NullBoolArray{TypeFrom(true)}, a, "failed Scan must not modify the array")
+		})
+	}
 }
 
 func Test_NullBoolArray_RoundTrip(t *testing.T) {
