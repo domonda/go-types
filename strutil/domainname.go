@@ -3,6 +3,8 @@ package strutil
 import (
 	"regexp"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 )
 
 const tld = "(?:com|net|org|edu|gov|mil|de|at|eu|ch|es|nl|uk|cz|dk|fi)"
@@ -37,30 +39,43 @@ func ParseDomainName(word string) string {
 	return ""
 }
 
-// ParseDomainNameIndex extracts a domain name from word and returns both the domain
-// and the byte indices [start, end) where the domain was found.
+// ParseDomainNameIndex extracts a domain name from word and returns both the
+// lowercase domain and the byte indices [start, end) where the domain was found in word.
 // It recognizes domains in HTTP URLs, www prefixed domains, and email addresses.
 // Returns empty string and nil indices if no domain is found.
 func ParseDomainNameIndex(word string) (domain string, indices []int) {
-	word = strings.ToLower(word)
+	lower := strings.ToLower(word)
 
-	indices = httpDomainRegex.FindStringSubmatchIndex(word)
+	indices = httpDomainRegex.FindStringSubmatchIndex(lower)
 	if len(indices) == 4 {
-		indices = indices[2:]
-		return strings.ToLower(word[indices[0]:indices[1]]), indices
+		return lower[indices[2]:indices[3]], []int{wordIndex(word, indices[2]), wordIndex(word, indices[3])}
 	}
 
-	indices = wwwDomainRegex.FindStringSubmatchIndex(word)
+	indices = wwwDomainRegex.FindStringSubmatchIndex(lower)
 	if len(indices) == 4 {
-		indices = indices[2:]
-		return strings.ToLower(word[indices[0]:indices[1]]), indices
+		return lower[indices[2]:indices[3]], []int{wordIndex(word, indices[2]), wordIndex(word, indices[3])}
 	}
 
-	indices = emailDomainRegex.FindStringSubmatchIndex(word)
+	indices = emailDomainRegex.FindStringSubmatchIndex(lower)
 	if len(indices) == 4 {
-		indices = indices[2:]
-		return strings.ToLower(word[indices[0]:indices[1]]), indices
+		return lower[indices[2]:indices[3]], []int{wordIndex(word, indices[2]), wordIndex(word, indices[3])}
 	}
 
 	return "", nil
+}
+
+// wordIndex converts the byte index lowerIndex of strings.ToLower(word)
+// to the byte index of the same rune in word.
+// Lowercasing can change the byte length of a rune, for example
+// 'İ' (U+0130) and the Kelvin sign (U+212A) become 'i' and 'k',
+// and an invalid UTF-8 byte becomes U+FFFD.
+func wordIndex(word string, lowerIndex int) int {
+	lowerPos := 0
+	for i, r := range word {
+		if lowerPos >= lowerIndex {
+			return i
+		}
+		lowerPos += utf8.RuneLen(unicode.ToLower(r))
+	}
+	return len(word)
 }

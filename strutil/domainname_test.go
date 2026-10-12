@@ -88,3 +88,32 @@ func Test_ParseDomainNameIndex_Indices(t *testing.T) {
 		}
 	}
 }
+
+func Test_ParseDomainNameIndex_CaseChangingRunes(t *testing.T) {
+	// The domain is matched in the lowercased word, but strings.ToLower
+	// can change the byte length of a rune: 'İ' (U+0130, 2 bytes) and the
+	// Kelvin sign (U+212A, 3 bytes) both become a single ASCII byte.
+	// The indices must still locate the domain in the passed word,
+	// else callers marking or replacing it in the original text
+	// would hit the wrong bytes.
+	tests := []struct {
+		word       string
+		wantDomain string
+		wantInWord string
+	}{
+		{word: "İnfo@domonda.com", wantDomain: "domonda.com", wantInWord: "domonda.com"},
+		{word: "https://İ.domonda.com/", wantDomain: "i.domonda.com", wantInWord: "İ.domonda.com"},
+		{word: "Karl@Kunde.at", wantDomain: "kunde.at", wantInWord: "Kunde.at"},
+		{word: "www.Kunde.at/İmpressum", wantDomain: "www.kunde.at", wantInWord: "www.Kunde.at"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.word, func(t *testing.T) {
+			domain, indices := ParseDomainNameIndex(tt.word)
+			assert.Equal(t, tt.wantDomain, domain)
+			assert.Equal(t, ParseDomainName(tt.word), domain, "same domain as ParseDomainName")
+			if assert.Len(t, indices, 2) {
+				assert.Equal(t, tt.wantInWord, tt.word[indices[0]:indices[1]])
+			}
+		})
+	}
+}

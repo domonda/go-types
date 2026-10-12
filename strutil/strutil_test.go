@@ -515,6 +515,31 @@ func TestRemoveKeepRunes_InvalidUTF8AndReplacementChar(t *testing.T) {
 			wantRemove: "abc",
 			wantKeep:   "\uFFFD\uFFFD",
 		},
+		// RemoveRunesString copied the unchanged prefix before the first
+		// removed rune verbatim, so an invalid byte in that prefix stayed
+		// raw instead of becoming U+FFFD like in RemoveRunes, and whether
+		// it was replaced depended on a later rune being removed.
+		{
+			name:       "invalid byte before the first removed rune",
+			str:        "\xff1a",
+			funcs:      []IsRuneFunc{unicode.IsDigit},
+			wantRemove: "\uFFFDa",
+			wantKeep:   "1",
+		},
+		{
+			name:       "truncated multi-byte rune before the first removed rune",
+			str:        "a\xe2\x82b1",
+			funcs:      []IsRuneFunc{unicode.IsDigit},
+			wantRemove: "a\uFFFD\uFFFDb",
+			wantKeep:   "1",
+		},
+		{
+			name:       "invalid byte and no rune removed",
+			str:        "a\xffb",
+			funcs:      []IsRuneFunc{unicode.IsDigit},
+			wantRemove: "a\uFFFDb",
+			wantKeep:   "",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -523,10 +548,7 @@ func TestRemoveKeepRunes_InvalidUTF8AndReplacementChar(t *testing.T) {
 			assert.Equal(t, tt.wantKeep, string(KeepRunes(in, tt.funcs...)), "KeepRunes")
 			assert.Equal(t, tt.str, string(in), "input must not be modified")
 
-			// The string variants must produce the same result.
-			// Note that RemoveRunesString copies the unchanged prefix before
-			// the first removed rune verbatim, so the first removed rune of
-			// every case comes before any invalid byte.
+			// The string variants must produce the same result
 			assert.Equal(t, tt.wantRemove, RemoveRunesString(tt.str, tt.funcs...), "RemoveRunesString")
 			assert.Equal(t, tt.wantKeep, KeepRunesString(tt.str, tt.funcs...), "KeepRunesString")
 		})
@@ -586,11 +608,18 @@ func TestMapRuneIsAfterWordSeparator(t *testing.T) {
 		{str: "a.b", want: []bool{true, false, true}},
 		{str: "a  b", want: []bool{true, false, true, true}},
 		// Continuation bytes of a multi-byte rune get the value of the
-		// rune's first byte (not testing a multi-byte rune at the end of
-		// the string, see the bug report for that case)
+		// rune's first byte
 		{str: "ä b", want: []bool{true, true, false, true}},
 		{str: "x äb", want: []bool{true, false, true, true, false}},
 		{str: "世x", want: []bool{true, true, true, false}},
+		// Also for the last rune of the string: its continuation bytes
+		// were left false, so a byte offset into the last rune
+		// (for example the end of a regexp match minus one)
+		// got a different value than the rune's first byte
+		{str: "ä", want: []bool{true, true}},
+		{str: "a ä", want: []bool{true, false, true, true}},
+		{str: "x世", want: []bool{true, false, false, false}},
+		{str: "a 世", want: []bool{true, false, true, true, true}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.str, func(t *testing.T) {

@@ -202,7 +202,9 @@ func KeepRunes(str []byte, keepRunes ...IsRuneFunc) []byte {
 
 // RemoveRunesString returns a copy of str with all runes removed
 // where any call to a removeRunes function reeturns true.
-// If no rune was removed, the string is not copied.
+// Like RemoveRunes, every invalid UTF-8 byte is passed
+// to the functions as utf8.RuneError and written as U+FFFD if kept.
+// If no rune was removed and str is valid UTF-8, the string is not copied.
 func RemoveRunesString(str string, removeRunes ...IsRuneFunc) string {
 	var b strings.Builder
 	b.Grow(len(str))
@@ -220,9 +222,16 @@ func RemoveRunesString(str string, removeRunes ...IsRuneFunc) string {
 				b.WriteRune(r)
 			}
 		} else {
-			if doRemove {
+			// An invalid byte is written as U+FFFD like in RemoveRunes,
+			// so it changes the string even if it is kept,
+			// and the prefix copied verbatim never contains invalid UTF-8
+			invalid := r == utf8.RuneError && !strings.HasPrefix(str[i:], string(utf8.RuneError))
+			if doRemove || invalid {
 				changed = true
 				b.WriteString(str[:i])
+				if !doRemove {
+					b.WriteRune(r)
+				}
 			}
 		}
 	}
@@ -264,6 +273,10 @@ func MapRuneIsAfterWordSeparator(str string) []bool {
 		}
 		i0 = i
 		r0 = r
+	}
+	// Copy mapping to further bytes of the last rune
+	for b := i0 + 1; b < len(str); b++ {
+		result[b] = result[b-1]
 	}
 	return result
 }
@@ -591,7 +604,7 @@ func SanitizeLineEndings(text string) string {
 	if first > 0 && text[first-1] == '\n' {
 		i++
 	}
-	for ; i < len(text); {
+	for i < len(text) {
 		switch text[i] {
 		case '\r':
 			b.WriteByte('\n')
@@ -650,7 +663,7 @@ func SanitizeLineEndingsBytes(text []byte) []byte {
 	if first > 0 && text[first-1] == '\n' {
 		i++
 	}
-	for ; i < len(text); {
+	for i < len(text) {
 		switch text[i] {
 		case '\r':
 			out = append(out, '\n')
