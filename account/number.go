@@ -1,13 +1,3 @@
-// Package account provides account number handling with validation,
-// parsing, and database integration for Go applications.
-//
-// The package includes:
-// - Account number validation with regex patterns
-// - Support for alphanumeric account numbers
-// - Numeric conversion utilities
-// - Database integration (Scanner/Valuer interfaces)
-// - JSON and XML marshalling/unmarshalling
-// - Nullable account number support
 package account
 
 import (
@@ -127,8 +117,8 @@ func (n Number) ValidateNumeric() error {
 }
 
 // Uint converts the Number to a uint64.
-// Returns an error if the Number is not purely numeric.
-// Prevents parsing of non-digit strings like hex numbers.
+// Returns a wrapped ErrAlphanumericNumber if the Number is not purely numeric
+// and the strconv.ParseUint error if the value overflows a uint64.
 func (n Number) Uint() (uint64, error) {
 	// Check upfront to prevent non digit strings like hex numbers
 	// to be parsed by strconv.ParseUint
@@ -149,8 +139,9 @@ func (n Number) UintPtr() (*uint64, error) {
 }
 
 // Int converts the Number to an int64.
-// Returns an error if the Number is not purely numeric.
-// Prevents parsing of non-digit strings like hex numbers.
+// Returns a wrapped ErrAlphanumericNumber if the Number is not purely numeric,
+// so a sign like "-1" or "+1" is an error and the result is never negative,
+// and the strconv.ParseInt error if the value overflows an int64.
 func (n Number) Int() (int64, error) {
 	// Check upfront to prevent non digit strings like hex numbers
 	// to be parsed by strconv.ParseInt
