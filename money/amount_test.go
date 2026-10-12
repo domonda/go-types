@@ -443,6 +443,38 @@ func TestAmount_UnmarshalJSON(t *testing.T) {
 	}
 }
 
+// TestAmount_UnmarshalJSON_stringEscapes protects that a JSON string is
+// decoded as JSON before it is parsed as amount, like float.Tolerant and
+// DecimalAmount do. A JSON encoder may escape any rune, so "1\u002c5" is
+// the same JSON value as "1,5" and must decode to the same amount instead
+// of failing on the backslash of the escape.
+func TestAmount_UnmarshalJSON_stringEscapes(t *testing.T) {
+	valid := map[string]Amount{
+		"\"1\\u002c5\"":           1.5,
+		"\"\\u0031.234,56\"":      1234.56,
+		"\"\\u002d1,5\"":          -1.5,
+		"\"1.5\\t\"":              1.5,
+		"\"\\u004e\\u0061N\"":     Amount(math.NaN()),
+		"\"1\\u0027234\\u002e5\"": 1234.5,
+	}
+	for j, want := range valid {
+		var amount Amount
+		if assert.NoError(t, json.Unmarshal([]byte(j), &amount), "json.Unmarshal(%s)", j) {
+			assert.True(t, equalInclNaN(float64(want), float64(amount)), "json.Unmarshal(%s) = %v, want %v", j, amount, want)
+		}
+	}
+
+	var s struct{ A Amount }
+	require.NoError(t, json.Unmarshal([]byte("{\"A\":\"1\\u002c5\"}"), &s))
+	assert.Equal(t, Amount(1.5), s.A)
+
+	for _, j := range []string{"\"1\\u002c5", "\"1\\x2c5\"", "\"1\\u002c5\\u002c5\""} {
+		amount := Amount(666)
+		assert.Error(t, amount.UnmarshalJSON([]byte(j)), "Amount.UnmarshalJSON(%s)", j)
+		assert.Equal(t, Amount(666), amount, "a failed Amount.UnmarshalJSON(%s) must not modify the amount", j)
+	}
+}
+
 func equalInclNaN(a, b float64) bool {
 	if math.IsNaN(a) {
 		return math.IsNaN(b)

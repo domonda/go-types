@@ -107,6 +107,36 @@ func TestRate_UnmarshalJSON(t *testing.T) {
 	}
 }
 
+// TestRate_UnmarshalJSON_stringEscapes protects that a JSON string is
+// decoded as JSON before it is parsed as rate, like float.Tolerant and
+// DecimalAmount do. A JSON encoder may escape any rune, so "19%" is
+// the same JSON value as "19%" and must decode to the same rate instead
+// of failing on the backslash of the escape.
+func TestRate_UnmarshalJSON_stringEscapes(t *testing.T) {
+	valid := map[string]Rate{
+		"\"0\\u002e19\"":      0.19,
+		"\"19\\u0025\"":       0.19,
+		"\"2\\u002c5 %\"":     0.025,
+		"\"\\u002d0.025\\t\"": -0.025,
+	}
+	for j, want := range valid {
+		var r Rate
+		if assert.NoError(t, json.Unmarshal([]byte(j), &r), "json.Unmarshal(%s)", j) {
+			assert.Equal(t, want, r, "json.Unmarshal(%s)", j)
+		}
+	}
+
+	var s struct{ VAT Rate }
+	require.NoError(t, json.Unmarshal([]byte("{\"VAT\":\"20\\u0025\"}"), &s))
+	assert.Equal(t, Rate(0.2), s.VAT)
+
+	for _, j := range []string{"\"19\\u0025", "\"19\\x25\""} {
+		r := Rate(666)
+		assert.Error(t, r.UnmarshalJSON([]byte(j)), "Rate.UnmarshalJSON(%s)", j)
+		assert.Equal(t, Rate(666), r, "a failed Rate.UnmarshalJSON(%s) must not modify the rate", j)
+	}
+}
+
 // TestRate_JSONRoundTrip pins that Rate, which has no MarshalJSON method,
 // is encoded as a plain JSON number that decodes back to the identical rate,
 // so exchange rates don't drift when passed through an API, and that a

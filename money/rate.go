@@ -1,6 +1,7 @@
 package money
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
 	"math/big"
@@ -61,7 +62,7 @@ func ParseRate(str string, acceptedDecimals ...int) (Rate, error) {
 	if slices.Contains(acceptedDecimals, decimals) {
 		return Rate(f), nil
 	}
-	return 0, fmt.Errorf("parsing %q returned %d decimals wich is not in accepted list of %v", s, decimals, acceptedDecimals)
+	return 0, fmt.Errorf("parsing %q returned %d decimals which is not in accepted list of %v", s, decimals, acceptedDecimals)
 }
 
 // RateFromPtr dereferences ptr or returns defaultVal if it is nil.
@@ -301,9 +302,12 @@ func (r *Rate) UnmarshalJSON(j []byte) error {
 		return nil
 	}
 
-	// Strip quotes
-	if l := len(s); l > 2 && s[0] == '"' && s[l-1] == '"' {
-		s = s[1 : l-1]
+	// Decode a JSON string through the standard library so \uXXXX and other
+	// escape sequences are resolved, not just the surrounding quotes stripped.
+	if len(s) > 0 && s[0] == '"' {
+		if err := json.Unmarshal(j, &s); err != nil {
+			return fmt.Errorf("can't unmarshal JSON(%s) as money.Rate because of: %w", j, err)
+		}
 	}
 
 	rate, err := ParseRate(s)
