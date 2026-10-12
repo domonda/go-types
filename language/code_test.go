@@ -107,6 +107,16 @@ func TestCodeLanguageName(t *testing.T) {
 	assert.Equal(t, "English", EN.LanguageName())
 	assert.Equal(t, "German", DE.LanguageName())
 	assert.Equal(t, "", Code("xx").LanguageName())
+	assert.Equal(t, "", Null.LanguageName())
+
+	// Like Valid/Validate/String and country.Code.EnglishName, the name is
+	// looked up for the normalized code, so every input that Validate
+	// accepts has a name (e.g. language codes read from user input or HTTP headers).
+	assert.Equal(t, "English", Code("EN").LanguageName())
+	assert.Equal(t, "English", Code(" en ").LanguageName())
+	assert.Equal(t, "English", Code("eng").LanguageName())
+	assert.Equal(t, "English", Code("en-US").LanguageName())
+	assert.Equal(t, "German", Code("ger").LanguageName())
 }
 
 func TestParseCode(t *testing.T) {

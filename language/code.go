@@ -2,11 +2,11 @@
 // based on ISO 639-1 standards for Go applications.
 //
 // The package includes:
-// - ISO 639-1 two-character language code validation and normalization
-// - Language name mapping and retrieval
-// - Database integration (Scanner/Valuer interfaces)
-// - JSON marshalling/unmarshalling
-// - Support for common language codes and names
+//   - ISO 639-1 two-character language code validation and normalization
+//   - Language name mapping and retrieval
+//   - Database integration (Scanner/Valuer interfaces)
+//   - JSON Schema definition (Code.JSONSchema)
+//   - Support for common language codes and names
 package language
 
 import (
@@ -190,8 +190,14 @@ func codeForName(name string) (Code, bool) {
 }
 
 // LanguageName returns the English name of the language for the code.
+// The code is normalized first, see Normalized.
+// Returns an empty string if the code is invalid.
 func (c Code) LanguageName() string {
-	return codeNames[c]
+	norm, err := c.Normalized()
+	if err != nil {
+		return ""
+	}
+	return codeNames[norm]
 }
 
 // String returns the normalized code if possible, else it will be returned unchanged as string.

@@ -79,7 +79,7 @@ func main() {
 	if !ok {
 		log.Fatal("cannot determine generator source path")
 	}
-	// genFile is .../language/gen-lang-maps/gen-lang-maps.go,
+	// genFile is .../language/gen-lang-maps/main.go,
 	// so the language package directory is two levels up.
 	langDir := filepath.Dir(filepath.Dir(genFile))
 
