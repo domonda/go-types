@@ -324,9 +324,12 @@ func (a DecimalAmount) IsInf(sign int) bool {
 // coefficient is taken directly from the digits of str without a float64
 // round-trip, so values like 99999999999999.99 keep their last cent.
 //
-// Like ParseAmount, a lone separator group is treated as a decimal separator,
-// not a thousands separator: "1,000" and "1'000" parse to 1.000 (== 1), not
-// 1000. Pass acceptedDecimals to reject such ambiguous inputs.
+// Like ParseAmount, a lone '.' or ',' is treated as a decimal separator,
+// not a thousands separator: "1,000" parses to 1.000 (== 1), not 1000.
+// Pass acceptedDecimals to reject such ambiguous inputs. The apostrophe and
+// the space are only ever thousands separators, so "1'000" and "1 000"
+// parse to 1000, and one that can't separate thousands, like in "1'5",
+// is an error.
 //
 // The tokens "NaN", "Inf"/"+Inf"/"Infinity" and "-Inf"/"-Infinity" parse to the
 // corresponding non-finite values.

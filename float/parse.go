@@ -21,6 +21,14 @@ func Parse(str string) (float64, error) {
 // ParseDetails parses a float string compatible with Format
 // and returns the detected integer thousands separator and decimal separator characters.
 // If a separator was not detected, then zero will be returned for thousandsSep or decimalSep.
+//
+// A single '.' or ',' is the decimal separator, so "1,234" parses as 1.234.
+// The apostrophe and the space are only ever thousands separators,
+// so "1'234" and "1 234" parse as 1234, and one that can't separate
+// thousands, like in "1'5", is an error.
+// Thousands separators have to be followed by exactly 3 digits
+// and the group in front of the first one must have 1 to 3 digits.
+// The returned decimalSep is always zero, '.' or ','.
 // See: https://en.wikipedia.org/wiki/Decimal_separator
 func ParseDetails(str string) (f float64, thousandsSep, decimalSep rune, decimals int, err error) {
 	str = strutil.TrimSpace(str)
@@ -43,7 +51,6 @@ func ParseDetails(str string) (f float64, thousandsSep, decimalSep rune, decimal
 		pointWritten = false
 		eIndex       = -1
 
-		numMinus          int
 		numGroupingRunes  int
 		lastGroupingRune  rune
 		lastGroupingIndex int
@@ -74,7 +81,6 @@ func ParseDetails(str string) (f float64, thousandsSep, decimalSep rune, decimal
 				return 0, 0, 0, 0, fmt.Errorf("minus can only be used as first or last character: %q", str)
 			}
 			floatBuilder.WriteByte(byte(r)) //#nosec G115
-			numMinus = 1
 
 		case r == '+':
 			switch {
@@ -92,6 +98,24 @@ func ParseDetails(str string) (f float64, thousandsSep, decimalSep rune, decimal
 
 	eIndex = -1
 
+	// groupsThousands reports whether the grouping runes found in front of the
+	// index end without a decimal separator separate thousands, which more than
+	// one of them and every apostrophe or space do, or whether a single '.' or
+	// ',' is the decimal separator. It returns an error if they separate
+	// thousands but the groups don't have the required number of digits.
+	groupsThousands := func(end int) (bool, error) {
+		if numGroupingRunes == 1 && (lastGroupingRune == '.' || lastGroupingRune == ',') {
+			return false, nil
+		}
+		if end-(lastGroupingIndex+1) != 3 {
+			return false, fmt.Errorf("thousands separators have to be 3 characters apart: %q", str)
+		}
+		if numGroupingRunes == 1 && (lastGroupingIndex < 1 || lastGroupingIndex > 3) {
+			return false, fmt.Errorf("first group before a thousands separator must have 1 to 3 digits: %q", str)
+		}
+		return true, nil
+	}
+
 	// remove the sign from the string and trim space in case the removal left one
 	trimmedSignsStr := strutil.TrimSpace(str[skipFirst : len(str)-skipLast])
 	for i, r := range trimmedSignsStr {
@@ -102,6 +126,9 @@ func ParseDetails(str string) (f float64, thousandsSep, decimalSep rune, decimal
 		case r == '.' || r == ',' || r == '\'':
 			if pointWritten {
 				return 0, 0, 0, 0, fmt.Errorf("no further separators allowed after decimal separator: %q", str)
+			}
+			if eIndex != -1 {
+				return 0, 0, 0, 0, fmt.Errorf("no separators allowed in the exponent: %q", str)
 			}
 
 			// Write everything after the lastNonDigitIndex and before current index
@@ -118,18 +145,21 @@ func ParseDetails(str string) (f float64, thousandsSep, decimalSep rune, decimal
 					return 0, 0, 0, 0, fmt.Errorf("thousands separators have to be 3 characters apart: %q", str)
 				}
 				numGroupingRunes++
+				// The first grouping rune is a thousands separator now,
+				// so the group in front of it must have 1 to 3 digits
+				if numGroupingRunes == 2 && (lastGroupingIndex < 1 || lastGroupingIndex > 3) {
+					return 0, 0, 0, 0, fmt.Errorf("first group before a thousands separator must have 1 to 3 digits: %q", str)
+				}
 				if r == lastGroupingRune {
-					if numGroupingRunes == 2 {
-						if floatBuilder.Len()-numMinus > 6 {
-							return 0, 0, 0, 0, fmt.Errorf("thousands separators have to be 3 characters apart: %q", str)
-						}
-					}
 					// If it's the same grouping rune, then just save it
 					lastGroupingRune = r
 					lastGroupingIndex = i
 				} else {
 					// If it's a different grouping rune, then we have
 					// reached the decimal separator
+					if r == '\'' {
+						return 0, 0, 0, 0, fmt.Errorf("apostrophe can only be used as thousands separator: %q", str)
+					}
 					floatBuilder.WriteByte('.')
 					pointWritten = true
 					thousandsSep = lastGroupingRune
@@ -142,6 +172,9 @@ func ParseDetails(str string) (f float64, thousandsSep, decimalSep rune, decimal
 			if pointWritten {
 				return 0, 0, 0, 0, fmt.Errorf("no further separators allowed after decimal separator: %q", str)
 			}
+			if eIndex != -1 {
+				return 0, 0, 0, 0, fmt.Errorf("no separators allowed in the exponent: %q", str)
+			}
 
 			// Write everything after the lastNonDigitIndex and before current index
 			floatBuilder.WriteString(trimmedSignsStr[lastNonDigitIndex+1 : i])
@@ -160,10 +193,10 @@ func ParseDetails(str string) (f float64, thousandsSep, decimalSep rune, decimal
 
 				numGroupingRunes++
 				if r == lastGroupingRune {
-					if numGroupingRunes == 2 {
-						if floatBuilder.Len()-numMinus > 6 {
-							return 0, 0, 0, 0, fmt.Errorf("thousands separators have to be 3 characters apart: %q", str)
-						}
+					// The first space is a thousands separator now,
+					// so the group in front of it must have 1 to 3 digits
+					if numGroupingRunes == 2 && (lastGroupingIndex < 1 || lastGroupingIndex > 3) {
+						return 0, 0, 0, 0, fmt.Errorf("first group before a thousands separator must have 1 to 3 digits: %q", str)
 					}
 					// If it's the same grouping rune, then just save it
 					lastGroupingRune = r
@@ -181,9 +214,17 @@ func ParseDetails(str string) (f float64, thousandsSep, decimalSep rune, decimal
 				return 0, 0, 0, 0, fmt.Errorf("e can't be the first or a repeating character: %q", str)
 			}
 			if numGroupingRunes > 0 && !pointWritten {
-				floatBuilder.WriteByte('.')
-				pointWritten = true
-				decimalSep = '.'
+				thousands, err := groupsThousands(i)
+				if err != nil {
+					return 0, 0, 0, 0, err
+				}
+				if thousands {
+					thousandsSep = lastGroupingRune
+				} else {
+					floatBuilder.WriteByte('.')
+					pointWritten = true
+					decimalSep = '.'
+				}
 			}
 			floatBuilder.WriteString(trimmedSignsStr[lastNonDigitIndex+1 : i+1]) // i+1 to write including the 'e'
 			lastNonDigitIndex = i
@@ -198,14 +239,13 @@ func ParseDetails(str string) (f float64, thousandsSep, decimalSep rune, decimal
 		}
 	}
 
-	if numGroupingRunes > 0 && !pointWritten {
-		if numGroupingRunes > 1 {
-			// If more than one grouping rune has been written, but no point
-			// then it was pure integer grouping, so the last there
-			// have to be 3 bytes since last grouping rune
-			if lastDigitIndex-lastGroupingIndex != 3 {
-				return 0, 0, 0, 0, fmt.Errorf("thousands separators have to be 3 characters apart: %q", str)
-			}
+	// Grouping runes in front of an exponent were already resolved there
+	if numGroupingRunes > 0 && !pointWritten && eIndex == -1 {
+		thousands, err := groupsThousands(lastDigitIndex + 1)
+		if err != nil {
+			return 0, 0, 0, 0, err
+		}
+		if thousands {
 			thousandsSep = lastGroupingRune
 		} else {
 			floatBuilder.WriteByte('.')

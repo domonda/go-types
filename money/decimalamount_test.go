@@ -94,6 +94,40 @@ func TestParseDecimalAmount_exactBeatsFloat(t *testing.T) {
 	assert.NotEqual(t, s, f.String())
 }
 
+// TestParseDecimalAmount_loneSeparator pins the documented asymmetry of a
+// single separator: a lone '.' or ',' is the decimal separator, while the
+// Swiss apostrophe and the French space only ever group thousands, so a
+// Swiss "1'000" is a thousand and not one, and an apostrophe that can't
+// group thousands is rejected instead of being read as a decimal separator.
+func TestParseDecimalAmount_loneSeparator(t *testing.T) {
+	cases := []struct {
+		str   string
+		coeff int64
+		scale int
+	}{
+		{"1,000", 1000, 3},
+		{"1.000", 1000, 3},
+		{"1'000", 1000, 0},
+		{"1 000", 1000, 0},
+		{"-12'345", -12345, 0},
+	}
+	for _, c := range cases {
+		a, err := ParseDecimalAmount(c.str)
+		require.NoError(t, err, "ParseDecimalAmount(%q)", c.str)
+		assert.Equal(t, c.coeff, a.Coefficient(), "coefficient of %q", c.str)
+		assert.Equal(t, c.scale, a.Scale(), "scale of %q", c.str)
+	}
+	for _, s := range []string{"1'5", "1 5", "1'50", "1'0000"} {
+		_, err := ParseDecimalAmount(s)
+		assert.Error(t, err, "ParseDecimalAmount(%q)", s)
+		_, err = ParseAmount(s)
+		assert.Error(t, err, "ParseAmount(%q)", s)
+	}
+	amount, err := ParseAmount("1'000")
+	require.NoError(t, err)
+	assert.Equal(t, Amount(1000), amount, "ParseAmount agrees with ParseDecimalAmount")
+}
+
 func TestParseDecimalAmount_acceptedDecimals(t *testing.T) {
 	_, err := ParseDecimalAmount("1.234", 0, 2)
 	assert.Error(t, err, "3 decimals not in {0,2}")

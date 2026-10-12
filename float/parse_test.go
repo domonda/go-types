@@ -202,3 +202,193 @@ func Test_ParseDetails_singleSeparatorAmbiguity(t *testing.T) {
 		assert.Equal(t, string(tt.wantDecSep), string(decimalSep), "ParseDetails(%q) decimalSep", tt.str)
 	}
 }
+
+// Test_ParseDetails_apostropheAndSpaceOnlyGroupThousands protects the rule
+// that the Swiss apostrophe and the SI/French space are only ever thousands
+// separators, unlike '.' and ',' which are the decimal separator when they
+// occur once. "1'234" is 1234 in Switzerland and "1 234" is 1234 in France,
+// reading them as 1.234 silently divides an amount by a thousand.
+// An apostrophe or a space that can't group thousands, like the one of
+// "1'5", is an error instead of a guess at a decimal separator that no
+// locale uses.
+func Test_ParseDetails_apostropheAndSpaceOnlyGroupThousands(t *testing.T) {
+	valid := []struct {
+		str              string
+		want             float64
+		wantThousandsSep rune
+		wantDecimalSep   rune
+		wantDecimals     int
+	}{
+		{"1'234", 1234, '\'', 0, 0},
+		{"1 234", 1234, ' ', 0, 0},
+		{"-12'345", -12345, '\'', 0, 0},
+		{"123 456 -", -123456, ' ', 0, 0},
+		{"1'234.50", 1234.5, '\'', '.', 2},
+		{"1'234,5", 1234.5, '\'', ',', 1},
+		{"1 234,56", 1234.56, ' ', ',', 2},
+		{"1'234e3", 1234e3, '\'', 0, 0},
+	}
+	for _, tt := range valid {
+		f, thousandsSep, decimalSep, decimals, err := ParseDetails(tt.str)
+		if assert.NoError(t, err, "ParseDetails(%q)", tt.str) {
+			assert.Equal(t, tt.want, f, "ParseDetails(%q) value", tt.str)
+			assert.Equal(t, string(tt.wantThousandsSep), string(thousandsSep), "ParseDetails(%q) thousandsSep", tt.str)
+			assert.Equal(t, string(tt.wantDecimalSep), string(decimalSep), "ParseDetails(%q) decimalSep", tt.str)
+			assert.Equal(t, tt.wantDecimals, decimals, "ParseDetails(%q) decimals", tt.str)
+		}
+	}
+
+	invalid := []string{
+		"1'5",
+		"1 5",
+		"1'23",
+		"1 23",
+		"1'2345",
+		"1 2345",
+		"1'",
+		"'234",
+		"1'234'5",
+		"1.234'5",   // apostrophe after a thousands separator would be the decimal one
+		"1,234'567", // apostrophe after a thousands separator would be the decimal one
+		"1'2e3",
+	}
+	for _, str := range invalid {
+		f, _, _, _, err := ParseDetails(str)
+		assert.Error(t, err, "ParseDetails(%q) = %v", str, f)
+	}
+}
+
+// Test_ParseDetails_firstThousandsGroup protects the digit grouping rule
+// that the group before the first thousands separator has 1 to 3 digits.
+// "1234.567,89" is no valid grouping in any locale and accepting it as
+// 1234567.89 turns a typo or a misread column into a plausible amount.
+// The rule must not depend on whether the thousands separator is followed
+// by another one, which "1234.567.890,0" always was rejected for,
+// or by the decimal separator.
+func Test_ParseDetails_firstThousandsGroup(t *testing.T) {
+	valid := map[string]float64{
+		"1.567,89":     1567.89,
+		"12.567,89":    12567.89,
+		"123.567,89":   123567.89,
+		"123,567.89":   123567.89,
+		"-1'567.89":    -1567.89,
+		"123 567,89":   123567.89,
+		"1.234.567,89": 1234567.89,
+	}
+	for str, want := range valid {
+		f, err := Parse(str)
+		if assert.NoError(t, err, "Parse(%q)", str) {
+			assert.Equal(t, want, f, "Parse(%q)", str)
+		}
+	}
+
+	invalid := []string{
+		"1234.567,89",
+		"1234,567.89",
+		"-1234.567,89",
+		"1234.567,89-",
+		"1234'567.89",
+		"1234 567,89",
+		"12345'678",
+		"12345 678",
+		".234,5",
+		",234.5",
+		"'234.5",
+	}
+	for _, str := range invalid {
+		f, err := Parse(str)
+		assert.Error(t, err, "Parse(%q) = %v", str, f)
+	}
+}
+
+// Test_ParseDetails_exponentAfterThousands protects that a thousands
+// grouped number keeps all of its integer digits in front of an exponent.
+// Before, the last group was taken as fractional digits,
+// so "1,234,567e3" parsed as 1234.567e3 instead of 1234567e3.
+func Test_ParseDetails_exponentAfterThousands(t *testing.T) {
+	tests := []struct {
+		str              string
+		want             float64
+		wantThousandsSep rune
+	}{
+		{"1,234,567e3", 1234567e3, ','},
+		{"1.234.567e-3", 1234567e-3, '.'},
+		{"1 234 567E3", 1234567e3, ' '},
+		{"1'234e3", 1234e3, '\''},
+	}
+	for _, tt := range tests {
+		f, thousandsSep, decimalSep, decimals, err := ParseDetails(tt.str)
+		if assert.NoError(t, err, "ParseDetails(%q)", tt.str) {
+			assert.Equal(t, tt.want, f, "ParseDetails(%q) value", tt.str)
+			assert.Equal(t, string(tt.wantThousandsSep), string(thousandsSep), "ParseDetails(%q) thousandsSep", tt.str)
+			assert.Equal(t, rune(0), decimalSep, "ParseDetails(%q) decimalSep", tt.str)
+			assert.Equal(t, 0, decimals, "ParseDetails(%q) decimals", tt.str)
+		}
+	}
+
+	// A single '.' or ',' in front of the exponent stays the decimal separator
+	f, err := Parse("1,5e3")
+	assert.NoError(t, err)
+	assert.Equal(t, 1500.0, f)
+	// A last group of other than 3 digits can't be grouped thousands
+	_, err = Parse("1,234,56e3")
+	assert.Error(t, err)
+}
+
+// Test_ParseDetails_separatorsFormatRoundTrip protects that the separators
+// ParseDetails detects can be passed back into Format, which panics for a
+// separator it doesn't support, to write a parsed number back in the style
+// it was read in. A zero decimalSep means the input had no decimal
+// separator, so any decimal separator that differs from thousandsSep can be
+// passed instead. The value must survive the round-trip.
+func Test_ParseDetails_separatorsFormatRoundTrip(t *testing.T) {
+	strs := []string{
+		"0",
+		"-1",
+		"1.5",
+		"1,5",
+		",5",
+		"1.",
+		"1,234",
+		"1.234",
+		"1 234",
+		"1'234",
+		"12 345 678",
+		"12'345'678",
+		"1,234,567",
+		"1.234.567",
+		"1,234.5",
+		"1.234,5",
+		"1 234.5",
+		"1 234,5",
+		"1'234.5",
+		"1'234,5",
+		"1.234.567,0",
+		"-1'234'567.891",
+		"1.2e6",
+		"1'234e3",
+		"1000000.8989",
+	}
+	for _, str := range strs {
+		f, thousandsSep, decimalSep, decimals, err := ParseDetails(str)
+		if !assert.NoError(t, err, "ParseDetails(%q)", str) {
+			continue
+		}
+		assert.Contains(t, []rune{0, '.', ',', ' ', '\''}, thousandsSep, "ParseDetails(%q) thousandsSep", str)
+		assert.Contains(t, []rune{0, '.', ','}, decimalSep, "ParseDetails(%q) decimalSep", str)
+		if decimalSep == 0 {
+			decimalSep = '.'
+			if thousandsSep == '.' {
+				decimalSep = ','
+			}
+		}
+		var formatted string
+		if !assert.NotPanics(t, func() { formatted = Format(f, thousandsSep, decimalSep, decimals, true) }, "Format(ParseDetails(%q))", str) {
+			continue
+		}
+		parsed, err := Parse(formatted)
+		if assert.NoError(t, err, "Parse(%q) of Format(ParseDetails(%q))", formatted, str) {
+			assert.Equal(t, f, parsed, "Parse(%q) of Format(ParseDetails(%q))", formatted, str)
+		}
+	}
+}
