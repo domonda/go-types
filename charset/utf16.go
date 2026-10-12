@@ -133,11 +133,13 @@ func EncodeUTF16(b []byte, byteOrder binary.ByteOrder) ([]byte, error) {
 }
 
 // DecodeUTF16String decodes the UTF-16 encoded bytes b using byteOrder and returns
-// the result as a UTF-8 string.
-// Returns an error if b has odd length.
+// the result as a UTF-8 string. Like DecodeUTF16, an optional BOM at the start
+// of b is validated against byteOrder and then stripped before decoding.
+// Returns an error if b has odd length or contains an unexpected BOM.
 func DecodeUTF16String(b []byte, byteOrder binary.ByteOrder) (string, error) {
-	if len(b)&1 != 0 {
-		return "", fmt.Errorf("odd length of UTF-16 string: %d", len(b))
+	result, err := DecodeUTF16(b, byteOrder)
+	if err != nil {
+		return "", err
 	}
-	return string(decodeUTF16Runes(b, byteOrder)), nil
+	return string(result), nil
 }

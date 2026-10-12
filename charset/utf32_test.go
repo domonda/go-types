@@ -75,6 +75,63 @@ func TestUTF32_RoundTrip(t *testing.T) {
 	}
 }
 
+// TestDecodeUTF32_BOMVariants checks that every UTF-32 decoder handles a
+// leading BOM like the UTF-16 decoders do: a matching BOM is stripped
+// instead of ending up as U+FEFF at the start of the text, and a BOM of
+// the other byte order is an error instead of silently decoding to U+FFFD,
+// because decoding with the wrong byte order produces garbage.
+// Data without a BOM is decoded with the passed byte order.
+func TestDecodeUTF32_BOMVariants(t *testing.T) {
+	decoders := []struct {
+		name   string
+		decode func(b []byte, byteOrder binary.ByteOrder) (string, error)
+	}{
+		{name: "DecodeUTF32", decode: func(b []byte, byteOrder binary.ByteOrder) (string, error) {
+			decoded, err := DecodeUTF32(b, byteOrder)
+			return string(decoded), err
+		}},
+		{name: "DecodeUTF32String", decode: DecodeUTF32String},
+		{name: "UTF32Encoding.Decode", decode: func(b []byte, byteOrder binary.ByteOrder) (string, error) {
+			decoded, err := UTF32Encoding(byteOrder).Decode(b)
+			return string(decoded), err
+		}},
+	}
+	var (
+		bomLE = []byte{0xFF, 0xFE, 0, 0}
+		bomBE = []byte{0, 0, 0xFE, 0xFF}
+		hiLE  = []byte{'h', 0, 0, 0, 'i', 0, 0, 0}
+		hiBE  = []byte{0, 0, 0, 'h', 0, 0, 0, 'i'}
+	)
+	tests := []struct {
+		name      string
+		b         []byte
+		byteOrder binary.ByteOrder
+		want      string
+		wantErr   string
+	}{
+		{name: "LE matching BOM", b: append(bomLE, hiLE...), byteOrder: binary.LittleEndian, want: "hi"},
+		{name: "BE matching BOM", b: append(bomBE, hiBE...), byteOrder: binary.BigEndian, want: "hi"},
+		{name: "LE only BOM", b: bomLE, byteOrder: binary.LittleEndian, want: ""},
+		{name: "LE opposite BOM", b: append(bomBE, hiBE...), byteOrder: binary.LittleEndian, wantErr: "expected UTF-32LE BOM but got UTF-32BE"},
+		{name: "BE opposite BOM", b: append(bomLE, hiLE...), byteOrder: binary.BigEndian, wantErr: "expected UTF-32BE BOM but got UTF-32LE"},
+		{name: "LE no BOM", b: hiLE, byteOrder: binary.LittleEndian, want: "hi"},
+		{name: "BE no BOM", b: hiBE, byteOrder: binary.BigEndian, want: "hi"},
+	}
+	for _, d := range decoders {
+		for _, tt := range tests {
+			t.Run(d.name+"/"+tt.name, func(t *testing.T) {
+				got, err := d.decode(tt.b, tt.byteOrder)
+				if tt.wantErr != "" {
+					assert.EqualError(t, err, tt.wantErr)
+					return
+				}
+				require.NoError(t, err)
+				assert.Equal(t, tt.want, got)
+			})
+		}
+	}
+}
+
 func TestUTF32_Empty(t *testing.T) {
 	encoded, err := EncodeUTF32(nil, binary.LittleEndian)
 	assert.NoError(t, err)
