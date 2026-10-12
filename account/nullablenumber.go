@@ -287,14 +287,15 @@ func (n *NullableNumber) UnmarshalJSON(j []byte) error {
 }
 
 // JSONSchema returns a JSON schema for NullableNumber, allowing either
-// a string matching the account number pattern or null.
+// a string matching the account number pattern of NumberRegexp
+// (DefaultNumberRegex unless reassigned) or null.
 func (NullableNumber) JSONSchema() *jsonschema.Schema {
 	return &jsonschema.Schema{
 		Title: "Nullable Account Number",
 		OneOf: []*jsonschema.Schema{
 			{
 				Type:    "string",
-				Pattern: DefaultNumberRegex,
+				Pattern: NumberRegexp.String(),
 			},
 			{Type: "null"},
 		},
@@ -303,9 +304,10 @@ func (NullableNumber) JSONSchema() *jsonschema.Schema {
 }
 
 // MarshalXML implements encoding/xml.Marshaler.
-// Encodes the NullableNumber as an XML element containing its string value.
+// Encodes the NullableNumber as an XML element containing its
+// whitespace trimmed string value, which is empty for null.
 func (n NullableNumber) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
-	return e.EncodeElement(string(n), start)
+	return e.EncodeElement(strings.TrimSpace(string(n)), start)
 }
 
 // UnmarshalXML implements encoding/xml.Unmarshaler.

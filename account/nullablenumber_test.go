@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"math"
+	"regexp"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -175,6 +176,9 @@ func TestNullableNumber_Scan(t *testing.T) {
 		{name: "int64 zero is NULL", value: int64(0), want: NumberNull},
 		{name: "int64", value: int64(1234567), want: "1234567"},
 		{name: "float64 zero is NULL", value: float64(0), want: NumberNull},
+		// -0 equals 0, so it must also be NULL and not become "-0".
+		// Note that the Go constant -0.0 is +0, so Copysign is needed.
+		{name: "float64 negative zero is NULL", value: math.Copysign(0, -1), want: NumberNull},
 		{name: "float64", value: float64(1234567), want: "1234567"},
 		{name: "invalid string", value: "#1", wantErr: true},
 		{name: "invalid bytes", value: []byte("-1"), wantErr: true},
@@ -252,6 +256,13 @@ func TestNullableNumber_JSONSchema(t *testing.T) {
 	assert.Equal(t, "string", s.OneOf[0].Type)
 	assert.Equal(t, DefaultNumberRegex, s.OneOf[0].Pattern)
 	assert.Equal(t, "null", s.OneOf[1].Type)
+
+	// The schema must publish the pattern that Validate actually uses,
+	// also when NumberRegexp was reassigned for an application specific format
+	orig := NumberRegexp
+	t.Cleanup(func() { NumberRegexp = orig })
+	NumberRegexp = regexp.MustCompile(`^[0-9]{6}$`)
+	assert.Equal(t, `^[0-9]{6}$`, NumberNull.JSONSchema().OneOf[0].Pattern)
 }
 
 func TestNullableNumber_XML(t *testing.T) {
@@ -273,6 +284,15 @@ func TestNullableNumber_XML(t *testing.T) {
 	d.Number = "previous"
 	require.NoError(t, xml.Unmarshal(x, &d))
 	assert.True(t, d.Number.IsNull())
+
+	// Marshalling trims like Value and MarshalJSON, so every output format
+	// writes the same account number and whitespace only is written as NULL
+	x, err = xml.Marshal(doc{Number: " 123 "})
+	require.NoError(t, err)
+	assert.Equal(t, `<doc><number>123</number></doc>`, string(x))
+	x, err = xml.Marshal(doc{Number: "  "})
+	require.NoError(t, err)
+	assert.Equal(t, `<doc><number></number></doc>`, string(x))
 
 	err = xml.Unmarshal([]byte(`<doc><number>-1</number></doc>`), &d)
 	assert.ErrorIs(t, err, ErrInvalidNumber)

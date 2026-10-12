@@ -208,7 +208,8 @@ func (n Number) Value() (driver.Value, error) {
 
 // Scan implements the database/sql.Scanner interface.
 // A float64 value must be a non-negative integer,
-// NaN, infinities, and fractions return an error.
+// NaN, infinities, and fractions return an error,
+// -0 is scanned as "0".
 func (n *Number) Scan(value any) error {
 	switch x := value.(type) {
 	case string:
@@ -237,6 +238,9 @@ func (n *Number) Scan(value any) error {
 	case float64:
 		if math.IsNaN(x) || math.IsInf(x, 0) || x < 0 || x != math.Trunc(x) {
 			return fmt.Errorf("%w: %v", ErrInvalidNumber, x)
+		}
+		if x == 0 {
+			x = 0 // -0 would be formatted as "-0"
 		}
 		*n = Number(strconv.FormatFloat(x, 'f', -1, 64))
 		return nil
@@ -276,19 +280,21 @@ func (n *Number) UnmarshalJSON(j []byte) error {
 }
 
 // JSONSchema returns a JSON schema for Number as a string constrained
-// to the account number pattern.
+// to the account number pattern of NumberRegexp
+// (DefaultNumberRegex unless reassigned).
 func (Number) JSONSchema() *jsonschema.Schema {
 	return &jsonschema.Schema{
 		Title:   "Account Number",
 		Type:    "string",
-		Pattern: DefaultNumberRegex,
+		Pattern: NumberRegexp.String(),
 	}
 }
 
 // MarshalXML implements encoding/xml.Marshaler.
-// Encodes the Number as an XML element containing its string value.
+// Encodes the Number as an XML element containing its
+// whitespace trimmed string value.
 func (n Number) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
-	return e.EncodeElement(string(n), start)
+	return NullableNumber(n).MarshalXML(e, start)
 }
 
 // UnmarshalXML implements encoding/xml.Unmarshaler.

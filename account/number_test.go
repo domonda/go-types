@@ -267,6 +267,10 @@ func TestNumber_Scan(t *testing.T) {
 		{name: "+Inf", value: math.Inf(1), wantErr: true},
 		{name: "-Inf", value: math.Inf(-1), wantErr: true},
 		{name: "non-integer float64", value: float64(1.5), wantErr: true},
+		// -0 equals 0, so it must scan like int64 zero instead of
+		// becoming "-0" that fails validation when written back.
+		// Note that the Go constant -0.0 is +0, so Copysign is needed.
+		{name: "float64 negative zero", value: math.Copysign(0, -1), want: "0"},
 		{name: "NULL", value: nil, wantErr: true},
 		{name: "unsupported type", value: true, wantErr: true},
 	}
@@ -347,6 +351,15 @@ func TestNumber_JSONSchema(t *testing.T) {
 	s := Number("").JSONSchema()
 	assert.Equal(t, "string", s.Type)
 	assert.Equal(t, DefaultNumberRegex, s.Pattern)
+
+	// NumberRegexp is reassignable for application specific formats,
+	// the schema must publish the pattern that Validate actually uses,
+	// else clients validating against the schema accept numbers that
+	// the server rejects (or the other way round).
+	orig := NumberRegexp
+	t.Cleanup(func() { NumberRegexp = orig })
+	NumberRegexp = regexp.MustCompile(`^[0-9]{6}$`)
+	assert.Equal(t, `^[0-9]{6}$`, Number("").JSONSchema().Pattern)
 }
 
 func TestNumber_XML(t *testing.T) {
@@ -363,6 +376,12 @@ func TestNumber_XML(t *testing.T) {
 
 	require.NoError(t, xml.Unmarshal([]byte(`<doc><number> 123 </number></doc>`), &d))
 	assert.Equal(t, Number("123"), d.Number, "XML text must be trimmed")
+
+	// Marshalling trims like Value and MarshalJSON,
+	// so every output format writes the same account number
+	x, err = xml.Marshal(doc{Number: " 123 "})
+	require.NoError(t, err)
+	assert.Equal(t, `<doc><number>123</number></doc>`, string(x))
 
 	err = xml.Unmarshal([]byte(`<doc><number>-1</number></doc>`), &d)
 	assert.ErrorIs(t, err, ErrInvalidNumber)
