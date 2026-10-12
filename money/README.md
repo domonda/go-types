@@ -325,7 +325,7 @@ Implements: `fmt.GoStringer`, `json.Unmarshaler` (pointer), `strfmt.Scannable` (
 
 ## Nullable amount types
 
-`NullableAmount`, `NullableDecimalAmount`, `NullableCentAmount`, and `NullableRate` are aliases of `nullable.Type[T]`, whose zero value is null. They have `IsNull`, `IsNotNull`, `Get` (panics for null), `GetOr`, `Set`, `SetNull`, `Ptr`, `Scan`, `Value`, `MarshalJSON`, `UnmarshalJSON`, and `JSONSchema`, see the [`nullable`](../nullable/README.md) package. The constructors are listed with each type above. They have no `ScanString`, so `strfmt.Scan` can only set them to null, see the [`strfmt`](../strfmt/README.md) gotchas.
+`NullableAmount`, `NullableDecimalAmount`, `NullableCentAmount`, and `NullableRate` are aliases of `nullable.Type[T]`, whose zero value is null. They have `IsNull`, `IsNotNull`, `Get` (panics for null), `GetOr`, `Set`, `SetNull`, `Ptr`, `Scan`, `Value`, `MarshalJSON`, `UnmarshalJSON`, and `JSONSchema`, see the [`nullable`](../nullable/README.md) package. The constructors are listed with each type above. They have no `ScanString`, [`strfmt`](../strfmt/README.md) `Scan` sets null for a nil string and else the value scanned like the wrapped type, so `"1,5"` is 1.5.
 
 ## Parsers and finder
 

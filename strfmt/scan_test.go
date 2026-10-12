@@ -866,3 +866,83 @@ func TestScanNullableTimeUnparsable(t *testing.T) {
 	assert.Error(t, Scan(reflect.ValueOf(&dest).Elem(), "not a time", config))
 	assert.Equal(t, want, dest, "destination is not modified by a failed scan")
 }
+
+// TestScanNullableType_roundTripsFormatPresets protects that Scan reads back
+// what the FormatConfig presets write for a nullable.Type[T], like the
+// money.NullableAmount, NullableDecimalAmount and NullableCentAmount aliases
+// of it. nullable.Type has no scanning method of its own, so only a nil
+// string could be scanned and a "1.234,50" cell of an exported nullable
+// amount failed to import with "can't scan ... as destination type
+// nullable.Type[...]". A non-nil string is scanned like the T itself, so a
+// money.Amount keeps its locale-aware parsing, and the Nil placeholder of
+// the format config scans back as null.
+func TestScanNullableType_roundTripsFormatPresets(t *testing.T) {
+	decimal := money.NewDecimalAmount(123450, 2)
+	values := []any{
+		money.NullableAmountFrom(1234.5),
+		money.NullableAmountFrom(-0.05),
+		money.NullableDecimalAmountFromPtr(&decimal),
+		money.NullableCentAmountFrom(123450),
+		money.NullableCentAmountFrom(-5),
+		nullable.TypeFrom(1234),
+		nullable.TypeFrom(-1),
+		money.NullableAmount{},
+		money.NullableDecimalAmount{},
+		money.NullableCentAmount{},
+		nullable.Type[int]{},
+	}
+	presets := []struct {
+		name   string
+		config *FormatConfig
+	}{
+		{name: "NewGermanFormatConfig", config: NewGermanFormatConfig()},
+		{name: "NewEnglishFormatConfig", config: NewEnglishFormatConfig()},
+	}
+	scanConfig := NewScanConfig()
+	for _, preset := range presets {
+		// The presets write null as "", NULL is another nil string of NewScanConfig
+		for _, nilString := range []string{preset.config.Nil, "NULL"} {
+			preset.config.Nil = nilString
+			for _, value := range values {
+				str := Format(value, preset.config)
+				dest := reflect.New(reflect.TypeOf(value)).Elem()
+				if assert.NoError(t, Scan(dest, str, scanConfig), "%s: Scan(%T, %q)", preset.name, value, str) {
+					assert.Equal(t, value, dest.Interface(), "%s: Scan(%T, %q)", preset.name, value, str)
+				}
+			}
+		}
+	}
+}
+
+// TestScanNullableType checks that a nullable.Type[T] destination is scanned
+// with the scanning of its T: a value is set by what T parses, a nil string
+// sets null also for a destination that held a value, and a string that T
+// can't parse or that fails the validation of T is an error that leaves the
+// destination unchanged instead of setting null and losing the bad cell.
+func TestScanNullableType(t *testing.T) {
+	config := NewScanConfig()
+
+	var amount money.NullableAmount
+	if assert.NoError(t, Scan(reflect.ValueOf(&amount).Elem(), "1,5", config)) {
+		assert.Equal(t, money.NullableAmountFrom(1.5), amount)
+	}
+	assert.NoError(t, Scan(reflect.ValueOf(&amount).Elem(), " ", config))
+	assert.True(t, amount.IsNull(), "a nil string sets null")
+
+	want := money.NullableAmountFrom(1.5)
+	for _, source := range []string{"abc", "1,5,5", "NaN"} {
+		dest := want
+		assert.Error(t, Scan(reflect.ValueOf(&dest).Elem(), source, config), "Scan(money.NullableAmount, %q)", source)
+		assert.Equal(t, want, dest, "a failed Scan(money.NullableAmount, %q) doesn't modify the destination", source)
+	}
+
+	var rate money.NullableRate
+	if assert.NoError(t, Scan(reflect.ValueOf(&rate).Elem(), "19 %", config)) {
+		assert.Equal(t, money.Rate(0.19), rate.Get())
+	}
+
+	var ptr *nullable.Type[int]
+	if assert.NoError(t, Scan(reflect.ValueOf(&ptr).Elem(), "42", config)) {
+		assert.Equal(t, nullable.TypeFrom(42), *ptr)
+	}
+}

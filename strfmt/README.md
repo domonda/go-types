@@ -60,6 +60,7 @@ A nil `config` scans with `DefaultScanConfig`. `Scan` resolves the destination i
    - `bool`: the trimmed source must be in `TrueStrings` or `FalseStrings`, compared case-sensitive,
    - signed and unsigned integers: `strconv.ParseInt`/`ParseUint` of the trimmed source in base 10 with the bit size of the destination, so `"300"` into a `uint8` is an error,
    - `float32`, `float64`: `float.Parse`, with an error if the value overflows the destination,
+   - a `nullable.Type[T]`, or another type whose pointer has the methods of `nullable.NullSetable[T]`, is set to the `T` scanned from the source with these steps, including the validation of `T`: `"1,5"` into a `money.NullableAmount` is 1.5,
    - every other kind is an error.
 8. `config.ValidateFunc`, if not nil, validates a value scanned in step 7. Values from steps 2, 5, and 6 are not passed to it.
 
@@ -218,7 +219,7 @@ What the presets write, and whether `Scan` with the default `ScanConfig` reads i
 ## Gotchas
 
 - **`"1,000"` scans as 1.** Floats and the money types parse with `float.Parse`, where a single `.` or `,` is the decimal separator. Integers are plain base 10, so `"1.000"` and `"1,000"` into an `int` are errors.
-- **Empty cells scan as zero.** `""`, `NULL`, and the other nil strings scan as `0` into numbers and `money.Amount`, which can't be told apart from a real zero. Use a pointer field like `*money.Amount`, a nullable type with a `ScanString` method like `date.NullableDate`, or set `StrictEmptyStringParsing`.
+- **Empty cells scan as zero.** `""`, `NULL`, and the other nil strings scan as `0` into numbers and `money.Amount`, which can't be told apart from a real zero. Use a pointer field like `*money.Amount`, a nullable type like `money.NullableAmount` or `date.NullableDate`, or set `StrictEmptyStringParsing`.
 - **A nil string into a `string` field is kept.** `"NULL"` and `"nil"` scan as the strings `"NULL"` and `"nil"`. Use `nullable.TrimmedString` or a `*string` to get null.
 - **Strings are not trimmed.** A `string` destination and `Scannable.ScanString` get the source with its whitespace, bools and integers are compared and parsed trimmed.
 - **Bool strings are an exact list.** `y`, `on`, and `X` are errors with the defaults.
@@ -227,7 +228,6 @@ What the presets write, and whether `Scan` with the default `ScanConfig` reads i
 - **Money presets use 2 decimals for every currency.** `CurrencyAmountJPY(1234.5)` formats as `JPY 1,234.50`, while `CurrencyAmount.String` writes `JPY 1235`.
 - **Registered formatters run before the null check.** A zero `money.Amount` formats as `0.00`, not as `config.Nil`, and an empty `date.Date` or null `date.NullableDate` formats as `""` even if `config.Nil` is `"-"`.
 - **Kinds win over `String` methods.** A type with a `string` or number kind and no registered formatter is formatted by its kind: `money.Currency("eur")` formats as `eur` although its `String` returns `EUR`, and `money.Rate(0.19)` as `0.19`.
-- **`nullable.Type` can only scan nil strings.** It has no `ScanString` or `UnmarshalText` method, so `money.NullableAmount`, `money.NullableCentAmount`, `money.NullableDecimalAmount`, and `money.NullableRate` scan `""` as null, but `"1,5"` is the error `can't scan "1,5" as destination type nullable.Type[...]`, although the presets format them. Use a pointer field like `*money.Amount` for optional cells, or register a `Scanner`.
 - **Formatters are looked up by the dereferenced type.** A formatter registered for `*T` only runs for a nil `*T`. Register it for `T`.
 - **Don't change `DefaultScanConfig` in place.** It is shared by every caller that passes nil. Create your own with `NewScanConfig`.
 - **Zero value configs.** `FormatConfig{}` has `Float.DecimalSep` 0, so formatting a float panics in `float.Format`, and it writes `""` for both bools. `ScanConfig{}` has no nil, true, or false strings. Start from the constructors.
