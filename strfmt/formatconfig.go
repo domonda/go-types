@@ -17,7 +17,6 @@ import (
 type FormatConfig struct {
 	Float          float.FormatDef
 	MoneyAmount    MoneyFormat
-	Percent        float.FormatDef
 	Time           string
 	Date           string
 	Nil            string // Also used for nullable.Nullable and Zeroable
@@ -39,7 +38,6 @@ func NewFormatConfig() *FormatConfig {
 	return &FormatConfig{
 		Float:       EnglishFloatFormat(-1),
 		MoneyAmount: EnglishMoneyFormat(true),
-		Percent:     EnglishFloatFormat(-1),
 		Time:        time.RFC3339,
 		Date:        date.Layout,
 		Nil:         "",
@@ -77,14 +75,13 @@ func NewEnglishFormatConfig() *FormatConfig {
 
 // NewGermanFormatConfig returns a FormatConfig based on NewFormatConfig
 // adjusted for German locale conventions: comma decimal separator,
-// dot thousands separator for money amounts only (floats and percentages
-// are not grouped), DD.MM.YYYY date layout, a long-form time layout,
+// dot thousands separator for money amounts only (floats are not grouped),
+// DD.MM.YYYY date layout, a long-form time layout,
 // and "ja"/"nein" boolean labels.
 func NewGermanFormatConfig() *FormatConfig {
 	config := NewFormatConfig()
 	config.Float = GermanFloatFormat(-1)
 	config.MoneyAmount = GermanMoneyFormat(true)
-	config.Percent = GermanFloatFormat(-1)
 	config.Date = "02.01.2006"
 	config.Time = "02.01.2006 15:04:05 MST"
 	config.True = "ja"
