@@ -77,6 +77,40 @@ func TestFormatConfig_TypeFormatters(t *testing.T) {
 	}
 }
 
+// TestFormatConfig_MoneyTypesFormatAlike checks that money.CentAmount and
+// money.DecimalAmount are formatted like money.Amount with the locale's
+// money format. Without their type formatters a CentAmount was written as
+// its raw cent count ("123450" for 1,234.50, a hundred times too much),
+// a zero CentAmount or DecimalAmount as the Nil placeholder, which looks
+// like missing data in an export, and a DecimalAmount ignored the decimal
+// comma and thousands separator of the locale.
+func TestFormatConfig_MoneyTypesFormatAlike(t *testing.T) {
+	tests := []struct {
+		amount money.Amount
+		german string
+		en     string
+	}{
+		{amount: 1234.5, german: "1.234,50", en: "1,234.50"},
+		{amount: 0, german: "0,00", en: "0.00"},
+		{amount: -0.05, german: "-0,05", en: "-0.05"},
+		{amount: 1234567.89, german: "1.234.567,89", en: "1,234,567.89"},
+	}
+	for _, tt := range tests {
+		cents := tt.amount.CentAmount(money.RoundHalfAwayFromZero)
+		decimal := tt.amount.DecimalAmount(2, money.RoundHalfAwayFromZero)
+		for _, value := range []any{tt.amount, cents, &cents, decimal, &decimal} {
+			assert.Equal(t, tt.german, Format(value, NewGermanFormatConfig()), "German %T(%v)", value, value)
+			assert.Equal(t, tt.en, Format(value, NewEnglishFormatConfig()), "English %T(%v)", value, value)
+		}
+	}
+
+	// A DecimalAmount is rounded or padded to the precision like an Amount
+	assert.Equal(t, "12,35", Format(money.NewDecimalAmount(12345, 3), NewGermanFormatConfig()), "12.345 rounds half away from zero")
+	assert.Equal(t, "5.00", Format(money.NewDecimalAmount(5, 0), NewEnglishFormatConfig()), "padded to two decimals")
+	assert.Equal(t, "0.00", Format(money.DecimalAmount{}, NewEnglishFormatConfig()), "zero value is zero, not Nil")
+	assert.Equal(t, "NaN", Format(money.DecimalAmountNaN(), NewGermanFormatConfig()))
+}
+
 // TestFormatConfig_NilPlaceholder checks that the configured Nil string
 // is used for null time values instead of a formatted zero time like
 // "01.01.0001 00:00:00 UTC", which would look like real data in a report.

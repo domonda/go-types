@@ -38,6 +38,40 @@ func TestMoneyFormat_FormatCurrencyAmount(t *testing.T) {
 	assert.Equal(t, "1.234,50", f.FormatCurrencyAmount(noCurrency))
 }
 
+// TestMoneyFormat_FormatCentAndDecimalAmount checks that the exact money
+// types honor the separators and the precision of a MoneyFormat like
+// FormatAmount does for money.Amount, so a custom format applies to all
+// money types alike. A negative precision keeps the exact digits.
+func TestMoneyFormat_FormatCentAndDecimalAmount(t *testing.T) {
+	tests := []struct {
+		name    string
+		format  MoneyFormat
+		cents   money.CentAmount
+		decimal money.DecimalAmount
+		want    string
+	}{
+		{name: "German", format: GermanMoneyFormat(true), cents: 123456, decimal: money.NewDecimalAmount(123456, 2), want: "1.234,56"},
+		{name: "English", format: EnglishMoneyFormat(true), cents: -123456, decimal: money.NewDecimalAmount(-123456, 2), want: "-1,234.56"},
+		{name: "precision 3 pads", format: MoneyFormat{DecimalSep: '.', Precision: 3}, cents: 150, decimal: money.NewDecimalAmount(15, 1), want: "1.500"},
+		{name: "precision 0 rounds half away from zero", format: MoneyFormat{DecimalSep: ',', Precision: 0}, cents: -250, decimal: money.NewDecimalAmount(-25, 1), want: "-3"},
+		{name: "precision -1 keeps the cents", format: MoneyFormat{DecimalSep: '.', Precision: -1}, cents: 150, decimal: money.NewDecimalAmount(150, 2), want: "1.50"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, tt.format.FormatCentAmount(tt.cents), "FormatCentAmount")
+			assert.Equal(t, tt.want, tt.format.FormatDecimalAmount(tt.decimal), "FormatDecimalAmount")
+		})
+	}
+
+	// Beyond the DecimalAmount range a CentAmount still formats exactly
+	f := EnglishMoneyFormat(true)
+	assert.Equal(t, "92,233,720,368,547,758.07", f.FormatCentAmount(money.MaxCentAmount))
+	// A finite DecimalAmount never formats as Inf, even if its value
+	// can't be represented with more decimals
+	big := money.NewDecimalAmount(200_000_000_000_000_000, 0)
+	assert.Equal(t, "200,000,000,000,000,000.00", f.FormatDecimalAmount(big))
+}
+
 // TestFormatterFunc_customTypeFormatter checks that a FormatterFunc
 // registered in TypeFormatters takes precedence over the generic
 // conversions of the type's kind, which is the purpose of the registry.

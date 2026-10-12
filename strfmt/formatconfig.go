@@ -31,7 +31,8 @@ type FormatConfig struct {
 // empty nil string, and "true"/"false" boolean labels.
 // It pre-registers type-specific formatters for date.Date,
 // date.NullableDate, time.Time, nullable.Time, time.Duration,
-// money.Amount, and money.CurrencyAmount.
+// money.Amount, money.CentAmount, money.DecimalAmount,
+// and money.CurrencyAmount.
 func NewFormatConfig() *FormatConfig {
 	return &FormatConfig{
 		Float:       EnglishFloatFormat(-1),
@@ -49,6 +50,8 @@ func NewFormatConfig() *FormatConfig {
 			reflect.TypeFor[nullable.Time]():        FormatterFunc(formatNullableTimeString),
 			reflect.TypeFor[time.Duration]():        FormatterFunc(formatDurationString),
 			reflect.TypeFor[money.Amount]():         FormatterFunc(formatMoneyAmountString),
+			reflect.TypeFor[money.CentAmount]():     FormatterFunc(formatMoneyCentAmountString),
+			reflect.TypeFor[money.DecimalAmount]():  FormatterFunc(formatMoneyDecimalAmountString),
 			reflect.TypeFor[money.CurrencyAmount](): FormatterFunc(formatMoneyCurrencyAmountString),
 		},
 	}
@@ -112,6 +115,14 @@ func formatDurationString(val reflect.Value, config *FormatConfig) string {
 
 func formatMoneyAmountString(val reflect.Value, config *FormatConfig) string {
 	return config.MoneyAmount.FormatAmount(val.Interface().(money.Amount))
+}
+
+func formatMoneyCentAmountString(val reflect.Value, config *FormatConfig) string {
+	return config.MoneyAmount.FormatCentAmount(val.Interface().(money.CentAmount))
+}
+
+func formatMoneyDecimalAmountString(val reflect.Value, config *FormatConfig) string {
+	return config.MoneyAmount.FormatDecimalAmount(val.Interface().(money.DecimalAmount))
 }
 
 func formatMoneyCurrencyAmountString(val reflect.Value, config *FormatConfig) string {
