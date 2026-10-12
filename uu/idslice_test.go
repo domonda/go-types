@@ -107,6 +107,9 @@ func TestIDSlice_Scan(t *testing.T) {
 		{name: "nil", value: nil, want: nil, wantErr: false},
 		{name: "empty", value: ``, want: nil, wantErr: false},
 		{name: "xxx", value: `xxx`, want: nil, wantErr: true},
+		// The array literal is text, a 16 character element
+		// must not be taken as raw binary UUID bytes
+		{name: "16 character element", value: `{abcdefghijklmnop}`, want: nil, wantErr: true},
 		{
 			name:  "21e70a0c-7f0e-44d8-8ae5-48992b89d0c5",
 			value: `{"21e70a0c-7f0e-44d8-8ae5-48992b89d0c5"}`,
@@ -418,6 +421,10 @@ func TestIDSlice_MarshalAndUnmarshalText(t *testing.T) {
 	if err := parsed.UnmarshalText([]byte("[not-an-uuid]")); err == nil {
 		t.Error("UnmarshalText of an invalid ID returned no error")
 	}
+	// A 16 character element must not be taken as raw binary UUID bytes
+	if err := parsed.UnmarshalText([]byte("[abcdefghijklmnop]")); err == nil {
+		t.Error("UnmarshalText of a 16 character element returned no error")
+	}
 }
 
 func TestIDSlice_ScanBytes(t *testing.T) {
@@ -460,6 +467,9 @@ func TestIDSlice_UnmarshalJSON_Errors(t *testing.T) {
 		{name: "not an array", data: `{"a":1}`},
 		{name: "not a string array", data: `[1,2]`},
 		{name: "invalid ID", data: `["not-an-uuid"]`},
+		// A JSON string is text, a 16 character string
+		// must not be taken as raw binary UUID bytes
+		{name: "16 character string", data: `["abcdefghijklmnop"]`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

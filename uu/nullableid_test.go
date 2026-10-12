@@ -750,6 +750,25 @@ func TestNullableID_MarshalUnmarshalText(t *testing.T) {
 	}
 }
 
+// TestNullableID_RejectsRawBinaryText checks that NullableID, like ID,
+// parses text and JSON only in the textual UUID formats, so a 16 character
+// string is not taken as raw binary UUID bytes. A 16 byte []byte from a
+// SQL driver is binary data and must still scan.
+func TestNullableID_RejectsRawBinaryText(t *testing.T) {
+	const text16 = "abcdefghijklmnop"
+	ref := IDMust("6ba7b810-9dad-11d1-80b4-00c04fd430c8").Nullable()
+
+	n := ref
+	require.Error(t, n.UnmarshalText([]byte(text16)), "UnmarshalText of 16 characters")
+	require.Error(t, json.Unmarshal([]byte(`"`+text16+`"`), &n), "json.Unmarshal of 16 characters")
+	require.Error(t, n.Scan(text16), "Scan of a 16 character string")
+	require.Equal(t, ref, n, "NullableID must be unchanged after errors")
+
+	var scanned NullableID
+	require.NoError(t, scanned.Scan(ref.Get().Bytes()), "Scan of raw binary []byte")
+	require.Equal(t, ref, scanned)
+}
+
 func TestNullableID_MarshalUnmarshalBinary(t *testing.T) {
 	ref := IDMust("6ba7b810-9dad-11d1-80b4-00c04fd430c8")
 

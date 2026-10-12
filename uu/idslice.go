@@ -300,7 +300,8 @@ func (s *IDSlice) scanBytes(src []byte) (err error) {
 	if len(src) > 2 {
 		elements := bytes.SplitSeq(src[1:len(src)-1], []byte{','})
 		for elem := range elements {
-			id, err := IDFromBytes(bytes.Trim(elem, `'"`))
+			var id ID
+			err := id.UnmarshalText(bytes.Trim(elem, `'"`))
 			if err != nil {
 				return err
 			}
@@ -380,7 +381,8 @@ func (s *IDSlice) UnmarshalJSON(data []byte) error {
 				if len(str) < 2 || str[0] != '"' || str[len(str)-1] != '"' {
 					return fmt.Errorf("can't parse as uu.IDSlice because not a JSON string array: %s", data)
 				}
-				id, err := IDFromBytes(str[1 : len(str)-1])
+				var id ID
+				err := id.UnmarshalText(str[1 : len(str)-1])
 				if err != nil {
 					return fmt.Errorf("error parsing uu.IDSlice from JSON: %w", err)
 				}

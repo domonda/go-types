@@ -393,10 +393,6 @@ func TestUnmarshalText(t *testing.T) {
 		input []byte
 	}{
 		{
-			name:  "binary format (16 bytes)",
-			input: []byte{0x6b, 0xa7, 0xb8, 0x10, 0x9d, 0xad, 0x11, 0xd1, 0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4, 0x30, 0xc8},
-		},
-		{
 			name:  "standard dashed format (36 bytes)",
 			input: []byte("6ba7b810-9dad-11d1-80b4-00c04fd430c8"),
 		},
@@ -445,6 +441,32 @@ func TestUnmarshalText(t *testing.T) {
 		err := id.UnmarshalText([]byte(""))
 		require.Error(t, err, "should return error for empty string")
 	})
+}
+
+// TestUnmarshalText_RejectsRawBinary checks that text and JSON are only
+// parsed in the textual UUID formats. The raw 16 byte binary format that
+// IDFromBytes also accepts is not text: accepting it would turn every
+// 16 character string, like the JSON value "abcdefghijklmnop", into an ID
+// without an error. Raw binary stays valid where binary data is expected,
+// in UnmarshalBinary and in Scan of a 16 byte []byte, which is how SQL
+// drivers return binary UUID columns.
+func TestUnmarshalText_RejectsRawBinary(t *testing.T) {
+	const text16 = "abcdefghijklmnop"
+	ref := IDMust("6ba7b810-9dad-11d1-80b4-00c04fd430c8")
+
+	id := ref
+	require.Error(t, id.UnmarshalText([]byte(text16)), "UnmarshalText of 16 characters")
+	require.Error(t, id.UnmarshalText(ref.Bytes()), "UnmarshalText of raw binary")
+	require.Error(t, json.Unmarshal([]byte(`"`+text16+`"`), &id), "json.Unmarshal of 16 characters")
+	require.Error(t, id.Scan(text16), "Scan of a 16 character string")
+	require.Equal(t, ref, id, "ID must be unchanged after errors")
+
+	var binID ID
+	require.NoError(t, binID.UnmarshalBinary(ref.Bytes()))
+	require.Equal(t, ref, binID)
+	var scanned ID
+	require.NoError(t, scanned.Scan(ref.Bytes()), "Scan of raw binary []byte")
+	require.Equal(t, ref, scanned)
 }
 
 func TestValue(t *testing.T) {

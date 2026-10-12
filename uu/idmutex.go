@@ -41,10 +41,15 @@ func NewIDMutexWithCallbacks(onLock, onUnlock func(ID)) *IDMutex {
 }
 
 // Lock the mutex for a given ID.
+// The zero value of IDMutex is usable,
+// it is initialized by the first Lock call.
 func (m *IDMutex) Lock(id ID) {
 	m.onLockCallback(id)
 
 	m.global.Lock()
+	if m.locks == nil {
+		m.locks = make(map[ID]*countedLock)
+	}
 	lock := m.locks[id]
 	if lock == nil {
 		lock = new(countedLock)

@@ -624,10 +624,9 @@ func (id ID) MarshalText() (text []byte, err error) {
 }
 
 // UnmarshalText implements the encoding.TextUnmarshaler interface.
-// Supports the same formats as IDFromBytes:
-//
-// Binary format (16 bytes):
-//   - Raw 16-byte UUID representation
+// Supports the same text formats as IDFromString.
+// The raw 16-byte binary format of IDFromBytes is not text
+// and returns an error, use UnmarshalBinary for it.
 //
 // String formats (after removing optional surrounding quotes "" or braces {}):
 //   - 22 bytes: Base64 URL encoding without padding (e.g., "abcdefghijklmnopqrstuv")
@@ -645,6 +644,11 @@ func (id ID) MarshalText() (text []byte, err error) {
 //
 // The function automatically strips surrounding double quotes or braces before parsing.
 func (id *ID) UnmarshalText(text []byte) (err error) {
+	// Check the length like IDFromString because IDFromBytes
+	// parses 16 bytes as binary representation, which is not text.
+	if len(text) < 22 {
+		return fmt.Errorf("invalid UUID length %d: %q", len(text), text)
+	}
 	newID, err := IDFromBytes(text)
 	if err != nil {
 		return err

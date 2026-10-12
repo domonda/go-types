@@ -150,6 +150,36 @@ func TestIDMutex_IsLocked(t *testing.T) {
 	assert.Panics(t, func() { m.Unlock(id) })
 }
 
+// TestIDMutex_ZeroValue checks that the zero value is usable without
+// NewIDMutex, like a sync.Mutex, so an IDMutex can be declared as a
+// struct field or variable. Unlocking a not locked ID must still panic
+// with the documented message instead of a nil map error.
+// The first Lock calls can race to initialize the zero value,
+// run with -race to verify that this is synchronized.
+func TestIDMutex_ZeroValue(t *testing.T) {
+	id := IDMust("946521d6-9aef-4bb1-8a19-e0fc0c7e3665")
+
+	var s struct{ m IDMutex }
+	assert.False(t, s.m.IsLocked(id))
+	require.NotPanics(t, func() { s.m.Lock(id) })
+	assert.True(t, s.m.IsLocked(id))
+	s.m.Unlock(id)
+	assert.False(t, s.m.IsLocked(id))
+
+	var m IDMutex
+	assert.PanicsWithValue(t, "uu.IDMutex.Unlock called for non locked key "+id.String(), func() { m.Unlock(id) })
+
+	var wg sync.WaitGroup
+	for range 8 {
+		wg.Go(func() {
+			id := IDv4()
+			m.Lock(id)
+			m.Unlock(id)
+		})
+	}
+	wg.Wait()
+}
+
 func TestNewIDMutexWithCallbacks(t *testing.T) {
 	a := IDMust("946521d6-9aef-4bb1-8a19-e0fc0c7e3665")
 	b := IDMust("de8482f2-164a-40f9-b4e0-c349b78c22f6")
