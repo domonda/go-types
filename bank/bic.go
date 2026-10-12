@@ -9,6 +9,7 @@ import (
 
 	"github.com/domonda/go-types"
 	"github.com/domonda/go-types/country"
+	"github.com/domonda/go-types/strutil"
 )
 
 // Compile-time check that BIC implements types.NormalizableValidator[BIC]
@@ -74,10 +75,11 @@ func (bic BIC) Validate() error {
 }
 
 // Normalized returns the BIC normalized to a length of 11 characters
-// by removing spaces and appending "XXX" in case of a valid length of 8 characters.
+// by removing all whitespace like IBAN.Normalized
+// and appending "XXX" in case of a valid length of 8 characters.
 // Returns the BIC unchanged in case of an error.
 func (bic BIC) Normalized() (BIC, error) {
-	norm := BIC(strings.ReplaceAll(string(bic), " ", ""))
+	norm := BIC(strutil.RemoveRunesString(string(bic), strutil.IsSpace))
 	if err := norm.Validate(); err != nil {
 		return bic, err
 	}
@@ -88,10 +90,11 @@ func (bic BIC) Normalized() (BIC, error) {
 }
 
 // NormalizedShort returns the BIC normalized to a length of 8 or 11 characters
-// by removing spaces and trimming the "XXX" suffix in case of a valid length of 8 characters.
+// by removing all whitespace like IBAN.Normalized
+// and trimming the "XXX" suffix in case of a valid length of 8 characters.
 // Returns the BIC unchanged in case of an error.
 func (bic BIC) NormalizedShort() (BIC, error) {
-	norm := BIC(strings.ReplaceAll(string(bic), " ", ""))
+	norm := BIC(strutil.RemoveRunesString(string(bic), strutil.IsSpace))
 	if err := norm.Validate(); err != nil {
 		return bic, err
 	}

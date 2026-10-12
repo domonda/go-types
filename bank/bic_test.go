@@ -203,6 +203,13 @@ func TestBIC_Normalize(t *testing.T) {
 			{"BELADEBEXXX", "BELADEBEXXX", "BELADEBE"},
 			{"GIBAATWW XXX", "GIBAATWWXXX", "GIBAATWW"},
 			{"BKAU AT WW", "BKAUATWWXXX", "BKAUATWW"},
+			// All whitespace is removed like by IBAN.Normalized, not only
+			// ASCII spaces, because a BIC next to an IBAN in a document or
+			// form must not fail on a tab, newline or no-break space
+			{"BKAU\tAT\tWW", "BKAUATWWXXX", "BKAUATWW"},
+			{"BELADEBEXXX\r\n", "BELADEBEXXX", "BELADEBE"},
+			{" GIBA ATWW XXX", "GIBAATWWXXX", "GIBAATWW"},
+			{"BELA​DEBE", "BELADEBEXXX", "BELADEBE"},
 			// A real branch code must never be trimmed
 			{"GENODEF1JEV", "GENODEF1JEV", "GENODEF1JEV"},
 		}
