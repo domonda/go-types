@@ -144,7 +144,7 @@ func (t *Type[T]) Scan(value any) error {
 	return nil
 }
 
-// UnarshalJSON implements encoding/json.Unmarshaler.
+// UnmarshalJSON implements encoding/json.Unmarshaler.
 // Interprets []byte(nil), []byte(""), []byte("null") as null.
 func (t *Type[T]) UnmarshalJSON(sourceJSON []byte) error {
 	if len(sourceJSON) == 0 || bytes.Equal(sourceJSON, []byte("null")) {

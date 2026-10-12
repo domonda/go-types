@@ -1,12 +1,3 @@
-// Package nullable provides interfaces and utilities for handling nullable values in Go.
-// It defines common interfaces for types that can represent null/zero states and provides
-// reflection-based utilities for null checking.
-//
-// The package includes:
-//   - Nullable interface for types that can represent null values
-//   - NullSetable interface for types that can be set to null and retrieved
-//   - Zeroable interface for types that can represent zero values
-//   - Reflection utilities for null/zero checking
 package nullable
 
 import (

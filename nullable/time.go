@@ -42,7 +42,7 @@ func TimeNow() Time {
 
 // TimeParse parses a time value with the provided layout
 // using time.Parse(layout, value)
-// except for when value is on of "", "null", "NULL",
+// except for when value is one of "", "null", "NULL",
 // then a null/zero time and no error are returned.
 func TimeParse(layout, value string) (Time, error) {
 	if value == "" || value == "null" || value == "NULL" {
@@ -57,7 +57,7 @@ func TimeParse(layout, value string) (Time, error) {
 
 // TimeParseInLocation parses a time value with the provided layout
 // and location using time.ParseInLocation(layout, value, loc)
-// except for when value is on of "", "null", "NULL",
+// except for when value is one of "", "null", "NULL",
 // then a null/zero time and no error are returned.
 func TimeParseInLocation(layout, value string, loc *time.Location) (Time, error) {
 	if value == "" || value == "null" || value == "NULL" {
@@ -162,7 +162,7 @@ func (n Time) StringOr(nullStr string) string {
 }
 
 // Format the time using time.Time.Format
-// or return and empty string if n is null.
+// or return an empty string if n is null.
 func (n Time) Format(layout string) string {
 	if n.IsNull() {
 		return ""
@@ -233,8 +233,9 @@ func (n Time) Value() (driver.Value, error) {
 	return n.Time, nil
 }
 
-// UnarshalJSON implements encoding/json.Unmarshaler.
+// UnmarshalJSON implements encoding/json.Unmarshaler.
 // Interprets []byte(nil), []byte(""), []byte("null") as null.
+// The JSON string "" is not null but an error.
 func (n *Time) UnmarshalJSON(sourceJSON []byte) error {
 	if len(sourceJSON) == 0 || bytes.Equal(sourceJSON, []byte("null")) /*|| bytes.Equal(sourceJSON, []byte(`"NULL"`))*/ {
 		*n = Time{}
@@ -277,7 +278,7 @@ func (n Time) MarshalText() ([]byte, error) {
 
 // UnmarshalText implements the encoding.TextUnmarshaler interface.
 // The time is expected to be in RFC 3339 format.
-// Empty text, "null", or "NULL" will set the time to null.
+// Empty text or "null" in any letter case will set the time to null.
 func (n *Time) UnmarshalText(text []byte) error {
 	if len(text) == 0 || bytes.EqualFold(text, []byte("NULL")) {
 		n.SetNull()

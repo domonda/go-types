@@ -11,12 +11,12 @@ import (
 
 // JSON is a []byte slice containing JSON text or nil
 // as the representation of the JSON "null" value.
-// that implements the interfaces:
-// json.Marshaler, json.Unmarshaler, driver.Value, sql.Scanner.
+// It implements the interfaces
+// json.Marshaler, json.Unmarshaler, driver.Valuer and sql.Scanner.
 // The nil value of the type JSON is marshalled as
 // the JSON "null" and SQL NULL values.
 // The JSON "null" and SQL NULL values are unmarshalled
-// as nil value ot the type JSON.
+// as nil value of the type JSON.
 type JSON []byte
 
 // MarshalJSON marshals source as JSON and returns it as a nullable JSON value.
@@ -30,8 +30,9 @@ func MarshalJSON(source any) (JSON, error) {
 // IsNull implements the Nullable interface.
 func (j JSON) IsNull() bool { return j == nil }
 
-// MarshalFrom marshalles source as JSON and sets it
+// MarshalFrom marshals source as JSON and sets it
 // at j when there was no error.
+// If source marshals to the JSON "null" value, j is set to nil.
 func (j *JSON) MarshalFrom(source any) error {
 	jsonBytes, err := json.Marshal(source)
 	if err == nil {
@@ -44,7 +45,8 @@ func (j *JSON) MarshalFrom(source any) error {
 	return err
 }
 
-// UnmarshalTo unmashalles the JSON of j to dest
+// UnmarshalTo unmarshals the JSON of j to dest.
+// A nil j returns an error because it holds no JSON text.
 func (j JSON) UnmarshalTo(dest any) error {
 	return json.Unmarshal(j, dest)
 }
