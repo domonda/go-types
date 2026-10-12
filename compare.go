@@ -6,11 +6,14 @@ import (
 	"reflect"
 )
 
-// CompareReflectValue compares two reflect.Values.
+// CompareReflectValue compares two reflect.Values and returns
+// -1, 0, or +1 like [cmp.Compare], so it can be used as the
+// comparison function for [slices.SortFunc].
 // Returns 0 if the values are not of the same type or not of an orderable kind,
-// so the function is safe to use as the less function for [slices.SortFunc]
-// on slices of mixed or non-orderable [reflect.Value]s (the order of such
-// elements is left unchanged).
+// so sorting mixed or non-orderable values does not panic.
+// The resulting order of such values is unspecified, because treating them
+// as equal to each other but not to the values between them breaks the
+// strict weak ordering that [slices.SortFunc] requires.
 //
 // The invalid zero reflect.Value, which has no type,
 // is ordered before all valid values.

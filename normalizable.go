@@ -6,22 +6,22 @@ package types
 // that may come in various formats but need to be standardized.
 //
 // The Normalized method should:
-// - Return the normalized value in its standard form
-// - Return an error if the value cannot be normalized
-// - Be idempotent (calling Normalized on an already normalized value should return the same result)
+//   - Return the normalized value in its standard form
+//   - Return an error if the value cannot be normalized
+//   - Be idempotent (calling Normalized on an already normalized value should return the same result)
 type Normalizable[T any] interface {
 	// Normalized returns the normalized value of type T or an error if normalization fails.
 	Normalized() (T, error)
 }
 
 // NormalizableValidator is a generic interface that combines validation and normalization capabilities.
-// It extends both the Validator interface and Normalizable interface, providing a comprehensive
-// solution for types that need both validation and normalization functionality.
+// It extends both the Validator interface and Normalizable interface
+// for types that need both validation and normalization functionality.
 //
 // This interface is particularly useful for types that:
-// - Accept input in various formats
-// - Need to validate the input before normalization
-// - Should provide a quick check for both validity and normalization status
+//   - Accept input in various formats
+//   - Need to validate the input before normalization
+//   - Should provide a quick check for both validity and normalization status
 type NormalizableValidator[T any] interface {
 	Validator
 	Normalizable[T]

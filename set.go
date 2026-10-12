@@ -29,6 +29,7 @@ func NewSet[T cmp.Ordered](vals ...T) Set[T] {
 }
 
 // Sorted returns a slice containing all values in the set, sorted in ascending order.
+// Returns nil for an empty or nil set.
 func (set Set[T]) Sorted() []T {
 	return SetToSortedSlice(set)
 }
@@ -110,7 +111,7 @@ func (set Set[T]) Clear() {
 	clear(set)
 }
 
-// Clone creates a deep copy of the set.
+// Clone returns a new set with the same values, or nil if the set is nil.
 func (set Set[T]) Clone() Set[T] {
 	if set == nil {
 		return nil
@@ -182,6 +183,7 @@ func (set Set[T]) SymmetricDifferenceWith(other Set[T]) {
 // Map applies a transformation function to each value in the set and returns a new set
 // containing the results. The mapFunc should return the transformed value and a boolean
 // indicating whether to include the result in the new set.
+// The returned set is never nil, also not for a nil set.
 func (set Set[T]) Map(mapFunc func(T) (T, bool)) Set[T] {
 	result := make(Set[T], len(set))
 	for val := range set {
@@ -214,7 +216,8 @@ func (set Set[T]) IsNull() bool {
 }
 
 // String implements the fmt.Stringer interface.
-// Returns a string representation of the set with values in sorted order.
+// Returns a string representation of the set with values in sorted order,
+// formatted with %#v, like [1, 2, 3] or ["a", "b"], and <nil> for a nil set.
 func (set Set[T]) String() string { //#nosec
 	if set == nil {
 		return "<nil>"
@@ -231,7 +234,9 @@ func (set Set[T]) String() string { //#nosec
 	return b.String()
 }
 
-// MarshalJSON implements encoding/json.Marshaler by returning the JSON null value for an empty (null) string.
+// MarshalJSON implements encoding/json.Marshaler.
+// A nil set is encoded as null, an empty set as [],
+// and any other set as an array of its values in ascending order.
 func (set Set[T]) MarshalJSON() ([]byte, error) {
 	if set.IsNull() {
 		return []byte(`null`), nil
@@ -277,6 +282,9 @@ func (set *Set[T]) UnmarshalJSON(j []byte) error {
 
 // ReduceSet applies a reduction function to all values in the set and returns the result.
 // The reduceFunc is called for each value in the set, with the accumulated result and the current value.
+// The first call gets the zero value of R as accumulated result.
+// The values are passed in undefined map iteration order,
+// so only an order independent reduceFunc gives a deterministic result.
 func ReduceSet[S ~map[T]struct{}, T cmp.Ordered, R any](set S, reduceFunc func(last R, val T) R) (result R) {
 	for val := range set {
 		result = reduceFunc(result, val)
@@ -286,6 +294,7 @@ func ReduceSet[S ~map[T]struct{}, T cmp.Ordered, R any](set S, reduceFunc func(l
 
 // ReduceSlice applies a reduction function to all values in the slice and returns the result.
 // The reduceFunc is called for each value in the slice, with the accumulated result and the current value.
+// The first call gets the zero value of R as accumulated result.
 func ReduceSlice[S ~[]T, T cmp.Ordered, R any](slice S, reduceFunc func(last R, val T) R) (result R) {
 	for _, val := range slice {
 		result = reduceFunc(result, val)
@@ -293,7 +302,9 @@ func ReduceSlice[S ~[]T, T cmp.Ordered, R any](slice S, reduceFunc func(last R, 
 	return result
 }
 
-// SetToRandomizedSlice converts a set to a slice with values in random order.
+// SetToRandomizedSlice converts a set to a slice with values in map iteration
+// order, which is unspecified but not a random shuffle.
+// Returns nil for an empty or nil set.
 func SetToRandomizedSlice[S ~map[T]struct{}, T cmp.Ordered](set S) []T {
 	l := len(set)
 	if l == 0 {
@@ -309,6 +320,7 @@ func SetToRandomizedSlice[S ~map[T]struct{}, T cmp.Ordered](set S) []T {
 }
 
 // SetToSortedSlice converts a set to a slice with values in sorted order.
+// Returns nil for an empty or nil set.
 func SetToSortedSlice[S ~map[T]struct{}, T cmp.Ordered](set S) []T {
 	l := len(set)
 	switch l {

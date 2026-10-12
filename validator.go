@@ -39,6 +39,7 @@ type Validators []Validator
 
 // Valid returns if the data of the implementation is valid.
 // Returns false if any validator in the slice returns false.
+// A nil element panics unless an earlier element returned false.
 func (v Validators) Valid() bool {
 	for _, validator := range v {
 		if !validator.Valid() {
@@ -96,6 +97,7 @@ type ValidatErrs []ValidatErr
 // and returns all their errors joined with errors.Join,
 // or nil if no element returned an error.
 // errors.Is and errors.As find each of the joined errors.
+// A nil element panics.
 func (v ValidatErrs) Validate() (err error) {
 	for _, validatErr := range v {
 		err = errors.Join(err, validatErr.Validate())
@@ -225,6 +227,7 @@ func isNilPointerWithValueMethod(v any, iface reflect.Type) bool {
 //
 // Errors are prefixed with a human-readable path to the offending value,
 // e.g. `struct field Users -> element [1] -> struct field Status: invalid main.Status value: "unknown"`.
+// An error of v itself is returned without a prefix.
 // The prefixed errors wrap the errors returned by [Validate],
 // so errors.Is and errors.As see through the path.
 //

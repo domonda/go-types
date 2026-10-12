@@ -9,6 +9,10 @@ import (
 
 // LenString holds a string together with a minimum and maximum length constraints.
 // It implements validation to ensure the string length falls within the specified bounds.
+// The length is counted in bytes, not runes.
+// All methods have pointer receivers, so a LenString value that is not
+// addressable, like a field of a struct marshalled by value, is encoded
+// by encoding/json as an empty object.
 // LenString implements the encoding.TextUnmarshaler, json.Unmarshaler,
 // and strfmt.Scannable interfaces that will perform length validation.
 type LenString struct {
@@ -127,6 +131,7 @@ func (s *LenString) MarshalJSON() (text []byte, err error) {
 // UnmarshalJSON implements the json.Unmarshaler interface.
 // It validates the string length after unmarshaling from JSON
 // and leaves the value unchanged if the length is not valid.
+// JSON null leaves the value unchanged too.
 func (s *LenString) UnmarshalJSON(text []byte) error {
 	if bytes.Equal(text, []byte("null")) {
 		return nil // no-op

@@ -20,15 +20,22 @@ var (
 //   - t is a primitive kind that encoding/json accepts: bool, any integer or
 //     unsigned integer kind, float32/float64, or string,
 //   - t is an array, slice, or struct (field types are not inspected),
-//   - t is a map whose key kind is supported by encoding/json — string,
-//     any integer kind, or a key type implementing [encoding.TextMarshaler],
-//   - t is a pointer or interface to a marshalable element type.
+//   - t is a map whose key kind is supported by encoding/json: string,
+//     any integer kind, or a key type implementing [encoding.TextMarshaler]
+//     (directly or via its pointer receiver),
+//   - t is a pointer to a marshalable element type.
 //
 // Kinds rejected by encoding/json (complex, chan, func, unsafe.Pointer) return
-// false. Because field/element types are not inspected recursively, a struct
-// or array containing an unsupported field type may pass this check and still
-// fail at runtime. Value-dependent failures such as float NaN/Inf are likewise
-// invisible here.
+// false. The check has false positives, where it returns true but
+// encoding/json fails at runtime:
+//   - struct field, array and slice element, and map value types are not
+//     inspected, so a struct with a chan field or a non-empty []func()
+//     passes the check,
+//   - encoding/json calls a method with a pointer receiver only for
+//     addressable values and never for map keys, so a type whose pointer
+//     type alone implements [json.Marshaler] or [encoding.TextMarshaler]
+//     can still fail when marshalled by value or used as map key,
+//   - value-dependent failures such as float NaN/Inf are invisible here.
 func CanMarshalJSON(t reflect.Type) bool {
 	if t == nil {
 		return false

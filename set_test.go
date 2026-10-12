@@ -221,8 +221,8 @@ func TestSet_UnmarshalJSON(t *testing.T) {
 	})
 
 	t.Run("replaces the elements of an existing set", func(t *testing.T) {
-		// The existing map is reused, so the previous elements have to be
-		// cleared instead of merged with the unmarshalled ones.
+		// The unmarshalled elements must replace the previous ones,
+		// not be merged with them, as UnmarshalJSON assigns a new set.
 		set := NewSet(1, 2, 3)
 		if err := json.Unmarshal([]byte(`[9]`), &set); err != nil {
 			t.Fatalf("Unmarshal returned %v", err)
