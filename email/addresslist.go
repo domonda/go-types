@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/domonda/go-types"
+	"github.com/domonda/go-types/strutil"
 )
 
 // Compile-time check that AddressList implements types.NormalizableValidator[AddressList]
@@ -179,6 +180,8 @@ func (l AddressList) Nullable() NullableAddressList {
 
 // Scan implements the database/sql.Scanner interface.
 // Supports scanning SQL strings and string arrays.
+// Whitespace around the array elements or a plain string is trimmed
+// like by AddressSet.Scan.
 func (l *AddressList) Scan(value any) error {
 	switch s := value.(type) {
 	case string:
@@ -195,7 +198,12 @@ func (l *AddressList) Scan(value any) error {
 			*l = AddressListJoinStrings(stringArray...)
 			return nil
 		}
-		*l = AddressList(s)
+		// Trimmed like the array elements by scanAddressArray
+		list := strutil.TrimSpace(s)
+		if list == "" {
+			return errors.New("can't scan whitespace only string as email.AddressList")
+		}
+		*l = AddressList(list)
 		return nil
 
 	case []byte:

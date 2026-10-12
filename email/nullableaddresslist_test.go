@@ -53,6 +53,14 @@ func TestNullableAddressList_Scan(t *testing.T) {
 		{name: "nested array", value: `{{a@example.com}}`, wantErr: true},
 		// A non-array string is an already joined list, so it is taken as is.
 		{name: "plain string", value: "a@example.com, b@example.com", want: "a@example.com, b@example.com"},
+		// Like the padded array elements above and like AddressSet.Scan,
+		// the padding of a plain string is not part of the list, else
+		// " a@example.com " and "a@example.com" would be different lists
+		// and the padding would end up in the first and last address.
+		{name: "padded plain string", value: " a@example.com, b@example.com\t\n", want: "a@example.com, b@example.com"},
+		{name: "padded plain bytes", value: []byte(" a@example.com "), want: "a@example.com"},
+		// Whitespace only is no list, like the empty string
+		{name: "whitespace only plain string", value: " \t ", wantErr: true},
 		{name: "bytes", value: []byte(`{"a@example.com"}`), want: "a@example.com"},
 		// SQL NULL is the empty list, unlike the empty string which is
 		// rejected because it can only come from a non-NULL column.

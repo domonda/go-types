@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/domonda/go-types/nullable"
+	"github.com/domonda/go-types/strutil"
 )
 
 // NullableAddressList is a comma separated list
@@ -151,6 +152,8 @@ func (n *NullableAddressList) SetNull() {
 // are joined into the list. The array form requires PostgreSQL or an
 // array-compatible database such as CockroachDB or YugabyteDB; Value
 // always writes a plain string and works with any database.
+// Whitespace around the array elements or a plain string is trimmed
+// like by AddressSet.Scan.
 func (n *NullableAddressList) Scan(value any) error {
 	switch s := value.(type) {
 	case nil:
@@ -171,7 +174,12 @@ func (n *NullableAddressList) Scan(value any) error {
 			*n = NullableAddressListJoinStrings(stringArray...)
 			return nil
 		}
-		*n = NullableAddressList(s)
+		// Trimmed like the array elements by scanAddressArray
+		list := strutil.TrimSpace(s)
+		if list == "" {
+			return errors.New("can't scan whitespace only string as email.NullableAddressList")
+		}
+		*n = NullableAddressList(list)
 		return nil
 
 	case []byte:
