@@ -53,7 +53,6 @@ The four filter functions pass every invalid UTF-8 byte to the predicates as `ut
 
 | Function                                           | Description                                        |
 |----------------------------------------------------|----------------------------------------------------|
-| `Ptr(str string) *string`                          | Pointer to a copy of `str`.                        |
 | `DerefPtr(ptr *string) string`                     | `*ptr`, or `""` for nil.                           |
 | `StringToPtrEmptyToNil(str string) *string`        | nil for `""`, else a pointer to a copy of `str`.   |
 | `EmptyStringToNil(str string) any`                 | Untyped nil for `""`, else `str`. Useful as SQL argument when `""` should be stored as NULL. |

@@ -5,9 +5,6 @@ import (
 	"unsafe"
 )
 
-// Ptr returns the passed string as pointer value.
-func Ptr(str string) *string { return &str }
-
 // EmptyStringToNil returns str or nil if it is empty.
 func EmptyStringToNil(str string) any {
 	if str == "" {

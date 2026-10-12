@@ -19,17 +19,6 @@ func TestConvertSlice(t *testing.T) {
 	require.Nil(t, out)
 }
 
-func TestPtr(t *testing.T) {
-	// Every call must return a new pointer to a copy of the argument,
-	// otherwise writing through one pointer would change the other.
-	a := Ptr("x")
-	b := Ptr("x")
-	require.Equal(t, "x", *a)
-	require.NotSame(t, a, b)
-	*a = "changed"
-	assert.Equal(t, "x", *b)
-}
-
 func TestEmptyStringToNil(t *testing.T) {
 	// The result is used for SQL arguments and JSON values where an empty
 	// string must become NULL. It has to be an untyped nil interface,
@@ -81,7 +70,7 @@ func TestIndexInStrings(t *testing.T) {
 func TestDerefPtr(t *testing.T) {
 	// A nil pointer must be safe to dereference and read as empty string
 	assert.Equal(t, "", DerefPtr(nil))
-	assert.Equal(t, "ä", DerefPtr(Ptr("ä")))
+	assert.Equal(t, "ä", DerefPtr(new("ä")))
 }
 
 func TestEqualPtrOrString(t *testing.T) {
@@ -93,12 +82,12 @@ func TestEqualPtrOrString(t *testing.T) {
 	}{
 		{name: "both nil", a: nil, b: nil, want: true},
 		{name: "same pointer", a: &s, b: &s, want: true},
-		{name: "different pointers to equal strings", a: Ptr("a"), b: Ptr("a"), want: true},
-		{name: "different strings", a: Ptr("a"), b: Ptr("b"), want: false},
+		{name: "different pointers to equal strings", a: new("a"), b: new("a"), want: true},
+		{name: "different strings", a: new("a"), b: new("b"), want: false},
 		// nil is not equal to a pointer to the empty string,
 		// so NULL and "" stay distinguishable
-		{name: "nil vs empty", a: nil, b: Ptr(""), want: false},
-		{name: "empty vs nil", a: Ptr(""), b: nil, want: false},
+		{name: "nil vs empty", a: nil, b: new(""), want: false},
+		{name: "empty vs nil", a: new(""), b: nil, want: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -15,7 +15,7 @@
 //     reflection-based validation.
 //   - [Normalizable] / [NormalizableValidator]: interfaces implemented
 //     by types that round-trip through a canonical normalized form.
-//   - [Ptr], [FromPtr], [FromPtrOr]: generic pointer helpers.
+//   - [FromPtr], [FromPtrOr]: generic pointer helpers.
 //   - [Yield], [Yield2], [YieldErr], [Seq2NilError]: adapters for the
 //     iter package introduced in Go 1.23.
 //   - [LenString]: string with min/max length constraints.

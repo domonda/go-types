@@ -420,6 +420,9 @@ picking the semver baseline.
 
 ### Removed
 
+- **Breaking:** `types.Ptr` and `strutil.Ptr`. Since Go 1.26, the minimum
+  Go version of this module, the built-in `new` accepts a value:
+  replace `types.Ptr(x)` and `strutil.Ptr(s)` with `new(x)` and `new(s)`.
 - **Breaking:** `strfmt.FormatConfig.Percent`. The field was set by the
   presets but never read anywhere.
 - **Breaking:** `types.ErrInvalidValue`. `types.Validate`, `TryValidate`,

@@ -127,7 +127,6 @@ These types assert `NormalizableValidator` at compile time: `bank.IBAN`, `bank.N
 
 | Function                                     | Description                        |
 |----------------------------------------------|------------------------------------|
-| `Ptr[T any](value T) *T`                     | Pointer to a copy of `value`.      |
 | `FromPtr[T any](ptr *T) T`                   | `*ptr`, or the zero `T` for nil.   |
 | `FromPtrOr[T any](ptr *T, defaultValue T) T` | `*ptr`, or `defaultValue` for nil. |
 
