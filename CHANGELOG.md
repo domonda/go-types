@@ -37,6 +37,15 @@ picking the semver baseline.
   `Validate()` in preference to `Valid()`, so they now accept those inputs for
   a `language.Code` instead of rejecting them. `strfmt` stores them as given,
   not normalized, because `Code` has no `ScanString` method.
+- `charset.GetEncoding` resolves IANA and MIME charset labels as they appear
+  in HTTP and MIME headers, like `windows-1252`, `ISO-8859-1`, `latin1`,
+  `US-ASCII` and `UTF-16`, through `golang.org/x/text/encoding/ianaindex`.
+  A label of an encoding the package already lists returns that encoding, so
+  `latin1` returns the `ISO 8859-1` encoding. Other supported charsets,
+  including multi-byte ones, are wrapped in the generic `Encoding` and named
+  by their MIME name. `htmlindex` is deliberately not used: it follows the
+  WHATWG encoding standard, which maps `iso-8859-1` and `us-ascii` to
+  `windows-1252`, and that is wrong for MIME.
 
 ### Changed
 
@@ -109,6 +118,104 @@ picking the semver baseline.
   the two float entry points now differ on out-of-range input. Underflow stays
   asymmetric: a `float64` smaller than `MaxDecimalAmountScale` can express, such
   as `1e-300`, still scans as zero without an error.
+- **Breaking:** version 7 UUIDs store their 48 bit millisecond timestamp
+  big-endian as RFC 9562 requires. `uu.IDv7`, `IDv7WithTime` and
+  `IDv7Deterministic` wrote it in native byte order, little-endian on
+  amd64 and arm64, so the IDs did not sort by time and `ID.V7Time` misread the
+  v7 IDs of every other implementation (the RFC test vector decoded to the
+  year 8118). v7 is the default version of `uu.NewID`. IDs generated before
+  this change have their timestamp bytes reversed: `V7Time` returns wrong
+  times for them, and they don't sort by time against new IDs.
+  `IDv7Deterministic` returns different IDs for the same timestamp.
+- **Breaking:** `uu.ID.Less` compares the bytes in canonical order, the same
+  as `bytes.Compare` and comparing the strings. It compared two native-endian
+  `uint64` halves, bytes 8 to 15 first. `IDSlice.Sort`, `IDSet.String`,
+  `IDSet.Sorted`, `IDSet.Value` and `IDSet.MarshalJSON` order IDs differently.
+- **Breaking:** `uu.IDMust`, `IDSliceMust`, `IDSetMust` and `NullableIDMust`
+  panic, and `IDFromAny` and `NullableIDFromAny` return an error, for a
+  string or `[]byte` that parses but is not a valid UUID, like the Nil UUID
+  for the non-nullable functions or an unknown version. Only the already
+  typed `ID` input was validated before, as the doc comments promised for all
+  input. The Nil UUID stays the valid NULL for the nullable functions.
+- **Breaking:** the ID function of `uu.ContextWithIDSequence` panics when
+  called after all IDs have been returned, instead of returning `uu.IDNil`,
+  because using more IDs than the test defined is a bug and `IDNil` is never a
+  valid ID. It is now safe for concurrent use.
+- **Breaking:** text and JSON unmarshalling of UUIDs rejects a 16 character
+  string instead of taking its bytes as a raw binary UUID, so the JSON string
+  `"abcdefghijklmnop"` is no longer the ID
+  `61626364-6566-6768-696a-6b6c6d6e6f70`. This applies to `ID` and
+  `NullableID` JSON and text, to `ID.Scan` and `NullableID.Scan` of a 16 byte
+  `string`, and to the elements of `IDSlice` and `IDSet` JSON and `Scan`.
+  Raw binary input is still accepted where it is binary: `UnmarshalBinary`,
+  `Scan` of a 16 byte `[]byte` from an SQL driver, `IDFromBytes` and
+  `NullableIDFromBytes`.
+- **Breaking:** `date.YearWeekMonday`, `YearWeekRange` and `PeriodRange` for
+  `YYYY-Wnn` follow ISO 8601, where January 4th is always in week 1. They
+  counted from January 1st, so years starting on a Friday or Saturday got the
+  wrong weeks: `YearWeekMonday(2021, 1)` is now `2021-01-04` instead of
+  `2020-12-28`, which is in week 53 of 2020.
+- **Breaking:** `date.YearMonth.DateRange` and `NullableYearMonth.DateRange`
+  return the last day of the month as the until date, like `2023-03-31`. They
+  returned the month itself, `"2023-03"`, which is not a `Date`.
+- **Breaking:** `date.YearMonth.Year`, `Month` and `date.YearQuarter.Year`,
+  `Quarter` return 0 for an invalid value, as documented. `YearMonth("")`
+  panicked, `YearMonth("2023-13").Month()` returned 13 and
+  `YearQuarter("2023-Q5").Quarter()` returned 5, so
+  `YearQuarter("2023-Q5").DateRange()` returned the first quarter of 2024.
+  The methods built on them, like `FirstMonth`, `AddQuarters` and the
+  `Contains` methods, follow.
+- **Breaking:** `date.NullableDate.After` returns true for a date compared
+  with `date.Null`, so null is before every date in both directions.
+  `Null.Before(d)` already returned true while `d.After(Null)` returned false.
+- **Breaking:** `nullable.NullBoolArray.Scan` and `notnull.NullBoolArray.Scan`
+  accept the elements `t`, `f`, `true`, `false` and `NULL` in any case and
+  return an error for any other element. They mapped every element other than
+  `t` and `f` to null, so `{true,false}` scanned as two nulls.
+- `nullable.TrimmedString` and `notnull.TrimmedString` treat a value made of
+  only trimmable runes, like a BOM, zero-width spaces, control characters or
+  invalid UTF-8, as null or empty in `IsNull` and `IsEmpty` too. `Value` and
+  `MarshalJSON` already wrote such a value as `""`, while `IsNull` reported
+  it as not null, so `TrimmedString("﻿")` was neither null nor a value.
+  Now `Value` writes SQL NULL, `MarshalJSON` writes `null` and `Get` panics
+  for it, like for any null. Only plain conversions are affected, because the
+  constructors already trimmed.
+- **Breaking:** `country.NullableCode` treats a whitespace-only value as null
+  in `IsNull`, `IsNotNull` and `Value`, and so in `MarshalJSON`, `String`,
+  `Get`, `GetOr` and `StringOr`, matching `Normalized`, which already
+  returned `Null` for it. `Value` wrote `"  "` to the database, and `Get` now
+  panics for it like for any null.
+- `language.Code.LanguageName` normalizes the code first like
+  `country.Code.EnglishName`, so `"EN"`, `"eng"` and `"en-US"` return
+  `"English"` instead of `""`.
+- **Breaking:** `email.NullableAddressFrom` returns an address without a name
+  as `a@b.com`, like `email.AddressFrom`, instead of `<a@b.com>`.
+- **Breaking:** `email.Address.DomainPart` returns `""` for a string without
+  `@`, as documented, instead of the whole string.
+- `email.UniqueNormalizedAddressSlice` no longer reorders and overwrites the
+  caller's slice; it returns a new slice, and nil when two or more addresses
+  are all invalid.
+- `email.Message.BuildRawMessage` writes each of the `To`, `Cc` and `Bcc`
+  headers once with all its addresses, as RFC 5322 requires. It wrote one
+  `To` header per address and kept only the last `Cc` and the last `Bcc`
+  address, dropping all others. Inline parts, `Attachment.Inline` as set by
+  `ParseMIMEMessage`, are written with `Content-Disposition: inline` and
+  their Content-ID in a `multipart/related` part instead of as attachments.
+- `email.Message.NewReplyMessage` keeps an existing `Re:` prefix (in any case)
+  instead of adding a second one, and sets `References` to the parent's
+  references followed by the parent's Message-ID, as RFC 5322 section 3.6.4
+  describes for threading.
+- `email.Message.ReferencesMessageIDs` splits the header on whitespace and
+  commas. RFC 5322 separates the IDs with whitespace, so a standard header
+  came back as one entry.
+- `charset.DecodeUTF16String`, `DecodeUTF32`, `DecodeUTF32String` and the
+  decoder of `UTF32Encoding` strip a byte order mark that matches the
+  requested byte order and return an error for an opposite one, like
+  `DecodeUTF16` already did. They kept a matching BOM as U+FEFF and decoded
+  data behind an opposite one to garbage.
+- `strutil/stringfrom.Interface` formats a non-string value with `fmt.Sprint`,
+  so `Interface(42)` is `"42"` instead of `"<int Value>"`, and returns `""`
+  for nil values instead of panicking.
 
 ### Removed
 
@@ -176,6 +283,89 @@ picking the semver baseline.
   dynamic types, so `DeepValidate` returned the errors of a `map[any]T` with
   keys of mixed types in a random order. Such values are now ordered by type
   name. Channels are now ordered by address as documented.
+- `types.CompareReflectValue` panicked for an invalid (zero) `reflect.Value`.
+  Invalid values are now ordered first, like nil interfaces.
+- `types.LenString.UnmarshalJSON` unmarshalled into the string field and then
+  validated an empty local variable, so with a minimum length every JSON
+  string was rejected but still stored, and without one the value was
+  replaced by `""`. JSON strings now unmarshal with the length check, and a
+  rejected value leaves the previous one unchanged.
+- `types.SliceContainsAll` returned false when more values were searched
+  than the slice has elements, even if every value is in it:
+  `SliceContainsAll([]int{1}, 1, 1)` is now true.
+- `types.Validate` and `types.TryValidate` panicked for a nil pointer whose
+  element type implements `Validator` or `ValidatErr` with a value receiver.
+  Such a pointer is now skipped like in `DeepValidate`: `Validate` returns
+  nil and `TryValidate` returns `nil, true`. Pointer-receiver methods are
+  still called with the nil pointer, so they can handle it themselves.
+- The zero values of `types.KeyMutex` and `uu.IDMutex` panicked on the first
+  `Lock` because of a nil map. They are now ready to use.
+- `uu.IDMutex` used `defer recover()`, which recovers nothing, so a panicking
+  lock or unlock callback escaped `Lock` and `Unlock`. The callbacks' panics
+  are now recovered as intended.
+- `queue.Queue` kept every delivered item reachable in its ring buffer until
+  the slot was overwritten. The slot is now cleared on delivery, so delivered
+  items can be garbage collected.
+- `date` parsing let a language hint or an ordinal day suffix swap day and
+  month even when only one order is a valid date, so
+  `date.Normalize("15.06.2024", language.EN)` failed and
+  `date.NewFinder(language.EN)` skipped day-first dates. A hint now only
+  decides ambiguous dates where both numbers can be the month.
+- `date.Date` methods that convert to `time.Time` worked on the zero time for
+  a valid but not normalized date, so `Date("25.12.2023").Format("02.01.2006")`
+  returned `"01.01.0001"`. `Format`, `After`, `Before`, the `Add` methods,
+  `Sub`, `Weekday`, `ISOWeek`, `WithinIncl`, `LastMonday` and the `Midnight`
+  methods now normalize first, like `Year`, `Month` and `Compare` already did.
+  `Format(date.Layout)` returns the normalized date instead of the input, and
+  `NullableDate.After` no longer panics for such input.
+- `date.Finder.FindAllIndex`, `vat.IDFinder.FindAllIndex` and
+  `money.AmountFinder.FindAllIndex` ignored their `n` argument and returned
+  all matches, breaking the `types.Finder` contract.
+- `country.Code("EL").IsEU()` returned false, although `EL` is the EU's own
+  code for Greece and the country code of Greek VAT IDs, so
+  `vat.ID("EL…").CountryCode().IsEU()` was false too.
+- `country.ParseCode("Greece")` returned `GR` or `EL` at random per process,
+  because two codes share the name and the name index was built in map order.
+  It now always returns the ISO 3166-1 code `GR`.
+- `email.ParseMessage` detected JSON only if the first byte was `{` and the
+  last `}`, so a JSON message with a trailing newline, as `json.Encoder`
+  writes it, was parsed as MIME.
+- `email.ParseTNEFMessageBytes` wrote the plain text converted from the HTML
+  body into `BodyHTML` instead of `Body` for a message without a plain body.
+- `charset.GetEncoding("")` returned IBM Code Page 037 with an empty name
+  instead of an error.
+- `charset.EncodeUTF16` rejected a valid U+FFFD in its input as invalid UTF-8.
+- `charset/findencoding.PrintFileWithAllEncodings` panicked for a negative
+  `maxBytes`, which now means no limit.
+- `bank.IBAN` removes all whitespace before checking the country code and
+  length, so an IBAN with leading whitespace is valid like one with inner
+  whitespace, and `IBAN.BankAndAccountNumbers` reads the numbers from the
+  normalized IBAN instead of slicing the raw string with its spaces.
+- `bank.BIC.Normalized`, `NormalizedShort` and `bank.NormalizeBIC` remove all
+  Unicode whitespace like `IBAN.Normalized`, not only ASCII spaces.
+  `BIC.Valid` stays strict and accepts only the compact form, because the
+  flag methods read fixed positions after `Valid()`.
+- `account.Number.Scan` and `NullableNumber.Scan` turned a `float64` NaN or
+  infinity into the account number `"NaN"` or `"+Inf"` and accepted negative
+  and fractional values. They now return an error wrapping
+  `account.ErrInvalidNumber` for them, and scan `-0` as `0`.
+- `account.Number.JSONSchema` and `NullableNumber.JSONSchema` always published
+  `DefaultNumberRegex`; they now publish the current `NumberRegexp`.
+  `MarshalXML` trims the number like `Value` and `MarshalJSON`.
+- `strutil.RemoveRunes`, `KeepRunes` and `SplitAndTrimIndex` stopped at the
+  first invalid UTF-8 byte or U+FFFD, unlike their string variants, so
+  `SplitAndTrimIndex("ab\xffcd ef")` returned one wrong range. They now
+  process the whole input. `RemoveRunesString` writes an invalid byte in the
+  unchanged prefix as U+FFFD like `RemoveRunes`.
+- `strutil.EqualJSON` panicked when both arguments held the same
+  uncomparable type, like two slices or maps.
+- `strutil.MapRuneIsAfterWordSeparator` left the continuation bytes of a
+  multi-byte last rune unset.
+- `strutil.ParseDomainNameIndex` returned indices into the lowercased input,
+  which are wrong for the original input when lowercasing changes the length
+  of a rune before or inside the domain, like `İ`.
+- `notnull.JSON(nil).Clone()` returned a non-nil empty value that marshalled
+  to zero bytes, which is not valid JSON. It now returns nil.
 
 ## 2026-09-02
 
