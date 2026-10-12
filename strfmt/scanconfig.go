@@ -99,10 +99,15 @@ type ScanConfig struct {
 // function as ValidateFunc.
 // Type-specific scanners for time.Time, nullable.Time
 // and time.Duration are pre-registered.
+//
+// The defaults accept the bool and time strings written by
+// NewFormatConfig, NewEnglishFormatConfig and NewGermanFormatConfig,
+// like "ja" and "nein", so that what those presets format can be
+// scanned back.
 func NewScanConfig() *ScanConfig {
 	c := &ScanConfig{
-		TrueStrings:  []string{"true", "True", "TRUE", "yes", "Yes", "YES", "1"},
-		FalseStrings: []string{"false", "False", "FALSE", "no", "No", "NO", "0"},
+		TrueStrings:  []string{"true", "True", "TRUE", "yes", "Yes", "YES", "ja", "Ja", "JA", "1"},
+		FalseStrings: []string{"false", "False", "FALSE", "no", "No", "NO", "nein", "Nein", "NEIN", "0"},
 		NilStrings:   []string{"", "nil", "<nil>", "null", "NULL"},
 		TimeFormats: []string{
 			time.RFC3339Nano,
@@ -110,7 +115,9 @@ func NewScanConfig() *ScanConfig {
 			time.DateOnly + " 15:04:05.999999999 -0700 MST", // Used by time.Time.String()
 			time.DateTime,
 			time.DateOnly + " 15:04",
-			time.DateOnly + "T15:04", // Used by browser datetime-local input type
+			time.DateOnly + "T15:04",  // Used by browser datetime-local input type
+			"02/01/2006 15:04:05 MST", // Used by NewEnglishFormatConfig
+			"02.01.2006 15:04:05 MST", // Used by NewGermanFormatConfig
 			time.DateOnly,
 		},
 		AcceptedMoneyAmountDecimals: []int{0, 2, 4},
@@ -138,7 +145,12 @@ func (c *ScanConfig) initTypeScanners() {
 // for a destination of that type, including the handling of a nil source
 // string, which it therefore has to handle itself if the default of
 // ScanConfig.StrictEmptyStringParsing is not what it wants.
+// The TypeScanners map is allocated if it is nil, like for a ScanConfig
+// that was not created by NewScanConfig.
 func (c *ScanConfig) SetTypeScanner(t reflect.Type, s Scanner) {
+	if c.TypeScanners == nil {
+		c.TypeScanners = make(map[reflect.Type]Scanner)
+	}
 	c.TypeScanners[t] = s
 }
 
