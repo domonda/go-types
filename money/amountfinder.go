@@ -22,7 +22,7 @@ const (
 
 var (
 	amountRegex = regexp.MustCompile(
-		`NaN|Inf|\+Inf|-Inf|` +
+		`^(?:NaN|[+-]?Inf)$|` +
 			commaAmountR +
 			`|` +
 			commaPointsAmountR +
@@ -77,10 +77,18 @@ var AmountFinder amountFinder
 
 type amountFinder struct{}
 
+// FindAllIndex returns the [start, end] byte index pairs of the amounts in str.
+// At most n results are returned; pass n < 0 to return all of them.
 func (amountFinder) FindAllIndex(str []byte, n int) (indices [][]int) {
+	if n == 0 {
+		return nil
+	}
 	for _, pos := range strutil.SplitAndTrimIndex(str, isAmountSplitRune, isAmountTrimRune) {
 		if amountRegex.Match(str[pos[0]:pos[1]]) {
 			indices = append(indices, pos)
+			if n > 0 && len(indices) == n {
+				return indices
+			}
 		}
 	}
 	return indices

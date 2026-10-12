@@ -33,6 +33,38 @@ func Test_StringIsAmount_acceptInt(t *testing.T) {
 	}
 }
 
+// Test_StringIsAmount_nonFiniteTokensMustBeWholeString pins that the
+// NaN and Inf tokens are only accepted as the whole string. AmountFinder
+// tests every word of a text with the same regex, so a token matched
+// anywhere inside a word turned words like "Information" into amounts
+// that then fail to parse or parse as infinity.
+func Test_StringIsAmount_nonFiniteTokensMustBeWholeString(t *testing.T) {
+	for _, str := range []string{"NaN", "Inf", "+Inf", "-Inf"} {
+		assert.True(t, StringIsAmount(str, false), "StringIsAmount(%q, false)", str)
+	}
+	for _, str := range []string{"Information", "Infinity", "Infos", "NaNa", "ANaN", "xInf", "-Info", "Inf.", "1,00Inf"} {
+		assert.False(t, StringIsAmount(str, false), "StringIsAmount(%q, false)", str)
+		assert.False(t, StringIsAmount(str, true), "StringIsAmount(%q, true)", str)
+	}
+	assert.Nil(t, AmountFinder.FindAllIndex([]byte("Information about the Infrastructure"), -1))
+}
+
+// TestAmountFinder_FindAllIndex_limit pins the n argument of the
+// types.Finder contract: n < 0 returns all matches, n == 0 none and
+// n > 0 at most n, in text order. Callers pass n > 0 to stop after the
+// first amounts, so returning more than asked for breaks them.
+func TestAmountFinder_FindAllIndex_limit(t *testing.T) {
+	text := []byte("1,00 2,00 3,00")
+	all := [][]int{{0, 4}, {5, 9}, {10, 14}}
+
+	assert.Equal(t, all, AmountFinder.FindAllIndex(text, -1), "n < 0")
+	assert.Nil(t, AmountFinder.FindAllIndex(text, 0), "n == 0")
+	assert.Equal(t, all[:1], AmountFinder.FindAllIndex(text, 1), "n == 1")
+	assert.Equal(t, all[:2], AmountFinder.FindAllIndex(text, 2), "n == 2")
+	assert.Equal(t, all, AmountFinder.FindAllIndex(text, 3), "n == number of matches")
+	assert.Equal(t, all, AmountFinder.FindAllIndex(text, 10), "n > number of matches")
+}
+
 // TestAmountFinder_FindAllIndex pins that amounts are found in invoice
 // text with both decimal conventions, separated by whitespace or colons
 // and with trailing punctuation trimmed, while integers like years
