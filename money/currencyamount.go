@@ -3,6 +3,7 @@ package money
 import (
 	"database/sql/driver"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/domonda/go-types/strutil"
@@ -77,9 +78,14 @@ func ParseCurrencyAmount(str string, acceptedDecimals ...int) (result CurrencyAm
 	return result, nil
 }
 
+// String returns the currency code followed by the amount rounded to the
+// decimal places of the minor unit of the currency, see Currency.MinorUnits,
+// like "EUR 1234.50", "JPY 1235" or "KWD 1.234", with a point as decimal
+// separator and without thousands grouping. An amount without currency
+// is formatted with two decimal places.
 // String implements the fmt.Stringer interface.
 func (ca CurrencyAmount) String() string {
-	return ca.FormatSep(true, 0, '.', 2)
+	return ca.FormatSep(true, 0, '.', ca.Currency.MinorUnits())
 }
 
 // FormatSep formats the CurrencyAmount using the given separators and decimal precision.
@@ -105,10 +111,23 @@ func (ca CurrencyAmount) GoString() string {
 // ScanString tries to parse and assign the passed
 // source string as value of the implementing type.
 //
+// Only amounts with zero or two decimal places or with the decimal places
+// of the minor unit of the currency, see Currency.MinorUnits, are accepted,
+// so that an ambiguous thousands grouping like "EUR 1.234" is rejected
+// while "KWD 1.234" written by String is scanned.
+//
 // If validate is true, then the Amount.Valid method is checked
 // to return an error if the floating point value is infinite or NaN.
 func (ca *CurrencyAmount) ScanString(source string, validate bool) error {
-	parsed, err := ParseCurrencyAmount(source, 0, 2)
+	parsed, err := ParseCurrencyAmount(source)
+	if err != nil {
+		return err
+	}
+	acceptedDecimals := []int{0, 2}
+	if minorUnits := parsed.Currency.MinorUnits(); !slices.Contains(acceptedDecimals, minorUnits) {
+		acceptedDecimals = append(acceptedDecimals, minorUnits)
+	}
+	parsed, err = ParseCurrencyAmount(source, acceptedDecimals...)
 	if err != nil {
 		return err
 	}

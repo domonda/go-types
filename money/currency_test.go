@@ -323,6 +323,53 @@ func TestCurrency_SymbolAndEnglishName(t *testing.T) {
 	}
 }
 
+// TestCurrency_MinorUnits pins the ISO 4217 minor units of the currencies
+// that don't have cents, because formatting a Kuwaiti dinar amount with two
+// decimals loses its fils and a yen amount with two decimals invents a
+// fraction that doesn't exist. Codes without a defined minor unit, codes
+// that are not part of ISO 4217 and invalid codes fall back to two.
+func TestCurrency_MinorUnits(t *testing.T) {
+	tests := []struct {
+		currency Currency
+		want     int
+	}{
+		{currency: EUR, want: 2},
+		{currency: USD, want: 2},
+		{currency: GBP, want: 2},
+		{currency: CHF, want: 2},
+		{currency: HUF, want: 2}, // ISO 4217 keeps 2 although cash has no fillér
+		{currency: JPY, want: 0},
+		{currency: KRW, want: 0},
+		{currency: ISK, want: 0},
+		{currency: CLP, want: 0},
+		{currency: VND, want: 0},
+		{currency: XOF, want: 0},
+		{currency: XAF, want: 0},
+		{currency: XPF, want: 0},
+		{currency: BHD, want: 3},
+		{currency: IQD, want: 3},
+		{currency: JOD, want: 3},
+		{currency: KWD, want: 3},
+		{currency: LYD, want: 3},
+		{currency: OMR, want: 3},
+		{currency: TND, want: 3},
+		{currency: MRU, want: 2}, // ISO 4217 2 although subdivided into 5 khoums
+		{currency: XDR, want: 2}, // no minor unit defined by ISO 4217
+		{currency: GGP, want: 2}, // not part of ISO 4217
+		{currency: "", want: 2},
+		{currency: "XYZ", want: 2},
+	}
+	for _, tt := range tests {
+		assert.Equal(t, tt.want, tt.currency.MinorUnits(), "Currency(%q).MinorUnits()", string(tt.currency))
+	}
+
+	// Every currency with other minor units than 2 is a valid code
+	for code, minorUnits := range currencyCodeToMinorUnits {
+		assert.True(t, code.ValidAndNormalized(), "Currency(%q) of currencyCodeToMinorUnits", string(code))
+		assert.NotEqual(t, 2, minorUnits, "Currency(%q) with the default minor units 2 is not listed", string(code))
+	}
+}
+
 // TestCurrency_NormalizedNames pins how written currency names normalize.
 // A name has to resolve to the currency it names: "Canadian Dollar" is not
 // a US Dollar and "Burundi Franc" is not a Swiss Franc, so a qualified name

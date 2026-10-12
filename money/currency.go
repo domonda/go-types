@@ -224,6 +224,19 @@ func (c Currency) EnglishName() string {
 	return currencyCodeToName[c]
 }
 
+// MinorUnits returns the number of decimal places of the minor unit
+// of the currency defined by ISO 4217, like 2 for the cents of EUR,
+// 0 for JPY and 3 for the fils of KWD.
+// Codes without a minor unit defined by ISO 4217, like XDR,
+// codes that are not part of ISO 4217, like GGP, and invalid codes
+// return 2. Like EnglishName it does not normalize the currency.
+func (c Currency) MinorUnits() int {
+	if minorUnits, ok := currencyCodeToMinorUnits[c]; ok {
+		return minorUnits
+	}
+	return 2
+}
+
 // String returns the normalized currency as string if possible,
 // else it will be returned unchanged as string.
 // String implements the fmt.Stringer interface.

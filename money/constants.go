@@ -207,6 +207,36 @@ var currencyCodeToName = map[Currency]string{ //#nosec G101
 	ZWL: "Zimbabwe Dollar (2009-2024)",
 }
 
+// currencyCodeToMinorUnits holds the ISO 4217 minor units, the number of
+// decimal places of the minor currency unit, of the currencies whose minor
+// unit is not 2 decimal places, see Currency.MinorUnits.
+var currencyCodeToMinorUnits = map[Currency]int{
+	BIF: 0,
+	CLP: 0,
+	DJF: 0,
+	GNF: 0,
+	ISK: 0,
+	JPY: 0,
+	KMF: 0,
+	KRW: 0,
+	PYG: 0,
+	RWF: 0,
+	UGX: 0,
+	VND: 0,
+	VUV: 0,
+	XAF: 0,
+	XOF: 0,
+	XPF: 0,
+
+	BHD: 3,
+	IQD: 3,
+	JOD: 3,
+	KWD: 3,
+	LYD: 3,
+	OMR: 3,
+	TND: 3,
+}
+
 // currencyCodeToISOName holds the English currency names of the ISO 4217
 // list like "Canadian Dollar", which often differ from the names of
 // currencyCodeToName like "Canada Dollar".

@@ -170,13 +170,23 @@ func TestCurrencyAmount_Constructors(t *testing.T) {
 
 // TestCurrencyAmount_Format pins the String format that is also used
 // as SQL value: currency code first, no thousands grouping, a point as
-// decimal separator and two decimals, and no currency prefix if the
+// decimal separator and the decimal places of the minor unit of the
+// currency, two for an empty currency, and no currency prefix if the
 // currency is empty.
 func TestCurrencyAmount_Format(t *testing.T) {
 	assert.Equal(t, "EUR 1234.56", CurrencyAmountEUR(1234.56).String())
 	assert.Equal(t, "EUR -1234567.89", CurrencyAmountEUR(-1234567.89).String())
 	assert.Equal(t, "USD 5.00", CurrencyAmountUSD(5).String())
 	assert.Equal(t, "5.00", CurrencyAmount{Amount: 5}.String())
+
+	// Two decimals lost the third decimal of a dinar and wrote a yen
+	// fraction that doesn't exist: "KWD 1.23" and "JPY 1235.00" before
+	assert.Equal(t, "KWD 1.234", CurrencyAmount{Currency: KWD, Amount: 1.234}.String())
+	assert.Equal(t, "BHD 0.500", CurrencyAmount{Currency: BHD, Amount: 0.5}.String())
+	assert.Equal(t, "KWD 1.235", CurrencyAmount{Currency: KWD, Amount: 1.2345}.String(), "rounded half away from zero")
+	assert.Equal(t, "JPY 1235", CurrencyAmountJPY(1234.5).String())
+	assert.Equal(t, "JPY -1000", CurrencyAmountJPY(-1000).String())
+	assert.Equal(t, "KRW 50000", CurrencyAmount{Currency: KRW, Amount: 50000}.String())
 
 	ca := CurrencyAmountEUR(1234567.891)
 	assert.Equal(t, "1.234.567,89 EUR", ca.FormatSep(false, '.', ',', 2))
@@ -277,7 +287,8 @@ func TestCurrencyAmount_GoString(t *testing.T) {
 
 // TestCurrencyAmount_ScanString pins that ScanString accepts the
 // currency at either side in any separator convention, but only whole
-// or cent amounts, and that validate rejects NaN and ±Inf.
+// or cent amounts or the minor units of the currency, like the three
+// decimals of KWD that String writes, and that validate rejects NaN and ±Inf.
 func TestCurrencyAmount_ScanString(t *testing.T) {
 	tests := []struct {
 		source   string
@@ -292,6 +303,12 @@ func TestCurrencyAmount_ScanString(t *testing.T) {
 		{source: "EUR NaN", validate: false, want: CurrencyAmountEUR(Amount(math.NaN()))},
 		{source: "EUR 12.345", validate: false, wantErr: true}, // sub-cent amount
 		{source: "EUR 12.3", validate: false, wantErr: true},
+		{source: "KWD 12.345", validate: true, want: CurrencyAmount{Currency: KWD, Amount: 12.345}},
+		{source: "12.345 BHD", validate: true, want: CurrencyAmount{Currency: BHD, Amount: 12.345}},
+		{source: "KWD 12.34", validate: true, want: CurrencyAmount{Currency: KWD, Amount: 12.34}},
+		{source: "KWD 12.3456", validate: true, wantErr: true},
+		{source: "JPY 1000", validate: true, want: CurrencyAmountJPY(1000)},
+		{source: "JPY 1.000", validate: true, wantErr: true}, // ambiguous grouping
 		{source: "EUR NaN", validate: true, wantErr: true},
 		{source: "EUR -Inf", validate: true, wantErr: true},
 		{source: "XYZ 12.34", validate: false, wantErr: true},
@@ -321,12 +338,19 @@ func TestCurrencyAmount_SQL(t *testing.T) {
 		CurrencyAmountEUR(1234.56),
 		CurrencyAmountUSD(-0.99),
 		CurrencyAmountJPY(1000),
+		{Currency: KWD, Amount: 1.234},
 		{Amount: 12.34},
 		{},
 	} {
 		v, err := ca.Value()
 		require.NoError(t, err)
 		assert.Equal(t, ca.String(), v)
+
+		// String and ScanString round-trip for every minor unit
+		var scanned CurrencyAmount
+		if assert.NoError(t, scanned.ScanString(v.(string), true), "ScanString(%q)", v) {
+			assert.Equal(t, ca, scanned, "ScanString(%q)", v)
+		}
 
 		var fromString, fromBytes CurrencyAmount
 		require.NoError(t, fromString.Scan(v))

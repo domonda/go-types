@@ -93,7 +93,7 @@ func ParseCurrencyDecimalAmount(str string, acceptedDecimals ...int) (result Cur
 
 // String implements the fmt.Stringer interface, placing the currency before the
 // amount and using the amount's own scale (unlike CurrencyAmount.String, which
-// forces two decimal places).
+// rounds to the minor unit of the currency).
 func (ca CurrencyDecimalAmount) String() string {
 	return ca.FormatSep(true, 0, '.')
 }
