@@ -26,8 +26,13 @@ func NewStrMutex() *StrMutex {
 }
 
 // Lock the mutex for a given key.
+// The zero value of StrMutex is usable,
+// it is initialized by the first Lock call.
 func (m *StrMutex) Lock(key string) {
 	m.locksMtx.Lock()
+	if m.locks == nil {
+		m.locks = make(map[string]*locker)
+	}
 	lock := m.locks[key]
 	if lock == nil {
 		lock = new(locker)
