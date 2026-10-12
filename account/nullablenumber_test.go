@@ -221,6 +221,18 @@ func TestNullableNumber_JSON(t *testing.T) {
 		assert.True(t, got.N.IsNull(), "JSON null must overwrite a previous value with NULL")
 	})
 
+	t.Run("empty string unmarshals as null", func(t *testing.T) {
+		// Scan("") and UnmarshalText("") give NumberNull, and MarshalJSON
+		// writes empty and whitespace only values as null, so a JSON ""
+		// (e.g. from a cleared form field) must also be read as NULL
+		// instead of failing as an invalid account number.
+		for _, j := range []string{`""`, `"  "`} {
+			n := NullableNumber("previous")
+			require.NoError(t, json.Unmarshal([]byte(j), &n), "json.Unmarshal(%s)", j)
+			assert.Equal(t, NumberNull, n, "json.Unmarshal(%s)", j)
+		}
+	})
+
 	t.Run("whitespace marshals as null", func(t *testing.T) {
 		j, err := json.Marshal(NullableNumber("  "))
 		require.NoError(t, err)

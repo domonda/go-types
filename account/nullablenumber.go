@@ -277,9 +277,16 @@ func (n NullableNumber) MarshalJSON() ([]byte, error) {
 	return json.Marshal(str)
 }
 
-// UnmarshalJSON implements encoding/json.Unmarshaler
+// UnmarshalJSON implements encoding/json.Unmarshaler.
+// JSON null and an empty or whitespace only JSON string
+// give NumberNull like Scan and UnmarshalText.
 func (n *NullableNumber) UnmarshalJSON(j []byte) error {
 	if bytes.Equal(j, []byte(`null`)) {
+		*n = NumberNull
+		return nil
+	}
+	var str string
+	if json.Unmarshal(j, &str) == nil && strings.TrimSpace(str) == "" {
 		*n = NumberNull
 		return nil
 	}
