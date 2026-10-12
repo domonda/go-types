@@ -8,7 +8,8 @@ Changing any of these after `v1.0.0` would break callers, so each needs a
 decision first. They are inconsistencies between packages, not bugs in one
 package: every listed behaviour is documented in the package READMEs.
 
-- [ ] **Tag `v1.0.0`.** No git tags exist yet. Pick semver baseline first.
+- [ ] **Tag `v1.0.0`.** No git tags exist yet. `VERSION` holds the first
+      pre-release, `v1.0.0-beta.1`, to tag before the final release.
 - [ ] **One rule for empty input to a nullable type.**
       `Scan("")` returns an error for `nullable.NonEmptyString` and
       `email.NullableAddress` but null for `nullable.TrimmedString` and
