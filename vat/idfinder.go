@@ -10,7 +10,7 @@ var IDFinder idFinder
 
 type idFinder struct{}
 
-// FindAllIndex returns the byte-index pairs [start, end] of the VAT IDs in str.
+// FindAllIndex returns the byte-index pairs [start, end) of the VAT IDs in str.
 // At most n results are returned; pass n < 0 to return all matches.
 func (idFinder) FindAllIndex(str []byte, n int) (indices [][]int) {
 	l := len(str)

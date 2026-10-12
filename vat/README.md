@@ -135,7 +135,7 @@ Implements: `fmt.Stringer`, `database/sql.Scanner`, `database/sql/driver.Valuer`
 var IDFinder idFinder
 ```
 
-`IDFinder.FindAllIndex(str []byte, n int) [][]int` returns the `[start, end]` byte offsets of valid VAT IDs in `str`, at most `n` (`n < 0` returns all, `n == 0` none). `IDFinder` implements `types.Finder`. It splits the text on whitespace and `:`, trims punctuation from each word, and tests runs of one to three words, so `"UID: ATU 10223006,"` yields `"ATU 10223006"`. The match is the raw text: pass it to `NormalizeVATID` to get the canonical ID.
+`IDFinder.FindAllIndex(str []byte, n int) [][]int` returns the `[start, end)` byte offsets of valid VAT IDs in `str`, at most `n` (`n < 0` returns all, `n == 0` none). `IDFinder` implements `types.Finder`. It splits the text on whitespace and `:`, trims punctuation from each word, and tests runs of one to three words, so `"UID: ATU 10223006,"` yields `"ATU 10223006"`. The match is the raw text: pass it to `NormalizeVATID` to get the canonical ID.
 
 ## strfmt
 

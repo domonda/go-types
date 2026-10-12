@@ -21,7 +21,7 @@ type Finder struct {
 	LangHint language.Code
 }
 
-// FindAllIndex returns the byte-index pairs [start, end] of every date found in
+// FindAllIndex returns the byte-index pairs [start, end) of every date found in
 // str, trying spans of up to three whitespace-delimited words at a time.
 // A span is a date if Normalize accepts it, so an ISO 8601 date-time
 // like "2023-12-25T10:00:00Z" is found as a whole.

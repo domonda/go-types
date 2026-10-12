@@ -287,8 +287,8 @@ picking the semver baseline.
   the last part, so `Amount(1).SplitEqually(200)` gave 199 parts of 0.01 and
   a last part of -0.99. All-zero weights put the whole amount into the last
   part instead of producing NaN.
-- **Breaking:** `money.CurrencyAmount.String`, and so its `Value` and
-  `GoString`, write the ISO 4217 minor units of the currency instead of
+- **Breaking:** `money.CurrencyAmount.String`, and so its `Value`,
+  write the ISO 4217 minor units of the currency instead of
   always two decimals: `"KWD 1.234"` instead of `"KWD 1.23"`, `"JPY 1235"`
   instead of `"JPY 1234.50"`. `CurrencyAmount.ScanString` additionally
   accepts the minor units of the currency, so the stored text scans back.
@@ -501,8 +501,8 @@ picking the semver baseline.
   Such a pointer is now skipped like in `DeepValidate`: `Validate` returns
   nil and `TryValidate` returns `nil, true`. Pointer-receiver methods are
   still called with the nil pointer, so they can handle it themselves.
-- The zero values of `types.KeyMutex` and `uu.IDMutex` panicked on the first
-  `Lock` because of a nil map. They are now ready to use.
+- The zero values of `types.KeyMutex`, `uu.IDMutex` and `strutil.StrMutex`
+  panicked on the first `Lock` because of a nil map. They are now ready to use.
 - `uu.IDMutex` used `defer recover()`, which recovers nothing, so a panicking
   lock or unlock callback escaped `Lock` and `Unlock`. The callbacks' panics
   are now recovered as intended.

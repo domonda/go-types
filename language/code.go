@@ -17,7 +17,7 @@ import (
 // and treats an empty Code string as SQL NULL value.
 type Code string //#enum
 
-// Null is an empty string and will be treatet as SQL NULL.
+// Null is an empty string and will be treated as SQL NULL.
 // language.Null.Valid() == false
 //
 // Declared as a conversion instead of `Null Code = ""` so that go-enum

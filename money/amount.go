@@ -161,7 +161,7 @@ func (a Amount) DecimalAmount(scale int, rounding RoundingMode) DecimalAmount {
 // as returned by Amount.Cents, differ by at most one cent.
 // Because both amounts are rounded to cents first,
 // the difference of the unrounded amounts can be up to
-// just under two cents, like for 10.004 and 10.0149.
+// just under two cents, like for 9.995 and 10.0149.
 func (a Amount) WithinOneCent(b Amount) bool {
 	diff := a.Cents() - b.Cents()
 	return diff >= -1 && diff <= 1
@@ -401,8 +401,10 @@ func (a Amount) Percentage(percent float64) Amount {
 // are handed to the last amounts, so no two amounts ever differ by more
 // than one cent and none has the opposite sign of the initial amount.
 // A count of one returns the amount unrounded.
-// A NaN or infinite amount, or one beyond the CentAmount range where
-// float64 can't represent cents anymore, is divided without rounding.
+// A NaN or infinite amount, or one beyond the CentAmount range,
+// is divided without rounding. Beyond about ±90 trillion (2^53 cents)
+// float64 can't represent every cent anymore, so the parts
+// may not sum up to the amount exactly.
 func (a Amount) SplitEqually(count int) []Amount {
 	if count < 1 {
 		return nil
@@ -440,7 +442,9 @@ func (a Amount) SplitEqually(count int) []Amount {
 // remainder method), so every amount is within one cent of its exact share
 // up to the float64 precision of the weight ratios.
 // A NaN or infinite amount or weight, or an amount beyond the CentAmount
-// range where float64 can't represent cents anymore, is split without rounding.
+// range, is split without rounding. Beyond about ±90 trillion (2^53 cents)
+// float64 can't represent every cent anymore, so the parts
+// may not sum up to the amount exactly.
 func (a Amount) SplitProportionally(weights []Amount) []Amount {
 	count := len(weights)
 	if count == 0 {

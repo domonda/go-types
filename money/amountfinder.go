@@ -82,7 +82,7 @@ var AmountFinder amountFinder
 
 type amountFinder struct{}
 
-// FindAllIndex returns the [start, end] byte index pairs of the amounts in str.
+// FindAllIndex returns the [start, end) byte index pairs of the amounts in str.
 // At most n results are returned; pass n < 0 to return all of them.
 func (amountFinder) FindAllIndex(str []byte, n int) (indices [][]int) {
 	if n == 0 {
