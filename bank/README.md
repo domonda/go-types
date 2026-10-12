@@ -65,7 +65,7 @@ An `IBAN` where `""` is the null value. Null counts as valid.
 | `Valid() bool`, `Validate() error`              | Null or a valid IBAN.                              |
 | `ValidAndNotNull() bool`                        | Not null and valid.                                |
 | `ValidAndNormalized() bool`                     | Null, or valid and in compact form.                |
-| `CountryCode() country.Code`                    | First two characters of a valid value, `""` for null or invalid values. With leading whitespace this is not a country code, normalize first. |
+| `CountryCode() country.Code`                    | Like `IBAN.CountryCode`, `""` for null or invalid values. |
 | `IsNull() bool`, `IsNotNull() bool`             | `iban == ""`, `iban != ""`.                        |
 | `Get() IBAN`                                    | Panics if null.                                    |
 | `GetOr(defaultIBAN IBAN) IBAN`                  | Value or the default.                              |

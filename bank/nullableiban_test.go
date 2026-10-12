@@ -46,6 +46,13 @@ func TestNullableIBAN_Valid(t *testing.T) {
 	assert.False(t, spacedIBAN.ValidAndNormalized())
 	assert.True(t, normIBAN.ValidAndNormalized())
 	assert.Equal(t, country.DE, spacedIBAN.CountryCode())
+	// Valid accepts leading whitespace, so CountryCode must read the
+	// country of the normalized IBAN like IBAN.CountryCode,
+	// not the first two raw characters (" D").
+	const leadingSpaceIBAN NullableIBAN = " DE89 3704 0044 0532 0130 00"
+	require.True(t, leadingSpaceIBAN.Valid())
+	assert.Equal(t, IBAN(leadingSpaceIBAN).CountryCode(), leadingSpaceIBAN.CountryCode())
+	assert.Equal(t, country.DE, leadingSpaceIBAN.CountryCode())
 
 	norm, err := spacedIBAN.Normalized()
 	require.NoError(t, err)

@@ -12,10 +12,10 @@ import (
 	"github.com/domonda/go-types/nullable"
 )
 
-// IBANNull is an empty string and will be treatet as SQL NULL.
+// IBANNull is an empty string and will be treated as SQL NULL.
 const IBANNull NullableIBAN = ""
 
-// NullableIBAN is a IBAN value which can hold an emtpy string ("") as the null value.
+// NullableIBAN is a IBAN value which can hold an empty string ("") as the null value.
 type NullableIBAN string
 
 // Compile-time check that NullableIBAN implements nullable.NullSetable[IBAN]
@@ -73,12 +73,14 @@ func (iban NullableIBAN) ValidAndNormalized() bool {
 	return err == nil && iban == norm
 }
 
-// CountryCode returns the country code of the IBAN
+// CountryCode returns the country code of the normalized IBAN
+// like IBAN.CountryCode, or country.Invalid ("")
+// if the IBAN is null or not valid.
 func (iban NullableIBAN) CountryCode() country.Code {
-	if iban.IsNull() || !iban.Valid() {
-		return ""
+	if iban.IsNull() {
+		return country.Invalid
 	}
-	return country.Code(iban[:2])
+	return IBAN(iban).CountryCode()
 }
 
 // Normalized returns the iban in normalized form,

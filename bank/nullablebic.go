@@ -10,10 +10,10 @@ import (
 	"github.com/domonda/go-types/nullable"
 )
 
-// BICNull is an empty string and will be treatet as SQL NULL.
+// BICNull is an empty string and will be treated as SQL NULL.
 const BICNull NullableBIC = ""
 
-// NullableBIC is a BIC value which can hold an emtpy string ("") as the null value.
+// NullableBIC is a BIC value which can hold an empty string ("") as the null value.
 type NullableBIC string
 
 // Compile-time check that NullableBIC implements nullable.NullSetable[BIC]
