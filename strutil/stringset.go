@@ -143,7 +143,7 @@ func (set StringSet) Clear() {
 	clear(set)
 }
 
-// Clone returns a deep copy of the set. Returns nil if the set is nil.
+// Clone returns a copy of the set. Returns nil if the set is nil.
 func (set StringSet) Clone() StringSet {
 	if set == nil {
 		return nil

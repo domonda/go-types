@@ -38,7 +38,7 @@ func ParseDomainName(word string) string {
 }
 
 // ParseDomainNameIndex extracts a domain name from word and returns both the domain
-// and the byte indices [start, end] where the domain was found.
+// and the byte indices [start, end) where the domain was found.
 // It recognizes domains in HTTP URLs, www prefixed domains, and email addresses.
 // Returns empty string and nil indices if no domain is found.
 func ParseDomainNameIndex(word string) (domain string, indices []int) {

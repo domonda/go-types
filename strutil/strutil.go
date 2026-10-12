@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/url"
 	"path"
+	"reflect"
 	"slices"
 	"strings"
 	"unicode"
@@ -25,15 +26,17 @@ type IsRuneFunc func(rune) bool
 
 // SplitAndTrimIndex first splits str into words not containing isSplitRune,
 // then trims the words with isTrimRune.
+// Like ranging over a string, every invalid UTF-8 byte
+// is passed to the functions as utf8.RuneError.
 func SplitAndTrimIndex(str []byte, isSplitRune, isTrimRune IsRuneFunc) (indices [][]int) {
 	inWord := false
 	inTrimmedWord := false
 	lastWasTrim := false
 	onlyTrimsSince := -1
 	wordStart := -1
-	r, n := utf8.DecodeRune(str)
 
-	for i := 0; r != utf8.RuneError; {
+	for i := 0; i < len(str); {
+		r, n := utf8.DecodeRune(str[i:])
 		isSplit := isSplitRune(r)
 		isTrim := isTrimRune(r)
 
@@ -87,7 +90,6 @@ func SplitAndTrimIndex(str []byte, isSplitRune, isTrimRune IsRuneFunc) (indices 
 		}
 
 		i += n
-		r, n = utf8.DecodeRune(str[i:])
 	}
 	if inTrimmedWord {
 		wordEnd := len(str)
@@ -155,12 +157,14 @@ func IsRuneAny(isRune ...IsRuneFunc) IsRuneFunc {
 }
 
 // RemoveRunes returns a copy of str with all runes removed
-// where any call to a removeRunes function reeturns true.
+// where any call to a removeRunes function returns true.
+// Like ranging over a string, every invalid UTF-8 byte is passed
+// to the functions as utf8.RuneError and written as U+FFFD if kept.
 func RemoveRunes(str []byte, removeRunes ...IsRuneFunc) []byte {
 	var buf bytes.Buffer
 	buf.Grow(len(str))
-	r, n := utf8.DecodeRune(str)
-	for r != utf8.RuneError {
+	for len(str) > 0 {
+		r, n := utf8.DecodeRune(str)
 		doRemove := false
 		for _, remove := range removeRunes {
 			if remove(r) {
@@ -172,18 +176,19 @@ func RemoveRunes(str []byte, removeRunes ...IsRuneFunc) []byte {
 			buf.WriteRune(r)
 		}
 		str = str[n:]
-		r, n = utf8.DecodeRune(str)
 	}
 	return buf.Bytes()
 }
 
-// KeepRunes returns a copy of str where with all runes kept in it
-// where any call to a keepRunes function reeturns true.
+// KeepRunes returns a copy of str with only those runes kept
+// where any call to a keepRunes function returns true.
+// Like ranging over a string, every invalid UTF-8 byte is passed
+// to the functions as utf8.RuneError and written as U+FFFD if kept.
 func KeepRunes(str []byte, keepRunes ...IsRuneFunc) []byte {
 	var buf bytes.Buffer
 	buf.Grow(len(str))
-	r, n := utf8.DecodeRune(str)
-	for r != utf8.RuneError {
+	for len(str) > 0 {
+		r, n := utf8.DecodeRune(str)
 		for _, keep := range keepRunes {
 			if keep(r) {
 				buf.WriteRune(r)
@@ -191,7 +196,6 @@ func KeepRunes(str []byte, keepRunes ...IsRuneFunc) []byte {
 			}
 		}
 		str = str[n:]
-		r, n = utf8.DecodeRune(str)
 	}
 	return buf.Bytes()
 }
@@ -264,14 +268,17 @@ func MapRuneIsAfterWordSeparator(str string) []bool {
 	return result
 }
 
-// EqualJSON returns true a and b are equal on a value basis,
+// EqualJSON returns true if a and b are equal on a value basis,
 // or if their marshalled JSON representation is equal.
+// Values of uncomparable types like slices and maps
+// are only compared by their JSON representation.
 func EqualJSON(a, b any) bool {
-	if a == b {
-		return true
-	}
 	if a == nil || b == nil {
-		return false
+		return a == b
+	}
+	// a == b panics if a and b have the same uncomparable dynamic type
+	if reflect.ValueOf(a).Comparable() && a == b {
+		return true
 	}
 	aJSON, err := json.Marshal(a)
 	if err != nil {

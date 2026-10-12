@@ -390,8 +390,7 @@ func TestIsNorLetterOrDigit(t *testing.T) {
 }
 
 // removeKeepRunesCases only uses valid UTF-8 without U+FFFD,
-// see the bug report about RemoveRunes and KeepRunes stopping
-// at the first utf8.RuneError.
+// see TestRemoveKeepRunes_InvalidUTF8AndReplacementChar for those.
 var removeKeepRunesCases = []struct {
 	name       string
 	str        string
@@ -467,6 +466,97 @@ func TestKeepRunes(t *testing.T) {
 	}
 }
 
+// RemoveRunes and KeepRunes must process the whole input like their
+// string variants: they used utf8.RuneError as end of input marker,
+// so an invalid UTF-8 byte or a legitimate U+FFFD silently dropped
+// everything after it. Like ranging over a string, an invalid byte
+// is passed to the functions as utf8.RuneError and written as U+FFFD.
+func TestRemoveKeepRunes_InvalidUTF8AndReplacementChar(t *testing.T) {
+	isReplacementChar := IsRune(unicode.ReplacementChar)
+	tests := []struct {
+		name       string
+		str        string
+		funcs      []IsRuneFunc
+		wantRemove string
+		wantKeep   string
+	}{
+		{
+			name:       "invalid byte in the middle",
+			str:        "1a\xffb2",
+			funcs:      []IsRuneFunc{unicode.IsDigit},
+			wantRemove: "a\uFFFDb",
+			wantKeep:   "12",
+		},
+		{
+			name:       "invalid byte at the end",
+			str:        "1a\xff",
+			funcs:      []IsRuneFunc{unicode.IsDigit},
+			wantRemove: "a\uFFFD",
+			wantKeep:   "1",
+		},
+		{
+			name:       "truncated multi-byte rune",
+			str:        "1a\xe2\x82b2",
+			funcs:      []IsRuneFunc{unicode.IsDigit},
+			wantRemove: "a\uFFFD\uFFFDb",
+			wantKeep:   "12",
+		},
+		{
+			name:       "legitimate U+FFFD",
+			str:        "1a\uFFFDb2\uFFFD",
+			funcs:      []IsRuneFunc{unicode.IsDigit},
+			wantRemove: "a\uFFFDb\uFFFD",
+			wantKeep:   "12",
+		},
+		{
+			name:       "invalid byte and U+FFFD both match utf8.RuneError",
+			str:        "a\xffb\uFFFDc",
+			funcs:      []IsRuneFunc{isReplacementChar},
+			wantRemove: "abc",
+			wantKeep:   "\uFFFD\uFFFD",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			in := []byte(tt.str)
+			assert.Equal(t, tt.wantRemove, string(RemoveRunes(in, tt.funcs...)), "RemoveRunes")
+			assert.Equal(t, tt.wantKeep, string(KeepRunes(in, tt.funcs...)), "KeepRunes")
+			assert.Equal(t, tt.str, string(in), "input must not be modified")
+
+			// The string variants must produce the same result.
+			// Note that RemoveRunesString copies the unchanged prefix before
+			// the first removed rune verbatim, so the first removed rune of
+			// every case comes before any invalid byte.
+			assert.Equal(t, tt.wantRemove, RemoveRunesString(tt.str, tt.funcs...), "RemoveRunesString")
+			assert.Equal(t, tt.wantKeep, KeepRunesString(tt.str, tt.funcs...), "KeepRunesString")
+		})
+	}
+}
+
+// SplitAndTrimIndex must split the whole input: it used utf8.RuneError
+// as end of input marker, so an invalid UTF-8 byte or a legitimate
+// U+FFFD dropped all following words and the last word was extended
+// to the end of the input. Like ranging over a string, an invalid byte
+// is a single utf8.RuneError rune that is part of its word.
+func Test_SplitAndTrimIndex_InvalidUTF8AndReplacementChar(t *testing.T) {
+	tests := []struct {
+		str  string
+		want [][]int
+	}{
+		{str: "ab\xffcd ef", want: [][]int{{0, 5}, {6, 8}}},
+		{str: "\xff ab", want: [][]int{{0, 1}, {2, 4}}},
+		{str: "ab \xff", want: [][]int{{0, 2}, {3, 4}}},
+		{str: "ab. \xe2\x82. cd", want: [][]int{{0, 2}, {4, 6}, {8, 10}}},
+		{str: "ab \uFFFD ef", want: [][]int{{0, 2}, {3, 6}, {7, 9}}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.str, func(t *testing.T) {
+			got := SplitAndTrimIndex([]byte(tt.str), unicode.IsSpace, unicode.IsPunct)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
 func TestRemoveRunesString_NoCopyIfUnchanged(t *testing.T) {
 	// Documented: if no rune was removed, the string is not copied
 	str := strings.Repeat("Grüße ", 10)
@@ -538,6 +628,41 @@ func TestEqualJSON(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			assert.Equal(t, tt.want, EqualJSON(tt.a, tt.b))
+		})
+	}
+}
+
+// EqualJSON is meant for any values that can be marshalled as JSON,
+// and slices and maps are the most common of those. Comparing two
+// values of the same uncomparable type with == panics, so EqualJSON
+// must compare them by their JSON instead of crashing the caller.
+func TestEqualJSON_Uncomparable(t *testing.T) {
+	type withSlice struct {
+		S []int `json:"s"`
+	}
+	type withAny struct {
+		A any `json:"a"`
+	}
+	tests := []struct {
+		name string
+		a, b any
+		want bool
+	}{
+		{name: "equal slices", a: []int{1, 2}, b: []int{1, 2}, want: true},
+		{name: "different slices", a: []int{1, 2}, b: []int{2, 1}, want: false},
+		{name: "nil slices", a: []int(nil), b: []int(nil), want: true},
+		{name: "equal maps", a: map[string]int{"a": 1, "b": 2}, b: map[string]int{"b": 2, "a": 1}, want: true},
+		{name: "different maps", a: map[string]int{"a": 1}, b: map[string]int{"a": 2}, want: false},
+		{name: "struct with slice", a: withSlice{S: []int{1}}, b: withSlice{S: []int{1}}, want: true},
+		// The struct type is comparable, but its dynamic field value is not
+		{name: "struct with slice in any field", a: withAny{A: []int{1}}, b: withAny{A: []int{1}}, want: true},
+		{name: "slice vs array", a: []int{1}, b: [1]int{1}, want: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.NotPanics(t, func() {
+				assert.Equal(t, tt.want, EqualJSON(tt.a, tt.b))
+			})
 		})
 	}
 }
