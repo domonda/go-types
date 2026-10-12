@@ -16,8 +16,16 @@ package: every listed behaviour is documented in the package READMEs.
       `money.NullableAmount`, `NullableDecimalAmount` and `NullableRate` but
       an error for `NullableCentAmount` and `uu.NullableID`.
       `uu.IDSlice.Scan("")` gives a nil slice, `uu.IDSet.Scan("")` an empty
-      non-nil set. Recommendation: empty input is null for every nullable
-      type, because an empty CSV cell or text column means "no value".
+      non-nil set. Whitespace-only values are null for the country, vat,
+      bank, money, email address and date nullable types, but a real value
+      for `email.NullableAddressList`, `date.NullableYearMonth`,
+      `date.NullableYearQuarter` and `nullable.NonEmptyString`, and
+      `account.NullableNumber` reports one as not null while writing JSON
+      `null`. `email.NullableAddress.Scan("")` is an error while
+      `Scan("  ")` is null. `date.NullableDate` JSON strings are stored as
+      given while `Scan` normalizes them. Recommendation: empty and
+      whitespace-only input is null for every nullable type, because an
+      empty CSV cell or text column means "no value".
 - [ ] **One rule for what `Value` writes.** `country.Code` and `vat.ID` write
       their normalized form, `money.Currency`, `language.Code`, `bank.IBAN`
       and `bank.BIC` write the raw string. `String()` normalizes for all of
