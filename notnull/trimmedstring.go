@@ -42,7 +42,8 @@ func TrimmedStringFrom(str string) TrimmedString {
 	return TrimmedString(strutil.TrimSpace(str))
 }
 
-// TrimmedStringJoin joins trimmed strings with the passed separator between them
+// TrimmedStringJoin joins trimmed strings with the passed separator between them.
+// Unlike nullable.TrimmedStringJoin it keeps strings that are empty after trimming.
 func TrimmedStringJoin[S ~string](separator string, strs ...S) TrimmedString {
 	var b strings.Builder
 	for i, s := range strs {
@@ -63,7 +64,7 @@ func (s TrimmedString) IsEmpty() bool {
 
 // String implements the fmt.Stringer interface
 // by returning a trimmed string that might be empty
-// if the underlying string consisting only of whitespace.
+// if the underlying string consists only of whitespace.
 func (s TrimmedString) String() string {
 	return strutil.TrimSpace(string(s))
 }
@@ -160,7 +161,9 @@ func (s TrimmedString) Value() (driver.Value, error) {
 	return s.String(), nil
 }
 
-// Scan implements the database/sql.Scanner interface
+// Scan implements the database/sql.Scanner interface.
+// SQL NULL returns an error because TrimmedString has no null state,
+// use nullable.TrimmedString for nullable columns.
 func (s *TrimmedString) Scan(value any) error {
 	switch x := value.(type) {
 	case string:
