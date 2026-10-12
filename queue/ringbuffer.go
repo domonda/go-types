@@ -25,6 +25,9 @@ func (b *ringBuffer[T]) push(item T) {
 	b.count++
 }
 
+// shift removes and returns the first item.
+// The vacated slot is zeroed so the buffer
+// does not keep the returned item reachable.
 func (b *ringBuffer[T]) shift() T {
 	if b.count == 0 {
 		panic("empty buffer")
@@ -32,5 +35,8 @@ func (b *ringBuffer[T]) shift() T {
 	b.count--
 	i := b.first
 	b.first = (b.first + 1) % len(b.items)
-	return b.items[i]
+	item := b.items[i]
+	var zero T
+	b.items[i] = zero
+	return item
 }
