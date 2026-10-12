@@ -71,8 +71,9 @@ func NewEnglishFormatConfig() *FormatConfig {
 
 // NewGermanFormatConfig returns a FormatConfig based on NewFormatConfig
 // adjusted for German locale conventions: comma decimal separator,
-// dot thousands separator, DD.MM.YYYY date layout, a long-form time
-// layout, and "ja"/"nein" boolean labels.
+// dot thousands separator for money amounts only (floats and percentages
+// are not grouped), DD.MM.YYYY date layout, a long-form time layout,
+// and "ja"/"nein" boolean labels.
 func NewGermanFormatConfig() *FormatConfig {
 	config := NewFormatConfig()
 	config.Float = GermanFloatFormat(-1)

@@ -43,7 +43,7 @@ func (f Tolerant) IsNaN() bool {
 	return math.IsNaN(float64(f))
 }
 
-// IsNaN returns if the float is positive or negative infinity
+// IsInf returns if the float is positive or negative infinity
 func (f Tolerant) IsInf() bool {
 	return math.IsInf(float64(f), 0)
 }

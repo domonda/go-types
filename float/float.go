@@ -3,10 +3,10 @@
 // for both float32 and float64 types using Go generics.
 //
 // The package includes:
-// - Decimal rounding utilities
-// - Float validation (NaN and infinity checks)
-// - Sign validation
-// - Safe pointer dereferencing with default values
+//   - Decimal rounding utilities
+//   - Float validation (NaN and infinity checks)
+//   - Sign validation
+//   - Safe pointer dereferencing with default values
 package float
 
 import "math"
