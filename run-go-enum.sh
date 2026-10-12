@@ -1,6 +1,6 @@
 #!/bin/bash
 SCRIPT_DIR=$(cd -P -- "$(dirname -- "$0")" && pwd -P)
-cd $SCRIPT_DIR
+cd "$SCRIPT_DIR" || exit 1
 
 # go-enum is pinned as a tool dependency in tools/go.mod so that this module
 # does not depend on it. -modfile resolves it from there, while go-enum runs

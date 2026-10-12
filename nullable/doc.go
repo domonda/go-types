@@ -9,7 +9,7 @@
 //   - [NonEmptyString] is null when empty, [TrimmedString] when empty
 //     after trimming.
 //   - [Time] is null for the zero time.Time.
-//   - [JSON] holds raw JSON text and is null when nil.
+//   - [JSON] holds raw JSON text and is null when nil or empty.
 //   - [StringArray], [IntArray], [FloatArray], [BoolArray] and the
 //     element-nullable [NullIntArray], [NullFloatArray] and [NullBoolArray]
 //     are PostgreSQL arrays where only a nil slice is NULL, so NULL and the
