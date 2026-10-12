@@ -16,7 +16,8 @@ import (
 var _ types.NormalizableValidator[BIC] = BIC("")
 
 // NormalizeBIC returns the passed string as BIC normalized to a length of 11 characters
-// by removing spaces and appending "XXX" in case of a valid length of 8 characters.
+// by removing all whitespace like IBAN.Normalized
+// and appending "XXX" in case of a valid length of 8 characters.
 // Returns the string unchanged as BIC in case of an error.
 func NormalizeBIC(str string) (BIC, error) {
 	return BIC(str).Normalized()
