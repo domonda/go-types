@@ -37,3 +37,38 @@ func TestFinder_LanguageHintKeepsUnambiguousDates(t *testing.T) {
 	require.Equal(t, [][]int{{16, 26}}, got)
 	assert.Equal(t, Date("2024-06-15"), Date(str[16:26]).NormalizedOrUnchanged(language.EN))
 }
+
+func TestFinder_FindsISO8601DateTimes(t *testing.T) {
+	// Normalize accepts an ISO 8601 date-time and uses its date part, so
+	// the finder must find it too, with a range that covers the whole
+	// date-time: the caller passes the found text to Normalize. The finder
+	// used to lower case the candidate first, which hid the upper case T
+	// from normalizeDate, so timestamps in text were never found.
+	tests := []struct {
+		text  string
+		want  [][]int
+		dates []Date
+	}{
+		{text: "2023-12-25T10:00:00Z", want: [][]int{{0, 20}}, dates: []Date{"2023-12-25"}},
+		{text: "2023-12-25T10:00:00", want: [][]int{{0, 19}}, dates: []Date{"2023-12-25"}},
+		{text: "sent at 2023-12-25T10:00:00+02:00.", want: [][]int{{8, 33}}, dates: []Date{"2023-12-25"}},
+		{text: "(2024-02-29T23:59:59.123Z) and 01.03.2024", want: [][]int{{1, 25}, {31, 41}}, dates: []Date{"2024-02-29", "2024-03-01"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.text, func(t *testing.T) {
+			got := NewFinder().FindAllIndex([]byte(tt.text), -1)
+			require.Equal(t, tt.want, got)
+			for i, idx := range got {
+				d, err := Normalize(tt.text[idx[0]:idx[1]])
+				require.NoError(t, err, "Normalize of the found text %q", tt.text[idx[0]:idx[1]])
+				assert.Equal(t, tt.dates[i], d)
+			}
+		})
+	}
+
+	// The finder finds exactly what Normalize accepts, so a date-time with
+	// a lower case t, which Normalize rejects, is not found either.
+	_, err := Normalize("2023-12-25t10:00:00z")
+	require.Error(t, err)
+	assert.Nil(t, NewFinder().FindAllIndex([]byte("2023-12-25t10:00:00z"), -1))
+}

@@ -1,7 +1,6 @@
 package date
 
 import (
-	"strings"
 	"unicode"
 	"unicode/utf8"
 
@@ -24,6 +23,8 @@ type Finder struct {
 
 // FindAllIndex returns the byte-index pairs [start, end] of every date found in
 // str, trying spans of up to three whitespace-delimited words at a time.
+// A span is a date if Normalize accepts it, so an ISO 8601 date-time
+// like "2023-12-25T10:00:00Z" is found as a whole.
 // At most n results are returned; pass n < 0 to return all matches.
 // The returned slice is nil when no dates are found.
 func (df *Finder) FindAllIndex(str []byte, n int) (indices [][]int) {
@@ -54,7 +55,10 @@ func (df *Finder) FindAllIndex(str []byte, n int) (indices [][]int) {
 				end -= size
 				r, size = utf8.DecodeLastRune(str[beg:end])
 			}
-			_, _, err := normalizeAndCheckDate(strings.ToLower(s[beg:end]), df.LangHint)
+			// Not lower cased here, normalizeDate does that itself
+			// after it found the upper case T of an ISO 8601 date-time,
+			// so a candidate is a date exactly if Normalize accepts it.
+			_, _, err := normalizeAndCheckDate(s[beg:end], df.LangHint)
 			if err == nil {
 				indices = append(indices, []int{beg, end})
 				if n > 0 && len(indices) == n {
