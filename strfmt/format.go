@@ -12,6 +12,8 @@ import (
 )
 
 // Format the passed value following the format config.
+// A nil config formats with the defaults of NewFormatConfig,
+// like Scan scans with DefaultScanConfig for a nil ScanConfig.
 // If the value implements encoding.TextMarshaler and MarshalText
 // does not return an error, then this string is returned instead
 // of more generic type conversions.
@@ -24,6 +26,7 @@ func Format(value any, config *FormatConfig) string {
 }
 
 // FormatValue formats the passed reflect.Value following the format config.
+// A nil config formats with the defaults of NewFormatConfig.
 // If the value implements encoding.TextMarshaler and MarshalText
 // does not return an error, then this string is returned instead
 // of more generic type conversions.
@@ -34,6 +37,9 @@ func Format(value any, config *FormatConfig) string {
 // a struct that was not passed as a pointer, is limited to the
 // conversions based on its kind and fmt.Sprint.
 func FormatValue(val reflect.Value, config *FormatConfig) string {
+	if config == nil {
+		config = NewFormatConfig()
+	}
 	if !val.IsValid() {
 		return config.Nil
 	}

@@ -290,18 +290,35 @@ func TestScanInvalidDest(t *testing.T) {
 	assert.Error(t, Scan(unexportedPtrField, "666", config), "unexported struct field of pointer type")
 }
 
-// TestScanNilConfig checks that a nil ScanConfig is reported as an error
-// instead of panicking on the first config field access. Scan reads the
-// config before every branch, including in the recursion for a pointer
-// destination, so a nil one must be rejected up front.
+// TestScanNilConfig checks that a nil ScanConfig scans with DefaultScanConfig
+// instead of panicking on the first config field access, consistent with
+// Format, which formats with the defaults of NewFormatConfig for a nil
+// FormatConfig, so a caller without locale preferences can pass nil to both.
+// Scan reads the config before every branch, including in the recursion for
+// a pointer destination, so the default has to apply to all of them.
+// This test used to expect an error for a nil ScanConfig.
 func TestScanNilConfig(t *testing.T) {
 	var i int
-	assert.Error(t, Scan(reflect.ValueOf(&i).Elem(), "666", nil), "nil ScanConfig")
-	assert.Zero(t, i, "destination is not modified")
+	assert.NoError(t, Scan(reflect.ValueOf(&i).Elem(), "666", nil), "nil ScanConfig")
+	assert.Equal(t, 666, i)
 
 	var ptr *int
-	assert.Error(t, Scan(reflect.ValueOf(&ptr).Elem(), "666", nil), "nil ScanConfig for a pointer destination")
-	assert.Nil(t, ptr, "destination is not allocated")
+	assert.NoError(t, Scan(reflect.ValueOf(&ptr).Elem(), "666", nil), "nil ScanConfig for a pointer destination")
+	if assert.NotNil(t, ptr, "destination is allocated") {
+		assert.Equal(t, 666, *ptr)
+	}
+
+	// The settings of DefaultScanConfig apply, like its nil strings
+	ptr = new(int)
+	assert.NoError(t, Scan(reflect.ValueOf(&ptr).Elem(), "null", nil))
+	assert.Nil(t, ptr, "null is a nil string of DefaultScanConfig")
+
+	var ti time.Time
+	assert.NoError(t, Scan(reflect.ValueOf(&ti).Elem(), "2024-03-05", nil), "registered type scanners of DefaultScanConfig")
+	assert.Equal(t, time.Date(2024, 3, 5, 0, 0, 0, 0, time.UTC), ti)
+
+	assert.Error(t, Scan(reflect.ValueOf(&i).Elem(), "abc", nil), "errors are still reported")
+	assert.Equal(t, 666, i, "destination is not modified by a failed scan")
 }
 
 // TestScanNonSettablePointerDest checks that a pointer which is not

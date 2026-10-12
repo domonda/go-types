@@ -94,6 +94,35 @@ func TestFormat(t *testing.T) {
 	}
 }
 
+// TestFormatNilConfig protects that a nil FormatConfig formats with the
+// defaults of NewFormatConfig instead of panicking on the first config field
+// access, consistent with Scan, which scans with DefaultScanConfig for a nil
+// ScanConfig, so a caller without locale preferences can pass nil to both.
+// A panic deep inside an export loop is a crash where a default is harmless.
+func TestFormatNilConfig(t *testing.T) {
+	defaults := NewFormatConfig()
+	for _, value := range []any{
+		true,
+		1234.5,
+		float32(0.1),
+		"text",
+		666,
+		money.Amount(1234.5),
+		money.CurrencyAmount{Currency: money.EUR, Amount: 1234.5},
+		date.Date("2024-03-05"),
+		time.Date(2024, 3, 5, 6, 7, 8, 0, time.UTC),
+		nullable.TimeNull,
+		(*int)(nil),
+		nil,
+	} {
+		var got string
+		if assert.NotPanics(t, func() { got = Format(value, nil) }, "Format(%#v, nil)", value) {
+			assert.Equal(t, Format(value, defaults), got, "Format(%#v, nil)", value)
+		}
+	}
+	assert.Equal(t, defaults.Nil, FormatValue(reflect.Value{}, nil), "invalid reflect.Value")
+}
+
 func ptrMoneyAmount(a float64) *money.Amount {
 	x := money.Amount(a)
 	return &x

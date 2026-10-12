@@ -18,6 +18,8 @@ type nullSetter interface {
 }
 
 // Scan source into dest using the given ScanConfig.
+// A nil config scans with DefaultScanConfig, like Format formats with
+// the defaults of NewFormatConfig for a nil FormatConfig.
 //
 // A Scanner registered for the destination type in config.TypeScanners is
 // asked before all built-in scanning logic, including the nil source string
@@ -79,7 +81,7 @@ func scanValue(dest reflect.Value, source string, config *ScanConfig) error {
 		return fmt.Errorf("can't scan %q into an invalid destination value", source)
 	}
 	if config == nil {
-		return fmt.Errorf("can't scan %q using nil ScanConfig", source)
+		config = DefaultScanConfig
 	}
 	if !dest.CanSet() {
 		// dest.Addr() and the Set methods panic instead of returning an
