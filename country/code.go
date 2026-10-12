@@ -2,18 +2,20 @@
 // based on ISO 3166-1 alpha-2 standards for Go applications.
 //
 // The package includes:
-// - ISO 3166-1 alpha-2 country code validation and normalization
-// - Alternative country code mappings (ITU codes, German names, etc.)
-// - European Union membership checking
-// - Database integration (Scanner/Valuer interfaces)
-// - JSON marshalling/unmarshalling
-// - Nullable country code support
+//   - ISO 3166-1 alpha-2 country code validation and normalization
+//   - Alternative country code mappings (ITU codes, German names, etc.)
+//   - European Union membership checking
+//   - Database integration (Scanner/Valuer interfaces)
+//   - JSON marshalling/unmarshalling
+//   - Nullable country code support
 package country
 
 import (
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
+	"iter"
+	"maps"
 	"strings"
 	"sync"
 
@@ -132,12 +134,23 @@ func ParseCode(str string) (Code, error) {
 // ParseCode when the input is not a recognizable code, so it is built on
 // first use rather than at package initialization.
 var nameToCode = sync.OnceValue(func() map[string]Code {
+	return newNameToCode(maps.Keys(countryMap))
+})
+
+// newNameToCode builds the name index for codes.
+// EL, the European Union's code for Greece, is skipped because it
+// shares the name "Greece" with GR: the name must resolve to the
+// ISO 3166-1 code GR independent of the iteration order of codes.
+func newNameToCode(codes iter.Seq[Code]) map[string]Code {
 	m := make(map[string]Code, len(countryMap))
-	for code, name := range countryMap {
-		m[strings.ToLower(name)] = code
+	for code := range codes {
+		if code == EL {
+			continue
+		}
+		m[strings.ToLower(countryMap[code])] = code
 	}
 	return m
-})
+}
 
 // codeForName resolves an English country name to its ISO 3166-1 alpha-2
 // Code, matching case-insensitively. The bool result reports whether a
@@ -152,6 +165,7 @@ func codeForName(name string) (Code, bool) {
 }
 
 // IsEU indicates if a country is a member of the European Union.
+// EL, the European Union's own code for Greece, is a member like GR.
 func (c Code) IsEU() bool {
 	norm, err := c.Normalized()
 	if err != nil {

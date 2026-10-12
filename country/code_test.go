@@ -31,6 +31,7 @@ func TestParseCode(t *testing.T) {
 		{in: "germany", want: DE},
 		{in: "  United Kingdom  ", want: GB},
 		{in: "United States", want: US},
+		{in: "Greece", want: GR}, // also the name of EL, see TestNameToCode_OrderIndependent
 
 		// Errors: input is returned unchanged.
 		{in: "", want: "", wantErr: true},
@@ -79,6 +80,34 @@ func TestCode_Normalized(t *testing.T) {
 				t.Errorf("Code.Normalized() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+// TestNameToCode_OrderIndependent pins that ParseCode resolves an English
+// country name to the same code in every process. GR and EL (the European
+// Union's code for Greece) share the name "Greece", and the name index is
+// built by ranging over countryMap whose iteration order is random, so a
+// "last one wins" index returned GR or EL at random. The ISO 3166-1 code GR
+// must win independent of the order, and any new duplicate name would make
+// the forward and backward builds differ.
+func TestNameToCode_OrderIndependent(t *testing.T) {
+	codes := slices.Sorted(maps.Keys(countryMap))
+	reversed := slices.Clone(codes)
+	slices.Reverse(reversed)
+	forward := newNameToCode(slices.Values(codes))
+	backward := newNameToCode(slices.Values(reversed))
+	if !maps.Equal(forward, backward) {
+		t.Errorf("name index depends on the order of the country codes")
+	}
+	if got := forward["greece"]; got != GR {
+		t.Errorf(`name index["greece"] = %q, want %q`, got, GR)
+	}
+
+	// Each build ranges over countryMap in a new random order
+	for range 50 {
+		if got := newNameToCode(maps.Keys(countryMap))["greece"]; got != GR {
+			t.Fatalf(`name index["greece"] = %q, want %q`, got, GR)
+		}
 	}
 }
 
@@ -229,6 +258,10 @@ func TestCode_IsEU(t *testing.T) {
 		{c: AT, want: true},
 		{c: DE, want: true},
 		{c: GR, want: true},
+		// EL is the EU's own code for Greece, used by Greek VAT IDs
+		// (vat.ID.CountryCode), so it must be an EU member like GR.
+		{c: EL, want: true},
+		{c: "el", want: true},
 		{c: "de", want: true},          // normalized before the lookup
 		{c: "Deutschland", want: true}, // AltCodes are resolved
 		{c: CH, want: false},           // EFTA, not EU
