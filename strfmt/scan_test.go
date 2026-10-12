@@ -875,7 +875,8 @@ func TestScanNullableTimeUnparsable(t *testing.T) {
 // amount failed to import with "can't scan ... as destination type
 // nullable.Type[...]". A non-nil string is scanned like the T itself, so a
 // money.Amount keeps its locale-aware parsing, and the Nil placeholder of
-// the format config scans back as null.
+// the format config, which every null value including a null
+// date.NullableDate is formatted as, scans back as null.
 func TestScanNullableType_roundTripsFormatPresets(t *testing.T) {
 	decimal := money.NewDecimalAmount(123450, 2)
 	values := []any{
@@ -890,6 +891,8 @@ func TestScanNullableType_roundTripsFormatPresets(t *testing.T) {
 		money.NullableDecimalAmount{},
 		money.NullableCentAmount{},
 		nullable.Type[int]{},
+		date.NullableDate("2024-03-05"),
+		date.Null,
 	}
 	presets := []struct {
 		name   string
@@ -905,6 +908,9 @@ func TestScanNullableType_roundTripsFormatPresets(t *testing.T) {
 			preset.config.Nil = nilString
 			for _, value := range values {
 				str := Format(value, preset.config)
+				if nullable.IsNull(value) {
+					assert.Equal(t, nilString, str, "%s: Format(null %T)", preset.name, value)
+				}
 				dest := reflect.New(reflect.TypeOf(value)).Elem()
 				if assert.NoError(t, Scan(dest, str, scanConfig), "%s: Scan(%T, %q)", preset.name, value, str) {
 					assert.Equal(t, value, dest.Interface(), "%s: Scan(%T, %q)", preset.name, value, str)

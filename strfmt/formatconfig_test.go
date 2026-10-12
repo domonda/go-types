@@ -1,6 +1,7 @@
 package strfmt
 
 import (
+	"reflect"
 	"testing"
 	"time"
 
@@ -171,6 +172,27 @@ func TestFormatConfig_NilPlaceholder(t *testing.T) {
 	assert.Equal(t, "N/A", Format(nullable.TimeNull, config), "nullable.Time null")
 	assert.Equal(t, "N/A", Format(time.Time{}, config), "zero time.Time")
 	assert.Equal(t, "N/A", Format((*int)(nil), config), "nil pointer")
+}
+
+// TestFormatConfig_NilPlaceholderForDates checks that a null date.NullableDate
+// and a zero date.Date are formatted as the configured Nil string, like a
+// null nullable.Time and a zero time.Time, instead of as "". An export with
+// Nil "-" had empty date cells next to "-" for every other missing value,
+// and a Nil placeholder that the ScanConfig reads as nil string, like
+// "NULL", has to scan back as null.
+func TestFormatConfig_NilPlaceholderForDates(t *testing.T) {
+	for _, config := range []*FormatConfig{NewFormatConfig(), NewGermanFormatConfig(), NewEnglishFormatConfig()} {
+		config.Nil = "NULL"
+		for _, value := range []any{date.Null, date.NullableDate("0001-01-01"), date.Date(""), date.Date("0001-01-01"), date.Date("0000-00-00")} {
+			assert.Equal(t, "NULL", Format(value, config), "Format(%T(%q))", value, value)
+		}
+		assert.Equal(t, Format(date.Date("2024-03-05"), config), Format(date.NullableDate("2024-03-05"), config), "date.NullableDate like date.Date")
+		assert.NotEqual(t, "NULL", Format(date.Date("2024-03-05"), config), "date.Date")
+
+		nullDate := date.NullableDate("2024-03-05")
+		assert.NoError(t, Scan(reflect.ValueOf(&nullDate).Elem(), Format(date.Null, config), nil))
+		assert.True(t, nullDate.IsNull(), "the Nil placeholder scans back as null")
+	}
 }
 
 // TestNewFormatConfig_defaults locks the locale conventions of the

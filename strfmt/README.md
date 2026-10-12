@@ -166,7 +166,7 @@ All three register the same `TypeFormatters`:
 
 | Type                                               | Formatted as                                       |
 |----------------------------------------------------|----------------------------------------------------|
-| `date.Date`, `date.NullableDate`                   | `Format(config.Date)`, `""` for an empty or null date, not `config.Nil`. |
+| `date.Date`, `date.NullableDate`                   | `Format(config.Date)`, `config.Nil` for the zero date or null, like `0001-01-01`. |
 | `time.Time`, `nullable.Time`                       | `Format(config.Time)`, `config.Nil` for the zero time or null. |
 | `time.Duration`                                    | `String()`, like `1h30m0s`.                        |
 | `money.Amount`                                     | `config.MoneyAmount.FormatAmount`, also for zero.  |
@@ -226,7 +226,7 @@ What the presets write, and whether `Scan` with the default `ScanConfig` reads i
 - **The English preset writes dates as DD/MM/YYYY**, the British order: `31/01/2024`, not the US `01/31/2024`.
 - **Zone abbreviations lose the offset.** The preset time layouts end with `MST`. `time.Parse` uses the offset of an abbreviation only if the local time zone knows it, so `31.01.2024 10:00:00 CET` scanned on a server in UTC is 10:00 in a zone named CET with offset 0. Times without a zone scan as UTC. Use `NewFormatConfig` with RFC 3339 for lossless times.
 - **Money presets use 2 decimals for every currency.** `CurrencyAmountJPY(1234.5)` formats as `JPY 1,234.50`, while `CurrencyAmount.String` writes `JPY 1235`.
-- **Registered formatters run before the null check.** A zero `money.Amount` formats as `0.00`, not as `config.Nil`, and an empty `date.Date` or null `date.NullableDate` formats as `""` even if `config.Nil` is `"-"`.
+- **Registered formatters run before the null check.** A zero `money.Amount` formats as `0.00`, not as `config.Nil`.
 - **Kinds win over `String` methods.** A type with a `string` or number kind and no registered formatter is formatted by its kind: `money.Currency("eur")` formats as `eur` although its `String` returns `EUR`, and `money.Rate(0.19)` as `0.19`.
 - **Formatters are looked up by the dereferenced type.** A formatter registered for `*T` only runs for a nil `*T`. Register it for `T`.
 - **Don't change `DefaultScanConfig` in place.** It is shared by every caller that passes nil. Create your own with `NewScanConfig`.

@@ -90,11 +90,19 @@ func NewGermanFormatConfig() *FormatConfig {
 }
 
 func formatDateString(val reflect.Value, config *FormatConfig) string {
-	return val.Interface().(date.Date).Format(config.Date)
+	d := val.Interface().(date.Date)
+	if d.IsZero() {
+		return config.Nil
+	}
+	return d.Format(config.Date)
 }
 
 func formatNullableDateString(val reflect.Value, config *FormatConfig) string {
-	return val.Interface().(date.NullableDate).Format(config.Date)
+	d := val.Interface().(date.NullableDate)
+	if d.IsNull() {
+		return config.Nil
+	}
+	return d.Format(config.Date)
 }
 
 func formatTimeString(val reflect.Value, config *FormatConfig) string {
