@@ -746,6 +746,11 @@ func TestAmount_RoundingOtherDecimals(t *testing.T) {
 	// Beyond the DecimalAmount range a finite Amount maps to ±Inf
 	assert.True(t, Amount(1e300).DecimalAmount(0, RoundHalfAwayFromZero).IsInf(1))
 	assert.True(t, Amount(-1e17).DecimalAmount(2, RoundHalfAwayFromZero).IsInf(-1))
+	// 2^58 has the shortest decimal 288230376151711740, which still fits the
+	// coefficient maximum of 2^58-1, the next float64 288230376151711800 not
+	assert.Equal(t, NewDecimalAmount(288230376151711740, 0), Amount(1<<58).DecimalAmount(0, RoundHalfAwayFromZero))
+	assert.Equal(t, NewDecimalAmount(-288230376151711740, 0), Amount(-1<<58).DecimalAmount(0, RoundHalfAwayFromZero))
+	assert.True(t, Amount(math.Nextafter(1<<58, math.Inf(1))).DecimalAmount(0, RoundHalfAwayFromZero).IsInf(1))
 	assert.Panics(t, func() { Amount(1).DecimalAmount(MaxDecimalAmountScale+1, RoundHalfAwayFromZero) })
 	assert.Panics(t, func() { Amount(1).DecimalAmount(-1, RoundHalfAwayFromZero) })
 }

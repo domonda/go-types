@@ -1374,15 +1374,16 @@ func decimalFromFloatRounded(f float64, bitSize, scale int, rounding RoundingMod
 	negative := math.Signbit(f)
 	intDigits, fracDigits, _ := strings.Cut(strconv.FormatFloat(math.Abs(f), 'f', -1, bitSize), ".")
 	digits := strings.TrimLeft(roundDecimalDigits(intDigits, fracDigits, scale, negative, rounding), "0")
-	var magnitude uint64
+	var coeff int64
 	if digits != "" {
 		var err error
-		magnitude, err = strconv.ParseUint(digits, 10, 64)
-		if err != nil || magnitude > uint64(maxDecimalAmountCoefficient) {
-			return decimalInf(negative) // ParseUint only fails for too many digits
+		// The digits have no sign, so ParseInt only fails for too many of them
+		// and parsing them as signed needs no unsigned to signed conversion
+		coeff, err = strconv.ParseInt(digits, 10, 64)
+		if err != nil || coeff > maxDecimalAmountCoefficient {
+			return decimalInf(negative)
 		}
 	}
-	coeff := int64(magnitude) //#nosec G115 -- bounded by maxDecimalAmountCoefficient
 	if negative {
 		coeff = -coeff
 	}

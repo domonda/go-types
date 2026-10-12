@@ -91,10 +91,24 @@ func TestParseCentAmount(t *testing.T) {
 		_, err = ParseCentAmount("-92233720368547758.09", RoundHalfAwayFromZero)
 		assert.Error(t, err)
 
+		// Rounding up past MaxCentAmount is out of range,
+		// rounding down to it is not
+		cents, err := ParseCentAmount("92233720368547758.07", RoundHalfAwayFromZero)
+		require.NoError(t, err)
+		assert.Equal(t, MaxCentAmount, cents)
+		_, err = ParseCentAmount("92233720368547758.075", RoundHalfAwayFromZero)
+		assert.Error(t, err)
+		cents, err = ParseCentAmount("92233720368547758.075", RoundDown)
+		require.NoError(t, err)
+		assert.Equal(t, MaxCentAmount, cents)
+		cents, err = ParseCentAmount("-92233720368547758.074", RoundHalfAwayFromZero)
+		require.NoError(t, err)
+		assert.Equal(t, MinCentAmount, cents)
+
 		// A cent count the DecimalAmount coefficient cannot hold but
 		// CentAmount can: 3e17 cents is above maxDecimalAmountCoefficient
 		// and well below MaxCentAmount.
-		cents, err := ParseCentAmount("3000000000000000.00", RoundHalfAwayFromZero)
+		cents, err = ParseCentAmount("3000000000000000.00", RoundHalfAwayFromZero)
 		require.NoError(t, err)
 		assert.Equal(t, CentAmount(300_000_000_000_000_000), cents)
 		assert.Greater(t, int64(cents), int64(maxDecimalAmountCoefficient))

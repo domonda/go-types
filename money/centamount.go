@@ -138,10 +138,10 @@ func centsFromDecimalDigits(intDigits, fracDigits string, negative bool, roundin
 	case len(fracDigits) > 2:
 		cut, fracDigits = fracDigits[2:], fracDigits[:2]
 	}
-	// Parsing with bitSize 63 caps the result at 2^63-1, which is exactly
-	// MaxCentAmount, so anything out of range is rejected here rather than
-	// silently wrapping the conversion below.
-	magnitude, err := strconv.ParseUint(strings.TrimLeft(intDigits+fracDigits, "0"), 10, 63)
+	// The digits have no sign, so parsing them as int64 caps the result at
+	// 2^63-1, which is exactly MaxCentAmount, and anything out of range is
+	// rejected here without an unsigned to signed conversion below.
+	magnitude, err := strconv.ParseInt(strings.TrimLeft(intDigits+fracDigits, "0"), 10, 64)
 	if err != nil {
 		// An empty string means all digits were zeros, anything else is out of range
 		if !errors.Is(err, strconv.ErrSyntax) {
@@ -151,13 +151,13 @@ func centsFromDecimalDigits(intDigits, fracDigits string, negative bool, roundin
 	}
 	if halfCmp, nonZero := compareCutFractionToHalf(cut); nonZero {
 		if roundAwayFromZero(rounding, negative, magnitude&1 == 1, halfCmp) {
-			magnitude++
-			if magnitude > uint64(MaxCentAmount) {
+			if magnitude == int64(MaxCentAmount) {
 				return 0, false
 			}
+			magnitude++
 		}
 	}
-	cents = CentAmount(magnitude) //#nosec G115 -- bounded by ParseUint bitSize 63 and the check above
+	cents = CentAmount(magnitude)
 	if negative {
 		cents = -cents
 	}
