@@ -153,6 +153,28 @@ func TestParseDecimalAmount_errors(t *testing.T) {
 	}
 }
 
+// TestParseDecimalAmount_acceptedDecimalsRejectNonFinite protects that
+// passing acceptedDecimals rejects NaN and ±Inf, as documented: the decimals
+// of the result must be in the list, and a non-finite value has none. The
+// allowlist is the guard of the caller for real money input, where a "NaN" or
+// "Infinity" is never a valid amount. Without acceptedDecimals they are
+// still parsed, because PostgreSQL numeric columns can hold them.
+func TestParseDecimalAmount_acceptedDecimalsRejectNonFinite(t *testing.T) {
+	for _, s := range []string{"NaN", "Inf", "+Inf", "-Inf", "Infinity", "+Infinity", "-Infinity", " Inf "} {
+		a, err := ParseDecimalAmount(s, 2)
+		assert.Error(t, err, "ParseDecimalAmount(%q, 2) = %v", s, a)
+
+		a, err = ParseDecimalAmount(s)
+		if assert.NoError(t, err, "ParseDecimalAmount(%q)", s) {
+			assert.False(t, a.IsFinite(), "ParseDecimalAmount(%q)", s)
+		}
+	}
+	a, err := ParseDecimalAmount("1,50", 0, 2)
+	if assert.NoError(t, err) {
+		assert.Equal(t, "1.50", a.String())
+	}
+}
+
 // TestParseDecimalAmount_oneSign protects that an exact amount with a sign
 // at both ends is an error instead of one of the signs winning: reading
 // "+1.5-" as -1.5 or "-1+" as -1 books a misread value with a silently

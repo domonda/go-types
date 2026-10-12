@@ -40,8 +40,10 @@ func TestParseRate(t *testing.T) {
 		{name: "1.5 % with 1 decimal", args: args{str: "1.5 %", acceptedDecimals: []int{1}}, want: 0.015},
 		{name: "1.5 % with 2 decimals", args: args{str: "1.5 %", acceptedDecimals: []int{2}}, wantErr: true},
 		{name: "20% with 0 decimals", args: args{str: "20%", acceptedDecimals: []int{0}}, want: 0.2},
-		// Non-finite values have no decimals to check
-		{name: "NaN with 2 decimals", args: args{str: "NaN", acceptedDecimals: []int{2}}, want: Rate(math.NaN())},
+		// Non-finite values have no decimals that could be accepted
+		{name: "NaN with 2 decimals", args: args{str: "NaN", acceptedDecimals: []int{2}}, wantErr: true},
+		{name: "Inf % with 0 decimals", args: args{str: "Inf %", acceptedDecimals: []int{0}}, wantErr: true},
+		{name: "-Inf with 2 decimals", args: args{str: "-Inf", acceptedDecimals: []int{2}}, wantErr: true},
 		{name: "empty", args: args{str: ""}, wantErr: true},
 		{name: "only percent sign", args: args{str: "%"}, wantErr: true},
 		{name: "not a number", args: args{str: "abc"}, wantErr: true},

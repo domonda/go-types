@@ -35,7 +35,10 @@ func NullableRateFromPtr(ptr *Rate) NullableRate {
 }
 
 // ParseRate parses a rate from str accepting only certain decimal digit counts.
-// If no acceptedDecimals are passed, then any decimal digit count is accepted.
+// If no acceptedDecimals are passed, then any decimal digit count is accepted
+// and infinity and NaN are parsed and returned without error.
+// If acceptedDecimals are passed, then infinity and NaN are errors
+// because they have no decimals that could be accepted.
 // If a string ends with '%' then the parsed number part will be divided by 100.
 func ParseRate(str string, acceptedDecimals ...int) (Rate, error) {
 	var (
@@ -56,8 +59,11 @@ func ParseRate(str string, acceptedDecimals ...int) (Rate, error) {
 	if percent {
 		f /= 100
 	}
-	if len(acceptedDecimals) == 0 || math.IsNaN(f) || math.IsInf(f, 0) {
+	if len(acceptedDecimals) == 0 {
 		return Rate(f), nil
+	}
+	if math.IsNaN(f) || math.IsInf(f, 0) {
+		return 0, errNonFiniteNotAccepted(str, acceptedDecimals)
 	}
 	if slices.Contains(acceptedDecimals, decimals) {
 		return Rate(f), nil

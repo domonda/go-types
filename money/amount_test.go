@@ -82,6 +82,12 @@ var nonStandardFormatted = map[string]Amount{
 func Test_ParseAmount(t *testing.T) {
 	for str, refAmount := range amountTable2Decimals {
 		amount, err := ParseAmount(str, 2)
+		if !refAmount.Valid() {
+			// Accepted decimals reject non-finite values,
+			// see TestParseAmount_acceptedDecimalsRejectNonFinite
+			assert.Error(t, err, "ParseAmount(%q, 2) = %v", str, amount)
+			continue
+		}
 		if err != nil {
 			t.Errorf("Could not parse amount %s because of error: '%s'", str, err)
 		}
@@ -103,6 +109,27 @@ func Test_ParseAmount(t *testing.T) {
 		if !equalInclNaN(float64(amount), float64(refAmount)) {
 			t.Errorf("Parsed '%s' amount %f != %f", str, amount, refAmount)
 		}
+	}
+}
+
+// TestParseAmount_acceptedDecimalsRejectNonFinite protects that passing
+// acceptedDecimals rejects NaN and ±Inf. The allowlist is the guard of the
+// caller for real money input, like the cells of an imported bank statement,
+// where a "NaN" or "Inf" is never a valid amount and has no decimals that
+// could be in the list. Without acceptedDecimals they are still parsed.
+func TestParseAmount_acceptedDecimalsRejectNonFinite(t *testing.T) {
+	for _, str := range []string{"NaN", "Inf", "+Inf", "-Inf", " Inf "} {
+		amount, err := ParseAmount(str, 0, 2)
+		assert.Error(t, err, "ParseAmount(%q, 0, 2) = %v", str, amount)
+
+		amount, err = ParseAmount(str)
+		if assert.NoError(t, err, "ParseAmount(%q)", str) {
+			assert.False(t, amount.Valid(), "ParseAmount(%q)", str)
+		}
+	}
+	amount, err := ParseAmount("1,50", 0, 2)
+	if assert.NoError(t, err) {
+		assert.Equal(t, Amount(1.5), amount)
 	}
 }
 

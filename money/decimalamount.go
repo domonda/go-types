@@ -333,7 +333,8 @@ func (a DecimalAmount) IsInf(sign int) bool {
 // is an error.
 //
 // The tokens "NaN", "Inf"/"+Inf"/"Infinity" and "-Inf"/"-Infinity" parse to the
-// corresponding non-finite values.
+// corresponding non-finite values. They are errors if acceptedDecimals are
+// passed, because a non-finite value has no decimals that could be accepted.
 //
 // Scientific notation like "1.5e2" is accepted and applied exactly by shifting
 // the scale, because JSON numbers and PostgreSQL float8 output may use it.
@@ -370,10 +371,11 @@ func ParseDecimalAmount(str string, acceptedDecimals ...int) (DecimalAmount, err
 	// The long "Infinity" spellings are not recognized by float.ParseDetails but
 	// are the PostgreSQL numeric literals emitted by Value.
 	switch str {
-	case "Infinity", "+Infinity":
-		return decimalInf(false), nil
-	case "-Infinity":
-		return decimalInf(true), nil
+	case "Infinity", "+Infinity", "-Infinity":
+		if len(acceptedDecimals) > 0 {
+			return DecimalAmount{}, errNonFiniteNotAccepted(str, acceptedDecimals)
+		}
+		return decimalInf(str == "-Infinity"), nil
 	}
 	// The exponent has to be split off before parsing because the coefficient is
 	// built from all digit runes of the mantissa, which must not include the
@@ -392,6 +394,9 @@ func ParseDecimalAmount(str string, acceptedDecimals ...int) (DecimalAmount, err
 		// does not recognize, like "1e1e1" or "1 e3". Their digits would end up
 		// in the coefficient, so reject them instead of parsing them wrongly.
 		return DecimalAmount{}, fmt.Errorf("money.DecimalAmount value %q has a malformed exponent", str)
+	}
+	if len(acceptedDecimals) > 0 && (math.IsNaN(f) || math.IsInf(f, 0)) {
+		return DecimalAmount{}, errNonFiniteNotAccepted(str, acceptedDecimals)
 	}
 	if math.IsNaN(f) {
 		return DecimalAmountNaN(), nil

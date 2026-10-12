@@ -123,13 +123,16 @@ func (ca *CurrencyAmount) ScanString(source string, validate bool) error {
 	if err != nil {
 		return err
 	}
-	acceptedDecimals := []int{0, 2}
-	if minorUnits := parsed.Currency.MinorUnits(); !slices.Contains(acceptedDecimals, minorUnits) {
-		acceptedDecimals = append(acceptedDecimals, minorUnits)
-	}
-	parsed, err = ParseCurrencyAmount(source, acceptedDecimals...)
-	if err != nil {
-		return err
+	// NaN and ±Inf have no decimals to check, validate decides about them
+	if parsed.Amount.Valid() {
+		acceptedDecimals := []int{0, 2}
+		if minorUnits := parsed.Currency.MinorUnits(); !slices.Contains(acceptedDecimals, minorUnits) {
+			acceptedDecimals = append(acceptedDecimals, minorUnits)
+		}
+		parsed, err = ParseCurrencyAmount(source, acceptedDecimals...)
+		if err != nil {
+			return err
+		}
 	}
 	if validate && !parsed.Amount.Valid() {
 		return fmt.Errorf("invalid amount: %q", source)

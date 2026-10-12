@@ -718,6 +718,19 @@ func TestDecimalAmount_CentAmount_fullRange(t *testing.T) {
 	assert.Error(t, err, "2.88e17 currency units is 2.88e19 cents, beyond MaxCentAmount")
 }
 
+// TestParseCentAmount_acceptedDecimalsRejectNonFinite pins that ParseCentAmount
+// rejects NaN and ±Inf with acceptedDecimals like ParseAmount, ParseRate and
+// ParseDecimalAmount do, and also without them, because a CentAmount has no
+// non-finite values to return.
+func TestParseCentAmount_acceptedDecimalsRejectNonFinite(t *testing.T) {
+	for _, str := range []string{"NaN", "Inf", "+Inf", "-Inf", "Infinity", "-Infinity"} {
+		c, err := ParseCentAmount(str, RoundHalfAwayFromZero, 0, 2)
+		assert.Error(t, err, "ParseCentAmount(%q, 0, 2) = %v", str, c)
+		c, err = ParseCentAmount(str, RoundHalfAwayFromZero)
+		assert.Error(t, err, "ParseCentAmount(%q) = %v", str, c)
+	}
+}
+
 // TestParseCentAmount_scientificNotation covers the exponent forms that JSON
 // encoders and PostgreSQL float8 text output produce. CentAmount and
 // DecimalAmount are read from the same columns and the same payloads, so a

@@ -31,7 +31,7 @@ type NullableAmount = nullable.Type[Amount]
 
 | Function / Method                                  | Description                                        |
 |----------------------------------------------------|----------------------------------------------------|
-| `ParseAmount(str, acceptedDecimals ...int) (Amount, error)` | Parses with `float.ParseDetails`. With `acceptedDecimals` the number of decimals written in `str` must be one of them. NaN and ±Inf are returned without error and skip the decimals check. |
+| `ParseAmount(str, acceptedDecimals ...int) (Amount, error)` | Parses with `float.ParseDetails`. With `acceptedDecimals` the number of decimals written in `str` must be one of them and NaN and ±Inf are errors, without them NaN and ±Inf are returned without error. |
 | `AmountFromPtr(ptr *Amount, defaultVal Amount) Amount` | `*ptr`, or `defaultVal` for nil.                   |
 | `NullableAmountFrom(value float64) NullableAmount` | A non-null `NullableAmount`. Takes a `float64`, not an `Amount`. |
 | `NullableAmountFromPtr(ptr *Amount) NullableAmount` | Null for a nil pointer.                            |
@@ -79,7 +79,7 @@ The value is `Coefficient × 10^-Scale`, packed into one `int64`: the low 5 bits
 | Function / Method                                  | Description                                        |
 |----------------------------------------------------|----------------------------------------------------|
 | `NewDecimalAmount(coefficient int64, scale int) DecimalAmount` | `coefficient × 10^-scale`: `NewDecimalAmount(1999, 2)` is 19.99. |
-| `ParseDecimalAmount(str, acceptedDecimals ...int) (DecimalAmount, error)` | Exact parse from the digits with the separator rules of `float.ParseDetails`. Reads `NaN`, `Inf`, `+Inf`, `-Inf`, `Infinity`, `-Infinity`, and exponents (`1.5e2` is 150). `acceptedDecimals` is matched against the scale of the result. Error for more than 18 decimals or a value beyond the coefficient range. |
+| `ParseDecimalAmount(str, acceptedDecimals ...int) (DecimalAmount, error)` | Exact parse from the digits with the separator rules of `float.ParseDetails`. Reads `NaN`, `Inf`, `+Inf`, `-Inf`, `Infinity`, `-Infinity`, and exponents (`1.5e2` is 150). `acceptedDecimals` is matched against the scale of the result, the non-finite tokens are errors with `acceptedDecimals`. Error for more than 18 decimals or a value beyond the coefficient range. |
 | `DecimalAmountFrom[T DecimalAmountConvertible](value T) DecimalAmount` | Integers exactly with scale 0, floats (`float32`, `float64`, `Amount`, `Rate`) as their shortest decimal, rounded half away from zero at scale 18 if it needs more. NaN and ±Inf map to the non-finite states, out of range values to ±Inf. |
 | `DecimalAmountConvertible`                         | Type constraint: the integer and float types, `Amount`, and `Rate`. |
 | `DecimalAmountNaN() DecimalAmount`, `DecimalAmountInf(sign int) DecimalAmount` | NaN, +Inf for `sign >= 0`, else -Inf.              |
@@ -357,7 +357,7 @@ The `langHints` of all parsers are ignored. Only the pointer types `*AmountParse
 - **`"1,000"` is 1.00 in every parser.** `ParseAmount`, `ParseDecimalAmount`, `ParseCentAmount`, `ParseRate`, `ParseCurrencyAmount`, the `ScanString` methods, and JSON strings read a single `.` or `,` as decimal separator. Pass `acceptedDecimals` to reject it: `ParseAmount("1,000", 0, 2)` is an error because `"1,000"` has 3 decimals.
 - **`DecimalAmount` `==` compares the packed bits.** `NewDecimalAmount(150, 2) == NewDecimalAmount(15, 1)` is false, and so are map keys, `reflect.DeepEqual`, and testify's `assert.Equal` for them. Use `Equal` or `Cmp`, which also treat NaN as equal to NaN.
 - **`DecimalAmount` precision is limited.** The coefficient has about 18 digits: at scale 2 the largest value is 2882303761517117.43, about 2.88×10^15. Beyond that `Add` yields ±Inf, `Mul` and `Div` round to fewer decimals until the integer part doesn't fit either, `ParseDecimalAmount` returns an error, and `NewDecimalAmount` panics. Use `CentAmount` for larger two-decimal values. The `Rate` methods go through `float64`.
-- **NaN and Inf.** `ParseAmount` and `ParseRate` accept `NaN` and `Inf` without error and skip the `acceptedDecimals` check. `json.Marshal` fails on such `Amount` and `Rate` values. `Amount.CentAmount` maps NaN to 0 and clamps Inf. Check `Valid()` after parsing untrusted input.
+- **NaN and Inf.** `ParseAmount`, `ParseRate`, and `ParseDecimalAmount` accept `NaN` and `Inf` without error if no `acceptedDecimals` are passed. `json.Marshal` fails on such `Amount` and `Rate` values. `Amount.CentAmount` maps NaN to 0 and clamps Inf. Check `Valid()` after parsing untrusted input.
 - **`CurrencyAmount` needs a text column.** Its `Value` is `"EUR 1234.50"`. A `numeric` column rejects it, and an `int64` from the database can't be scanned.
 - **`CurrencyAmount.String` depends on the currency.** `CurrencyAmountJPY(1234.5)` is `"JPY 1235"` and the stored SQL text is rounded the same way. `MinorUnits`, `Symbol`, and `EnglishName` don't normalize, so `CurrencyAmount{Currency: "jpy", Amount: 1234.5}` is `"jpy 1234.50"`. Normalize the currency first.
 - **`CurrencyAmount.ScanString` is stricter than `Scan`.** `ScanString("EUR 1.234")` is an error, `Scan("EUR 1.234")` assigns 1.234.

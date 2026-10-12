@@ -33,21 +33,32 @@ func NullableAmountFromPtr(ptr *Amount) NullableAmount {
 }
 
 // ParseAmount parses an amount from str accepting only certain decimal digit counts.
-// If no acceptedDecimals are passed, then any decimal digit count is accepted.
-// Infinity and NaN are parsed and returned without error.
-// The Amount.Valid method can be aused to check for infinity and NaN.
+// If no acceptedDecimals are passed, then any decimal digit count is accepted
+// and infinity and NaN are parsed and returned without error.
+// The Amount.Valid method can be used to check for infinity and NaN.
+// If acceptedDecimals are passed, then infinity and NaN are errors
+// because they have no decimals that could be accepted.
 func ParseAmount(str string, acceptedDecimals ...int) (Amount, error) {
 	f, _, _, decimals, err := float.ParseDetails(str)
 	if err != nil {
 		return 0, err
 	}
-	if len(acceptedDecimals) == 0 || math.IsNaN(f) || math.IsInf(f, 0) {
+	if len(acceptedDecimals) == 0 {
 		return Amount(f), nil
+	}
+	if math.IsNaN(f) || math.IsInf(f, 0) {
+		return 0, errNonFiniteNotAccepted(str, acceptedDecimals)
 	}
 	if slices.Contains(acceptedDecimals, decimals) {
 		return Amount(f), nil
 	}
 	return 0, fmt.Errorf("parsing %q returned %d decimals which is not in accepted list of %v", str, decimals, acceptedDecimals)
+}
+
+// errNonFiniteNotAccepted returns the error of the parse functions for
+// a NaN or infinite str parsed with acceptedDecimals.
+func errNonFiniteNotAccepted(str string, acceptedDecimals []int) error {
+	return fmt.Errorf("parsing %q returned a non-finite value which has no decimals of the accepted list %v", str, acceptedDecimals)
 }
 
 // AmountFromPtr dereferences ptr or returns defaultVal if it is nil.
