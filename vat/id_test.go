@@ -227,7 +227,7 @@ func Test_NormalizeVATID(t *testing.T) {
 
 func Test_VATIDValid(t *testing.T) {
 	for _, invalidID := range invalidVATIDs {
-		assert.Falsef(t, invalidID.Valid(), "vat.ID should be invalid: %s, Regex uses NormalizedUnchecked: %s", string(invalidID), string(invalidID /*.NormalizedUnchecked()*/))
+		assert.Falsef(t, invalidID.Valid(), "vat.ID should be invalid: %s", string(invalidID))
 	}
 }
 
