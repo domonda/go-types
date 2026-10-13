@@ -30,7 +30,10 @@ package: every listed behaviour is documented in the package READMEs.
 - [ ] **One rule for what `Value` writes.** `country.Code` and `vat.ID` write
       their normalized form, `money.Currency`, `language.Code`, `bank.IBAN`
       and `bank.BIC` write the raw string. `String()` normalizes for all of
-      them, which hides the difference in logs.
+      them, which hides the difference in logs. With a lenient `Validate`
+      the raw string reaches the database: `money.Currency("eur")` passes
+      `types.DeepValidate` and is stored as `"eur"`. `language.Code` avoids
+      this with a `Validate` as strict as `Valid`.
 - [ ] **One rule for the empty value of a non-nullable type.**
       `country.Code("")` writes SQL NULL and JSON `""`, `bank.IBAN("")`
       writes `""` to both, and `account.Number("")` writes SQL NULL and JSON
@@ -224,16 +227,18 @@ time.
 - [ ] **`strfmt` and other `nullable.Type[T]`.** `money.NullableRate` and
       other `nullable.Type[T]` without a registered formatter are written
       with `fmt.Sprint`.
-- [ ] **Time zones in the `strfmt` presets.** The presets' time layouts end
-      in `MST`, so a non-UTC offset is lost when scanning back.
-- [ ] **`email` dates and threading.** A `Date` header with a named zone
-      other than UT/GMT, like `EST`, gets a zero offset.
-      `NewReplyMessage` does not fall back to the parent's `In-Reply-To` when
-      it has no `References`.
+- [ ] **Time zones in the `strfmt` presets.** The English and German
+      presets' time layouts end in `MST` without a numeric offset, so a
+      formatted time only scans back where its zone abbreviation is known
+      (`UTC`, `GMT` or one of `time.Local`); elsewhere `ParseTime` rejects
+      it. The English layout is also day first and reads US month-first
+      input with a known zone as another date. A numeric offset in the
+      layouts would make the round trip lossless.
+- [ ] **`email` dates.** A `Date` header with a named zone other than
+      UT/GMT, like `EST`, gets a zero offset.
 - [ ] **`bank.IBANFinder`** only finds IBANs written compact and upper case.
 - [ ] **`queue.Queue`** has no way to drain the queue gracefully before
       `Close`, which discards undelivered items.
-- [ ] **`float.ParseDetails("1,5e3")`** reports `.` as the decimal separator.
 - [ ] **`strutil.TransliterateSpecialCharacters`** drops a valid U+FFFD
       together with invalid bytes.
 - [ ] **Bump `gosec` in `tools/go.mod`.** The pinned version cannot read the
@@ -245,6 +250,20 @@ time.
 
 ## Completed
 
+- [x] **Fixes from the code review of PR #28.** `date`: full "August"
+      dates parse, a number with an ordinal suffix is never the month,
+      year 0 dates give the zero time, `NullableDate.Format(Layout)` is
+      `""` for every null date, comparisons parse each date once.
+      `language.Code.Validate` is strict like `Valid`. UTF-16 text starting
+      with the UTF-8 BOM bytes decodes. `account.NullableNumber` treats a
+      whitespace-only value as null in every method.
+      `float.ParseDetails("1,5e3")` reports `,`. `email.NullableAddress`
+      and `NullableAddressList` scan `""` and whitespace as null, and
+      `NewReplyMessage` falls back to the parent's `In-Reply-To`.
+      `strfmt.ScanConfig.ParseTime` rejects zone abbreviations with an
+      unknown offset. The copied `UnmarshalJSON` of the nullable string
+      types and the number array parsers share `internal` helpers.
+      **Completed:** 2026-10-13
 - [x] **Bug sweep and documentation pass.** Audited every package against
       its README, fixed the bugs found (see the Changed and Fixed sections of
       the CHANGELOG, many of them breaking), rewrote all package READMEs as
