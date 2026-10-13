@@ -760,6 +760,19 @@ func TestBuildRawMessage_InlineParts(t *testing.T) {
 // TestBuildRawMessage_InvalidRecipients protects that a message with
 // unparsable recipients is not built, because silently dropping a
 // recipient would send the message to fewer people than intended.
+// An unparsable From or Reply-To is no recipient, but written into the
+// header as given it leaves the receiver no address to reply to,
+// so it is an error too instead of a message that can't be answered.
+//
+// Value: protects=BuildRawMessage returns an error instead of a message for
+// an unparsable From or Reply-To;
+// fails_when=From/Reply-To are written via Address.ASCII or as given, which
+// keep an unparsable address unchanged instead of failing;
+// why_new=the From/Reply-To error branches in BuildRawMessage are run by no
+// test, the table only had the To, Delivered-To, Cc and Bcc rows;
+// seam=none;
+// no_claim=which header encoding a valid non-ASCII From name gets, see
+// TestBuildRawMessage_NonASCIIFromName
 func TestBuildRawMessage_InvalidRecipients(t *testing.T) {
 	tests := []struct {
 		name string
@@ -769,10 +782,14 @@ func TestBuildRawMessage_InvalidRecipients(t *testing.T) {
 		{name: "Delivered-To", msg: email.Message{To: "a@example.com", DeliveredTo: "not an address"}},
 		{name: "Cc", msg: email.Message{To: "a@example.com", Cc: "not an address"}},
 		{name: "Bcc", msg: email.Message{To: "a@example.com", Bcc: "not an address"}},
+		{name: "From", msg: email.Message{From: "not an address", To: "a@example.com"}},
+		{name: "Reply-To", msg: email.Message{To: "a@example.com", ReplyTo: "not an address"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tt.msg.From = "from@example.com"
+			if tt.msg.From == "" {
+				tt.msg.From = "from@example.com"
+			}
 			raw, err := tt.msg.BuildRawMessage()
 			require.Error(t, err)
 			require.Nil(t, raw)

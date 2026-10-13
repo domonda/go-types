@@ -86,6 +86,19 @@ func Test_ParseFloat(t *testing.T) {
 	}
 }
 
+// Test_ParseFloat_invalid protects that malformed numbers are errors
+// instead of a guessed value. A separator in the exponent must be an
+// error, because dropping it like a thousands separator turns "1e3,5"
+// into 1e35, an amount 32 orders of magnitude off.
+//
+// Value: protects=a '.', ',', apostrophe or space in the exponent is an error;
+// fails_when=the exponent checks of ParseDetails are dropped, so "1e3,5" parses
+// as 1e35 without an error;
+// why_new=no tested input had a separator after the exponent marker, both
+// exponent separator error branches were run by no test;
+// seam=none;
+// no_claim=separators in front of the exponent, see
+// Test_ParseDetails_exponentAfterThousands
 func Test_ParseFloat_invalid(t *testing.T) {
 	invalidDecimalFloats := []string{
 		"",
@@ -130,6 +143,10 @@ func Test_ParseFloat_invalid(t *testing.T) {
 		"1234567 123 456", // first grouped block longer than 6 digits (space)
 		"1e",              // dangling exponent without digits
 		"1e999",           // out of float64 range must error, not silently become +Inf
+		"1e3,5",           // separator in the exponent, not 1e35
+		"1e3.5",           // separator in the exponent, not 1e35
+		"1e3'5",           // separator in the exponent, not 1e35
+		"1e3 5",           // separator in the exponent, not 1e35
 	}
 
 	for _, s := range invalidDecimalFloats {

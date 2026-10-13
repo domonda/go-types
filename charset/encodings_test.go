@@ -65,6 +65,19 @@ func TestGetEncoding_EmptyName(t *testing.T) {
 // case-insensitively. A label of an encoding listed by EncodingNames must
 // return the same Encoding as its display name, so the Encoding name and
 // the encoded bytes don't depend on which label a sender used.
+// That includes the BOM handling: a UTF-16BE or UTF-16LE label must not
+// return a generic decoder that keeps a BOM as U+FEFF in the text and
+// decodes a BOM of the other byte order as garbage instead of an error.
+//
+// Value: protects=the IANA aliases csUTF16BE and csUTF16LE return this
+// package's UTF-16BE/LE Encoding with its BOM, like their display names;
+// fails_when=GetEncoding drops its UTF16 IgnoreBOM cases and wraps x/text
+// UTF-16 with the MIME name, which has the same name and bytes but No BOM;
+// why_new=no UTF-16 alias row existed, and name plus encoded bytes can't
+// tell the wrapped x/text encoding from this package's UTF-16 encoding;
+// seam=none;
+// no_claim=the "UTF-16" label with BOM detection, see
+// TestGetEncoding_IANAOnlyEncodings
 func TestGetEncoding_IANALabels(t *testing.T) {
 	const text = "Grüße"
 	tests := []struct {
@@ -80,6 +93,8 @@ func TestGetEncoding_IANALabels(t *testing.T) {
 		{label: "ISO-8859-15", wantName: "ISO 8859-15"},
 		{label: "csUTF8", wantName: "UTF-8"},
 		{label: "ISO-8859-6-E", wantName: "ISO-8859-6E"},
+		{label: "csUTF16BE", wantName: "UTF-16BE"},
+		{label: "csUTF16LE", wantName: "UTF-16LE"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.label, func(t *testing.T) {
@@ -92,6 +107,7 @@ func TestGetEncoding_IANALabels(t *testing.T) {
 			got, err := enc.Encode([]byte(text))
 			assert.Equal(t, wantErr != nil, err != nil, "same encoding error as %s", byName)
 			assert.Equal(t, want, got, "same encoded bytes as %s", byName)
+			assert.Equal(t, byName.BOM(), enc.BOM(), "same BOM as %s", byName)
 		})
 	}
 }

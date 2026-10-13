@@ -78,6 +78,18 @@ func TestMoneyFormat_FormatCurrencyDecimalAmount(t *testing.T) {
 // types honor the separators and the precision of a MoneyFormat like
 // FormatAmount does for money.Amount, so a custom format applies to all
 // money types alike. A negative precision keeps the exact digits.
+// A MoneyFormat without DecimalSep pads with a point like FormatAmount,
+// the zero rune must not end up in the text where it is invisible
+// but breaks CSV files and string comparisons.
+//
+// Value: protects=FormatDecimalAmount pads an amount without decimals with
+// '.' for a zero DecimalSep, like FormatAmount and FormatCentAmount;
+// fails_when=the padding writes string(format.DecimalSep) unconditionally,
+// so DecimalAmount 5 formats as "5\x0000" instead of "5.00";
+// why_new=every row had a DecimalSep, the zero DecimalSep default branch of
+// FormatDecimalAmount is run by no test;
+// seam=none;
+// no_claim=the thousands separator default or formatting of Inf and NaN
 func TestMoneyFormat_FormatCentAndDecimalAmount(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -91,6 +103,7 @@ func TestMoneyFormat_FormatCentAndDecimalAmount(t *testing.T) {
 		{name: "precision 3 pads", format: MoneyFormat{DecimalSep: '.', Precision: 3}, cents: 150, decimal: money.NewDecimalAmount(15, 1), want: "1.500"},
 		{name: "precision 0 rounds half away from zero", format: MoneyFormat{DecimalSep: ',', Precision: 0}, cents: -250, decimal: money.NewDecimalAmount(-25, 1), want: "-3"},
 		{name: "precision -1 keeps the cents", format: MoneyFormat{DecimalSep: '.', Precision: -1}, cents: 150, decimal: money.NewDecimalAmount(150, 2), want: "1.50"},
+		{name: "zero DecimalSep pads with a point", format: MoneyFormat{Precision: 2}, cents: 500, decimal: money.NewDecimalAmount(5, 0), want: "5.00"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
