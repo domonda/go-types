@@ -127,6 +127,16 @@ func TestMessage_Recipients(t *testing.T) {
 		msg.Recipients(),
 	)
 
+	// A quoted local part must be compared in its formatted, quoted form,
+	// else the same mailbox from To, Cc and Bcc gets the message 3 times.
+	// Value: protects=Recipients dedups a quoted local part across To, Cc and Bcc and keeps it quoted; fails_when=exists compares a.Address instead of addrSpec(a), which never matches a quoted entry; why_new=existing recipients have only unquoted local parts, where both forms are equal; seam=none; no_claim=that lower casing a quoted local part is RFC correct
+	msg = &email.Message{
+		To:  `"a b"@example.com`,
+		Cc:  `X <"A B"@Example.com>`,
+		Bcc: `"a b"@example.com, c@example.com`,
+	}
+	require.Equal(t, []string{`"a b"@example.com`, "c@example.com"}, msg.Recipients())
+
 	require.Empty(t, (&email.Message{}).Recipients(), "a message without recipients")
 }
 

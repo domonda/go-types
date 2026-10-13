@@ -239,6 +239,14 @@ func TestTransliterateSpecialCharactersMaxLen(t *testing.T) {
 		{name: "invalid byte at the start", args: args{"\xe4pfel", -1}, want: "pfel"},
 		{name: "only invalid bytes before valid ones", args: args{"\xff\xffxy", -1}, want: "xy"},
 		{name: "invalid byte at the start with maxLen", args: args{"\xffabc", 2}, want: "ab"},
+		// When every rune is dropped the builder stays empty, but the
+		// result must still be "" and not the invalid input, and a
+		// transliteration after a dropped first byte is still written.
+		// Value: protects=only dropped runes give "", a transliteration after a dropped first byte is written; fails_when=the final check is b.Len() > 0 instead of changed, returning the input; why_new=existing invalid-byte rows all keep valid runes, so b is never empty; seam=none; no_claim=handling of runes missing from the transliteration table
+		{name: "only an invalid byte", args: args{"\xff", -1}, want: ""},
+		{name: "only U+FFFD", args: args{"�", -1}, want: ""},
+		{name: "invalid byte before transliteration", args: args{"\xffÖl", -1}, want: "Oel"},
+		{name: "invalid byte before transliteration with maxLen", args: args{"\xffÖl", 2}, want: "Oe"},
 		// Dropped invalid bytes don't count towards maxLen
 		{name: "invalid byte with maxLen", args: args{"ab\xffcd", 3}, want: "abc"},
 	}

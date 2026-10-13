@@ -142,6 +142,12 @@ func TestAddress_NormalizedRoundTrip(t *testing.T) {
 		`Jürgen Müller <J@Example.com>`,
 		`"Müller, Jürgen" <j@x.de>`,
 		`mike@doe.com (Mike Doe)`,
+		// The parser unescapes quoted-pairs and the formatter escapes
+		// again only what needs it. If one side is skipped, every write
+		// adds backslashes and the stored mailbox drifts away.
+		// Value: protects=quoted-pairs in a quoted local part keep Normalized idempotent and the same mailbox; fails_when=parseAddress keeps local[1:len-1] without calling unquoteLocalPart; why_new=no existing row has a backslash inside a quoted local part; seam=none; no_claim=which quoted-pairs RFC 5322 permits or how they are re-escaped
+		`"a\ b"@example.com`,
+		`"a\\b"@example.com`,
 	} {
 		t.Run(string(addr), func(t *testing.T) {
 			require.NoError(t, addr.Validate())
@@ -251,6 +257,12 @@ func TestAddress_Parts(t *testing.T) {
 		{addr: `"Doe, John" <John.Doe@Example.com>`, name: `Doe, John`, addressPart: `john.doe@example.com`, localPart: `john.doe`},
 		// RFC 2047 encoded names are decoded.
 		{addr: `=?utf-8?b?wqFIb2xhLCBzZcOxb3Ih?= <senor@hola.com>`, name: `¡Hola, señor!`, addressPart: `senor@hola.com`, localPart: `senor`},
+		// A quoted local part keeps its quotes, else the address part
+		// would read as another mailbox, here one at evil.com, and the
+		// local part ends at the last @ because the quoted part has one.
+		// Value: protects=quoted local part stays quoted in AddressPart(String) and LocalPart cuts at the last @; fails_when=LocalPart uses strings.IndexByte (first @) instead of LastIndexByte; why_new=no existing Parts row has a quoted local part or an @ in it; seam=none; no_claim=that lower casing a quoted local part is RFC correct
+		{addr: `"Victim@Evil.com>"@Example.com`, name: ``, addressPart: `"victim@evil.com>"@example.com`, localPart: `"victim@evil.com>"`},
+		{addr: `"a b"@example.com`, name: ``, addressPart: `"a b"@example.com`, localPart: `"a b"`},
 	}
 	for _, tt := range tests {
 		t.Run(string(tt.addr), func(t *testing.T) {

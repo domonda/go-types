@@ -214,6 +214,14 @@ func TestAddressList_UniqueAddressParts(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, MakeAddressSet("john@example.com", "jane@example.com"), set)
 
+	// The set holds formatted address parts, so a quoted local part
+	// stays quoted: unquoted, "victim@evil.com>"@example.com would
+	// become a lookup key that reads as a mailbox at evil.com.
+	// Value: protects=UniqueAddressParts keeps quoted local parts quoted and dedups them case-insensitively; fails_when=UniqueAddressParts adds Address(addr.Address) instead of addrSpec(addr); why_new=existing set assertion has only unquoted local parts; seam=none; no_claim=that lower casing a quoted local part is RFC correct
+	set, err = AddressList(`"Victim@Evil.com>"@Example.com, X <"A B"@Example.com>, "a b"@example.com`).UniqueAddressParts()
+	require.NoError(t, err)
+	assert.Equal(t, MakeAddressSet(`"victim@evil.com>"@example.com`, `"a b"@example.com`), set)
+
 	set, err = AddressList(`a@example.com, not an address`).UniqueAddressParts()
 	assert.Error(t, err, "an invalid entry must not be silently dropped")
 	assert.Nil(t, set)

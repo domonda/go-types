@@ -2,6 +2,7 @@ package date
 
 import (
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"testing"
 	"time"
@@ -941,6 +942,30 @@ func TestDate_MarshalJSON(t *testing.T) {
 	}
 }
 
+// MarshalText must write the normalized date like Value and MarshalJSON,
+// because encoding/xml uses it: without it XML output would carry
+// whatever spelling Validate accepted, like "25.12.2023". A date that
+// can't be normalized is written unchanged instead of failing the write.
+// Value: protects=Date.MarshalText and encoding/xml write the normalized date, an invalid date unchanged; fails_when=MarshalText returns []byte(date) instead of []byte(date.String()); why_new=MarshalText is a new method without any test or caller in the module; seam=none; no_claim=strfmt output, it formats dates through TypeFormatters
+func TestDate_MarshalText(t *testing.T) {
+	for _, tt := range []struct {
+		date Date
+		want string
+	}{
+		{date: "25.12.2023", want: "2023-12-25"},
+		{date: "invalid", want: "invalid"},
+	} {
+		text, err := tt.date.MarshalText()
+		require.NoError(t, err)
+		assert.Equal(t, tt.want, string(text), "Date(%q).MarshalText()", string(tt.date))
+	}
+
+	type row struct{ D Date }
+	data, err := xml.Marshal(row{D: "25.12.2023"})
+	require.NoError(t, err)
+	assert.Equal(t, `<row><D>2023-12-25</D></row>`, string(data))
+}
+
 // Additional constructor function tests
 func TestOfToday(t *testing.T) {
 	d := OfToday()
@@ -1348,6 +1373,12 @@ func TestDate_IsTodayInUTC(t *testing.T) {
 	assert.True(t, today.IsTodayInUTC())
 	// A valid but non-normalized today is still today, see TestDate_IsToday
 	assert.True(t, Date(today.Format("02.01.2006")).IsTodayInUTC())
+	// Normalizing first must not make other days or a parse error count
+	// as today, like IsToday in TestDate_IsToday.
+	// Value: protects=IsTodayInUTC is false for another day, the next UTC day and an invalid date; fails_when=IsTodayInUTC returns err == nil without comparing to OfNowInUTC; why_new=the test only had true cases, so an always-true-for-valid result passed; seam=none; no_claim=behavior across a UTC midnight between OfNowInUTC calls
+	assert.False(t, Date("2020-01-01").IsTodayInUTC())
+	assert.False(t, Date("invalid").IsTodayInUTC())
+	assert.False(t, today.AddDays(1).IsTodayInUTC())
 }
 
 func TestDate_AfterToday(t *testing.T) {
