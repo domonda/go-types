@@ -1,8 +1,11 @@
 package email
 
 import (
+	"database/sql/driver"
+	"encoding/json"
 	"net/mail"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/invopop/jsonschema"
 
@@ -19,19 +22,55 @@ type Address string
 
 // AddressFrom creates an Address from a parsed mail.Address.
 // If the address has no name part, returns just the address.
-// If the address has a name part, returns the full formatted string.
+// If the address has a name part, returns the name as quoted string
+// followed by the address within angle brackets like mail.Address.String,
+// but a non-ASCII name is kept as UTF-8 instead of being RFC 2047 encoded,
+// so that the Address stays readable in JSON and databases.
+// Use mail.Address.String to format an address for a message header.
 func AddressFrom(addr *mail.Address) Address {
 	if addr == nil {
 		return ""
 	}
 	if addr.Name == "" {
 		// Without name just return the address part.
-		// parsed.String() always puts the address part
+		// mail.Address.String always puts the address part
 		// within angle brackets which is only needed
 		// if there is also a name part.
 		return Address(addr.Address)
 	}
-	return Address(addr.String())
+	// Without name String formats only the address part,
+	// quoting the local part where needed
+	addrPart := (&mail.Address{Address: addr.Address}).String()
+	return Address(quoteName(addr.Name) + " " + addrPart)
+}
+
+// quoteName returns name as quoted string like mail.Address.String
+// does for an ASCII name, also for a non-ASCII name, which is allowed
+// as UTF-8 by RFC 6532. Like mail.Address.String, it escapes quotes and
+// backslashes and drops ASCII control characters other than tab.
+func quoteName(name string) string {
+	var b strings.Builder
+	b.WriteByte('"')
+	for _, r := range name {
+		switch {
+		case r == '"' || r == '\\':
+			b.WriteByte('\\')
+			b.WriteRune(r)
+		case r == ' ' || r == '\t' || ('!' <= r && r <= '~') || r >= utf8.RuneSelf:
+			b.WriteRune(r)
+		}
+	}
+	b.WriteByte('"')
+	return b.String()
+}
+
+// asciiAddress formats addr like AddressFrom, but RFC 2047 encodes
+// a non-ASCII name like mail.Address.String does.
+func asciiAddress(addr *mail.Address) string {
+	if addr.Name == "" {
+		return addr.Address
+	}
+	return addr.String()
 }
 
 // NormalizedAddress parses an email address using lenient validation
@@ -57,6 +96,44 @@ func (a Address) Normalized() (Address, error) {
 // This is more permissive than the standard net/mail.ParseAddress function.
 func (a Address) Parse() (*mail.Address, error) {
 	return ParseAddress(string(a))
+}
+
+// String returns the normalized address,
+// or the unchanged address if it can't be normalized.
+// A non-ASCII name stays UTF-8, see ASCII.
+// String implements the fmt.Stringer interface.
+func (a Address) String() string {
+	norm, _ := a.Normalized()
+	return string(norm)
+}
+
+// ASCII returns the normalized address like String, but with
+// a non-ASCII name RFC 2047 encoded like mail.Address.String does,
+// as required for message headers, or the unchanged address
+// if it can't be normalized. The address part is not encoded,
+// so an address part with non-ASCII characters stays non-ASCII.
+func (a Address) ASCII() string {
+	parsed, err := a.Parse()
+	if err != nil {
+		return string(a)
+	}
+	return asciiAddress(parsed)
+}
+
+// Value implements the driver database/sql/driver.Valuer interface.
+// Returns the normalized address, or the unchanged string
+// if it can't be normalized, so an empty Address is written as empty string.
+func (a Address) Value() (driver.Value, error) {
+	norm, _ := a.Normalized()
+	return string(norm), nil
+}
+
+// MarshalJSON implements encoding/json.Marshaler.
+// Returns the normalized address as JSON string,
+// or the unchanged string if it can't be normalized.
+func (a Address) MarshalJSON() ([]byte, error) {
+	norm, _ := a.Normalized()
+	return json.Marshal(string(norm))
 }
 
 // Validate checks if the Address is a valid email address format.

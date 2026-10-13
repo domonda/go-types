@@ -30,7 +30,8 @@ Each type parses leniently in one place and reduces every accepted spelling to o
 The methods follow one pattern, which [Validation and normalization](explanation-validation-and-normalization.md) explains in detail:
 
 - `Normalized()` returns the canonical form or an error.
-- `Valid()` and `Validate()` accept every spelling that normalizes. Two exceptions are strict: `language.Code.Valid` accepts only a lower-case ISO 639-1 code (its `Validate` normalizes), and `bank.BIC.Valid` accepts only the compact form.
+- `Valid()` and `Validate()` accept every spelling that normalizes. One exception is strict: `language.Code.Valid` accepts only a lower-case ISO 639-1 code (its `Validate` normalizes).
+- `Value()` and `MarshalJSON()` write the canonical form of a valid value.
 - `ValidAndNormalized()` accepts only the canonical form.
 - `String()` returns the canonical form for a valid value.
 

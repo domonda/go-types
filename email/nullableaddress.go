@@ -2,7 +2,6 @@ package email
 
 import (
 	"database/sql/driver"
-	"encoding/json"
 	"fmt"
 	"net/mail"
 
@@ -128,12 +127,31 @@ func (n NullableAddress) IsNotNull() bool {
 	return !n.IsNull()
 }
 
-// StringOr returns the string value of n or the passed nullString if n.IsNull()
-func (n NullableAddress) StringOr(nullString string) string {
+// String returns the normalized address like Address.String,
+// "" for null, or the unchanged address if it can't be normalized.
+// String implements the fmt.Stringer interface.
+func (n NullableAddress) String() string {
+	norm, _ := n.Normalized()
+	return string(norm)
+}
+
+// ASCII returns the address like Address.ASCII, or "" for null.
+func (n NullableAddress) ASCII() string {
 	if n.IsNull() {
+		return ""
+	}
+	return Address(n).ASCII()
+}
+
+// StringOr returns the normalized NullableAddress as string,
+// or the passed nullString if the NullableAddress is null
+// or can't be normalized.
+func (n NullableAddress) StringOr(nullString string) string {
+	norm, err := n.Normalized()
+	if err != nil || norm.IsNull() {
 		return nullString
 	}
-	return string(n)
+	return string(norm)
 }
 
 // Get returns the non nullable Address
@@ -191,12 +209,13 @@ func (n *NullableAddress) Scan(value any) error {
 }
 
 // Value implements the driver database/sql/driver.Valuer interface.
-// Returns nil for SQL NULL if the NullableAddress is null, see IsNull.
+// Returns nil for SQL NULL if the NullableAddress is null, see IsNull,
+// else the normalized address like Address.Value.
 func (n NullableAddress) Value() (driver.Value, error) {
 	if n.IsNull() {
 		return nil, nil
 	}
-	return string(n), nil
+	return Address(n).Value()
 }
 
 // UnmarshalText implements encoding.TextUnmarshaler
@@ -213,12 +232,13 @@ func (n *NullableAddress) UnmarshalJSON(data []byte) error {
 }
 
 // MarshalJSON implements the json.Marshaler interface
-// by returning the JSON null value if the NullableAddress is null, see IsNull.
+// by returning the JSON null value if the NullableAddress is null, see IsNull,
+// else the normalized address like Address.MarshalJSON.
 func (n NullableAddress) MarshalJSON() ([]byte, error) {
 	if n.IsNull() {
 		return []byte(`null`), nil
 	}
-	return json.Marshal(string(n))
+	return Address(n).MarshalJSON()
 }
 
 // JSONSchema returns the JSON schema definition for the NullableAddress type.

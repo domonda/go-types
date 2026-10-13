@@ -208,6 +208,15 @@ func TestNullableID_String(t *testing.T) {
 	assert.Equal(t, "atu 1234 5678", NullableID("atu 1234 5678").String(), "invalid input is returned unchanged")
 }
 
+// StringOr returns the normalized value like String, but the alternative
+// instead of a value that can't be normalized, so a caller printing
+// StringOr never shows a misspelled or invalid value as if it were valid.
+func TestNullableID_StringOr(t *testing.T) {
+	assert.Equal(t, "none", Null.StringOr("none"))
+	assert.Equal(t, "ATU10223006", NullableID("atu 1022 3006").StringOr("none"))
+	assert.Equal(t, "none", NullableID("invalid").StringOr("none"))
+}
+
 func TestNullableID_ScanString(t *testing.T) {
 	// Text sources such as CSV files spell NULL in several ways,
 	// all of them must reset a previously set value to Null.
@@ -307,6 +316,11 @@ func TestNullableID_JSON(t *testing.T) {
 		data, err := json.Marshal(doc{VAT: "  "})
 		require.NoError(t, err)
 		assert.JSONEq(t, `{"vat":null}`, string(data))
+	})
+	t.Run("value is normalized like ID.MarshalJSON", func(t *testing.T) {
+		data, err := json.Marshal(doc{VAT: "at u 1022 3006"})
+		require.NoError(t, err)
+		assert.JSONEq(t, `{"vat":"ATU10223006"}`, string(data))
 	})
 	t.Run("value round-trip", func(t *testing.T) {
 		data, err := json.Marshal(doc{VAT: "ATU10223006"})

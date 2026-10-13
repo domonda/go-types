@@ -52,9 +52,9 @@ func TestNullableCurrency_WhitespaceIsNull(t *testing.T) {
 	}
 }
 
-// TestNullableCurrency_GetOrStringOr pins the fallbacks for NULL values:
-// GetOr also falls back for invalid currencies so that callers always
-// get a usable Currency, while StringOr only falls back for NULL.
+// TestNullableCurrency_GetOrStringOr pins the fallbacks: GetOr and StringOr
+// fall back for NULL and for invalid currencies, so that callers always
+// get a usable Currency or the canonical code, never a misspelled one.
 func TestNullableCurrency_GetOrStringOr(t *testing.T) {
 	assert.Equal(t, EUR, NullableCurrency("").GetOr(EUR))
 	assert.Equal(t, EUR, NullableCurrency("XYZ").GetOr(EUR))
@@ -62,7 +62,8 @@ func TestNullableCurrency_GetOrStringOr(t *testing.T) {
 
 	assert.Equal(t, "none", NullableCurrency("").StringOr("none"))
 	assert.Equal(t, "USD", NullableCurrency("USD").StringOr("none"))
-	assert.Equal(t, "XYZ", NullableCurrency("XYZ").StringOr("none"))
+	assert.Equal(t, "USD", NullableCurrency(" usd ").StringOr("none"), "normalized like String")
+	assert.Equal(t, "none", NullableCurrency("XYZ").StringOr("none"))
 }
 
 // TestNullableCurrency_Validity pins the main difference to Currency:
@@ -221,6 +222,32 @@ func TestNullableCurrency_JSON(t *testing.T) {
 		var got doc
 		require.NoError(t, json.Unmarshal(data, &got))
 		assert.Equal(t, tt.n, got.Currency, "round-trip of %s", data)
+	}
+}
+
+// A non-null NullableCurrency is written normalized like Currency, see
+// TestCurrency_ValueAndMarshalJSONNormalize, and null stays SQL NULL and
+// JSON null, including the whitespace-only null.
+func TestNullableCurrency_ValueAndMarshalJSONNormalize(t *testing.T) {
+	tests := []struct {
+		n        NullableCurrency
+		wantSQL  any
+		wantJSON string
+	}{
+		{n: CurrencyNull, wantSQL: nil, wantJSON: `null`},
+		{n: "  ", wantSQL: nil, wantJSON: `null`},
+		{n: "eur", wantSQL: "EUR", wantJSON: `"EUR"`},
+		{n: "$", wantSQL: "USD", wantJSON: `"USD"`},
+		{n: "XYZ", wantSQL: "XYZ", wantJSON: `"XYZ"`},
+	}
+	for _, tt := range tests {
+		v, err := tt.n.Value()
+		require.NoError(t, err)
+		assert.Equal(t, tt.wantSQL, v, "NullableCurrency(%q).Value()", string(tt.n))
+
+		j, err := json.Marshal(tt.n)
+		require.NoError(t, err)
+		assert.Equal(t, tt.wantJSON, string(j), "json.Marshal(NullableCurrency(%q))", string(tt.n))
 	}
 }
 

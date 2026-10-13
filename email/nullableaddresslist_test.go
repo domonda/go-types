@@ -1,6 +1,7 @@
 package email
 
 import (
+	"database/sql/driver"
 	"encoding/json"
 	"testing"
 
@@ -162,7 +163,7 @@ func TestNullableAddressList_NotNull(t *testing.T) {
 	assert.Equal(t, NullableAddressList(`"Doe, John" <john@example.com>, b@example.com`), normalized)
 	assert.True(t, normalized.ValidAndNormalized())
 
-	assert.Equal(t, string(n), n.StringOr("<none>"))
+	assert.Equal(t, string(normalized), n.StringOr("<none>"), "StringOr normalizes like String")
 	assert.Equal(t, AddressList(n), n.Get())
 	assert.Equal(t, AddressList(n), n.GetOr("default@example.com"))
 }
@@ -254,6 +255,57 @@ func TestNullableAddressList_JSON(t *testing.T) {
 			assert.Equal(t, want, got)
 		}
 	})
+}
+
+// A non-null NullableAddressList is written normalized like AddressList,
+// see TestAddressList_ValueAndMarshalJSONNormalize. A list that
+// normalizes to the empty list, like whitespace only or the
+// "undisclosed-recipients:;" placeholder, is written as SQL NULL and
+// JSON null, because the empty list is the null value.
+func TestNullableAddressList_ValueAndMarshalJSONNormalize(t *testing.T) {
+	tests := []struct {
+		n        NullableAddressList
+		wantSQL  driver.Value
+		wantJSON string
+	}{
+		{n: "", wantSQL: nil, wantJSON: `null`},
+		{n: "  ", wantSQL: nil, wantJSON: `null`},
+		{n: "undisclosed-recipients:;", wantSQL: nil, wantJSON: `null`},
+		{n: "A@Example.com,  B@Example.com", wantSQL: "a@example.com, b@example.com", wantJSON: `"a@example.com, b@example.com"`},
+		{n: "not an address", wantSQL: "not an address", wantJSON: `"not an address"`},
+	}
+	for _, tt := range tests {
+		v, err := tt.n.Value()
+		require.NoError(t, err)
+		assert.Equal(t, tt.wantSQL, v, "NullableAddressList(%q).Value()", string(tt.n))
+
+		j, err := json.Marshal(tt.n)
+		require.NoError(t, err)
+		assert.Equal(t, tt.wantJSON, string(j), "json.Marshal(NullableAddressList(%q))", string(tt.n))
+	}
+}
+
+// String and ASCII work like those of AddressList, see
+// TestAddressList_StringAndASCII, and return "" for null and for a list
+// without addresses. StringOr returns the normalized list or the
+// alternative for null, empty and invalid lists.
+func TestNullableAddressList_StringASCIIStringOr(t *testing.T) {
+	tests := []struct {
+		n            NullableAddressList
+		wantStr      string
+		wantASCII    string
+		wantStringOr string
+	}{
+		{n: ``, wantStr: ``, wantASCII: ``, wantStringOr: `none`},
+		{n: `undisclosed-recipients:;`, wantStr: ``, wantASCII: ``, wantStringOr: `none`},
+		{n: `A@Example.com, Zoë <Zoe@Example.com>`, wantStr: `a@example.com, "Zoë" <zoe@example.com>`, wantASCII: `a@example.com, =?utf-8?q?Zo=C3=AB?= <zoe@example.com>`, wantStringOr: `a@example.com, "Zoë" <zoe@example.com>`},
+		{n: `not an address`, wantStr: `not an address`, wantASCII: `not an address`, wantStringOr: `none`},
+	}
+	for _, tt := range tests {
+		assert.Equal(t, tt.wantStr, tt.n.String(), "NullableAddressList(%q).String()", string(tt.n))
+		assert.Equal(t, tt.wantASCII, tt.n.ASCII(), "NullableAddressList(%q).ASCII()", string(tt.n))
+		assert.Equal(t, tt.wantStringOr, tt.n.StringOr("none"), "NullableAddressList(%q).StringOr()", string(tt.n))
+	}
 }
 
 func TestNullableAddressList_UnmarshalText(t *testing.T) {

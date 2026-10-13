@@ -1,6 +1,7 @@
 package email
 
 import (
+	"encoding/json"
 	"net/mail"
 	"reflect"
 	"testing"
@@ -267,6 +268,44 @@ func TestAddressList_ValidateAndNormalized(t *testing.T) {
 			assert.True(t, normalized.ValidAndNormalized(), "normalizing must be idempotent")
 		})
 	}
+}
+
+// Value and MarshalJSON write an AddressList normalized like Address,
+// see TestAddress_ValueAndMarshalJSONNormalize. A list that can't be
+// normalized is written unchanged instead of failing the write.
+func TestAddressList_ValueAndMarshalJSONNormalize(t *testing.T) {
+	tests := []struct {
+		l    AddressList
+		want string
+	}{
+		{l: `a@example.com`, want: `a@example.com`},
+		{l: `A@Example.com,  Jürgen <J@Example.com>`, want: `a@example.com, "Jürgen" <j@example.com>`},
+		{l: `a@example.com, not an address`, want: `a@example.com, not an address`},
+		{l: ``, want: ``},
+	}
+	for _, tt := range tests {
+		v, err := tt.l.Value()
+		require.NoError(t, err)
+		assert.Equal(t, tt.want, v, "AddressList(%q).Value()", string(tt.l))
+
+		j, err := json.Marshal(tt.l)
+		require.NoError(t, err)
+		var got string
+		require.NoError(t, json.Unmarshal(j, &got))
+		assert.Equal(t, tt.want, got, "json.Marshal(AddressList(%q))", string(tt.l))
+	}
+}
+
+// String and ASCII of a list work like those of Address,
+// see TestAddress_StringAndASCII.
+func TestAddressList_StringAndASCII(t *testing.T) {
+	l := AddressList(`A@Example.com, Jürgen <J@Example.com>`)
+	assert.Equal(t, `a@example.com, "Jürgen" <j@example.com>`, l.String())
+	assert.Equal(t, `a@example.com, =?utf-8?q?J=C3=BCrgen?= <j@example.com>`, l.ASCII())
+
+	invalid := AddressList(`a@example.com, not an address`)
+	assert.Equal(t, string(invalid), invalid.String())
+	assert.Equal(t, string(invalid), invalid.ASCII())
 }
 
 func TestAddressList_Nullable(t *testing.T) {

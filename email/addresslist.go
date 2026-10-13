@@ -1,6 +1,8 @@
 package email
 
 import (
+	"database/sql/driver"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/mail"
@@ -172,6 +174,52 @@ func (l AddressList) Normalized() (AddressList, error) {
 		b.WriteString(string(AddressFrom(p)))
 	}
 	return AddressList(b.String()), nil
+}
+
+// String returns the normalized list,
+// or the unchanged list if it can't be normalized.
+// Non-ASCII names stay UTF-8, see ASCII.
+// String implements the fmt.Stringer interface.
+func (l AddressList) String() string {
+	norm, _ := l.Normalized()
+	return string(norm)
+}
+
+// ASCII returns the normalized list like String, but with
+// non-ASCII names RFC 2047 encoded like Address.ASCII,
+// or the unchanged list if it can't be normalized.
+func (l AddressList) ASCII() string {
+	parsed, err := l.Parse()
+	if err != nil {
+		return string(l)
+	}
+	return asciiAddressList(parsed)
+}
+
+// asciiAddressList joins the addresses formatted by asciiAddress
+// with ", " separators.
+func asciiAddressList(addrs []*mail.Address) string {
+	formatted := make([]string, len(addrs))
+	for i, addr := range addrs {
+		formatted[i] = asciiAddress(addr)
+	}
+	return strings.Join(formatted, ", ")
+}
+
+// Value implements the driver database/sql/driver.Valuer interface.
+// Returns the normalized list, or the unchanged string
+// if it can't be normalized, so an empty list is written as empty string.
+func (l AddressList) Value() (driver.Value, error) {
+	norm, _ := l.Normalized()
+	return string(norm), nil
+}
+
+// MarshalJSON implements encoding/json.Marshaler.
+// Returns the normalized list as JSON string,
+// or the unchanged string if it can't be normalized.
+func (l AddressList) MarshalJSON() ([]byte, error) {
+	norm, _ := l.Normalized()
+	return json.Marshal(string(norm))
 }
 
 // Nullable converts the AddressList to a NullableAddressList type.

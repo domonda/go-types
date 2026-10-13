@@ -26,14 +26,6 @@ package: every listed behaviour is documented in the package READMEs.
       strings are stored as given while `Scan` normalizes them.
       Decided: empty and whitespace-only input is null for every nullable
       type, see Design decisions in the [README](README.md).
-- [ ] **One rule for what `Value` writes.** Decided: the canonical form, see
-      Design decisions in the [README](README.md). `country.Code` and `vat.ID` write
-      their normalized form, `money.Currency`, `language.Code`, `bank.IBAN`
-      and `bank.BIC` write the raw string. `String()` normalizes for all of
-      them, which hides the difference in logs. With a lenient `Validate`
-      the raw string reaches the database: `money.Currency("eur")` passes
-      `types.DeepValidate` and is stored as `"eur"`. `language.Code` avoids
-      this with a `Validate` as strict as `Valid`.
 - [ ] **One rule for the empty value of a non-nullable type.**
       `country.Code("")` writes SQL NULL and JSON `""`, `bank.IBAN("")`
       writes `""` to both, and `account.Number("")` writes SQL NULL and JSON
@@ -249,6 +241,13 @@ time.
 
 ## Completed
 
+- [x] **One rule for what `Value` writes.** The types with a `Normalized`
+      method write the normalized form in `Value` and `MarshalJSON`, and
+      their `Validate` normalizes first, also for `language.Code` and
+      `bank.BIC`. `money.CurrencyAmount` and `CurrencyDecimalAmount` write
+      their currency normalized. Normalized email addresses keep non-ASCII
+      names as UTF-8, only `BuildRawMessage` encodes them with RFC 2047.
+      **Completed:** 2026-10-13
 - [x] **Fixes from the code review of PR #28.** `date`: full "August"
       dates parse, a number with an ordinal suffix is never the month,
       year 0 dates give the zero time, `NullableDate.Format(Layout)` is

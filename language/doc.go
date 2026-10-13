@@ -7,9 +7,10 @@
 // POSIX locales ("en-US", "zh_Hant"). [ParseCode] also accepts English
 // language names ("German").
 //
-// [Code.Valid] and [Code.Validate] are strict and only accept a canonical
-// lower-case code, because [Code.Value] writes the code unchanged.
-// Normalize input in other spellings before validating and storing it.
+// [Code.Valid] is strict and only accepts a canonical lower-case code.
+// [Code.Validate] normalizes first and accepts every spelling that
+// [Code.Normalized] accepts, because [Code.Value] and [Code.MarshalJSON]
+// write the normalized code.
 //
 // The package includes:
 //   - [Code] with SQL Scan and Value methods, where [Null] is SQL NULL

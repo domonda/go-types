@@ -127,9 +127,10 @@ The [docs index](docs/README.md) lists everything. By what you need:
 - `Valid() bool` and `Validate() error` accept the input that `Normalized()`
   accepts, so `country.Code("de").Valid()` and `vat.ID("atu 1022 3006").Valid()`
   are true. `ValidAndNormalized()` reports whether a value is already in
-  canonical form. Two types are strict: `language.Code.Valid` only accepts a
-  canonical code (its `Validate` normalizes first), and `bank.BIC.Valid` only
-  accepts the compact upper case form. See
+  canonical form. One type is strict: `language.Code.Valid` only accepts a
+  canonical code (its `Validate` normalizes first). `Value()` and
+  `MarshalJSON()` write the normalized form, so a non-canonical spelling that
+  `Validate` accepts doesn't reach SQL or JSON. See
   [validation and normalization](docs/explanation-validation-and-normalization.md).
 - How each type is written to and read from SQL and JSON, including its zero
   and null values, is in the Serialization section of its package README.
@@ -149,7 +150,10 @@ types gets resolved. Types that don't follow a rule yet are tracked in
   type writes, its `Value`, its JSON and its `String`, is the canonical form:
   `country.Code("de")` is stored and marshalled as `DE`. Lenient validation
   and canonical output belong together, a value that passes `Validate` must
-  never be stored in another spelling.
+  never be stored in another spelling. The canonical form is UTF-8 for
+  readability, the email types have an extra `ASCII()` for message headers.
+  `String` of a set lists its elements as given, because normalizing could
+  merge elements.
 - **Empty input is null.** For a nullable type, an empty or whitespace-only
   string from SQL, JSON or text is null, because an empty CSV cell or text
   column means "no value".

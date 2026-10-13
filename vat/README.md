@@ -95,7 +95,7 @@ The formats and checksum functions live in `formats.go` (`idRegex` and `checkSum
 | `Nullable()`                   | Plain conversion to `NullableID`, no normalization. |
 | `ScanString(source, validate)` | Assigns the canonical `source`. If that fails, returns the error when `validate` is true, else assigns `source` as is. |
 
-Implements: `fmt.Stringer`, `database/sql.Scanner`, `database/sql/driver.Valuer`, `strfmt.Scannable`, `types.NormalizableValidator[ID]` and `JSONSchema()` (string with `minLength` 4 and no `maxLength`, because formatted IDs can be longer than `IDMaxLength`). `ID` has no JSON methods.
+Implements: `fmt.Stringer`, `database/sql.Scanner`, `database/sql/driver.Valuer`, `json.Marshaler`, `strfmt.Scannable`, `types.NormalizableValidator[ID]` and `JSONSchema()` (string with `minLength` 4 and no `maxLength`, because formatted IDs can be longer than `IDMaxLength`). `ID` has no `UnmarshalJSON`.
 
 ## NullableID
 
@@ -122,7 +122,7 @@ const Null NullableID = ""
 | `GetOr(defaultID)`                 | The `ID`, or `defaultID` if null.                  |
 | `Set(id)`, `SetNull()`             | Assign an `ID` or `Null`.                          |
 | `String()`                         | Canonical ID, `""` for `Null`, or the raw string if invalid. |
-| `StringOr(nullString)`             | The raw string (not normalized), or `nullString` if null. |
+| `StringOr(nullString)`             | Canonical ID, or `nullString` if null or invalid.  |
 | `CountryCode()`                    | Like `ID`, as `country.NullableCode`; `country.Null` if null or invalid. |
 | `IsMOSS()`, `Number()`             | Like `ID`; false and `""` for `Null`.              |
 | `ScanString(source, validate)`     | `""`, whitespace only, `"NULL"`, `"null"` and `"nil"` set `Null`; otherwise like `ID`. |
@@ -146,11 +146,11 @@ var IDFinder idFinder
 | Value                         | SQL `Value()`     | JSON (`json.Marshal`) | `String()`      |
 |-------------------------------|-------------------|-----------------------|-----------------|
 | `ID("")`                      | `""` (not `NULL`) | `""`                  | `""`            |
-| `ID("atu 1022 3006")` (valid) | `"ATU10223006"`   | `"atu 1022 3006"`     | `"ATU10223006"` |
+| `ID("atu 1022 3006")` (valid) | `"ATU10223006"`   | `"ATU10223006"`       | `"ATU10223006"` |
 | `ID("ATU10223006")`           | `"ATU10223006"`   | `"ATU10223006"`       | `"ATU10223006"` |
 | `ID("bad")` (invalid)         | `"bad"`, no error | `"bad"`               | `"bad"`         |
 | `NullableID` `Null`, `"  "`   | `NULL`            | `null`                | `""`            |
-| `NullableID("atu 1022 3006")` | `"ATU10223006"`   | `"atu 1022 3006"`     | `"ATU10223006"` |
+| `NullableID("atu 1022 3006")` | `"ATU10223006"`   | `"ATU10223006"`       | `"ATU10223006"` |
 | `NullableID("bad")` (invalid) | `"bad"`, no error | `"bad"`               | `"bad"`         |
 
 | Input                          | `ID`                                    | `NullableID`         |
@@ -168,11 +168,10 @@ var IDFinder idFinder
 - **Greece uses `EL`.** `"GR094019245"` fails with "unsupported country code", `"EL094019245"` is valid. `CountryCode()` returns `country.EL`, which `country.Code.IsEU` counts as an EU member.
 - **Only listed prefixes.** A valid country without a format, like `US`, is rejected.
 - **Format only for some countries.** CH, IE, IS, LI, NL, SM and `EU` have no checksum; CZ (9 and 10 digits), FR (letter keys), GB/XI (`GD`, `HA`) and LV (natural persons) are checked partly. A well-formed made-up number passes there.
-- **The length limit applies after normalization.** `"AT - U - 1022 - 3006"` (20 characters) is valid. That's why the JSON schema has no `maxLength`: it would reject formatted IDs that `Normalized` accepts and that are written to JSON unnormalized.
+- **The length limit applies after normalization.** `"AT - U - 1022 - 3006"` (20 characters) is valid. That's why the JSON schema has no `maxLength`: it would reject formatted IDs that `Normalized` accepts and that JSON decoding stores unnormalized.
 - **`"No."` is not Norway.** Input starting with `"No."` or `"no."` is rejected, because it is far more often the English abbreviation for number.
 - **`ID` is not nullable.** `ID("").Value()` writes an empty string, and `Scan(nil)` returns an error. Use `NullableID` for nullable columns.
-- **Output is only partly normalized.** `Value` writes valid IDs canonical, but JSON encodes the raw string for both types. Normalize before encoding if consumers expect the canonical form.
-- **`StringOr` is not normalized.** `NullableID("atu 10223006").StringOr("-")` is `"atu 10223006"`.
+- **Only writing normalizes.** `Value` and `MarshalJSON` write valid IDs canonical, but `Scan` and JSON decoding store the string as is.
 - **The finder reads at most three words.** `"DE 167 015 661"` spans four words and is not found; `"DE 167015661"` is.
 
 ## Examples

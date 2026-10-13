@@ -2,7 +2,6 @@ package bank
 
 import (
 	"database/sql/driver"
-	"encoding/json"
 	"fmt"
 
 	"github.com/invopop/jsonschema"
@@ -111,12 +110,13 @@ func (bic *NullableBIC) Scan(value any) error {
 }
 
 // Value implements the driver database/sql/driver.Valuer interface.
-// Returns nil for SQL NULL if the NullableBIC is null, see IsNull.
+// Returns nil for SQL NULL if the NullableBIC is null, see IsNull,
+// else the normalized BIC like BIC.Value.
 func (bic NullableBIC) Value() (driver.Value, error) {
 	if bic.IsNull() {
 		return nil, nil
 	}
-	return string(bic), nil
+	return BIC(bic).Value()
 }
 
 // Set sets an BIC for this NullableBIC
@@ -159,13 +159,15 @@ func (bic NullableBIC) String() string {
 	return string(norm)
 }
 
-// StringOr returns the NullableBIC as string without normalization,
-// unlike String, or the passed defaultString if the NullableBIC is null.
+// StringOr returns the normalized NullableBIC as string,
+// or the passed defaultString if the NullableBIC is null
+// or can't be normalized.
 func (bic NullableBIC) StringOr(defaultString string) string {
-	if bic.IsNull() {
+	norm, err := bic.Normalized()
+	if err != nil || norm.IsNull() {
 		return defaultString
 	}
-	return string(bic)
+	return string(norm)
 }
 
 // IsNull returns true if the NullableBIC is null,
@@ -182,12 +184,13 @@ func (bic NullableBIC) IsNotNull() bool {
 }
 
 // MarshalJSON implements encoding/json.Marshaler
-// by returning the JSON null value if the NullableBIC is null, see IsNull.
+// by returning the JSON null value if the NullableBIC is null, see IsNull,
+// else the normalized BIC like BIC.MarshalJSON.
 func (bic NullableBIC) MarshalJSON() ([]byte, error) {
 	if bic.IsNull() {
 		return []byte(`null`), nil
 	}
-	return json.Marshal(string(bic))
+	return BIC(bic).MarshalJSON()
 }
 
 // UnmarshalJSON implements encoding/json.Unmarshaler

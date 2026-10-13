@@ -96,7 +96,7 @@ const Null NullableCode = ""
 | `GetOr(defaultCode)`           | The `Code`, or `defaultCode` if null.              |
 | `Set(code)`, `SetNull()`       | Assign a `Code` or `Null`.                         |
 | `String()`                     | `""` if null, else the normalized code or the raw string. |
-| `StringOr(defaultString)`      | The raw string (not normalized), or `defaultString` if null. |
+| `StringOr(defaultString)`      | Normalized code, or `defaultString` if null or invalid. |
 | `IsEU()`, `EnglishName()`      | As for `Code`.                                     |
 | `ScanString(source, validate)` | `""`, whitespace only, `"NULL"`, `"null"` and `"nil"` set `Null`; otherwise like `Code`. |
 
@@ -135,7 +135,6 @@ Output is normalized, input is not: a value read with `Scan` or `json.Unmarshal`
 - **XK is not an ISO code.** Other systems may reject it.
 - **Invalid values are written without error.** `Value` and `MarshalJSON` write an invalid code unchanged. Validate before writing.
 - **Whitespace.** `NullableCode("  ")` is null (SQL NULL, JSON `null`), but `Code("  ")` is invalid and `Value` writes `"  "`.
-- **`StringOr` is not normalized.** `NullableCode("de").StringOr("-")` is `"de"`, while `String()` is `"DE"`.
 
 ## Examples
 

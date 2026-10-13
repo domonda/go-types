@@ -2,6 +2,7 @@ package language
 
 import (
 	"database/sql/driver"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
@@ -39,20 +40,21 @@ func (c Code) Valid() bool {
 	return ok
 }
 
-// Validate returns an error if c is not a valid ISO 639-1 language code,
-// exactly like Valid. Value and encoding/json store c as given, so
-// validation only accepts the normalized code. Use Normalized to accept
-// other spellings like "EN", "eng" and "en-US".
+// Validate returns an error if c can not be normalized to a valid
+// ISO 639-1 language code, so it accepts other spellings like
+// "EN", "eng" and "en-US" that the strict Valid rejects.
+// See Normalized for the accepted input shapes.
+// Value and MarshalJSON write the normalized code.
 //
-// Hand-written: returns an error that names the offending input
-// instead of the generic error that go-enum would generate.
+// Hand-written: normalizes first like country.Code and money.Currency,
+// and returns the error from Normalized, which names the offending input,
+// instead of the generic error of the strict lookup that go-enum would
+// generate.
 //
 // #custom
 func (c Code) Validate() error {
-	if !c.Valid() {
-		return fmt.Errorf("invalid language.Code: %q", string(c))
-	}
-	return nil
+	_, err := c.Normalized()
+	return err
 }
 
 // ValidAndNormalized returns true if the Code is valid and already normalized.
@@ -223,11 +225,22 @@ func (c *Code) Scan(value any) error {
 }
 
 // Value implements the driver database/sql/driver.Valuer interface.
+// Returns nil for SQL NULL if the Code is Null, else the normalized code,
+// or the unchanged string if it can't be normalized.
 func (c Code) Value() (driver.Value, error) {
 	if c == Null {
 		return nil, nil
 	}
-	return string(c), nil
+	norm, _ := c.Normalized()
+	return string(norm), nil
+}
+
+// MarshalJSON implements encoding/json.Marshaler.
+// Returns the normalized code as JSON string,
+// or the unchanged string if it can't be normalized.
+func (c Code) MarshalJSON() ([]byte, error) {
+	norm, _ := c.Normalized()
+	return json.Marshal(string(norm))
 }
 
 // JSONSchema returns the JSON schema definition for the Code type.

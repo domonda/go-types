@@ -341,16 +341,6 @@ cross-field rules in the struct's `Validate`, as in step 3.
 `types.CombinedValidatErr` wrap even a single error with `errors.Join`.
 Compare with `errors.Is(err, ErrSomething)`.
 
-**A `language.Code` field with the value `"EN"` fails with `invalid
-language.Code: "EN"`.**
-`Valid()` and `Validate()` only accept the canonical lower-case code, because
-`Value()` stores the code unchanged. `Normalized()` accepts `"EN"`, `"eng"` and
-`"en-US"`: store its result before validating.
-
-**A `bank.BIC` with spaces fails with `invalid BIC "BKAU AT WW" length: 10`.**
-`bank.BIC.Validate` does not remove whitespace, `bank.BIC.Normalized` does.
-Normalize the BIC before validating it.
-
 ## Related
 
 - [Validation and normalization](explanation-validation-and-normalization.md):

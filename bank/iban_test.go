@@ -1,6 +1,7 @@
 package bank
 
 import (
+	"encoding/json"
 	"regexp"
 	"testing"
 
@@ -323,6 +324,33 @@ func TestIBAN_SQL(t *testing.T) {
 		require.NoError(t, iban.Scan(v))
 		assert.Equal(t, IBAN("DE89370400440532013000"), iban)
 	})
+}
+
+// Value and MarshalJSON write an IBAN normalized, because Validate accepts
+// the IBAN grouped with spaces as printed on statements: without
+// normalization the grouped and the compact IBAN would reach SQL and JSON
+// as different strings. An IBAN that can't be normalized is written
+// unchanged instead of failing the write.
+func TestIBAN_ValueAndMarshalJSONNormalize(t *testing.T) {
+	tests := []struct {
+		iban IBAN
+		want string
+	}{
+		{iban: "DE89370400440532013000", want: "DE89370400440532013000"},
+		{iban: "DE89 3704 0044 0532 0130 00", want: "DE89370400440532013000"},
+		{iban: " AT61 1904 3002 3457 3201 ", want: "AT611904300234573201"},
+		{iban: "DE00 1234", want: "DE00 1234"},
+		{iban: "", want: ""},
+	}
+	for _, tt := range tests {
+		v, err := tt.iban.Value()
+		require.NoError(t, err)
+		assert.Equal(t, tt.want, v, "IBAN(%q).Value()", string(tt.iban))
+
+		j, err := json.Marshal(tt.iban)
+		require.NoError(t, err)
+		assert.Equal(t, `"`+tt.want+`"`, string(j), "json.Marshal(IBAN(%q))", string(tt.iban))
+	}
 }
 
 func TestIBAN_BankAndAccountNumbers_Countries(t *testing.T) {

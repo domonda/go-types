@@ -138,7 +138,7 @@ Rules for numeric dates:
 | `LastMonday()`                                     | The Monday on or before the date.                  |
 | `NextSunday()`                                     | The Sunday on or after the date.                   |
 
-Implements: `fmt.Stringer`, `database/sql.Scanner`, `database/sql/driver.Valuer`, `strfmt.Scannable`, `types.Validator`, `types.ValidatErr` and `JSONSchema()` (`{"type":"string","format":"date"}`). `Date` has no JSON methods. It is not a `types.NormalizableValidator` because `Normalized` takes optional language hints.
+Implements: `fmt.Stringer`, `database/sql.Scanner`, `database/sql/driver.Valuer`, `strfmt.Scannable`, `types.Validator`, `types.ValidatErr` and `JSONSchema()` (`{"type":"string","format":"date"}`). `Date` has `MarshalJSON`, but no `UnmarshalJSON`. It is not a `types.NormalizableValidator` because `Normalized` takes optional language hints.
 
 ## NullableDate
 
@@ -169,7 +169,7 @@ const Null NullableDate = ""
 | `Normalized(lang...)`                              | `Null` for null input, otherwise like `Date`.      |
 | `NormalizedOrNull(lang...)`, `NormalizedOrUnchanged(lang...)` | As for `Date`.                                     |
 | `String()`                                         | `""` for null, else like `Date`.                   |
-| `StringOr(nullString)`                             | `String()`, or `nullString` if null.               |
+| `StringOr(nullString)`                             | Normalized, or `nullString` if null or invalid.    |
 | `ScanString(source, validate)`                     | `""`, `"NULL"`, `"null"`, `"nil"` and whitespace only set `Null`; otherwise like `Date`. |
 | `ScanStringWithLang(source, lang)`                 | A null `source` sets `Null`; otherwise like `Date`. |
 | `MidnightUTC()`, `Midnight()`, `MidnightInLocation(loc)` | Return `nullable.Time`, null for null or invalid dates. |
@@ -303,11 +303,11 @@ SQL `Value()` and JSON encoding:
 |----------------------------------------------------|--------------------------------------------|-------------------------------|------------------|
 | `Date("")`                                         | `NULL`                                     | `""`                          | `""`             |
 | `Date("0001-01-01")`, `Date("0000-00-00")`         | `NULL`                                     | the string as is              | the string as is |
-| `Date("25.12.2023")` (valid, not normalized)       | `"2023-12-25"`                             | `"25.12.2023"`                | `"2023-12-25"`   |
+| `Date("25.12.2023")` (valid, not normalized)       | `"2023-12-25"`                             | `"2023-12-25"`                | `"2023-12-25"`   |
 | `Date("2023-12-25")`                               | `"2023-12-25"`                             | `"2023-12-25"`                | `"2023-12-25"`   |
 | `Date("bad")` (invalid)                            | error                                      | `"bad"`                       | `"bad"`          |
 | `NullableDate` null or zero date                   | `NULL`                                     | `null`                        | `""`             |
-| `NullableDate("25.12.2023")`                       | `"2023-12-25"`                             | `"25.12.2023"`                | `"2023-12-25"`   |
+| `NullableDate("25.12.2023")`                       | `"2023-12-25"`                             | `"2023-12-25"`                | `"2023-12-25"`   |
 | `NullableDate("bad")`                              | error                                      | `"bad"`                       | `"bad"`          |
 | `YearMonth`, `YearQuarter` and their nullable types | the raw string, `""` for null (not `NULL`) | the raw string, `""` for null | the raw string   |
 
@@ -336,7 +336,7 @@ Reading values:
 - **Day first.** `"05/06/2024"` is June 5 unless the hint is English. The hint never changes a date that has only one valid reading. Only the first `lang` argument is used.
 - **Two-digit years** pivot at 45: `"25.12.44"` is 2044-12-25, `"25.12.45"` is 1945-12-25.
 - **Invalid and zero dates become the zero time.** `Date("bad").Format("02.01.2006")` returns `"01.01.0001"` and `Date("").AddDays(1)` returns `"0001-01-02"`. Check `Valid` (or `IsZero`) before formatting or doing arithmetic. `Format(Layout)` instead returns an invalid date unchanged. Comparisons don't use the zero time: `After`, `Before`, `WithinIncl`, `BetweenExcl`, `AfterTime` and `BeforeTime` are false for an invalid date, so `Date("bad").Before("2024-01-01")` and `Date("2024-01-01").EqualOrAfter("bad")` are false.
-- **JSON is not normalized.** `Date` and `NullableDate` encode the raw string, and decoding does not validate. Normalize before encoding if consumers expect `YYYY-MM-DD`.
+- **Only writing normalizes.** `Value` and `MarshalJSON` of `Date` and `NullableDate` write a valid date as `YYYY-MM-DD`, but JSON decoding stores the string as is without validating it. An invalid date is an error for `Value` and written unchanged by `MarshalJSON`.
 - **Null ordering.** `Null` is before every date: `Null.Before(d)` and `d.After(Null)` are true, `Null.BeforeToday()` is true.
 - **Upper-case `Q`.** `YearQuarter("2024-q1").Valid()` is false, while `PeriodRange("2024-q1")` works.
 - **Nullable period types differ from `NullableDate`.** The `IsNull` of `NullableYearMonth` and `NullableYearQuarter` is only `""`, while `NullableDate.IsNull` also covers the zero dates.
@@ -432,7 +432,7 @@ type Invoice struct {
 }
 
 func main() {
-	b, _ := json.Marshal(Invoice{Issued: "2024-03-01"})
+	b, _ := json.Marshal(Invoice{Issued: "2024-03-01", Paid: "15.3.2024"})
 	fmt.Println(string(b))
 
 	v, _ := date.Null.Value()
@@ -446,7 +446,7 @@ func main() {
 	}
 
 	// Output:
-	// {"issued":"2024-03-01","paid":null}
+	// {"issued":"2024-03-01","paid":"2024-03-15"}
 	// <nil>
 	// 2024-03-01
 	// 25.12.2023

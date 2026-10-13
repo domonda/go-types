@@ -46,7 +46,7 @@ There is no uppercasing and no removal of dashes or other punctuation.
 | `iban.Scan(value) error`, `iban.Value()`           | See [Serialization](#serialization).               |
 | `IBAN.JSONSchema()`                                | String with the `IBANRegex` pattern.               |
 
-Implements: `sql.Scanner`, `driver.Valuer`, `fmt.Stringer`, `strfmt.Scannable`, `types.NormalizableValidator[IBAN]`. No JSON or text methods.
+Implements: `sql.Scanner`, `driver.Valuer`, `json.Marshaler`, `fmt.Stringer`, `strfmt.Scannable`, `types.NormalizableValidator[IBAN]`. No `UnmarshalJSON` or text methods.
 
 ## NullableIBAN
 
@@ -69,7 +69,7 @@ An `IBAN` where `""` is the null value. A whitespace only value is null too, lik
 | `IsNull() bool`, `IsNotNull() bool`             | Null is `""` or whitespace only.                   |
 | `Get() IBAN`                                    | Panics if null.                                    |
 | `GetOr(defaultIBAN IBAN) IBAN`                  | Value or the default.                              |
-| `StringOr(defaultString) string`                | Value unchanged, or the default if null.           |
+| `StringOr(defaultString) string`                | Normalized, or the default if null or invalid.     |
 | `String() string`                               | Normalized if valid, else unchanged, `""` for null. |
 | `Set(IBAN)`, `SetNull()`                        | `Set("")` sets null.                               |
 | `ScanString(source, validate) error`            | `""`, whitespace only, `NULL`, `null`, and `nil` set null, other values like `IBAN.ScanString`. |
@@ -95,25 +95,25 @@ A BIC has 8 or 11 uppercase characters: a 4 letter institution code, a 2 letter 
 | Function / Method                                  | Description                                        |
 |----------------------------------------------------|----------------------------------------------------|
 | `NormalizeBIC(str) (BIC, error)`                   | `BIC(str).Normalized()`.                           |
-| `StringIsBIC(str) bool`                            | `BIC(str).Valid()`, so whitespace is not accepted. |
-| `bic.Validate() error`, `bic.Valid() bool`         | Strict check of the raw value: length 8 or 11, syntax, country code, deny-list. |
+| `StringIsBIC(str) bool`                            | `BIC(str).Valid()`.                                |
+| `bic.Validate() error`, `bic.Valid() bool`         | Normalizes first: length 8 or 11 after removing all whitespace, syntax, country code, deny-list. |
 | `bic.Normalized() (BIC, error)`                    | Removes all whitespace, validates, and appends `XXX` to an 8 character BIC. Returns the input unchanged with the error. |
 | `bic.NormalizedShort() (BIC, error)`               | Like `Normalized`, but removes the `XXX` suffix of an 11 character BIC. |
 | `bic.NormalizedOrNull() NullableBIC`               | Normalized, or `BICNull` if invalid.               |
 | `bic.ValidAndNormalized() bool`                    | Valid 11 character form.                           |
-| `bic.Parse() (bankCode string, countryCode country.Code, branchCode string, isValid bool)` | The institution code, the country code, and the branch code (`""` for 8 characters). All empty and `false` if invalid. There is no location part. |
-| `bic.CountryCode() country.Code`                   | Characters 5 and 6, `""` if invalid.               |
+| `bic.Parse() (bankCode string, countryCode country.Code, branchCode string, isValid bool)` | The institution code, the country code, and the branch code (`""` for 8 characters). All empty and `false` if invalid. There is no location part. Parses the value as given, so whitespace makes it invalid. |
+| `bic.CountryCode() country.Code`                   | Characters 5 and 6 of the normalized BIC, `""` if invalid. |
 | `bic.TrimBranchCode() BIC`                         | The first 8 characters.                            |
-| `bic.IsTestBIC() bool`                             | Valid and the 8th character is `0`.                |
-| `bic.IsPassiveSWIFT() bool`                        | Valid and the 8th character is `1`.                |
-| `bic.ReceiverPaysFees() bool`                      | Valid and the 8th character is `2`.                |
+| `bic.IsTestBIC() bool`                             | Valid and the 8th character of the normalized BIC is `0`. |
+| `bic.IsPassiveSWIFT() bool`                        | Valid and the 8th character of the normalized BIC is `1`. |
+| `bic.ReceiverPaysFees() bool`                      | Valid and the 8th character of the normalized BIC is `2`. |
 | `bic.String() string`                              | Normalized (11 characters) if valid, else unchanged. |
 | `bic.Nullable() NullableBIC`                       | Type conversion.                                   |
-| `bic.ScanString(source, validate) error`           | Assigns the source unchanged, without normalization. With `validate` an invalid source is an error. |
+| `bic.ScanString(source, validate) error`           | Assigns the source unchanged, without normalization. With `validate` a source that `Validate` rejects is an error. |
 | `bic.Scan(value) error`, `bic.Value()`             | See [Serialization](#serialization).               |
 | `BIC.JSONSchema()`                                 | String with the `BICRegex` pattern.                |
 
-Implements: `sql.Scanner`, `driver.Valuer`, `fmt.Stringer`, `strfmt.Scannable`, `types.NormalizableValidator[BIC]`. No JSON or text methods.
+Implements: `sql.Scanner`, `driver.Valuer`, `json.Marshaler`, `fmt.Stringer`, `strfmt.Scannable`, `types.NormalizableValidator[BIC]`. No `UnmarshalJSON` or text methods.
 
 ## NullableBIC
 
@@ -134,7 +134,7 @@ A `BIC` where `""` is the null value. A whitespace only value is null too, like 
 | `IsNull() bool`, `IsNotNull() bool`             | Null is `""` or whitespace only.                   |
 | `Get() BIC`                                     | Panics if null.                                    |
 | `GetOr(defaultBIC BIC) BIC`                     | Value or the default.                              |
-| `StringOr(defaultString) string`                | Value unchanged, or the default if null.           |
+| `StringOr(defaultString) string`                | Normalized, or the default if null or invalid.     |
 | `String() string`                               | Normalized if valid, else unchanged, `""` for null. |
 | `Set(BIC)`, `SetNull()`                         | `Set("")` sets null.                               |
 | `ScanString(source, validate) error`            | `""`, whitespace only, `NULL`, `null`, and `nil` set null, other values like `BIC.ScanString`. |
@@ -228,20 +228,20 @@ The tag paths start below the root element, which is not checked.
 
 ## Serialization
 
-`Scan` and JSON decoding of `IBAN`, `BIC`, and their nullable variants never normalize or validate.
+`Scan` and JSON decoding of `IBAN`, `BIC`, and their nullable variants never normalize or validate. `Value` and `MarshalJSON` write a valid IBAN compact and a valid BIC with 11 characters, and an invalid value unchanged.
 
 | Type                          | `Value()` writes                             | `Scan` accepts                                     | JSON                                               | Text                                               |
 |-------------------------------|----------------------------------------------|----------------------------------------------------|----------------------------------------------------|----------------------------------------------------|
-| `IBAN`, `BIC`                 | The string unchanged, `""` as `""`, not NULL | `string` and `[]byte` unchanged, NULL as `""`, other types are errors | No methods: plain string, `""` as `""`, `null` leaves the value unchanged | No text methods, `ScanString` for `strfmt`         |
-| `NullableIBAN`, `NullableBIC` | Null (`""` or whitespace only) as NULL, else the string unchanged | Like `IBAN`, NULL is null                          | `MarshalJSON` writes null as `null`, else the string unchanged. `UnmarshalJSON` assigns strings unchanged and sets null for `null`, other JSON values are errors | No text methods, `ScanString` for `strfmt`         |
+| `IBAN`, `BIC`                 | Normalized if valid, else unchanged, `""` as `""`, not NULL | `string` and `[]byte` unchanged, NULL as `""`, other types are errors | `MarshalJSON` writes like `Value`, `""` as `""`. No `UnmarshalJSON`: a string is assigned unchanged, `null` leaves the value unchanged | No text methods, `ScanString` for `strfmt`         |
+| `NullableIBAN`, `NullableBIC` | Null (`""` or whitespace only) as NULL, else like `IBAN` and `BIC` | Like `IBAN`, NULL is null                          | `MarshalJSON` writes null as `null`, else like `IBAN` and `BIC`. `UnmarshalJSON` assigns strings unchanged and sets null for `null`, other JSON values are errors | No text methods, `ScanString` for `strfmt`         |
 | `Account`                     | No `Valuer`, marshal to JSON yourself        | `string` or `[]byte` with JSON or an IBAN, see `UnmarshalJSON`. NULL is an error. | Marshal: `{"iban":"...","bic":"...","currency":"...","holder":"..."}`, `iban` always, the others omitted when empty. Unmarshal: a JSON object is assigned without normalization or validation, a JSON string must be a valid IBAN and is normalized, `BIC`, `Currency`, and `Holder` become null. `null` leaves the account unchanged. | `UnmarshalText` like `UnmarshalJSON` after trimming, also for an unquoted IBAN |
 
 ## Gotchas
 
 - **IBAN normalization only removes whitespace.** `de89370400440532013000` fails with `invalid IBAN country code` and `DE89-3704-0044-0532-0130-00` with `wrong IBAN length`. Uppercase or clean punctuation yourself.
-- **IBAN validation normalizes, BIC validation doesn't.** `IBAN("DE89 3704 0044 0532 0130 00").Valid()` and `StringIsIBAN` are true, while `BIC("BKAU AT WW").Valid()` and `StringIsBIC` are false, although `NormalizeBIC("BKAU AT WW")` returns `BKAUATWWXXX`. Likewise `IBAN.ScanString` and `IBANParser` normalize, `BIC.ScanString` and `BICParser` don't.
-- **Store the normalized form.** A valid IBAN with spaces has `ValidAndNormalized() == false`, and `Value()` writes it with the spaces.
-- **8 vs 11 character BICs.** `BIC("BKAUATWW") == BIC("BKAUATWWXXX")` is false. `Normalized` and `String` produce 11 characters, `NormalizedShort` 8, and `ValidAndNormalized` is only true for the 11 character form. Normalize both sides before comparing.
+- **Validation normalizes, parsing a BIC doesn't.** `IBAN("DE89 3704 0044 0532 0130 00").Valid()`, `BIC("BKAU AT WW").Valid()`, `StringIsIBAN` and `StringIsBIC` are true. `IBAN.ScanString` and `IBANParser` normalize, while `BIC.ScanString` assigns the source unchanged and `BICParser` rejects whitespace, because it returns the BIC as given.
+- **Only writing normalizes.** `Value` and `MarshalJSON` write the normalized form, but the Go value keeps its spelling: a valid IBAN with spaces has `ValidAndNormalized() == false` and is not `==` to the compact IBAN.
+- **8 vs 11 character BICs.** `BIC("BKAUATWW") == BIC("BKAUATWWXXX")` is false. `Normalized`, `String`, `Value` and `MarshalJSON` produce 11 characters, `NormalizedShort` 8, and `ValidAndNormalized` is only true for the 11 character form. Normalize both sides before comparing.
 - **`String` normalizes.** `fmt` and `%s` print an IBAN without spaces and a BIC with 11 characters, also the results of `NormalizedWithSpaces` and `NormalizedShort`. Convert with `string(iban)` to print the value as it is.
 - **The BIC country code is at characters 5 and 6**, not at the start like in an IBAN.
 - **Only the nullable types write SQL NULL.** `IBAN("").Value()` and `BIC("").Value()` return `""`. All four types scan NULL as `""`.
@@ -293,7 +293,7 @@ func main() {
 	// DE 37040044 0532013000 <nil>
 	// BKAUATWWXXX <nil>
 	// BKAUATWW
-	// false
+	// true
 }
 ```
 

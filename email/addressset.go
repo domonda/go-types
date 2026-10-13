@@ -2,6 +2,7 @@ package email
 
 import (
 	"database/sql/driver"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"iter"
@@ -324,6 +325,11 @@ func (set AddressSet) AddressList() AddressList {
 // the sorted addresses joined as a comma separated list,
 // or "<nil>" for a nil set like [types.Set.String] does.
 //
+// Unlike the String methods of the address types, String does not
+// normalize, because normalizing can merge addresses, and the string
+// has to list every element of the set, like the String methods
+// of the other set types.
+//
 // An allocated empty set renders as the empty string, which is what the
 // empty address list is, so the nil rendering is what distinguishes the
 // two. Use [AddressSet.AddressList] to get the joined list unconditionally.
@@ -433,7 +439,12 @@ func (set *AddressSet) Scan(value any) error {
 }
 
 // Value implements the driver database/sql/driver.Valuer interface.
+// Writes the normalized set, or the set unchanged
+// if any of its addresses can't be normalized.
 func (set AddressSet) Value() (driver.Value, error) {
+	if norm, err := set.Normalized(); err == nil {
+		set = norm
+	}
 	if set == nil {
 		return nil, nil
 	}
@@ -442,4 +453,15 @@ func (set AddressSet) Value() (driver.Value, error) {
 	}
 	s := set.Sorted()
 	return (*notnull.StringArray)(unsafe.Pointer(&s)).Value() //#nosec G103 -- unsafe OK
+}
+
+// MarshalJSON implements encoding/json.Marshaler by writing the normalized
+// set, or the set unchanged if any of its addresses can't be normalized,
+// as JSON object with the addresses as keys like encoding/json writes a map,
+// so the JSON still unmarshals into an AddressSet. A nil set is JSON null.
+func (set AddressSet) MarshalJSON() ([]byte, error) {
+	if norm, err := set.Normalized(); err == nil {
+		set = norm
+	}
+	return json.Marshal(map[Address]struct{}(set))
 }

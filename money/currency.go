@@ -2,6 +2,7 @@ package money
 
 import (
 	"database/sql/driver"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
@@ -212,11 +213,22 @@ func (c *Currency) Scan(value any) error {
 }
 
 // Value implements the driver database/sql/driver.Valuer interface.
+// Returns nil for SQL NULL if the Currency is empty, else the normalized
+// currency, or the unchanged string if it can't be normalized.
 func (c Currency) Value() (driver.Value, error) {
 	if c == CurrencyNull {
 		return nil, nil
 	}
-	return string(c), nil
+	norm, _ := c.Normalized()
+	return string(norm), nil
+}
+
+// MarshalJSON implements encoding/json.Marshaler.
+// Returns the normalized currency as JSON string,
+// or the unchanged string if it can't be normalized.
+func (c Currency) MarshalJSON() ([]byte, error) {
+	norm, _ := c.Normalized()
+	return json.Marshal(string(norm))
 }
 
 // Symbol returns the currency symbol like € for EUR if available,

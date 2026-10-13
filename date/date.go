@@ -2,6 +2,7 @@ package date
 
 import (
 	"database/sql/driver"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -828,6 +829,15 @@ func (date Date) Value() (driver.Value, error) {
 		return nil, err
 	}
 	return string(normalized), nil
+}
+
+// MarshalJSON implements encoding/json.Marshaler.
+// Returns the normalized date as JSON string,
+// or the unchanged string if the date can't be normalized,
+// so an empty Date is written as empty string.
+func (date Date) MarshalJSON() ([]byte, error) {
+	norm, _ := date.Normalized()
+	return json.Marshal(string(norm))
 }
 
 // JSONSchema returns the JSON schema definition for the Date type.

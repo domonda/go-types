@@ -646,23 +646,34 @@ func TestBuildRawMessage_RecipientHeadersOnce(t *testing.T) {
 	require.Equal(t, msg.Bcc, parsed.Bcc)
 }
 
-// TestBuildRawMessage_NonASCIIFromName protects that the From and Reply-To
-// addresses stay parseable when their display name needs RFC 2047
-// encoding. Written raw, the whole header value including the <address>
-// became one encoded-word and RFC 5322 parsers could not find the
-// address, so replies went nowhere.
+// TestBuildRawMessage_NonASCIIFromName protects that the addresses stay
+// parseable when their display name needs RFC 2047 encoding. Written raw,
+// the whole header value including the <address> became one encoded-word
+// and RFC 5322 parsers could not find the address, so replies went
+// nowhere. The normalized Address keeps the name as UTF-8, so the
+// encoding has to happen when the header is written.
 func TestBuildRawMessage_NonASCIIFromName(t *testing.T) {
 	msg := &email.Message{
-		From:    "Jörg Müller <joerg@example.com>",
-		ReplyTo: "Zoë Bäcker <zoe@example.com>",
-		To:      "to@example.com",
-		Body:    "Body",
+		From:        "Jörg Müller <joerg@example.com>",
+		ReplyTo:     "Zoë Bäcker <zoe@example.com>",
+		To:          `"Müller, Jürgen" <juergen@example.com>, to@example.com`,
+		DeliveredTo: "Zoë <zoe@example.com>",
+		Cc:          "Søren <soeren@example.com>",
+		Bcc:         "Bjørn <bjoern@example.com>",
+		Body:        "Body",
 	}
 	raw, err := msg.BuildRawMessage()
 	require.NoError(t, err)
 
 	parsed, err := mail.ReadMessage(strings.NewReader(string(raw)))
 	require.NoError(t, err)
+	for key, values := range parsed.Header {
+		for _, value := range values {
+			for _, r := range value {
+				require.Less(t, r, rune(128), "header %s must be ASCII: %s", key, value)
+			}
+		}
+	}
 	from, err := mail.ParseAddress(parsed.Header.Get("From"))
 	require.NoError(t, err)
 	require.Equal(t, "joerg@example.com", from.Address)
@@ -671,6 +682,24 @@ func TestBuildRawMessage_NonASCIIFromName(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "zoe@example.com", replyTo.Address)
 	require.Equal(t, "Zoë Bäcker", replyTo.Name)
+	to, err := mail.ParseAddressList(parsed.Header.Get("To"))
+	require.NoError(t, err)
+	require.Len(t, to, 2)
+	require.Equal(t, "juergen@example.com", to[0].Address)
+	require.Equal(t, "Müller, Jürgen", to[0].Name)
+	cc, err := mail.ParseAddress(parsed.Header.Get("Cc"))
+	require.NoError(t, err)
+	require.Equal(t, "Søren", cc.Name)
+
+	// Parsed back, the addresses are normalized with UTF-8 names
+	msgParsed, err := email.ParseMIMEMessage(strings.NewReader(string(raw)))
+	require.NoError(t, err)
+	require.Equal(t, email.Address(`"Jörg Müller" <joerg@example.com>`), msgParsed.From)
+	require.Equal(t, email.NullableAddress(`"Zoë Bäcker" <zoe@example.com>`), msgParsed.ReplyTo)
+	require.Equal(t, email.AddressList(`"Müller, Jürgen" <juergen@example.com>, to@example.com`), msgParsed.To)
+	require.Equal(t, email.NullableAddressList(`"Zoë" <zoe@example.com>`), msgParsed.DeliveredTo)
+	require.Equal(t, email.NullableAddressList(`"Søren" <soeren@example.com>`), msgParsed.Cc)
+	require.Equal(t, email.NullableAddressList(`"Bjørn" <bjoern@example.com>`), msgParsed.Bcc)
 }
 
 // TestBuildRawMessage_NilAttachment protects that a JSON null in the

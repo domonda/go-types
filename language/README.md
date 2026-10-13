@@ -32,7 +32,7 @@ names := language.Code("").EnumStrings() // []string{"aa", "ab", "af", ...}
 | `ParseCode(str)`             | Canonical code from a code, tag or English language name, see below. |
 | `Normalized()`               | The canonical ISO 639-1 code for the input shapes listed below. On failure returns the input unchanged and an error that quotes it. |
 | `Valid()`                    | Strict: true only for a canonical lower-case ISO 639-1 code. `Code("EN").Valid()` is false. |
-| `Validate()`                 | Strict like `Valid()`: an error that quotes the input, or nil. `Code("EN").Validate()` is an error. |
+| `Validate()`                 | Normalizes first: the error of `Normalized()`, which quotes the input, or nil. `Code("EN").Validate()` is nil. |
 | `ValidAndNormalized()`       | True only for a canonical code; same result as `Valid()`. |
 | `LanguageName()`             | English name from the ISO 639-1 table. Normalizes first; `""` if invalid. |
 | `String()`                   | Normalized code, or the raw string if invalid.     |
@@ -40,9 +40,9 @@ names := language.Code("").EnumStrings() // []string{"aa", "ab", "af", ...}
 | `ISO6393Name(code)`          | English reference name of an ISO 639-3 code (`"deu"` gives `"German"`), `""` if unknown. |
 | `ISO6393Macrolanguage(code)` | ISO 639-3 macrolanguage of an individual language (`"twi"` gives `"aka"`), `""` if none. |
 
-Implements: `fmt.Stringer`, `database/sql.Scanner`, `database/sql/driver.Valuer`, `types.NormalizableValidator[Code]` and `JSONSchema()` (`{"type":"string","pattern":"^[a-z]{2}$"}`). `Code` has no JSON methods and no `ScanString` method, so it is not a `strfmt.Scannable`.
+Implements: `fmt.Stringer`, `database/sql.Scanner`, `database/sql/driver.Valuer`, `encoding/json.Marshaler`, `types.NormalizableValidator[Code]` and `JSONSchema()` (`{"type":"string","pattern":"^[a-z]{2}$"}`). `Code` has no `UnmarshalJSON` and no `ScanString` method, so it is not a `strfmt.Scannable`.
 
-`Valid`, `Validate` and `String` are hand-written and carry a `// #custom` marker, so go-enum keeps them. `Valid` and `Validate` are strict on purpose, unlike those of `country.Code` and `money.Currency`, because `Value` writes the code unchanged.
+`Valid`, `Validate` and `String` are hand-written and carry a `// #custom` marker, so go-enum keeps them. `Valid` is strict on purpose, unlike those of `country.Code` and `money.Currency`. `Validate` normalizes first like theirs, because `Value` and `MarshalJSON` write the normalized code.
 
 ### Normalized input shapes
 
@@ -71,12 +71,12 @@ On failure it returns the input unchanged and the error of `Normalized`.
 
 ## Serialization
 
-| Value                  | SQL `Value()`           | JSON (`json.Marshal`) | `String()` |
-|------------------------|-------------------------|-----------------------|------------|
-| `Null`                 | `NULL`                  | `""`                  | `""`       |
-| `Code("en")`           | `"en"`                  | `"en"`                | `"en"`     |
-| `Code("EN")`           | `"EN"` (not normalized) | `"EN"`                | `"en"`     |
-| `Code("xx")` (invalid) | `"xx"`, no error        | `"xx"`                | `"xx"`     |
+| Value                  | SQL `Value()`    | JSON (`json.Marshal`) | `String()` |
+|------------------------|------------------|-----------------------|------------|
+| `Null`                 | `NULL`           | `""`                  | `""`       |
+| `Code("en")`           | `"en"`           | `"en"`                | `"en"`     |
+| `Code("EN")`           | `"en"`           | `"en"`                | `"en"`     |
+| `Code("xx")` (invalid) | `"xx"`, no error | `"xx"`                | `"xx"`     |
 
 | Input                          | Result                                  |
 |--------------------------------|-----------------------------------------|
@@ -88,10 +88,10 @@ On failure it returns the input unchanged and the error of `Normalized`.
 
 ## Gotchas
 
-- **`Valid` and `Validate` are strict.** `Code("EN").Valid()` is false and `Code("EN").Validate()` is an error, so `types.Validate`, `types.DeepValidate` and `strfmt` scanning reject `"EN"`, `"eng"` and `"en-US"`. Call `Normalized` first to accept them.
-- **`Value` does not normalize.** `Code("EN")` is written to SQL as `"EN"`, unlike `country.Code`, which writes normalized codes.
+- **`Valid` is strict, `Validate` is not.** `Code("EN").Valid()` is false, but `Code("EN").Validate()` is nil, so `types.Validate`, `types.DeepValidate` and `strfmt` scanning accept `"EN"`, `"eng"` and `"en-US"`. Check `Valid` or `ValidAndNormalized` to require the canonical code.
+- **Only writing normalizes.** `Value` and `MarshalJSON` write `Code("EN")` as `"en"`, but `Scan` and JSON decoding keep `"EN"` as given.
 - **Optional languages.** `Null` is SQL NULL but fails `Validate`, so an empty language field fails `types.DeepValidate`. Use a `*language.Code` for optional fields or check for `Null` before validating.
-- **JSON is the plain string.** `Null` encodes as `""`, not `null`. The JSON schema pattern `^[a-z]{2}$` rejects `"EN"` like `Validate` does.
+- **JSON is a string.** `Null` encodes as `""`, not `null`. The JSON schema pattern `^[a-z]{2}$` rejects `"EN"` as input, `MarshalJSON` never writes it.
 - **English names must match a table entry.** `ParseCode("Greek")` fails, because the names are `"Greek, Modern (1453-)"` (ISO 639-1) and `"Modern Greek (1453-)"` (ISO 639-3).
 - **Names may list synonyms.** `language.CA.LanguageName()` is `"Catalan; Valencian"`, `language.NL.LanguageName()` is `"Dutch; Flemish"`.
 - **Tags lose detail.** `"zh-Hant"` and `"zh-Hans"` both normalize to `"zh"`.
@@ -114,7 +114,7 @@ func main() {
 		fmt.Println(c, err)
 	}
 
-	// Valid and Validate are strict, Normalized accepts other spellings
+	// Valid is strict, Validate and Normalized accept other spellings
 	c := language.Code("EN")
 	fmt.Println(c.Valid(), c.Validate(), c.LanguageName())
 	norm, err := c.Normalized()
@@ -129,7 +129,7 @@ func main() {
 	// zh <nil>
 	// de <nil>
 	// Klingon invalid language.Code: "Klingon"
-	// false invalid language.Code: "EN" English
+	// false <nil> English
 	// en <nil> <nil>
 }
 ```
@@ -138,26 +138,26 @@ func main() {
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/domonda/go-types/language"
 )
 
 func main() {
-	// Value writes the raw string, normalize before storing
+	// Value and MarshalJSON write the normalized code
 	v, _ := language.Code("EN").Value()
 	fmt.Println(v)
-	norm, _ := language.Code("EN").Normalized()
-	v, _ = norm.Value()
-	fmt.Println(v)
+	j, _ := json.Marshal(language.Code("en-US"))
+	fmt.Println(string(j))
 
 	fmt.Println(language.ISO6393Name("deu"), language.ISO6393Macrolanguage("twi"))
 	fmt.Println(language.CA.LanguageName())
 	fmt.Println(len(language.Code("").Enums()))
 
 	// Output:
-	// EN
 	// en
+	// "en"
 	// German aka
 	// Catalan; Valencian
 	// 184
@@ -191,7 +191,7 @@ See [Add an enum code](../docs/howto-add-an-enum-code.md) for the full steps.
 - [`country`](../country/README.md): ISO 3166-1 country codes, built the same way.
 - [`date`](../date/README.md): uses `Code` as a hint for ambiguous dates.
 - [`gen-lang-maps`](gen-lang-maps/README.md): the generator for the ISO 639-3 tables.
-- [Validation and normalization](../docs/explanation-validation-and-normalization.md): why `Valid` and `Validate` are strict here.
+- [Validation and normalization](../docs/explanation-validation-and-normalization.md): why `Valid` is strict here.
 - [Null conventions](../docs/explanation-null-conventions.md)
 - [Lenient parsing](../docs/explanation-lenient-parsing.md): language hints for dates.
 - [Add an enum code](../docs/howto-add-an-enum-code.md)

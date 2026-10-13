@@ -144,6 +144,15 @@ func TestNullableBIC_ScanString(t *testing.T) {
 	})
 }
 
+// StringOr returns the normalized value like String, but the alternative
+// instead of a value that can't be normalized, so a caller printing
+// StringOr never shows a misspelled or invalid value as if it were valid.
+func TestNullableBIC_StringOr(t *testing.T) {
+	assert.Equal(t, "none", BICNull.StringOr("none"))
+	assert.Equal(t, "BKAUATWWXXX", NullableBIC("BKAU AT WW").StringOr("none"))
+	assert.Equal(t, "none", NullableBIC("DEUTZZFF").StringOr("none"))
+}
+
 func TestNullableBIC_SQL(t *testing.T) {
 	t.Run("NULL is written as nil", func(t *testing.T) {
 		// NULL must be written to SQL as nil, not as an empty string
@@ -209,6 +218,31 @@ func TestNullableBIC_JSON(t *testing.T) {
 	assert.Equal(t, `{"bic":"BELADEBEXXX"}`, string(j))
 	require.NoError(t, json.Unmarshal(j, &got))
 	assert.Equal(t, NullableBIC("BELADEBEXXX"), got.BIC)
+}
+
+// A non-null NullableBIC is written normalized like BIC, see
+// TestBIC_ValueAndMarshalJSONNormalize, and null stays SQL NULL and
+// JSON null, including the whitespace-only null.
+func TestNullableBIC_ValueAndMarshalJSONNormalize(t *testing.T) {
+	tests := []struct {
+		bic      NullableBIC
+		wantSQL  any
+		wantJSON string
+	}{
+		{bic: BICNull, wantSQL: nil, wantJSON: `null`},
+		{bic: "  ", wantSQL: nil, wantJSON: `null`},
+		{bic: "BKAU AT WW", wantSQL: "BKAUATWWXXX", wantJSON: `"BKAUATWWXXX"`},
+		{bic: "DEUTZZFF", wantSQL: "DEUTZZFF", wantJSON: `"DEUTZZFF"`},
+	}
+	for _, tt := range tests {
+		v, err := tt.bic.Value()
+		require.NoError(t, err)
+		assert.Equal(t, tt.wantSQL, v, "NullableBIC(%q).Value()", string(tt.bic))
+
+		j, err := json.Marshal(tt.bic)
+		require.NoError(t, err)
+		assert.Equal(t, tt.wantJSON, string(j), "json.Marshal(NullableBIC(%q))", string(tt.bic))
+	}
 }
 
 func TestNullableBIC_UnmarshalJSON(t *testing.T) {

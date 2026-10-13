@@ -1,6 +1,7 @@
 package bank
 
 import (
+	"encoding/json"
 	"regexp"
 	"strings"
 	"testing"
@@ -65,6 +66,47 @@ func Test_BICValid(t *testing.T) {
 		if bic.Valid() {
 			t.Errorf("Invalid BIC not recognized: %s", string(bic))
 		}
+	}
+}
+
+// Valid and Validate accept a BIC with whitespace because they normalize
+// first like Normalized, the same way the other types of this module do,
+// and Value and MarshalJSON write the normalized BIC.
+func TestBIC_ValidateNormalizes(t *testing.T) {
+	for _, bic := range validBICsWithSpaces {
+		assert.NoError(t, bic.Validate(), "BIC(%q).Validate()", string(bic))
+		assert.True(t, bic.Valid(), "BIC(%q).Valid()", string(bic))
+	}
+	for _, bic := range invalidBICs {
+		assert.Error(t, bic.Validate(), "BIC(%q).Validate()", string(bic))
+	}
+}
+
+// Value and MarshalJSON write a BIC normalized to 11 characters, because
+// Validate accepts the 8 character form and whitespace: without
+// normalization "BKAU AT WW", "BKAUATWW" and "BKAUATWWXXX" would reach SQL
+// and JSON as three different strings for the same bank. A BIC that can't
+// be normalized is written unchanged instead of failing the write.
+func TestBIC_ValueAndMarshalJSONNormalize(t *testing.T) {
+	tests := []struct {
+		bic  BIC
+		want string
+	}{
+		{bic: "BKAUATWWXXX", want: "BKAUATWWXXX"},
+		{bic: "BKAUATWW", want: "BKAUATWWXXX"},
+		{bic: "BKAU AT WW", want: "BKAUATWWXXX"},
+		{bic: " GENODEF1JEV ", want: "GENODEF1JEV"},
+		{bic: "DEUTZZFF", want: "DEUTZZFF"},
+		{bic: "", want: ""},
+	}
+	for _, tt := range tests {
+		v, err := tt.bic.Value()
+		require.NoError(t, err)
+		assert.Equal(t, tt.want, v, "BIC(%q).Value()", string(tt.bic))
+
+		j, err := json.Marshal(tt.bic)
+		require.NoError(t, err)
+		assert.Equal(t, `"`+tt.want+`"`, string(j), "json.Marshal(BIC(%q))", string(tt.bic))
 	}
 }
 
@@ -254,6 +296,7 @@ func TestBIC_CountryCode(t *testing.T) {
 	assert.Equal(t, country.DE, BIC("BELADEBEXXX").CountryCode())
 	assert.Equal(t, country.GG, BIC("RBOSGGSX").CountryCode())
 	assert.Equal(t, country.Code(""), BIC("DEUTZZFF").CountryCode(), "invalid BIC has no country")
+	assert.Equal(t, country.AT, BIC(" BKAU AT WW ").CountryCode(), "a BIC that Valid accepts has a country")
 }
 
 func TestBIC_TrimBranchCode(t *testing.T) {
@@ -278,6 +321,9 @@ func TestBIC_LocationFlags(t *testing.T) {
 		{bic: "DEUTDEF2", wantReceiverPaysFees: true},
 		{bic: "DEUTDEFF"},
 		{bic: "DEUTDEFFXXX"},
+		// Read from the normalized BIC, because Valid accepts whitespace
+		{bic: " DEUT DE F0 ", wantTest: true},
+		{bic: "DEUT DE F1", wantPassive: true},
 		// Invalid BICs never have flags, even if the 8th character matches
 		{bic: "deutDEF0"},
 		{bic: "DEUTZZF1"},

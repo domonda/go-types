@@ -457,50 +457,53 @@ func (msg *Message) BuildRawMessage() (raw []byte, err error) {
 	if msg.References.IsNotNull() {
 		root.Header.Set("References", msg.References.Get())
 	}
-	// Normalized like the To, Cc, and Bcc addresses by Split, so that
-	// a non-ASCII name is RFC 2047 encoded without the address part
-	from := msg.From
-	if from != "" {
-		from, err = from.Normalized()
+	// The addresses are parsed and written with asciiAddress, like ASCII
+	// does, so that a non-ASCII name is RFC 2047 encoded without the
+	// address part. The MIME encoder would otherwise encode the whole
+	// header value including the address part.
+	var from string
+	if msg.From != "" {
+		parsed, err := msg.From.Parse()
 		if err != nil {
 			return nil, err
 		}
+		from = asciiAddress(parsed)
 	}
-	root.Header.Set("From", string(from))
+	root.Header.Set("From", from)
 	if msg.ReplyTo.IsNotNull() {
-		replyTo, err := msg.ReplyTo.Normalized()
+		replyTo, err := msg.ReplyTo.Parse()
 		if err != nil {
 			return nil, err
 		}
-		root.Header.Set("Reply-To", string(replyTo))
+		root.Header.Set("Reply-To", asciiAddress(replyTo))
 	}
-	tos, err := msg.To.Split()
+	tos, err := msg.To.Parse()
 	if err != nil {
 		return nil, err
 	}
 	if len(tos) > 0 {
-		root.Header.Set("To", string(AddressListJoin(tos...)))
+		root.Header.Set("To", asciiAddressList(tos))
 	}
-	deliveredTos, err := msg.DeliveredTo.Split()
+	deliveredTos, err := msg.DeliveredTo.Parse()
 	if err != nil {
 		return nil, err
 	}
 	for _, deliveredTo := range deliveredTos {
-		root.Header.Add("Delivered-To", string(deliveredTo))
+		root.Header.Add("Delivered-To", asciiAddress(deliveredTo))
 	}
-	ccs, err := msg.Cc.Split()
+	ccs, err := msg.Cc.Parse()
 	if err != nil {
 		return nil, err
 	}
 	if len(ccs) > 0 {
-		root.Header.Set("Cc", string(AddressListJoin(ccs...)))
+		root.Header.Set("Cc", asciiAddressList(ccs))
 	}
-	bccs, err := msg.Bcc.Split()
+	bccs, err := msg.Bcc.Parse()
 	if err != nil {
 		return nil, err
 	}
 	if len(bccs) > 0 {
-		root.Header.Set("Bcc", string(AddressListJoin(bccs...)))
+		root.Header.Set("Bcc", asciiAddressList(bccs))
 	}
 	root.Header.Set("Date", formatDate(msg.Date))
 	for key, vals := range msg.ExtraHeader {

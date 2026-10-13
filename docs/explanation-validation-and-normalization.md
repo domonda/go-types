@@ -53,9 +53,10 @@ decide between day-first and month-first dates.
 
 ## Validity is lenient
 
-For most types `Valid` and `Validate` don't ask "is this already canonical?"
-but "can `Normalized` turn this into a valid value?". Most of them are
-implemented by calling `Normalized` and returning its error:
+`Validate` doesn't ask "is this already canonical?" but "can `Normalized`
+turn this into a valid value?". It is implemented by calling `Normalized`
+and returning its error, and `Valid` agrees with it for every type but
+`language.Code`:
 
 | Value                                      | `Valid()` | `Normalized()`           | `ValidAndNormalized()` |
 |--------------------------------------------|-----------|--------------------------|------------------------|
@@ -66,40 +67,42 @@ implemented by calling `Normalized` and returning its error:
 | `vat.ID("atu 1022 3006")`                  | `true`    | `ATU10223006`            | `false`                |
 | `bank.IBAN("DE89 3704 0044 0532 0130 00")` | `true`    | `DE89370400440532013000` | `false`                |
 | `bank.BIC("BKAUATWW")`                     | `true`    | `BKAUATWWXXX`            | `false`                |
+| `bank.BIC("BKAU AT WW")`                   | `true`    | `BKAUATWWXXX`            | `false`                |
 | `email.Address("John@Example.com")`        | `true`    | `john@example.com`       | `false`                |
 | `date.Date("25.12.2023")`                  | `true`    | `2023-12-25`             | `false`                |
 | `country.Code("XX")`                       | `false`   | error                    | `false`                |
 
 The reasoning: a valid value in another spelling is still the same value, so
-rejecting it would only reject real-world input. Where a contract requires the
-canonical form, like a stored key or an API that promises normalized output,
-check `ValidAndNormalized` or store the result of `Normalized`.
+rejecting it would only reject real-world input. Leniency is safe because
+`Value` and `MarshalJSON` write the normalized form, see
+[Normalized output](#normalized-output). Where a contract requires the
+canonical form in Go, like a map key or a comparison with `==`, check
+`ValidAndNormalized` or keep the result of `Normalized`.
 
 Each type decides how far its leniency goes. `bank.IBAN` removes whitespace
 but doesn't change the letter case, so `de89370400440532013000` fails with
 `invalid IBAN country code`. `country.Code` accepts German names and ITU codes
 from `AltCodes` but not English names; `country.ParseCode` adds those.
-`language.Code` is not lenient at all: `Valid` and `Validate` only accept the
-canonical lower-case code, because `Value` writes the code unchanged, while
-`Normalized` accepts `"EN"`, `"eng"` and `"en-US"`. The
-package READMEs and [Lenient parsing](explanation-lenient-parsing.md) list the
-details.
+`bank.BIC` removes whitespace, but `BIC.Parse` and `BICParser` read the BIC
+as given, so whitespace makes it invalid there.
+The package READMEs and [Lenient parsing](explanation-lenient-parsing.md) list
+the details.
 
 ## Where the methods disagree
 
-### `bank.BIC`: lenient `Normalized`, strict `Validate`
+### `language.Code`: strict `Valid`, lenient `Validate`
 
-`bank.BIC` is deliberate. `Normalized` removes all
-whitespace before it checks the code, `Valid` and `Validate` do not, because
-`Parse`, `IsTestBIC`, `IsPassiveSWIFT` and `ReceiverPaysFees` read fixed
-character positions once the BIC is valid:
+`language.Code.Valid` only accepts the canonical lower-case ISO 639-1 code,
+while `Validate` accepts every spelling that `Normalized` accepts:
 
-| Value                    | `Valid()` | `Validate()`                          | `Normalized()` |
-|--------------------------|-----------|---------------------------------------|----------------|
-| `bank.BIC("BKAU AT WW")` | `false`   | `invalid BIC "BKAU AT WW" length: 10` | `BKAUATWWXXX`  |
+| Value                    | `Valid()` | `Validate()` | `Normalized()` |
+|--------------------------|-----------|--------------|----------------|
+| `language.Code("EN")`    | `false`   | `nil`        | `en`           |
+| `language.Code("en-US")` | `false`   | `nil`        | `en`           |
 
-So `types.Validate` rejects a BIC that `Normalized` accepts. Normalize a BIC
-before validating it.
+`types.Validate` and `types.DeepValidate` call `Validate`, so they accept
+`"EN"`, see below. Check `Valid` or `ValidAndNormalized` to require the
+canonical code.
 
 ## Why `types.Validate` prefers `ValidatErr`
 
@@ -135,13 +138,12 @@ func main() {
 	lang := language.Code("EN")
 	fmt.Println(lang.Valid(), lang.Validate())
 
-	// Normalize input in another spelling before validating it
-	norm, _ := lang.Normalized()
-	fmt.Println(types.Validate(norm))
+	// types.Validate prefers the lenient Validate over the strict Valid
+	fmt.Println(types.Validate(lang))
 	fmt.Println(types.DeepValidate(Profile{Language: "xx"}))
 
 	// Output:
-	// false invalid language.Code: "EN"
+	// false <nil>
 	// <nil>
 	// [struct field Language: invalid language.Code: "xx"]
 }
@@ -243,28 +245,47 @@ exists on `bank.IBAN`, `bank.BIC`, their nullable types, `country.NullableCode`,
 `date.Date`, `date.NullableDate`, `money.Currency`, `money.NullableCurrency`,
 `vat.ID` and `vat.NullableID`.
 
-## Normalize where the input enters
+## Normalized output
 
-The SQL and JSON methods don't normalize consistently:
+Because `Validate` accepts every spelling that `Normalized` accepts, the
+`Value` and `MarshalJSON` methods of these types write the normalized form,
+so `"eur"` and `"EUR"` can't reach a database column or an API response as
+two different currencies:
 
-| Type             | `Value()`                    | JSON                |
-|------------------|------------------------------|---------------------|
-| `country.Code`   | normalized if valid          | normalized if valid |
-| `vat.ID`         | normalized if valid          | as stored           |
-| `date.Date`      | normalized, error if invalid | as stored           |
-| `money.Currency` | as stored                    | as stored           |
-| `language.Code`  | as stored                    | as stored           |
-| `bank.IBAN`      | as stored                    | as stored           |
+| Type                                       | `Value()`                    | `MarshalJSON()`     |
+|--------------------------------------------|------------------------------|---------------------|
+| `country.Code`, `country.NullableCode`     | normalized if valid          | normalized if valid |
+| `vat.ID`, `vat.NullableID`                 | normalized if valid          | normalized if valid |
+| `money.Currency`, `NullableCurrency`       | normalized if valid          | normalized if valid |
+| `language.Code`                            | normalized if valid          | normalized if valid |
+| `bank.IBAN`, `bank.NullableIBAN`           | normalized if valid          | normalized if valid |
+| `bank.BIC`, `bank.NullableBIC`             | normalized if valid          | normalized if valid |
+| `date.Date`, `date.NullableDate`           | normalized, error if invalid | normalized if valid |
+| `email.Address`, `NullableAddress`         | normalized if valid          | normalized if valid |
+| `email.AddressList`, `NullableAddressList` | normalized if valid          | normalized if valid |
+| `email.AddressSet`                         | normalized if valid          | normalized if valid |
 
-`Scan` of these types stores the database text without checking it, except
-`date.Date.Scan`, which normalizes and rejects invalid dates. `String()`
-normalizes for all of them, which hides the difference:
-`fmt.Println(money.Currency("eur"))` prints `EUR` while the database receives
-`eur`.
+A value that can't be normalized is written unchanged, except by the `Value`
+methods of the `date` types, which return an error. A null value of a
+nullable type is written as SQL NULL and JSON `null`.
 
-The reliable place to normalize is where input enters your program: call
-`Normalized()` once, handle the error, and keep the result. Everything after
-that point can rely on `ValidAndNormalized()` being true.
+`String()` of these types returns the normalized form too, or the original
+if it can't be normalized. The normalized form is UTF-8, so a display name
+like `"Jürgen Müller" <j@x.de>` stays readable; the email types have an
+extra `ASCII()` method that RFC 2047 encodes non-ASCII names for message
+headers. `StringOr(alternative)` of the nullable types returns the
+normalized form, or the alternative for a null value and for a value that
+can't be normalized. The set types are the exception: the `String()` of
+`email.AddressSet`, `types.Set`, `uu.IDSet` and `strutil.StringSet` lists
+the elements as given, because normalizing could merge two elements and
+the string would no longer show every element of the set.
+
+Reading doesn't normalize: `Scan` and JSON decoding store the text without
+checking it, except `date.Date.Scan`, which normalizes and rejects invalid
+dates. So a Go value can hold `"eur"` until it is written. To compare values
+in Go, call `Normalized()` where input enters your program, handle the error,
+and keep the result. Everything after that point can rely on
+`ValidAndNormalized()` being true.
 
 ## Related
 

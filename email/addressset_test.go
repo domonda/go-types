@@ -2,6 +2,7 @@ package email
 
 import (
 	"database/sql/driver"
+	"encoding/json"
 	"reflect"
 	"slices"
 	"testing"
@@ -397,6 +398,39 @@ func TestAddressSet_Value(t *testing.T) {
 	}
 }
 
+// Value and MarshalJSON write the normalized set, so addresses that
+// differ only in spelling are written once. JSON keeps the object form
+// that encoding/json writes for a map, so it still unmarshals into an
+// AddressSet. A set with an address that can't be normalized is written
+// unchanged instead of failing the write.
+func TestAddressSet_ValueAndMarshalJSONNormalize(t *testing.T) {
+	tests := []struct {
+		set      AddressSet
+		wantSQL  driver.Value
+		wantJSON string
+	}{
+		{set: nil, wantSQL: nil, wantJSON: `null`},
+		{set: MakeAddressSet(), wantSQL: "{}", wantJSON: `{}`},
+		{set: MakeAddressSet("B@Example.com", "b@example.com", "a@example.com"), wantSQL: `{"a@example.com","b@example.com"}`, wantJSON: `{"a@example.com":{},"b@example.com":{}}`},
+		{set: MakeAddressSet("B@Example.com", "invalid"), wantSQL: `{"B@Example.com","invalid"}`, wantJSON: `{"B@Example.com":{},"invalid":{}}`},
+	}
+	for _, tt := range tests {
+		v, err := tt.set.Value()
+		if err != nil || v != tt.wantSQL {
+			t.Errorf("Value() of %v = %v, %v, want %v, nil", tt.set, v, err, tt.wantSQL)
+		}
+
+		j, err := json.Marshal(tt.set)
+		if err != nil || string(j) != tt.wantJSON {
+			t.Errorf("json.Marshal of %v = %s, %v, want %s, nil", tt.set, j, err, tt.wantJSON)
+		}
+		var decoded AddressSet
+		if err := json.Unmarshal(j, &decoded); err != nil {
+			t.Errorf("json.Unmarshal(%s) returned %v", j, err)
+		}
+	}
+}
+
 // TestAddressSet_ValueScanRoundTrip pins down that Scan is the inverse of
 // Value. Both use the same PostgreSQL array codec, so the quotes and the
 // backslash escapes that Value writes have to be consumed again by Scan
@@ -457,6 +491,13 @@ func TestAddressSet_AddressListAndString(t *testing.T) {
 	// The literal, not string(set.AddressList()), which is what String
 	// returns verbatim; comparing the two checks the code against itself.
 	if got, want := set.String(), "a@example.com, b@example.com"; got != want {
+		t.Errorf("String() = %s, want %s", got, want)
+	}
+
+	// Unlike the address types, String doesn't normalize: normalizing would
+	// merge the two spellings, and String has to list every element.
+	set = MakeAddressSet("B@Example.com", "b@example.com")
+	if got, want := set.String(), "B@Example.com, b@example.com"; got != want {
 		t.Errorf("String() = %s, want %s", got, want)
 	}
 }

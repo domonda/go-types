@@ -197,10 +197,16 @@ func TestNullableDate_String(t *testing.T) {
 	assert.Equal(t, "", Null.String())
 }
 
+// StringOr returns the normalized value like String, but the alternative
+// instead of a value that can't be normalized, so a caller printing
+// StringOr never shows a misspelled or invalid value as if it were valid.
 func TestNullableDate_StringOr(t *testing.T) {
 	d := NullableDate("2023-12-25")
 	assert.Equal(t, "2023-12-25", d.StringOr("N/A"))
 	assert.Equal(t, "N/A", Null.StringOr("N/A"))
+	assert.Equal(t, "2023-12-25", NullableDate("25.12.2023").StringOr("N/A"))
+	assert.Equal(t, "N/A", NullableDate("bad").StringOr("N/A"))
+	assert.Equal(t, "bad", NullableDate("bad").String(), "String returns the original")
 }
 
 func TestNullableDate_Year(t *testing.T) {
@@ -874,9 +880,13 @@ func TestNullableDate_MarshalJSON(t *testing.T) {
 		want string
 	}{
 		{date: Null, want: `{"d":null}`},
+		{date: "  ", want: `{"d":null}`},
 		// A zero date is NULL and must be marshalled as JSON null
 		{date: "0001-01-01", want: `{"d":null}`},
 		{date: "2023-12-25", want: `{"d":"2023-12-25"}`},
+		// Written normalized like Date, see TestDate_MarshalJSON
+		{date: "25.12.2023", want: `{"d":"2023-12-25"}`},
+		{date: "invalid", want: `{"d":"invalid"}`},
 	}
 	for _, tt := range tests {
 		t.Run(string(tt.date), func(t *testing.T) {

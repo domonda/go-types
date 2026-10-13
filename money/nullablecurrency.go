@@ -2,7 +2,6 @@ package money
 
 import (
 	"database/sql/driver"
-	"encoding/json"
 	"fmt"
 
 	"github.com/domonda/go-types/internal"
@@ -64,13 +63,15 @@ func (n NullableCurrency) GetOr(defaultVal Currency) Currency {
 	return Currency(n)
 }
 
-// StringOr returns the NullableCurrency as string
-// or the passed defaultString if the NullableCurrency is null.
+// StringOr returns the normalized NullableCurrency as string,
+// or the passed defaultString if the NullableCurrency is null
+// or can't be normalized.
 func (n NullableCurrency) StringOr(defaultString string) string {
-	if n.IsNull() {
+	norm, err := n.Normalized()
+	if err != nil || norm.IsNull() {
 		return defaultString
 	}
-	return string(n)
+	return string(norm)
 }
 
 // Valid returns true if n is null (empty or whitespace only),
@@ -174,12 +175,13 @@ func (n *NullableCurrency) Scan(value any) error {
 }
 
 // Value implements the driver database/sql/driver.Valuer interface.
-// Returns nil for SQL NULL if the NullableCurrency is null, see IsNull.
+// Returns nil for SQL NULL if the NullableCurrency is null, see IsNull,
+// else the normalized currency like Currency.Value.
 func (n NullableCurrency) Value() (driver.Value, error) {
 	if n.IsNull() {
 		return nil, nil
 	}
-	return string(n), nil
+	return Currency(n).Value()
 }
 
 // Symbol returns the currency symbol like € for EUR if available,
@@ -214,12 +216,13 @@ func (n NullableCurrency) String() string {
 }
 
 // MarshalJSON implements encoding/json.Marshaler
-// by returning the JSON null value if the NullableCurrency is null, see IsNull.
+// by returning the JSON null value if the NullableCurrency is null, see IsNull,
+// else the normalized currency like Currency.MarshalJSON.
 func (n NullableCurrency) MarshalJSON() ([]byte, error) {
 	if n.IsNull() {
 		return []byte(`null`), nil
 	}
-	return json.Marshal(string(n))
+	return Currency(n).MarshalJSON()
 }
 
 // UnmarshalJSON implements encoding/json.Unmarshaler

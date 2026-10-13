@@ -2,6 +2,7 @@ package bank
 
 import (
 	"database/sql/driver"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
@@ -218,8 +219,19 @@ func (iban *IBAN) Scan(value any) error {
 }
 
 // Value implements the driver database/sql/driver.Valuer interface.
+// Returns the normalized IBAN, or the unchanged string
+// if it can't be normalized, so an empty IBAN is written as empty string.
 func (iban IBAN) Value() (driver.Value, error) {
-	return string(iban), nil
+	norm, _ := iban.Normalized()
+	return string(norm), nil
+}
+
+// MarshalJSON implements encoding/json.Marshaler.
+// Returns the normalized IBAN as JSON string,
+// or the unchanged string if it can't be normalized.
+func (iban IBAN) MarshalJSON() ([]byte, error) {
+	norm, _ := iban.Normalized()
+	return json.Marshal(string(norm))
 }
 
 // JSONSchema returns the JSON schema definition for the IBAN type.

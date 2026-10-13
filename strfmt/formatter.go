@@ -48,8 +48,8 @@ func (format *MoneyFormat) FormatCurrencyAmount(currencyAmount money.CurrencyAmo
 }
 
 // FormatCurrencyDecimalAmount formats a currency-tagged decimal amount like
-// FormatCurrencyAmount formats a currency-tagged amount, placing the currency
-// code before or after the number according to format.CurrencyFirst,
+// FormatCurrencyAmount formats a currency-tagged amount, placing the normalized
+// currency code before or after the number according to format.CurrencyFirst,
 // with the number formatted by FormatDecimalAmount.
 func (format *MoneyFormat) FormatCurrencyDecimalAmount(currencyAmount money.CurrencyDecimalAmount) string {
 	amountStr := format.FormatDecimalAmount(currencyAmount.Amount)
@@ -57,9 +57,9 @@ func (format *MoneyFormat) FormatCurrencyDecimalAmount(currencyAmount money.Curr
 		return amountStr
 	}
 	if format.CurrencyFirst {
-		return string(currencyAmount.Currency) + " " + amountStr
+		return currencyAmount.Currency.String() + " " + amountStr
 	}
-	return amountStr + " " + string(currencyAmount.Currency)
+	return amountStr + " " + currencyAmount.Currency.String()
 }
 
 // FormatCentAmount formats a cent amount like FormatAmount formats an amount,

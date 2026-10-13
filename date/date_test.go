@@ -918,6 +918,29 @@ func TestDate_Value(t *testing.T) {
 	}
 }
 
+// MarshalJSON writes a Date normalized like Value, because Validate accepts
+// other formats like "25.12.2023": without normalization API consumers
+// would get dates that are not in the "date" format of the JSON schema.
+// A date that can't be normalized is written unchanged instead of failing
+// the write.
+func TestDate_MarshalJSON(t *testing.T) {
+	tests := []struct {
+		date Date
+		want string
+	}{
+		{date: "2023-12-25", want: `"2023-12-25"`},
+		{date: "25.12.2023", want: `"2023-12-25"`},
+		{date: "December 25, 2023", want: `"2023-12-25"`},
+		{date: "invalid", want: `"invalid"`},
+		{date: "", want: `""`},
+	}
+	for _, tt := range tests {
+		j, err := json.Marshal(tt.date)
+		require.NoError(t, err)
+		assert.Equal(t, tt.want, string(j), "json.Marshal(Date(%q))", string(tt.date))
+	}
+}
+
 // Additional constructor function tests
 func TestOfToday(t *testing.T) {
 	d := OfToday()

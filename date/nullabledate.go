@@ -2,7 +2,6 @@ package date
 
 import (
 	"database/sql/driver"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -182,13 +181,15 @@ func (n NullableDate) String() string {
 	return string(norm)
 }
 
-// StringOr returns the NullableDate as string
-// or the passed nullString if the NullableDate is null.
+// StringOr returns the normalized NullableDate as string,
+// or the passed nullString if the NullableDate is null
+// or can't be normalized.
 func (n NullableDate) StringOr(nullString string) string {
-	if n.IsNull() {
+	norm, err := n.Normalized()
+	if err != nil || norm.IsNull() {
 		return nullString
 	}
-	return n.String()
+	return string(norm)
 }
 
 // Normalized returns the date in normalized form,
@@ -636,12 +637,13 @@ func (n NullableDate) Value() (driver.Value, error) {
 }
 
 // MarshalJSON implements encoding/json.Marshaler.
-// Returns the JSON null value for null dates (see IsNull), otherwise returns the date as a JSON string.
+// Returns the JSON null value for null dates (see IsNull),
+// otherwise the normalized date like Date.MarshalJSON.
 func (n NullableDate) MarshalJSON() ([]byte, error) {
 	if n.IsNull() {
 		return []byte(`null`), nil
 	}
-	return json.Marshal(string(n))
+	return Date(n).MarshalJSON()
 }
 
 // UnmarshalJSON implements encoding/json.Unmarshaler

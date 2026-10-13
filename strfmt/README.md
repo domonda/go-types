@@ -194,7 +194,7 @@ type MoneyFormat struct {
 | `(*MoneyFormat).FormatAmount(money.Amount) string` | `amount.FormatSep(ThousandsSep, DecimalSep, Precision)`: rounded half away from zero and padded to `Precision`, `-1` for the shortest exact form. |
 | `(*MoneyFormat).FormatCentAmount(money.CentAmount) string` | Like `FormatDecimalAmount` of the amount with scale 2. |
 | `(*MoneyFormat).FormatDecimalAmount(money.DecimalAmount) string` | Rounded half away from zero to `Precision` if it has more decimals, padded with zeros if it has fewer. A negative `Precision` writes the decimals of the amount's scale. NaN and ±Inf as `NaN`, `Inf`, `-Inf`. |
-| `(*MoneyFormat).FormatCurrencyAmount(money.CurrencyAmount) string` | The amount like `FormatAmount`, with the currency code and a space before it if `CurrencyFirst`, else after it. No code for an empty currency. |
+| `(*MoneyFormat).FormatCurrencyAmount(money.CurrencyAmount) string` | The amount like `FormatAmount`, with the normalized currency code and a space before it if `CurrencyFirst`, else after it. No code for an empty currency. |
 | `(*MoneyFormat).FormatCurrencyDecimalAmount(money.CurrencyDecimalAmount) string` | Like `FormatCurrencyAmount` with the amount from `FormatDecimalAmount`. |
 | `EnglishFloatFormat(precision) float.FormatDef`    | `{0, '.', precision, false}`: no grouping, trailing zeros trimmed. |
 | `GermanFloatFormat(precision) float.FormatDef`     | `{0, ',', precision, false}`.                      |

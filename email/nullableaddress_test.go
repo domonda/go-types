@@ -120,7 +120,7 @@ func TestNullableAddress_NotNull(t *testing.T) {
 	assert.Equal(t, "john.doe", localPart)
 
 	assert.Equal(t, "Example.com", n.DomainPart())
-	assert.Equal(t, string(n), n.StringOr("<none>"))
+	assert.Equal(t, string(normalized), n.StringOr("<none>"), "StringOr normalizes like String")
 	assert.Equal(t, Address(n), n.Get())
 	assert.Equal(t, Address(n), n.GetOr("default@example.com"))
 	assert.Equal(t, NullableAddressList(n), n.AsList())
@@ -293,6 +293,53 @@ func TestNullableAddress_JSON(t *testing.T) {
 		require.NoError(t, json.Unmarshal(data, &out))
 		assert.Equal(t, in, out)
 	})
+}
+
+// A non-null NullableAddress is written normalized like Address, see
+// TestAddress_ValueAndMarshalJSONNormalize, and null stays SQL NULL and
+// JSON null, including the whitespace-only null.
+func TestNullableAddress_ValueAndMarshalJSONNormalize(t *testing.T) {
+	tests := []struct {
+		n        NullableAddress
+		wantSQL  driver.Value
+		wantJSON string
+	}{
+		{n: AddressNull, wantSQL: nil, wantJSON: `null`},
+		{n: "  ", wantSQL: nil, wantJSON: `null`},
+		{n: `Zoë Bäcker <Zoe@Example.com>`, wantSQL: `"Zoë Bäcker" <zoe@example.com>`, wantJSON: `"\"Zoë Bäcker\" \u003czoe@example.com\u003e"`},
+		{n: `not an address`, wantSQL: `not an address`, wantJSON: `"not an address"`},
+	}
+	for _, tt := range tests {
+		v, err := tt.n.Value()
+		require.NoError(t, err)
+		assert.Equal(t, tt.wantSQL, v, "NullableAddress(%q).Value()", string(tt.n))
+
+		j, err := json.Marshal(tt.n)
+		require.NoError(t, err)
+		assert.Equal(t, tt.wantJSON, string(j), "json.Marshal(NullableAddress(%q))", string(tt.n))
+	}
+}
+
+// String and ASCII work like those of Address, see
+// TestAddress_StringAndASCII, and return "" for null. StringOr returns
+// the normalized address or the alternative for null and invalid values.
+func TestNullableAddress_StringASCIIStringOr(t *testing.T) {
+	tests := []struct {
+		n            NullableAddress
+		wantStr      string
+		wantASCII    string
+		wantStringOr string
+	}{
+		{n: AddressNull, wantStr: ``, wantASCII: ``, wantStringOr: `none`},
+		{n: `  `, wantStr: ``, wantASCII: ``, wantStringOr: `none`},
+		{n: `Zoë <Zoe@Example.com>`, wantStr: `"Zoë" <zoe@example.com>`, wantASCII: `=?utf-8?q?Zo=C3=AB?= <zoe@example.com>`, wantStringOr: `"Zoë" <zoe@example.com>`},
+		{n: `not an address`, wantStr: `not an address`, wantASCII: `not an address`, wantStringOr: `none`},
+	}
+	for _, tt := range tests {
+		assert.Equal(t, tt.wantStr, tt.n.String(), "NullableAddress(%q).String()", string(tt.n))
+		assert.Equal(t, tt.wantASCII, tt.n.ASCII(), "NullableAddress(%q).ASCII()", string(tt.n))
+		assert.Equal(t, tt.wantStringOr, tt.n.StringOr("none"), "NullableAddress(%q).StringOr()", string(tt.n))
+	}
 }
 
 func TestNullableAddress_UnmarshalText(t *testing.T) {

@@ -2,6 +2,7 @@ package vat
 
 import (
 	"database/sql/driver"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"unicode"
@@ -36,6 +37,7 @@ const ErrInvalidID errs.Sentinel = "invalid VAT ID"
 // ID implements the database/sql.Scanner and database/sql/driver.Valuer interfaces
 // without validating the ID: Scan assigns the value as is and Value returns
 // the normalized ID, or the unchanged string if the ID can't be normalized.
+// MarshalJSON writes the ID normalized like Value.
 // Scanning SQL NULL returns an error, use NullableID to read and write SQL NULL values.
 type ID string
 
@@ -253,12 +255,20 @@ func (id ID) Value() (driver.Value, error) {
 	return string(normalized), nil
 }
 
+// MarshalJSON implements encoding/json.Marshaler.
+// Returns the normalized ID as JSON string,
+// or the unchanged string if the ID can't be normalized.
+func (id ID) MarshalJSON() ([]byte, error) {
+	norm, _ := id.Normalized()
+	return json.Marshal(string(norm))
+}
+
 // JSONSchema returns the JSON schema for ID, describing it as a string with
 // the title "Value Added Tax ID" and the package-defined minimum length.
 // It has no maximum length, see IDMaxLength.
 func (ID) JSONSchema() *jsonschema.Schema {
 	// No MaxLength, because IDMaxLength limits the normalized ID
-	// while JSON holds the ID unnormalized, which can be longer
+	// while decoded JSON holds the ID unnormalized, which can be longer
 	minLength := uint64(IDMinLength)
 	return &jsonschema.Schema{
 		Title:     "Value Added Tax ID",

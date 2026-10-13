@@ -172,6 +172,15 @@ func TestNullableIBAN_ScanString(t *testing.T) {
 	})
 }
 
+// StringOr returns the normalized value like String, but the alternative
+// instead of a value that can't be normalized, so a caller printing
+// StringOr never shows a misspelled or invalid value as if it were valid.
+func TestNullableIBAN_StringOr(t *testing.T) {
+	assert.Equal(t, "none", IBANNull.StringOr("none"))
+	assert.Equal(t, "DE89370400440532013000", NullableIBAN("DE89 3704 0044 0532 0130 00").StringOr("none"))
+	assert.Equal(t, "none", NullableIBAN("DE00 1234").StringOr("none"))
+}
+
 func TestNullableIBAN_SQL(t *testing.T) {
 	t.Run("NULL is written as nil", func(t *testing.T) {
 		// NULL must be written to SQL as nil, not as an empty string
@@ -237,6 +246,31 @@ func TestNullableIBAN_JSON(t *testing.T) {
 	assert.Equal(t, `{"iban":"DE89370400440532013000"}`, string(j))
 	require.NoError(t, json.Unmarshal(j, &got))
 	assert.Equal(t, NullableIBAN("DE89370400440532013000"), got.IBAN)
+}
+
+// A non-null NullableIBAN is written normalized like IBAN, see
+// TestIBAN_ValueAndMarshalJSONNormalize, and null stays SQL NULL and
+// JSON null, including the whitespace-only null.
+func TestNullableIBAN_ValueAndMarshalJSONNormalize(t *testing.T) {
+	tests := []struct {
+		iban     NullableIBAN
+		wantSQL  any
+		wantJSON string
+	}{
+		{iban: IBANNull, wantSQL: nil, wantJSON: `null`},
+		{iban: "  ", wantSQL: nil, wantJSON: `null`},
+		{iban: "DE89 3704 0044 0532 0130 00", wantSQL: "DE89370400440532013000", wantJSON: `"DE89370400440532013000"`},
+		{iban: "DE00 1234", wantSQL: "DE00 1234", wantJSON: `"DE00 1234"`},
+	}
+	for _, tt := range tests {
+		v, err := tt.iban.Value()
+		require.NoError(t, err)
+		assert.Equal(t, tt.wantSQL, v, "NullableIBAN(%q).Value()", string(tt.iban))
+
+		j, err := json.Marshal(tt.iban)
+		require.NoError(t, err)
+		assert.Equal(t, tt.wantJSON, string(j), "json.Marshal(NullableIBAN(%q))", string(tt.iban))
+	}
 }
 
 func TestNullableIBAN_UnmarshalJSON(t *testing.T) {

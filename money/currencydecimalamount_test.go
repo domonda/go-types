@@ -113,6 +113,20 @@ func TestCurrencyDecimalAmount_JSON(t *testing.T) {
 	assert.Equal(t, ca, got)
 }
 
+// Value, String and JSON write the currency normalized like
+// TestCurrencyAmount_NormalizedCurrencyOutput.
+func TestCurrencyDecimalAmount_NormalizedCurrencyOutput(t *testing.T) {
+	ca := CurrencyDecimalAmount{Currency: "eur", Amount: NewDecimalAmount(150, 2)}
+	v, err := ca.Value()
+	require.NoError(t, err)
+	assert.Equal(t, "EUR 1.50", v)
+	assert.Equal(t, "EUR 1.50", ca.String())
+
+	data, err := json.Marshal(ca)
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"Currency":"EUR","Amount":1.50}`, string(data))
+}
+
 func TestCurrencyDecimalAmount_CurrencyAmount(t *testing.T) {
 	ca := CurrencyDecimalAmountEUR(NewDecimalAmount(123456, 2))
 	fa := ca.CurrencyAmount()

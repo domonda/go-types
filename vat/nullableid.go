@@ -2,7 +2,6 @@ package vat
 
 import (
 	"database/sql/driver"
-	"encoding/json"
 	"fmt"
 
 	"github.com/invopop/jsonschema"
@@ -93,13 +92,15 @@ func (n NullableID) GetOr(defaultID ID) ID {
 	return ID(n)
 }
 
-// StringOr returns the NullableID as string
-// or the passed nullString if the NullableID is null.
+// StringOr returns the normalized NullableID as string,
+// or the passed nullString if the NullableID is null
+// or can't be normalized.
 func (n NullableID) StringOr(nullString string) string {
-	if n.IsNull() {
+	norm, err := n.Normalized()
+	if err != nil || norm.IsNull() {
 		return nullString
 	}
-	return string(n)
+	return string(norm)
 }
 
 // Valid returns if id is a valid VAT ID or Null,
@@ -235,12 +236,13 @@ func (n NullableID) Value() (driver.Value, error) {
 }
 
 // MarshalJSON implements encoding/json.Marshaler
-// by returning the JSON null value if the NullableID is null, see IsNull.
+// by returning the JSON null value if the NullableID is null, see IsNull,
+// else the normalized ID like ID.MarshalJSON.
 func (n NullableID) MarshalJSON() ([]byte, error) {
 	if n.IsNull() {
 		return []byte(`null`), nil
 	}
-	return json.Marshal(string(n))
+	return ID(n).MarshalJSON()
 }
 
 // UnmarshalJSON implements encoding/json.Unmarshaler

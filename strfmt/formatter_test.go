@@ -36,6 +36,9 @@ func TestMoneyFormat_FormatCurrencyAmount(t *testing.T) {
 	noCurrency := money.CurrencyAmount{Amount: 1234.5}
 	f := GermanMoneyFormat(true)
 	assert.Equal(t, "1.234,50", f.FormatCurrencyAmount(noCurrency))
+
+	// The currency is written normalized like money.Currency.String
+	assert.Equal(t, "EUR 1.234,50", f.FormatCurrencyAmount(money.CurrencyAmount{Currency: "eur", Amount: 1234.5}))
 }
 
 // TestMoneyFormat_FormatCurrencyDecimalAmount checks that a
@@ -66,6 +69,9 @@ func TestMoneyFormat_FormatCurrencyDecimalAmount(t *testing.T) {
 	// Without a currency there is nothing to place before or after the number
 	f := GermanMoneyFormat(true)
 	assert.Equal(t, "1.234,50", f.FormatCurrencyDecimalAmount(money.CurrencyDecimalAmount{Amount: amount.Amount}))
+
+	// The currency is written normalized like by FormatCurrencyAmount
+	assert.Equal(t, "EUR 1.234,50", f.FormatCurrencyDecimalAmount(money.CurrencyDecimalAmount{Currency: "€", Amount: amount.Amount}))
 }
 
 // TestMoneyFormat_FormatCentAndDecimalAmount checks that the exact money

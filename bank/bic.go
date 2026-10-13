@@ -2,6 +2,7 @@ package bank
 
 import (
 	"database/sql/driver"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -57,9 +58,16 @@ func (bic BIC) ValidAndNormalized() bool {
 	return err == nil && bic == norm
 }
 
-// Validate returns an error if this is not a valid SWIFT Business Identifier Code.
+// Validate returns an error if this is not a valid SWIFT Business Identifier Code
+// after removing all whitespace like Normalized.
 // Checks length, format, and validates against a list of known invalid BICs.
 func (bic BIC) Validate() error {
+	_, err := bic.Normalized()
+	return err
+}
+
+// validateCompact checks the BIC as given, without removing whitespace.
+func (bic BIC) validateCompact() error {
 	length := len(bic)
 	if length != BICMinLength && length != BICMaxLength {
 		return fmt.Errorf("invalid BIC %q length: %d", string(bic), length)
@@ -81,7 +89,7 @@ func (bic BIC) Validate() error {
 // Returns the BIC unchanged in case of an error.
 func (bic BIC) Normalized() (BIC, error) {
 	norm := BIC(strutil.RemoveRunesString(string(bic), strutil.IsSpace))
-	if err := norm.Validate(); err != nil {
+	if err := norm.validateCompact(); err != nil {
 		return bic, err
 	}
 	if len(norm) == 8 {
@@ -96,7 +104,7 @@ func (bic BIC) Normalized() (BIC, error) {
 // Returns the BIC unchanged in case of an error.
 func (bic BIC) NormalizedShort() (BIC, error) {
 	norm := BIC(strutil.RemoveRunesString(string(bic), strutil.IsSpace))
-	if err := norm.Validate(); err != nil {
+	if err := norm.validateCompact(); err != nil {
 		return bic, err
 	}
 	if len(norm) == 11 && strings.HasSuffix(string(norm), "XXX") {
@@ -133,6 +141,8 @@ func (bic BIC) Nullable() NullableBIC {
 
 // Parse parses the BIC into its components: bank code, country code, branch code.
 // Returns isValid as false if the BIC is invalid or in the list of false BICs.
+// The BIC is parsed as given, so a BIC containing whitespace is invalid,
+// use Normalized first.
 func (bic BIC) Parse() (bankCode string, countryCode country.Code, branchCode string, isValid bool) {
 	if _, isFalse := falseBICs[bic]; isFalse {
 		return "", "", "", false
@@ -192,10 +202,11 @@ func (bic BIC) Parse() (bankCode string, countryCode country.Code, branchCode st
 	return bankCode, countryCode, branchCode, true
 }
 
-// CountryCode returns the country code of the BIC.
+// CountryCode returns the country code of the normalized BIC.
 // May be invalid if the BIC is invalid.
 func (bic BIC) CountryCode() country.Code {
-	_, cc, _, _ := bic.Parse()
+	norm, _ := bic.Normalized()
+	_, cc, _, _ := norm.Parse()
 	return cc
 }
 
@@ -207,19 +218,25 @@ func (bic BIC) TrimBranchCode() BIC {
 	return bic[:8]
 }
 
-// IsTestBIC returns true if this is a test BIC (8th character is '0').
+// IsTestBIC returns true if this is a test BIC
+// (8th character of the normalized BIC is '0').
 func (bic BIC) IsTestBIC() bool {
-	return bic.Valid() && bic[7] == '0'
+	norm, err := bic.Normalized()
+	return err == nil && norm[7] == '0'
 }
 
-// IsPassiveSWIFT returns true if this is a passive SWIFT BIC (8th character is '1').
+// IsPassiveSWIFT returns true if this is a passive SWIFT BIC
+// (8th character of the normalized BIC is '1').
 func (bic BIC) IsPassiveSWIFT() bool {
-	return bic.Valid() && bic[7] == '1'
+	norm, err := bic.Normalized()
+	return err == nil && norm[7] == '1'
 }
 
-// ReceiverPaysFees returns true if the receiver pays fees (8th character is '2').
+// ReceiverPaysFees returns true if the receiver pays fees
+// (8th character of the normalized BIC is '2').
 func (bic BIC) ReceiverPaysFees() bool {
-	return bic.Valid() && bic[7] == '2'
+	norm, err := bic.Normalized()
+	return err == nil && norm[7] == '2'
 }
 
 // Scan implements the database/sql.Scanner interface.
@@ -238,8 +255,19 @@ func (bic *BIC) Scan(value any) error {
 }
 
 // Value implements the driver database/sql/driver.Valuer interface.
+// Returns the normalized BIC, or the unchanged string
+// if it can't be normalized, so an empty BIC is written as empty string.
 func (bic BIC) Value() (driver.Value, error) {
-	return string(bic), nil
+	norm, _ := bic.Normalized()
+	return string(norm), nil
+}
+
+// MarshalJSON implements encoding/json.Marshaler.
+// Returns the normalized BIC as JSON string,
+// or the unchanged string if it can't be normalized.
+func (bic BIC) MarshalJSON() ([]byte, error) {
+	norm, _ := bic.Normalized()
+	return json.Marshal(string(norm))
 }
 
 // JSONSchema returns the JSON schema definition for the BIC type.

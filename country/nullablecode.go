@@ -136,12 +136,15 @@ func (n NullableCode) GetOr(defaultCode Code) Code {
 	return Code(n)
 }
 
-// StringOr returns the NullableCode as string or the passed defaultString if the NullableCode is null.
+// StringOr returns the normalized NullableCode as string,
+// or the passed defaultString if the NullableCode is null
+// or can't be normalized.
 func (n NullableCode) StringOr(defaultString string) string {
-	if n.IsNull() {
+	norm, err := n.Normalized()
+	if err != nil || norm.IsNull() {
 		return defaultString
 	}
-	return string(n)
+	return string(norm)
 }
 
 // String returns the normalized code if possible, else it will be returned unchanged as string.

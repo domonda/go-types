@@ -200,6 +200,26 @@ func TestNullableCode_String(t *testing.T) {
 	}
 }
 
+// StringOr returns the normalized value like String, but the alternative
+// instead of a value that can't be normalized, so a caller printing
+// StringOr never shows a misspelled or invalid value as if it were valid.
+func TestNullableCode_StringOr(t *testing.T) {
+	tests := []struct {
+		n    NullableCode
+		want string
+	}{
+		{n: Null, want: "none"},
+		{n: "  ", want: "none"},
+		{n: "de", want: "DE"},
+		{n: "Atlantis", want: "none"},
+	}
+	for _, tt := range tests {
+		if got := tt.n.StringOr("none"); got != tt.want {
+			t.Errorf("NullableCode(%q).StringOr() = %q, want %q", string(tt.n), got, tt.want)
+		}
+	}
+}
+
 func TestNullableCode_Scan(t *testing.T) {
 	t.Run("NULL resets to Null", func(t *testing.T) {
 		n := NullableCode("DE")

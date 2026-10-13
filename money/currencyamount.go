@@ -78,7 +78,7 @@ func ParseCurrencyAmount(str string, acceptedDecimals ...int) (result CurrencyAm
 	return result, nil
 }
 
-// String returns the currency code followed by the amount rounded to the
+// String returns the normalized currency code followed by the amount rounded to the
 // decimal places of the minor unit of the currency, see Currency.MinorUnits,
 // like "EUR 1234.50", "JPY 1235" or "KWD 1.234", with a point as decimal
 // separator and without thousands grouping. An amount without currency
@@ -90,16 +90,17 @@ func (ca CurrencyAmount) String() string {
 
 // FormatSep formats the CurrencyAmount using the given separators and decimal precision.
 // If currencyFirst is true the currency code is placed before the amount,
-// otherwise it is placed after. See Amount.FormatSep for details about the separator and precision arguments.
+// otherwise it is placed after. The currency is normalized if valid,
+// see Currency.String. See Amount.FormatSep for details about the separator and precision arguments.
 func (ca CurrencyAmount) FormatSep(currencyFirst bool, thousandsSep, decimalSep rune, precision int) string {
 	amountStr := ca.Amount.FormatSep(thousandsSep, decimalSep, precision)
 	if ca.Currency == "" {
 		return amountStr
 	}
 	if currencyFirst {
-		return string(ca.Currency) + " " + amountStr
+		return ca.Currency.String() + " " + amountStr
 	}
-	return amountStr + " " + string(ca.Currency)
+	return amountStr + " " + ca.Currency.String()
 }
 
 // GoString returns a Go syntax representation of the CurrencyAmount for debugging.

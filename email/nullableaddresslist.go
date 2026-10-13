@@ -106,12 +106,31 @@ func (n NullableAddressList) IsNotNull() bool {
 	return n != ""
 }
 
-// StringOr returns the string value of n or the passed nullString if n.IsNull()
-func (n NullableAddressList) StringOr(nullString string) string {
+// String returns the normalized list like AddressList.String,
+// "" for null, or the unchanged list if it can't be normalized.
+// String implements the fmt.Stringer interface.
+func (n NullableAddressList) String() string {
+	norm, _ := n.Normalized()
+	return string(norm)
+}
+
+// ASCII returns the list like AddressList.ASCII, or "" for null.
+func (n NullableAddressList) ASCII() string {
 	if n.IsNull() {
+		return ""
+	}
+	return AddressList(n).ASCII()
+}
+
+// StringOr returns the normalized NullableAddressList as string,
+// or the passed nullString if the NullableAddressList is null
+// or can't be normalized.
+func (n NullableAddressList) StringOr(nullString string) string {
+	norm, err := n.Normalized()
+	if err != nil || norm.IsNull() {
 		return nullString
 	}
-	return string(n)
+	return string(norm)
 }
 
 // Get returns the non nullable string value
@@ -189,11 +208,16 @@ func (n *NullableAddressList) Scan(value any) error {
 }
 
 // Value implements the driver database/sql/driver.Valuer interface.
+// Returns nil for SQL NULL if the normalized list is null,
+// which includes a whitespace only list or one without addresses
+// like "undisclosed-recipients:;", else the normalized list,
+// or the unchanged string if it can't be normalized.
 func (n NullableAddressList) Value() (driver.Value, error) {
-	if n.IsNull() {
+	norm, _ := n.Normalized()
+	if norm.IsNull() {
 		return nil, nil
 	}
-	return string(n), nil
+	return string(norm), nil
 }
 
 // UnmarshalText implements encoding.TextUnmarshaler
@@ -209,10 +233,13 @@ func (n *NullableAddressList) UnmarshalJSON(data []byte) error {
 	return internal.UnmarshalJSONStringOrNull(n, data)
 }
 
-// MarshalJSON implements the json.Marshaler interface.
+// MarshalJSON implements the json.Marshaler interface
+// by returning the JSON null value if the normalized list is null like for Value,
+// else the normalized list, or the unchanged string if it can't be normalized.
 func (n NullableAddressList) MarshalJSON() ([]byte, error) {
-	if n.IsNull() {
+	norm, _ := n.Normalized()
+	if norm.IsNull() {
 		return []byte("null"), nil
 	}
-	return json.Marshal(string(n))
+	return json.Marshal(string(norm))
 }

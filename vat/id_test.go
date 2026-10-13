@@ -511,9 +511,31 @@ func TestID_Value(t *testing.T) {
 	assert.Equal(t, "ATU10223006", v)
 }
 
-// The JSON schema must accept every valid ID as it is encoded as JSON,
+// MarshalJSON writes an ID normalized like Value, because Validate accepts
+// formatted IDs like "atu 1022 3006": without normalization API consumers
+// would get the same ID in different spellings. An ID that can't be
+// normalized is written unchanged instead of failing the write.
+func TestID_MarshalJSON(t *testing.T) {
+	tests := []struct {
+		id   ID
+		want string
+	}{
+		{id: "ATU10223006", want: `"ATU10223006"`},
+		{id: "at u 1022 3006", want: `"ATU10223006"`},
+		{id: "NL 123 456 789 B 01", want: `"NL123456789B01"`},
+		{id: "invalid", want: `"invalid"`},
+		{id: "", want: `""`},
+	}
+	for _, tt := range tests {
+		j, err := json.Marshal(tt.id)
+		require.NoError(t, err)
+		assert.Equal(t, tt.want, string(j), "json.Marshal(ID(%q))", string(tt.id))
+	}
+}
+
+// The JSON schema must accept every valid ID that JSON decoding accepts,
 // otherwise API validation and Go validation would disagree.
-// The ID is encoded unnormalized, and IDMaxLength only limits
+// Decoding assigns the ID unnormalized, and IDMaxLength only limits
 // the length after removing whitespace and punctuation, so the schema
 // can't have a maximum length. Formatting only adds characters,
 // so the minimum length still holds.
@@ -524,9 +546,8 @@ func TestID_JSONSchema(t *testing.T) {
 	assert.Equal(t, uint64(IDMinLength), *s.MinLength)
 	assert.Nil(t, s.MaxLength)
 
-	formatted := ID("NL 123 456 789 B 01")
+	var formatted ID
+	require.NoError(t, json.Unmarshal([]byte(`"NL 123 456 789 B 01"`), &formatted))
 	require.True(t, formatted.Valid())
-	data, err := json.Marshal(formatted)
-	require.NoError(t, err)
-	assert.Greater(t, len(data)-2, IDMaxLength, "formatted ID is longer than IDMaxLength")
+	assert.Greater(t, len(formatted), IDMaxLength, "formatted ID is longer than IDMaxLength")
 }

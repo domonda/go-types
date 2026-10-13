@@ -1,6 +1,7 @@
 package money
 
 import (
+	"encoding/json"
 	"fmt"
 	"maps"
 	"slices"
@@ -315,6 +316,37 @@ func TestCurrency_SQL(t *testing.T) {
 	c = EUR
 	assert.Error(t, c.Scan(int64(1)))
 	assert.Equal(t, EUR, c, "a failed scan must not modify the currency")
+}
+
+// Value and MarshalJSON write a Currency normalized, because Validate
+// accepts other spellings like "eur" and "€": without normalization they
+// would reach SQL and JSON as given, where "eur" and "EUR" compare as
+// different currencies. A currency that can't be normalized is written
+// unchanged instead of failing the write.
+func TestCurrency_ValueAndMarshalJSONNormalize(t *testing.T) {
+	tests := []struct {
+		c    Currency
+		want string
+	}{
+		{c: EUR, want: "EUR"},
+		{c: "eur", want: "EUR"},
+		{c: " € ", want: "EUR"},
+		{c: "Canadian Dollar", want: "CAD"},
+		{c: "XYZ", want: "XYZ"},
+	}
+	for _, tt := range tests {
+		v, err := tt.c.Value()
+		require.NoError(t, err)
+		assert.Equal(t, tt.want, v, "Currency(%q).Value()", string(tt.c))
+
+		j, err := json.Marshal(tt.c)
+		require.NoError(t, err)
+		assert.Equal(t, `"`+tt.want+`"`, string(j), "json.Marshal(Currency(%q))", string(tt.c))
+	}
+
+	j, err := json.Marshal(Currency(CurrencyNull))
+	require.NoError(t, err)
+	assert.Equal(t, `""`, string(j), "the empty Currency is no JSON null, use NullableCurrency")
 }
 
 // TestCurrency_SymbolAndEnglishName pins the display helpers: well known

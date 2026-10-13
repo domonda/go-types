@@ -18,7 +18,7 @@ A non-normalized address with an optional display name. All parsing goes through
 |----------------------------------------------------|----------------------------------------------------|
 | `ParseAddress(str) (*mail.Address, error)`         | Lenient parser. Lowercases the address part, decodes RFC 2047 names in the charsets of `golang.org/x/net/html/charset` (ISO 8859-2, Windows-1250, ...), accepts quoted names, `addr (Name)` comments, and umlauts. A name equal to the address is dropped. |
 | `NormalizedAddress(str) (Address, error)`          | `Address(str).Normalized()`.                       |
-| `AddressFrom(*mail.Address) Address`               | `""` for nil, the bare address without a name, else `mail.Address.String()` (`"Name" <addr>`). |
+| `AddressFrom(*mail.Address) Address`               | `""` for nil, the bare address without a name, else `"Name" <addr>` like `mail.Address.String()`, but with a non-ASCII name as UTF-8 instead of RFC 2047 encoded. |
 | `FindAllAddresses(text) []Address`                 | All matches of `AddressRegexp` in text, in order, not normalized. |
 | `UniqueNormalizedAddressSlice([]Address) []Address` | New sorted slice of the unique address parts. Skips invalid entries, returns nil if none is valid, does not modify the input. |
 | `AddressRegexp`                                    | Compiled, unanchored regular expression for an address without name. |
@@ -33,8 +33,10 @@ A non-normalized address with an optional display name. All parsing goes through
 | `a.DomainPart() string`                            | Raw text after the last `@` with trailing `>` and whitespace trimmed, `""` without `@`. Not parsed or lowercased. |
 | `a.AsList() AddressList`                           | List containing only `a`.                          |
 | `a.Nullable() NullableAddress`                     | Type conversion.                                   |
+| `a.String() string`                                | Normalized with a UTF-8 name, else unchanged.      |
+| `a.ASCII() string`                                 | Like `String`, but a non-ASCII name RFC 2047 encoded for message headers. The address part is not encoded. |
 
-Implements: `types.NormalizableValidator[Address]`, `JSONSchema()` (`string`, format `email`). No JSON or SQL methods, it is encoded as a plain string.
+Implements: `fmt.Stringer`, `driver.Valuer`, `json.Marshaler`, `types.NormalizableValidator[Address]`, `JSONSchema()` (`string`, format `email`). No `Scanner` and no `UnmarshalJSON`, it is read as a plain string.
 
 ## AddressList
 
@@ -58,9 +60,10 @@ A comma separated list. `Validate` and `Valid` accept the empty list, only `Scan
 | `l.Validate() error` / `l.Valid() bool`            | Strict, any bad entry is an error.                 |
 | `l.ValidAndNormalized() bool`                      | Valid and equal to its normalized form.            |
 | `l.Nullable() NullableAddressList`                 | Type conversion.                                   |
-| `l.Scan(value) error`                              | See [Serialization](#serialization).               |
+| `l.String() string`, `l.ASCII() string`            | Like `Address.String` and `Address.ASCII` for every address. |
+| `l.Scan(value) error`, `l.Value()`, `l.MarshalJSON()` | See [Serialization](#serialization).               |
 
-Implements: `sql.Scanner`, `types.NormalizableValidator[AddressList]`. No `driver.Valuer` and no JSON methods, it is written as a plain string.
+Implements: `fmt.Stringer`, `sql.Scanner`, `driver.Valuer`, `json.Marshaler`, `types.NormalizableValidator[AddressList]`. No `UnmarshalJSON`, it is read as a plain string.
 
 ## AddressSet
 
@@ -85,16 +88,16 @@ A set of addresses, stored in SQL as a PostgreSQL text array. It implements the 
 | `Sorted() []Address`, `Strings() []string`         | Sorted elements.                                   |
 | `AddressList() AddressList`                        | Sorted elements joined with `", "`.                |
 | `GetOne() Address`                                 | Any element, `""` for an empty set.                |
-| `String() string`                                  | Like `AddressList`, but `"<nil>"` for a nil set.   |
+| `String() string`                                  | Like `AddressList`, but `"<nil>"` for a nil set. Not normalized, because normalizing can merge elements. |
 | `Add`, `AddSet`, `AddNormalized`, `AddAddressPart` | Pointer receivers that allocate the map, safe on a nil set. `AddNormalized` and `AddAddressPart` return the parse error. |
 | `Insert`, `InsertAll`, `UnionWith`, `SymmetricDifferenceWith` | Value receivers, panic on a nil set when they have to add an element. |
 | `Delete`, `DeleteAll`, `DeleteFunc`, `Clear`, `IntersectionWith`, `DifferenceWith` | Remove elements, safe on a nil set. `Delete*` report whether the set changed. |
 | `Clone`, `Union`, `Intersection`, `Difference`, `SymmetricDifference` | New sets. `Clone` of nil is nil. `Difference` is asymmetric. |
 | `Normalized() (AddressSet, error)`                 | New set of the normalized addresses, nil for nil, the receiver with the error if any address is invalid. |
 | `Validate`, `Valid`, `ValidAndNormalized`          | Validation of all elements.                        |
-| `Scan`, `Value`                                    | See [Serialization](#serialization).               |
+| `Scan`, `Value`, `MarshalJSON`                     | See [Serialization](#serialization).               |
 
-Implements: `sql.Scanner`, `driver.Valuer`, `fmt.Stringer`, `types.NormalizableValidator[AddressSet]`, the collections proposal set interface. No JSON methods.
+Implements: `sql.Scanner`, `driver.Valuer`, `json.Marshaler`, `fmt.Stringer`, `types.NormalizableValidator[AddressSet]`, the collections proposal set interface. No `UnmarshalJSON`.
 
 ## NullableAddress
 
@@ -114,11 +117,13 @@ An `Address` where `""` is SQL NULL and JSON null. A whitespace only value is nu
 | `n.NamePart()`, `n.AddressPart()`, `n.LocalPart()`, `n.DomainPart()` | Like `Address`, `""` for null.                     |
 | `n.IsNull()`, `n.IsNotNull()`                      | Null is `""` or whitespace only.                   |
 | `n.Get() Address`                                  | Panics if null.                                    |
-| `n.GetOr(def Address) Address`, `n.StringOr(nullString) string` | Value or the default.                              |
+| `n.GetOr(def Address) Address`                     | Value or the default.                              |
+| `n.String()`, `n.ASCII()`                          | Like `Address`, `""` for null.                     |
+| `n.StringOr(nullString) string`                    | Normalized, or the default if null or invalid.     |
 | `n.Set(Address)`, `n.SetNull()`                    | `Set("")` sets null.                               |
 | `n.AsList() NullableAddressList`                   | List containing only `n`, the null list if `n` is null. |
 
-Implements: `sql.Scanner`, `driver.Valuer`, `json.Marshaler`, `json.Unmarshaler`, `encoding.TextUnmarshaler`, `JSONSchema()` (email string or null), `nullable.NullSetable[Address]`. There is no `Valid()` method, use `Validate() == nil`.
+Implements: `fmt.Stringer`, `sql.Scanner`, `driver.Valuer`, `json.Marshaler`, `json.Unmarshaler`, `encoding.TextUnmarshaler`, `JSONSchema()` (email string or null), `nullable.NullSetable[Address]`. There is no `Valid()` method, use `Validate() == nil`.
 
 ## NullableAddressList
 
@@ -136,10 +141,12 @@ An `AddressList` where `""` is the empty list, SQL NULL, and JSON null. Null cou
 | `n.Normalized()`, `n.Validate()`, `n.ValidAndNormalized()` | Strict like `AddressList`, null is valid.        |
 | `n.IsNull()`, `n.IsNotNull()`                      | `n == ""`, `n != ""`.                            |
 | `n.Get() AddressList`                              | Panics if null.                                  |
-| `n.GetOr(def AddressList)`, `n.StringOr(nullString)` | Value or the default.                            |
+| `n.GetOr(def AddressList)`                         | Value or the default.                            |
+| `n.String()`, `n.ASCII()`                          | Like `AddressList`, `""` for null and for a list without addresses. |
+| `n.StringOr(nullString)`                           | Normalized, or the default if null, without addresses, or invalid. |
 | `n.Set(AddressList)`, `n.SetNull()`                | `Set("")` sets null.                             |
 
-Implements: `sql.Scanner`, `driver.Valuer`, `json.Marshaler`, `json.Unmarshaler`, `encoding.TextUnmarshaler`, `nullable.NullSetable[AddressList]`. No `Valid()` and no `JSONSchema`.
+Implements: `fmt.Stringer`, `sql.Scanner`, `driver.Valuer`, `json.Marshaler`, `json.Unmarshaler`, `encoding.TextUnmarshaler`, `nullable.NullSetable[AddressList]`. No `Valid()` and no `JSONSchema`.
 
 ## Message
 
@@ -198,7 +205,7 @@ type ReplyTemplateData struct {
 }
 ```
 
-`BuildRawMessage` writes `text/plain` and `text/html` bodies (as `multipart/alternative` if both exist), attachments with `Inline` set as inline parts with their Content-ID inside `multipart/related`, and all other attachments with an attachment disposition inside `multipart/mixed`. `From`, `Reply-To`, `To`, `Cc`, and `Bcc` are written normalized, so a non-ASCII display name is RFC 2047 encoded without the address. `To`, `Cc`, and `Bcc` are each written once with all addresses comma separated, `Delivered-To` once per address, then all `ExtraHeader` values.
+`BuildRawMessage` writes `text/plain` and `text/html` bodies (as `multipart/alternative` if both exist), attachments with `Inline` set as inline parts with their Content-ID inside `multipart/related`, and all other attachments with an attachment disposition inside `multipart/mixed`. The addresses are written normalized, with a non-ASCII display name RFC 2047 encoded without the address like `mail.Address.String()` does. `To`, `Cc`, and `Bcc` are each written once with all addresses comma separated, `Delivered-To` once per address, then all `ExtraHeader` values.
 
 ## Parsing messages
 
@@ -259,15 +266,15 @@ type Attachment struct {
 
 ## Serialization
 
-None of the `Scan` or `Unmarshal*` methods validate or normalize.
+None of the `Scan` or `Unmarshal*` methods validate or normalize. `Value` and `MarshalJSON` write the normalized form, or the value unchanged if it can't be normalized.
 
 | Type                  | `Value()` writes                                   | `Scan` accepts                                     | JSON                                               | Text                                               |
 |-----------------------|----------------------------------------------------|----------------------------------------------------|----------------------------------------------------|----------------------------------------------------|
-| `Address`             | No `Valuer`, `database/sql` writes the string, `""` as `""` | No `Scanner`, `database/sql` assigns `string` and `[]byte`, NULL is an error | Plain string, `""` as `""`                         | No methods                                         |
-| `AddressList`         | No `Valuer`, `database/sql` writes the string      | `string` or `[]byte`: a `{...}` PostgreSQL array literal is decoded, elements trimmed, empty ones skipped, joined with `", "` (so `{}` gives `""`). Any other string trimmed. NULL, `""` and whitespace only are errors. | Plain string                                       | No methods                                         |
-| `AddressSet`          | nil: NULL. Empty: `{}`. Else sorted array literal `{"a@example.com","b@example.com"}` | NULL: nil set. `{...}` array literal: elements trimmed, empty ones skipped, a `NULL` element or a nested array is an error. Any other string: a single element set, trimmed. `""` and whitespace only are errors. `[]byte` like `string`. | No methods: nil is `null`, a set is a JSON object `{"a@example.com":{}}`, which also unmarshals | No methods                                         |
-| `NullableAddress`     | Null (`""` or whitespace only): NULL. Else the string | NULL, `""` and whitespace only: null. Any other `string` or `[]byte` as is. | Null marshals as `null`. `null` and `""` unmarshal to null | `UnmarshalText` assigns the text as is, no `MarshalText` |
-| `NullableAddressList` | `""`: NULL. Else the string                        | NULL, `""` and whitespace only: null. Other `string` and `[]byte` like `AddressList`. | `""` marshals as `null`. `null` and `""` unmarshal to null | `UnmarshalText` assigns the text as is, no `MarshalText` |
+| `Address`             | Normalized, `""` as `""`                           | No `Scanner`, `database/sql` assigns `string` and `[]byte`, NULL is an error | `MarshalJSON` like `Value`. Decoded as plain string, `""` as `""` | No methods                                         |
+| `AddressList`         | Normalized, `""` as `""`                           | `string` or `[]byte`: a `{...}` PostgreSQL array literal is decoded, elements trimmed, empty ones skipped, joined with `", "` (so `{}` gives `""`). Any other string trimmed. NULL, `""` and whitespace only are errors. | `MarshalJSON` like `Value`. Decoded as plain string | No methods                                         |
+| `AddressSet`          | Normalized set. nil: NULL. Empty: `{}`. Else sorted array literal `{"a@example.com","b@example.com"}` | NULL: nil set. `{...}` array literal: elements trimmed, empty ones skipped, a `NULL` element or a nested array is an error. Any other string: a single element set, trimmed. `""` and whitespace only are errors. `[]byte` like `string`. | `MarshalJSON` writes the normalized set like a map: nil is `null`, a set is a JSON object `{"a@example.com":{}}`, which also unmarshals | No methods                                         |
+| `NullableAddress`     | Null (`""` or whitespace only): NULL. Else normalized | NULL, `""` and whitespace only: null. Any other `string` or `[]byte` as is. | Null marshals as `null`, else like `Value`. `null` and `""` unmarshal to null | `UnmarshalText` assigns the text as is, no `MarshalText` |
+| `NullableAddressList` | NULL if the normalized list is empty, so also for whitespace only and `undisclosed-recipients:;`. Else normalized | NULL, `""` and whitespace only: null. Other `string` and `[]byte` like `AddressList`. | `null` like `Value` writes NULL, else like `Value`. `null` and `""` unmarshal to null | `UnmarshalText` assigns the text as is, no `MarshalText` |
 
 The array literals written by `AddressSet` and read by the `Scan` methods of `AddressSet`, `AddressList`, and `NullableAddressList` need PostgreSQL or an array-compatible database like CockroachDB or YugabyteDB. `NullableAddressList.Value` writes a plain string that works with any database.
 
@@ -275,12 +282,12 @@ The array literals written by `AddressSet` and read by the `Scan` methods of `Ad
 
 - **Lenient vs strict.** `ParseAddressList`, `AddressList.Split`, and `NullableAddressList.Split`/`Parse` return the valid entries plus an error. `Validate`, `Normalized`, `UniqueAddressParts`, `NormalizeAddressList`, `NormalizedAddressSet`, and `NormalizedAddressPartSet` fail on the first bad entry. `Message.Recipients` drops bad entries silently. `"a@example.com, not an address"` gives `[a@example.com]` and an error from `Split`, and only an error from `Normalized`.
 - **Normalization is lossy.** The local part is lowercased (`John.Doe@Example.com` becomes `john.doe@example.com`). Quotes in the local part are removed and spaces and commas become dots: `"Doe, John"@example.com` becomes `doe..john@example.com` (which `net/mail` writes quoted). A display name equal to the address is dropped, `<a@b.com>` becomes `a@b.com`, and `mike@doe.com (Mike Doe)` becomes `"Mike Doe" <mike@doe.com>`.
-- **Display names follow `net/mail`.** ASCII names are quoted: `John Doe <j@example.com>` normalizes to `"John Doe" <j@example.com>`, so `ValidAndNormalized` is false for the unquoted form. Non-ASCII names are RFC 2047 encoded: `Jürgen Müller <J@X.de>` normalizes to `=?utf-8?q?J=C3=BCrgen_M=C3=BCller?= <j@x.de>`.
+- **Display names are quoted UTF-8.** `John Doe <j@example.com>` normalizes to `"John Doe" <j@example.com>`, so `ValidAndNormalized` is false for the unquoted form. A non-ASCII name stays UTF-8 (RFC 6532), also when the input was RFC 2047 encoded: `Jürgen Müller <J@X.de>` and `=?utf-8?q?J=C3=BCrgen_M=C3=BCller?= <j@x.de>` both normalize to `"Jürgen Müller" <j@x.de>`. Only `BuildRawMessage` RFC 2047 encodes names, because MIME headers must be ASCII.
 - **A top level domain of two or more ASCII letters is required.** `user@example` and IP literals like `user@[192.0.2.1]` are invalid.
 - **`AddressRegexp` is not anchored.** `AddressRegexp.MatchString("xx a@b.com yy")` is true. Use `Address.Validate` to validate.
 - **`DomainPart` does not parse.** `Address("John <J@Example.COM>").DomainPart()` is `Example.COM`. Call it on a normalized address before looking it up in `ProviderDomains()`.
 - **Empty strings in SQL.** `AddressList.Scan` and `AddressSet.Scan` reject `""` and whitespace only strings, `NullableAddress.Scan` and `NullableAddressList.Scan` read them as null. Store NULL instead of `""` (the nullable `Value` methods do).
-- **`AddressSet` is a plain map for JSON and iteration.** `json.Marshal` writes `{"a@example.com":{}}`, `All` and `range` iterate in random order. Use `Sorted`, `Strings`, or `AddressList` for a stable order.
+- **`AddressSet` is a plain map for JSON and iteration.** `json.Marshal` writes `{"a@example.com":{}}` for the normalized set, `All` and `range` iterate in random order. Use `Sorted`, `Strings`, or `AddressList` for a stable order.
 - **A nil `AddressSet` panics on `Insert`, `InsertAll`, `UnionWith`, and `SymmetricDifferenceWith`**, like a nil map assignment. Use `Add` and `AddSet` on fields that may be nil.
 - **Errors carry the raw message.** `ParseMessage`, `ParseMIMEMessage`, `ParseMIMEMessageBytes`, `ParseTNEFMessageBytes`, `NewReplyMessage`, and `BuildRawMessage` wrap errors with `errs.WrapWithFuncParams` from [go-errs](https://github.com/domonda/go-errs). `err.Error()` contains the call stack with the passed arguments, for the parse functions the raw message bytes, cut at `errs.FormatParamMaxLen` (5000 bytes by default) per argument and repeated for every wrapping function. This also applies to the joined header errors returned together with a usable message. `ParseAddressList` errors contain the whole list. Don't log these errors where message content must not appear.
 - **Named time zones in `Date`.** Zone abbreviations are parsed with `time.Parse`, which only knows `UTC` and the abbreviations of the local time zone. Others get offset zero: `Mon, 2 Jan 2006 15:04:05 EST` parses as `15:04:05 +0000 EST`.

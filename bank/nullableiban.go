@@ -2,7 +2,6 @@ package bank
 
 import (
 	"database/sql/driver"
-	"encoding/json"
 	"fmt"
 
 	"github.com/invopop/jsonschema"
@@ -143,12 +142,13 @@ func (iban *NullableIBAN) Scan(value any) error {
 }
 
 // Value implements the driver database/sql/driver.Valuer interface.
-// Returns nil for SQL NULL if the NullableIBAN is null, see IsNull.
+// Returns nil for SQL NULL if the NullableIBAN is null, see IsNull,
+// else the normalized IBAN like IBAN.Value.
 func (iban NullableIBAN) Value() (driver.Value, error) {
 	if iban.IsNull() {
 		return nil, nil
 	}
-	return string(iban), nil
+	return IBAN(iban).Value()
 }
 
 // Set sets an IBAN for this NullableIBAN
@@ -180,13 +180,15 @@ func (iban NullableIBAN) GetOr(defaultIBAN IBAN) IBAN {
 	return IBAN(iban)
 }
 
-// StringOr returns the NullableIBAN as string
-// or the passed defaultString if the NullableIBAN is null.
+// StringOr returns the normalized NullableIBAN as string,
+// or the passed defaultString if the NullableIBAN is null
+// or can't be normalized.
 func (iban NullableIBAN) StringOr(defaultString string) string {
-	if iban.IsNull() {
+	norm, err := iban.Normalized()
+	if err != nil || norm.IsNull() {
 		return defaultString
 	}
-	return string(iban)
+	return string(norm)
 }
 
 // IsNull returns true if the NullableIBAN is null,
@@ -214,12 +216,13 @@ func (iban NullableIBAN) String() string {
 }
 
 // MarshalJSON implements encoding/json.Marshaler
-// by returning the JSON null value if the NullableIBAN is null, see IsNull.
+// by returning the JSON null value if the NullableIBAN is null, see IsNull,
+// else the normalized IBAN like IBAN.MarshalJSON.
 func (iban NullableIBAN) MarshalJSON() ([]byte, error) {
 	if iban.IsNull() {
 		return []byte(`null`), nil
 	}
-	return json.Marshal(string(iban))
+	return IBAN(iban).MarshalJSON()
 }
 
 // UnmarshalJSON implements encoding/json.Unmarshaler

@@ -1,6 +1,7 @@
 package money
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
 	"testing"
@@ -368,4 +369,32 @@ func TestCurrencyAmount_SQL(t *testing.T) {
 	assert.Error(t, ca.Scan(int64(1)))
 	assert.Error(t, ca.Scan("EUR abc"))
 	assert.Equal(t, CurrencyAmountEUR(1), ca, "a failed scan must not modify the value")
+}
+
+// Value, String and JSON write the currency of a CurrencyAmount normalized
+// like Currency.Value, because ParseCurrencyAmount, Scan and JSON decoding
+// keep a currency like "eur" as given: without normalization the same
+// amount would reach SQL and JSON in different spellings. A currency that
+// can't be normalized is written unchanged.
+func TestCurrencyAmount_NormalizedCurrencyOutput(t *testing.T) {
+	tests := []struct {
+		ca       CurrencyAmount
+		wantSQL  string
+		wantJSON string
+	}{
+		{ca: CurrencyAmount{Currency: "eur", Amount: 1.5}, wantSQL: "EUR 1.50", wantJSON: `{"Currency":"EUR","Amount":1.5}`},
+		{ca: CurrencyAmount{Currency: "€", Amount: 1.5}, wantSQL: "EUR 1.50", wantJSON: `{"Currency":"EUR","Amount":1.5}`},
+		{ca: CurrencyAmount{Currency: "jpy", Amount: 1234.5}, wantSQL: "JPY 1235", wantJSON: `{"Currency":"JPY","Amount":1234.5}`},
+		{ca: CurrencyAmount{Currency: "XYZ", Amount: 1.5}, wantSQL: "XYZ 1.50", wantJSON: `{"Currency":"XYZ","Amount":1.5}`},
+	}
+	for _, tt := range tests {
+		v, err := tt.ca.Value()
+		require.NoError(t, err)
+		assert.Equal(t, tt.wantSQL, v, "Value of %#v", tt.ca)
+		assert.Equal(t, tt.wantSQL, tt.ca.String(), "String of %#v", tt.ca)
+
+		j, err := json.Marshal(tt.ca)
+		require.NoError(t, err)
+		assert.JSONEq(t, tt.wantJSON, string(j), "json.Marshal of %#v", tt.ca)
+	}
 }

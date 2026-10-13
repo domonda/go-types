@@ -91,8 +91,8 @@ func ParseCurrencyDecimalAmount(str string, acceptedDecimals ...int) (result Cur
 	return result, nil
 }
 
-// String implements the fmt.Stringer interface, placing the currency before the
-// amount and using the amount's own scale (unlike CurrencyAmount.String, which
+// String implements the fmt.Stringer interface, placing the normalized currency
+// before the amount and using the amount's own scale (unlike CurrencyAmount.String, which
 // rounds to the minor unit of the currency).
 func (ca CurrencyDecimalAmount) String() string {
 	return ca.FormatSep(true, 0, '.')
@@ -100,7 +100,8 @@ func (ca CurrencyDecimalAmount) String() string {
 
 // FormatSep formats the CurrencyDecimalAmount using the given separators. If
 // currencyFirst is true the currency code is placed before the amount,
-// otherwise it is placed after. The number of decimal places is the amount's
+// otherwise it is placed after. The currency is normalized if valid,
+// see Currency.String. The number of decimal places is the amount's
 // own Scale; see DecimalAmount.FormatSep for the separator arguments.
 func (ca CurrencyDecimalAmount) FormatSep(currencyFirst bool, thousandsSep, decimalSep rune) string {
 	amountStr := ca.Amount.FormatSep(thousandsSep, decimalSep)
@@ -108,9 +109,9 @@ func (ca CurrencyDecimalAmount) FormatSep(currencyFirst bool, thousandsSep, deci
 		return amountStr
 	}
 	if currencyFirst {
-		return string(ca.Currency) + " " + amountStr
+		return ca.Currency.String() + " " + amountStr
 	}
-	return amountStr + " " + string(ca.Currency)
+	return amountStr + " " + ca.Currency.String()
 }
 
 // GoString returns a Go syntax representation of the CurrencyDecimalAmount for

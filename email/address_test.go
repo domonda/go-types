@@ -1,6 +1,7 @@
 package email
 
 import (
+	"encoding/json"
 	"net/mail"
 	"testing"
 
@@ -14,6 +15,9 @@ var emailAddressNormalized = map[Address]string{
 	"test888@test.com":               "test888@test.com",
 	"<noname@test.com>":              "noname@test.com",
 	"With Name <With.Name@test.com>": `"With Name" <with.name@test.com>`,
+	// Non-ASCII names stay UTF-8, also when they were RFC 2047 encoded
+	"Jürgen Müller <J@Example.com>":                     `"Jürgen Müller" <j@example.com>`,
+	"=?utf-8?b?wqFIb2xhLCBzZcOxb3Ih?= <senor@hola.com>": `"¡Hola, señor!" <senor@hola.com>`,
 }
 
 func TestAddressNormalized(t *testing.T) {
@@ -36,6 +40,13 @@ func TestAddressFrom(t *testing.T) {
 		{name: `empty`, addr: &mail.Address{Name: "", Address: ""}, want: ``},
 		{name: `erik@domonda.com`, addr: &mail.Address{Name: "", Address: "erik@domonda.com"}, want: `erik@domonda.com`},
 		{name: `"Erik Unger" <erik@domonda.com>`, addr: &mail.Address{Name: "Erik Unger", Address: "erik@domonda.com"}, want: `"Erik Unger" <erik@domonda.com>`},
+		// Unlike mail.Address.String, a non-ASCII name is not RFC 2047
+		// encoded, so the Address stays readable in JSON and databases.
+		{name: `non-ASCII name`, addr: &mail.Address{Name: "Jürgen Müller", Address: "j@example.com"}, want: `"Jürgen Müller" <j@example.com>`},
+		// Quoted like mail.Address.String: quotes and backslashes escaped,
+		// control characters that would break a header line dropped.
+		{name: `escaped name`, addr: &mail.Address{Name: `Say "Hi" \ Bye`, Address: "j@example.com"}, want: `"Say \"Hi\" \\ Bye" <j@example.com>`},
+		{name: `control characters`, addr: &mail.Address{Name: "A\r\nB\x00C", Address: "j@example.com"}, want: `"ABC" <j@example.com>`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -90,6 +101,8 @@ func TestAddress_NormalizedIsIdempotent(t *testing.T) {
 		`"Doe, John" <john@example.com>`,
 		`<Noname@Example.com>`,
 		`=?utf-8?b?wqFIb2xhLCBzZcOxb3Ih?= <senor@hola.com>`,
+		`Jürgen Müller <J@X.de>`,
+		`"Müller, Jürgen" <j@x.de>`,
 	} {
 		t.Run(string(addr), func(t *testing.T) {
 			once, err := addr.Normalized()
@@ -109,6 +122,61 @@ func TestAddress_Normalized_InvalidReturnsInput(t *testing.T) {
 	norm, err := addr.Normalized()
 	assert.Error(t, err)
 	assert.Equal(t, addr, norm)
+}
+
+// Value and MarshalJSON write an Address normalized, because Validate
+// accepts other spellings like an upper case address part or an
+// RFC 2047 encoded name: without normalization the same address would
+// reach SQL and JSON as different strings. An address that can't be
+// normalized is written unchanged instead of failing the write.
+func TestAddress_ValueAndMarshalJSONNormalize(t *testing.T) {
+	tests := []struct {
+		addr Address
+		want string
+	}{
+		{addr: `john@example.com`, want: `john@example.com`},
+		{addr: `John.Doe@Example.com`, want: `john.doe@example.com`},
+		{addr: `John Doe <John@Example.com>`, want: `"John Doe" <john@example.com>`},
+		{addr: `=?utf-8?q?J=C3=BCrgen?= <j@example.com>`, want: `"Jürgen" <j@example.com>`},
+		{addr: `not an address`, want: `not an address`},
+		{addr: ``, want: ``},
+	}
+	for _, tt := range tests {
+		v, err := tt.addr.Value()
+		require.NoError(t, err)
+		assert.Equal(t, tt.want, v, "Address(%q).Value()", string(tt.addr))
+
+		j, err := json.Marshal(tt.addr)
+		require.NoError(t, err)
+		var got string
+		require.NoError(t, json.Unmarshal(j, &got))
+		assert.Equal(t, tt.want, got, "json.Marshal(Address(%q))", string(tt.addr))
+	}
+}
+
+// String returns the normalized address with a non-ASCII name as UTF-8
+// for readability, ASCII the same with the name RFC 2047 encoded for
+// message headers. Both return the original if it can't be normalized,
+// so an invalid address is still shown instead of an empty string.
+func TestAddress_StringAndASCII(t *testing.T) {
+	tests := []struct {
+		addr      Address
+		wantStr   string
+		wantASCII string
+	}{
+		{addr: `John@Example.com`, wantStr: `john@example.com`, wantASCII: `john@example.com`},
+		{addr: `John Doe <John@Example.com>`, wantStr: `"John Doe" <john@example.com>`, wantASCII: `"John Doe" <john@example.com>`},
+		{addr: `Jürgen Müller <J@Example.com>`, wantStr: `"Jürgen Müller" <j@example.com>`, wantASCII: `=?utf-8?q?J=C3=BCrgen_M=C3=BCller?= <j@example.com>`},
+		{addr: `not an address`, wantStr: `not an address`, wantASCII: `not an address`},
+	}
+	for _, tt := range tests {
+		assert.Equal(t, tt.wantStr, tt.addr.String(), "Address(%q).String()", string(tt.addr))
+		assert.Equal(t, tt.wantASCII, tt.addr.ASCII(), "Address(%q).ASCII()", string(tt.addr))
+	}
+
+	// The ASCII form parses back to the same normalized address
+	ascii := Address(Address(`Jürgen Müller <J@Example.com>`).ASCII())
+	assert.Equal(t, `"Jürgen Müller" <j@example.com>`, ascii.String())
 }
 
 // TestAddress_Parts protects the accessors used to compare and route
