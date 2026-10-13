@@ -36,6 +36,7 @@ These rules override conflicting /ship steps:
 - **Branch scope** (Steps 9 and 11): fix findings in code the branch changed; collect problems that predate the branch into one opt-in batch. After a fix round, re-verify the fixed findings with targeted tests rather than re-running every specialist.
 - **Read-only subagents**: every subagent prompt states the worktree is read-only: no edits, no `git checkout`/`restore`/`stash`, no `go.mod`/`go.sum` changes. Mutation tests run in a temp copy (`rsync -a` or `go test -overlay`).
 - **Codex** adversarial pass: only on diffs under ~750 changed lines; larger ones time out at 9 minutes.
+- **Greptile** is not used in any of my repos: skip Step 6.5 (early Greptile PR) and Step 10 (Greptile triage) entirely.
 - **Pregate**: "stray" and "no test lane" findings on `*_test.go`, and PII hits in test fixtures, are Go false positives: note them in the PR body and continue.
 - **Generated tests** carry the comments a maintainer would write; gstack `Value:` cards go in the PR body.
 - **TODOS.md**: skip creating one.
