@@ -398,3 +398,33 @@ func TestCurrencyAmount_NormalizedCurrencyOutput(t *testing.T) {
 		assert.JSONEq(t, tt.wantJSON, string(j), "json.Marshal of %#v", tt.ca)
 	}
 }
+
+// TestCurrencyAmount_ScanStringMinorUnitsWithComma protects that the extra
+// decimal places of a currency like KWD are only read the way String writes
+// them, with a point: "KWD 1,234" can be 1234 with thousands grouping,
+// so reading it as 1.234 would silently divide the amount by 1000.
+func TestCurrencyAmount_ScanStringMinorUnitsWithComma(t *testing.T) {
+	var ca CurrencyAmount
+	require.NoError(t, ca.ScanString("KWD 1.234", true))
+	assert.Equal(t, CurrencyAmount{Currency: "KWD", Amount: 1.234}, ca)
+
+	for _, source := range []string{"KWD 1,234", "BHD 999,999"} {
+		ca = CurrencyAmount{}
+		err := ca.ScanString(source, true)
+		if err == nil {
+			assert.NotEqual(t, 3, decimalsOf(float64(ca.Amount)), "%q must not be read with 3 decimals: %v", source, ca)
+		}
+	}
+}
+
+// decimalsOf returns the number of decimal places of f
+// in its shortest representation.
+func decimalsOf(f float64) int {
+	s := fmt.Sprint(f)
+	for i, r := range s {
+		if r == '.' {
+			return len(s) - i - 1
+		}
+	}
+	return 0
+}

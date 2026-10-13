@@ -3,6 +3,8 @@ package internal
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
+	"reflect"
 )
 
 // UnmarshalJSONStringOrNull implements encoding/json.Unmarshaler for a
@@ -19,6 +21,12 @@ func UnmarshalJSONStringOrNull[S ~string](dst *S, data []byte) error {
 	var str string
 	err := json.Unmarshal(data, &str)
 	if err != nil {
+		var typeErr *json.UnmarshalTypeError
+		if errors.As(err, &typeErr) {
+			// Name the type S instead of string like encoding/json
+			// does for a string type without UnmarshalJSON
+			return &json.UnmarshalTypeError{Value: typeErr.Value, Type: reflect.TypeFor[S](), Offset: typeErr.Offset}
+		}
 		return err
 	}
 	*dst = S(str)

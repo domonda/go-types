@@ -68,10 +68,16 @@ func (n NullableDate) IsZero() bool {
 }
 
 // IsNull returns true if the NullableDate is null or zero,
-// which includes whitespace only like for country.NullableCode.
+// which includes whitespace only like for country.NullableCode,
+// and a zero date in another format like "01.01.0001",
+// which would else be written as "0001-01-01" that reads back as null.
 // IsNull implements the nullable.Nullable interface.
 func (n NullableDate) IsNull() bool {
-	return n.IsZero() || strutil.TrimSpace(n) == Null
+	if n.IsZero() || strutil.TrimSpace(n) == Null {
+		return true
+	}
+	norm, err := Date(n).Normalized()
+	return err == nil && norm.IsZero()
 }
 
 // IsNotNull returns true if the NullableDate is not null.

@@ -937,3 +937,18 @@ func TestNullableDate_JSONSchema(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "null", string(data), "default value is JSON null")
 }
+
+// TestNullableDate_ZeroDateInOtherFormatIsNull protects a stable round trip:
+// "01.01.0001" written as "0001-01-01" would read back as null, so it must
+// be null already.
+func TestNullableDate_ZeroDateInOtherFormatIsNull(t *testing.T) {
+	n := NullableDate("01.01.0001")
+	assert.True(t, n.IsNull())
+	v, err := n.Value()
+	require.NoError(t, err)
+	assert.Nil(t, v)
+	j, err := json.Marshal(n)
+	require.NoError(t, err)
+	assert.Equal(t, `null`, string(j))
+	assert.False(t, NullableDate("02.01.0001").IsNull())
+}

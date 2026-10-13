@@ -288,8 +288,13 @@ func (n *NullableNumber) UnmarshalJSON(j []byte) error {
 		return nil
 	}
 	var str string
-	if json.Unmarshal(j, &str) == nil && strutil.TrimSpace(str) == "" {
-		*n = NumberNull
+	if json.Unmarshal(j, &str) == nil {
+		// Trimmed like by Scan and UnmarshalText
+		no, err := NullableNumberFrom(str)
+		if err != nil {
+			return fmt.Errorf("%w from JSON: %s", err, j)
+		}
+		*n = no
 		return nil
 	}
 	return (*Number)(n).UnmarshalJSON(j)

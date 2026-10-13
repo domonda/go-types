@@ -115,7 +115,9 @@ func (ca CurrencyAmount) GoString() string {
 // Only amounts with zero or two decimal places or with the decimal places
 // of the minor unit of the currency, see Currency.MinorUnits, are accepted,
 // so that an ambiguous thousands grouping like "EUR 1.234" is rejected
-// while "KWD 1.234" written by String is scanned.
+// while "KWD 1.234" written by String is scanned. The decimal places of
+// the minor unit are only accepted without a comma, like String writes
+// them, because "KWD 1,234" could also be 1234 with thousands grouping.
 //
 // If validate is true, then the Amount.Valid method is checked
 // to return an error if the floating point value is infinite or NaN.
@@ -127,7 +129,7 @@ func (ca *CurrencyAmount) ScanString(source string, validate bool) error {
 	// NaN and ±Inf have no decimals to check, validate decides about them
 	if parsed.Amount.Valid() {
 		acceptedDecimals := []int{0, 2}
-		if minorUnits := parsed.Currency.MinorUnits(); !slices.Contains(acceptedDecimals, minorUnits) {
+		if minorUnits := parsed.Currency.MinorUnits(); !slices.Contains(acceptedDecimals, minorUnits) && !strings.Contains(source, ",") {
 			acceptedDecimals = append(acceptedDecimals, minorUnits)
 		}
 		parsed, err = ParseCurrencyAmount(source, acceptedDecimals...)

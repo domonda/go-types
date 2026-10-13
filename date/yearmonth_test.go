@@ -391,3 +391,12 @@ func TestYearMonth_Compare(t *testing.T) {
 		})
 	}
 }
+
+// TestYearMonth_ValidateRejectsYearZero protects that a YearMonth is only
+// valid if its dates are: Date has no year 0, so "0000-05" would add months
+// through an invalid date and give "0001-02" for AddMonths(1).
+func TestYearMonth_ValidateRejectsYearZero(t *testing.T) {
+	require.Error(t, YearMonth("0000-05").Validate())
+	require.NoError(t, YearMonth("0001-05").Validate())
+	require.Equal(t, YearMonth("0000-05"), YearMonth("0000-05").AddMonths(1), "invalid stays unchanged")
+}

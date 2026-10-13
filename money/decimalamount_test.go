@@ -1795,3 +1795,13 @@ func TestParseDecimalAmount_zeroKeepsMantissaScale(t *testing.T) {
 	_, err = ParseDecimalAmount("0e-30", 0)
 	assert.NoError(t, err)
 }
+
+// TestDecimalAmount_DividedByNegativeZeroRate protects the IEEE 754 sign of
+// a division by a negative zero rate, like float64 division, because the
+// decimal zero of the exact path has no sign.
+func TestDecimalAmount_DividedByNegativeZeroRate(t *testing.T) {
+	q := NewDecimalAmount(100, 0).DividedByRate(Rate(math.Copysign(0, -1)))
+	assert.True(t, q.IsInf(-1), "1 / -0 = %s, want -Inf", q)
+	q = NewDecimalAmount(100, 0).DividedByRate(0)
+	assert.True(t, q.IsInf(1), "1 / 0 = %s, want +Inf", q)
+}

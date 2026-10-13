@@ -53,7 +53,7 @@ Rules for numeric dates:
 - **Language hint.** The first `lang` argument is a hint, normalized with `language.Code.Normalized`, so `language.EN`, `"EN"`, `" en"`, `"en-US"` and `"eng"` all mean English. A hint that can't be normalized, like `"english"`, is ignored. Only English changes the result: it reads month first.
 - **The hint only decides ambiguous dates.** It applies only when both numbers are 1 to 12. `"15.06.2024"` and `"06/15/2024"` both give 2024-06-15 with any hint. The separator never matters.
 - **Ordinal suffix.** A suffix like `"1st"` marks the day for ambiguous dates and wins over the hint: `"02 1st 2003"` and `"1st 02 2003"` are 2003-02-01, also with `language.EN`. A number with a suffix is never the month, so `"13 1st 2024"` is an error.
-- **Two-digit years.** 00 to 44 become 2000 to 2044, 45 to 99 become 1945 to 1999.
+- **Two-digit years.** 00 to 44 become 2000 to 2044, 45 to 99 become 1945 to 1999. A single digit is never the year, so `"12.12.5"` is an error.
 
 ### Functions
 
@@ -146,7 +146,7 @@ Implements: `fmt.Stringer`, `database/sql.Scanner`, `database/sql/driver.Valuer`
 const Null NullableDate = ""
 ```
 
-`NullableDate` has the same string form as `Date`. `Null`, whitespace only (like for `country.NullableCode`) and the zero dates `"0000-00-00"` and `"0001-01-01"` are null, valid, and written as SQL NULL and JSON `null`.
+`NullableDate` has the same string form as `Date`. `Null`, whitespace only (like for `country.NullableCode`), the zero dates `"0000-00-00"` and `"0001-01-01"`, and a zero date in another format like `"01.01.0001"` are null, valid, and written as SQL NULL and JSON `null`.
 
 | Function                          | Description                                        |
 |-----------------------------------|----------------------------------------------------|
@@ -156,7 +156,7 @@ const Null NullableDate = ""
 
 | Method                                             | Description                                        |
 |----------------------------------------------------|----------------------------------------------------|
-| `IsNull()`                                         | True for `Null`, whitespace only and the zero dates. |
+| `IsNull()`                                         | True for `Null`, whitespace only and the zero dates, also in another format like `"01.01.0001"`. |
 | `IsZero()`                                         | True for `Null` and the zero dates.                |
 | `IsNotNull()`                                      | `!IsNull()`.                                       |
 | `Get()`                                            | The `Date`; panics if null.                        |

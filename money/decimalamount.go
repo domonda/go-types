@@ -804,7 +804,10 @@ func (a DecimalAmount) MulInt64(n int64) DecimalAmount {
 // Like Amount.CentAmount it uses the shortest decimal representation of the
 // rate, so 3.00 times 0.145 is exactly 0.435, which RoundToCents rounds to
 // 0.44, and not the 0.43499999999999994 of a float64 product. The product is
-// computed exactly with Mul and returned without trailing zeros. A rate whose
+// computed with Mul and returned without trailing zeros. It is exact unless
+// it needs more than MaxDecimalAmountScale decimal places, then Mul rounds
+// it half away from zero, so rounding it again, like to cents, can differ
+// by one from rounding the exact product. A rate whose
 // shortest decimal needs more than MaxDecimalAmountScale decimal places or
 // doesn't fit the coefficient range is multiplied in float64 precision.
 // Round to the final precision afterwards, e.g. with RoundToCents.
@@ -820,9 +823,11 @@ func (a DecimalAmount) MultipliedByRate(rate Rate) DecimalAmount {
 // Div by the shortest decimal representation of the rate like
 // MultipliedByRate, so a quotient that doesn't terminate is rounded half away
 // from zero at the largest scale that fits. Division by a zero rate yields
-// ±Inf (or NaN for 0/0).
+// ±Inf (or NaN for 0/0), with the sign of a negative zero rate.
 func (a DecimalAmount) DividedByRate(rate Rate) DecimalAmount {
-	if r, ok := exactDecimalFromFloat(float64(rate)); ok {
+	// A zero rate is divided in float64, because the decimal zero
+	// has no sign and dividing by -0 must give -Inf for a positive amount
+	if r, ok := exactDecimalFromFloat(float64(rate)); ok && rate != 0 {
 		return a.Div(r, RoundHalfAwayFromZero).withoutTrailingZeros()
 	}
 	return decimalFromFloatShortest(a.Float()/float64(rate), 64)

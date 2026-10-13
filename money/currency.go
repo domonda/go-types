@@ -143,6 +143,11 @@ func (c Currency) Normalized() (Currency, error) {
 		if result, found = currencyNameToCode[str]; found {
 			return result, nil
 		}
+	}
+	// Only letters, spaces and the punctuation of names like
+	// "U.S. Dollar", "US-Dollar" or "Dollars (USD)" are guessed,
+	// so that "USD 1.5" or "€ USD" are no currencies
+	if len(str) > 3 && !strings.ContainsFunc(str, isNoCurrencyNameRune) {
 		// Words of letters only, so "U.S." becomes "US"
 		// and "US-Dollar" the two words "US" and "DOLLAR"
 		words := strings.FieldsFunc(strings.ReplaceAll(str, ".", ""), func(r rune) bool { return !unicode.IsLetter(r) })
@@ -163,6 +168,11 @@ func (c Currency) Normalized() (Currency, error) {
 	}
 
 	return Currency(str), nil
+}
+
+// isNoCurrencyNameRune returns if r can't be part of a currency name.
+func isNoCurrencyNameRune(r rune) bool {
+	return !unicode.IsLetter(r) && !unicode.IsSpace(r) && !strings.ContainsRune(".-()", r)
 }
 
 // unitWithQualifiers returns if the words contain at least one of the

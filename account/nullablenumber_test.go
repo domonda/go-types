@@ -363,3 +363,18 @@ func TestNullableNumber_UnmarshalJSONZeroIsNull(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(`42`), &n))
 	assert.Equal(t, NullableNumber("42"), n)
 }
+
+// TestNullableNumber_UnmarshalJSONTrimsLikeScan protects that JSON reads a
+// value padded with a zero-width space like Scan and UnmarshalText do,
+// so the same column value doesn't fail only when it arrives as JSON.
+func TestNullableNumber_UnmarshalJSONTrimsLikeScan(t *testing.T) {
+	var scanned NullableNumber
+	require.NoError(t, scanned.Scan("\u200b123"))
+
+	var fromJSON NullableNumber
+	require.NoError(t, json.Unmarshal([]byte(`"\u200b123"`), &fromJSON))
+	assert.Equal(t, scanned, fromJSON)
+	assert.Equal(t, NullableNumber("123"), fromJSON)
+
+	require.Error(t, json.Unmarshal([]byte(`"not a number!"`), &fromJSON))
+}

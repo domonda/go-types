@@ -904,8 +904,9 @@ func normalizeDate(str string, langHint language.Code) (string, bool, error) {
 		return "", false, fmt.Errorf("too short for a date: %q", str)
 	}
 
-	if len(trimmed) > 10 && trimmed[10] == 'T' {
-		// Use date part of this date-time format: "2006-01-02T15:04:05"
+	if len(trimmed) > 11 && trimmed[10] == 'T' && trimmed[11] >= '0' && trimmed[11] <= '9' {
+		// Use date part of this date-time format: "2006-01-02T15:04:05",
+		// but not of a word like "2023-12-25TOTAL"
 		trimmed = trimmed[:10]
 	}
 
@@ -932,11 +933,15 @@ func normalizeDate(str string, langHint language.Code) (string, bool, error) {
 	}
 	dayHint := -1
 	totalLen := 0
+	// A single digit is padded to two, but can't be a year,
+	// so that text like "set 6 4" is not the date 2004-09-06
+	var singleDigit [3]bool
 	for i := range parts {
 		l := len(parts[i])
 		totalLen += l
 		if l == 1 {
 			parts[i] = "0" + parts[i]
+			singleDigit[i] = true
 			continue
 		}
 		// Strip English ordinal suffixes (1st, 2nd, 3rd, 4th, 21st,
@@ -968,9 +973,12 @@ func normalizeDate(str string, langHint language.Code) (string, bool, error) {
 	month1, _ := monthNameMap[parts[1]]
 	month2, _ := monthNameMap[parts[2]]
 
-	expandVal2ToFullYear := func() {
+	expandVal2ToFullYear := func() bool {
 		if len2 != 2 {
 			panic("len2")
+		}
+		if singleDigit[2] {
+			return false
 		}
 		if val2 < 45 {
 			parts[2] = "20" + parts[2]
@@ -980,12 +988,13 @@ func normalizeDate(str string, langHint language.Code) (string, bool, error) {
 			val2 = 1900 + val2
 		}
 		len2 = 4
+		return true
 	}
 
 	switch {
 	case month0 != 0:
-		if len2 == 2 {
-			expandVal2ToFullYear()
+		if len2 == 2 && !expandVal2ToFullYear() {
+			return "", false, fmt.Errorf("invalid date: %q", str)
 		}
 		if !validDay(val1) || !validYear(val2) {
 			return "", false, fmt.Errorf("invalid date: %q", str)
@@ -998,9 +1007,12 @@ func normalizeDate(str string, langHint language.Code) (string, bool, error) {
 			// YY m DD
 			parts[0], parts[2] = parts[2], parts[0]
 			val0, val2 = val2, val0
+			singleDigit[0], singleDigit[2] = singleDigit[2], singleDigit[0]
 			// DD m YY
 		}
-		expandVal2ToFullYear()
+		if !expandVal2ToFullYear() {
+			return "", false, fmt.Errorf("invalid date: %q", str)
+		}
 		fallthrough
 
 	case len0 == 2 && month1 != 0 && len2 == 4:
@@ -1018,6 +1030,9 @@ func normalizeDate(str string, langHint language.Code) (string, bool, error) {
 		return fmt.Sprintf("%s-%02d-%s", parts[0], month1, parts[2]), false, nil
 
 	case month2 != 0:
+		if singleDigit[0] {
+			return "", false, fmt.Errorf("invalid date: %q", str)
+		}
 		if len0 == 2 {
 			// YY DD m
 			if val0 < 45 {
@@ -1039,7 +1054,9 @@ func normalizeDate(str string, langHint language.Code) (string, bool, error) {
 		return strings.Join(parts, "-"), false, nil
 
 	case len0 == 2 && len1 == 2 && len2 == 2:
-		expandVal2ToFullYear()
+		if !expandVal2ToFullYear() {
+			return "", false, fmt.Errorf("invalid date: %q", str)
+		}
 		fallthrough
 
 	case len0 == 2 && len1 == 2 && len2 == 4:

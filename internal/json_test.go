@@ -34,3 +34,25 @@ func TestUnmarshalJSONStringOrNull(t *testing.T) {
 	var typeErr *json.UnmarshalTypeError
 	assert.ErrorAs(t, UnmarshalJSONStringOrNull(&n, []byte(`1`)), &typeErr, "same error type as encoding/json")
 }
+
+// TestUnmarshalJSONStringOrNull_TypeError protects that a JSON value of the
+// wrong type reports the target type like encoding/json does for a string
+// type without UnmarshalJSON, instead of "Go value of type string", which
+// doesn't tell which of the nullable types failed.
+func TestUnmarshalJSONStringOrNull_TypeError(t *testing.T) {
+	var v struct {
+		Field nullableTestString `json:"field"`
+	}
+	err := json.Unmarshal([]byte(`{"field":123}`), &v)
+	var typeErr *json.UnmarshalTypeError
+	require.ErrorAs(t, err, &typeErr)
+	assert.Contains(t, err.Error(), "internal.nullableTestString")
+}
+
+// nullableTestString uses UnmarshalJSONStringOrNull like the nullable
+// string types of the domain packages.
+type nullableTestString string
+
+func (n *nullableTestString) UnmarshalJSON(data []byte) error {
+	return UnmarshalJSONStringOrNull(n, data)
+}

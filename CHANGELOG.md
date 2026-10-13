@@ -157,7 +157,8 @@ picking the semver baseline.
 - **Breaking:** `money.Currency.Normalized` guesses EUR only from the words
   `EUR`, `Euro` and `Euros`, like the other units, instead of from any text
   containing `EUR`, so `TEUR` (thousands of euros) and `Amateur` are no
-  currencies.
+  currencies. Only text of letters, spaces and `.`, `-`, `(` and `)` is
+  guessed, so `USD 1.5`, `€ USD` and `100 Dollars` are no currencies.
 - **Breaking:** `bank.BIC.Validate` and `Valid`, and so `NullableBIC`,
   `StringIsBIC` and `BIC.ScanString` with `validate`, remove whitespace like
   `Normalized`, so `"BKAU AT WW"` is valid. `CountryCode`, `IsTestBIC`,
@@ -271,6 +272,14 @@ picking the semver baseline.
   Raw binary input is still accepted where it is binary: `UnmarshalBinary`,
   `Scan` of a 16 byte `[]byte` from an SQL driver, `IDFromBytes` and
   `NullableIDFromBytes`.
+- **Breaking:** `date` parsing never reads a single digit as year, so
+  `"12.12.5"` and text like `"set 6 4"`, with the Italian month name `set`,
+  are no dates for `Normalize` and `Finder`. A date-time is only cut at a
+  `T` followed by a digit, so `"2023-12-25TOTAL"` is no date.
+  `YearMonth` and `YearQuarter` reject the year 0 like `Date`, and
+  `NullableDate` treats a zero date in another format, like `"01.01.0001"`,
+  as null, because it would be written as `"0001-01-01"`, which reads back
+  as null.
 - **Breaking:** `date.YearWeekMonday`, `YearWeekRange` and `PeriodRange` for
   `YYYY-Wnn` follow ISO 8601, where January 4th is always in week 1. They
   counted from January 1st, so years starting on a Friday or Saturday got the
@@ -418,7 +427,9 @@ picking the semver baseline.
   write the ISO 4217 minor units of the currency instead of
   always two decimals: `"KWD 1.234"` instead of `"KWD 1.23"`, `"JPY 1235"`
   instead of `"JPY 1234.50"`. `CurrencyAmount.ScanString` additionally
-  accepts the minor units of the currency, so the stored text scans back.
+  accepts the minor units of the currency written with a point like by
+  `String`, so the stored text scans back, but `"KWD 1,234"` is not read
+  as 1.234.
   `FormatSep` keeps its explicit precision.
 - `strfmt.Format` and `strfmt.Scan` use the default configuration for a nil
   config. `Format` panicked and `Scan` returned an error.

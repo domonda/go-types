@@ -35,14 +35,14 @@ func YearMonthOfToday() YearMonth {
 }
 
 // Validate returns an error if the year-month is not in valid YYYY-MM format.
-// Checks that the year is within reasonable range (≤3000) and month is 1-12.
+// Checks that the year is 1 to 3000, because Date has no year 0, and month is 1-12.
 func (ym YearMonth) Validate() error {
 	if len(ym) != 7 || ym[4] != '-' {
 		return fmt.Errorf("invalid year month: %q", ym)
 	}
 	yearStr := string(ym)[:4]
 	year, err := strconv.ParseUint(yearStr, 10, 16)
-	if err != nil || year > 3000 {
+	if err != nil || year < 1 || year > 3000 {
 		return fmt.Errorf("invalid year: %q", yearStr)
 	}
 	monthStr := string(ym)[5:7]

@@ -33,14 +33,14 @@ func YearQuarterOfToday() YearQuarter {
 }
 
 // Validate returns an error if the year-quarter is not in valid YYYY-Q# format.
-// Checks that the year is within reasonable range (≤3000) and quarter is 1-4.
+// Checks that the year is 1 to 3000, because Date has no year 0, and quarter is 1-4.
 func (yq YearQuarter) Validate() error {
 	if len(yq) != 7 || yq[4] != '-' || yq[5] != 'Q' {
 		return fmt.Errorf("invalid year quarter: %q", yq)
 	}
 	yearStr := string(yq)[:4]
 	year, err := strconv.ParseUint(yearStr, 10, 16)
-	if err != nil || year > 3000 {
+	if err != nil || year < 1 || year > 3000 {
 		return fmt.Errorf("invalid year: %q", yearStr)
 	}
 	quarterStr := string(yq)[6:7]

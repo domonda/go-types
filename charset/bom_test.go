@@ -264,3 +264,26 @@ func Test_BOM_String_UTF32AndInvalid(t *testing.T) {
 	// Invalid values show their bytes for debugging
 	assert.Equal(t, "Invalid BOM: [120 121]", BOM("xy").String())
 }
+
+// TestBOM_DecodeKeepsTextBOM protects that only the one leading BOM is
+// removed: a U+FEFF after it is a character of the text, like a zero
+// width no-break space, and must be decoded instead of stripped again.
+func TestBOM_DecodeKeepsTextBOM(t *testing.T) {
+	tests := []struct {
+		bom  BOM
+		data []byte
+	}{
+		{bom: BOMUTF32LE, data: []byte{0xFF, 0xFE, 0, 0, 0xFF, 0xFE, 0, 0, 'a', 0, 0, 0}},
+		{bom: BOMUTF32BE, data: []byte{0, 0, 0xFE, 0xFF, 0, 0, 0xFE, 0xFF, 0, 0, 0, 'a'}},
+		{bom: BOMUTF16LE, data: []byte{0xFF, 0xFE, 0xFF, 0xFE, 'a', 0}},
+		{bom: BOMUTF16BE, data: []byte{0xFE, 0xFF, 0xFE, 0xFF, 0, 'a'}},
+	}
+	for _, tt := range tests {
+		decoded, err := tt.bom.Decode(tt.data)
+		require.NoError(t, err, tt.bom.String())
+		assert.Equal(t, "\ufeffa", string(decoded), tt.bom.String())
+		str, err := tt.bom.DecodeString(tt.data)
+		require.NoError(t, err, tt.bom.String())
+		assert.Equal(t, "\ufeffa", str, tt.bom.String())
+	}
+}

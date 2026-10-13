@@ -643,3 +643,24 @@ func TestCurrency_MarshalXML(t *testing.T) {
 		}{})
 	}, "a nil pointer attribute without omitempty panics, documented in the CHANGELOG")
 }
+
+// TestCurrency_NormalizedRejectsAmountsAndSymbols protects that guessing a
+// currency from its unit word only reads names: "USD 1.5" is an amount and
+// "€ USD" names two currencies, so normalizing them to a single currency
+// would turn free text into data.
+func TestCurrency_NormalizedRejectsAmountsAndSymbols(t *testing.T) {
+	for _, c := range []Currency{"USD 1.5", "€ USD", "$ CHF", "100 Dollars"} {
+		_, err := c.Normalized()
+		assert.Error(t, err, "Currency(%q).Normalized()", c)
+	}
+	for c, want := range map[Currency]Currency{
+		"Dollars (USD)":               "USD",
+		"U.S. Dollar":                 "USD",
+		"US-Dollar":                   "USD",
+		"Zimbabwe Dollar (2009-2024)": "ZWL",
+	} {
+		norm, err := c.Normalized()
+		require.NoError(t, err, "Currency(%q).Normalized()", c)
+		assert.Equal(t, want, norm, "Currency(%q).Normalized()", c)
+	}
+}

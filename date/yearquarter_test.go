@@ -845,3 +845,10 @@ func TestNullableYearQuarter_ContainsYearMonth(t *testing.T) {
 		})
 	}
 }
+
+// TestYearQuarter_ValidateRejectsYearZero protects that a YearQuarter is only
+// valid if its dates are, see TestYearMonth_ValidateRejectsYearZero.
+func TestYearQuarter_ValidateRejectsYearZero(t *testing.T) {
+	assert.Error(t, YearQuarter("0000-Q2").Validate())
+	assert.NoError(t, YearQuarter("0001-Q2").Validate())
+}

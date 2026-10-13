@@ -141,7 +141,6 @@ The package has no SQL support.
 - **`"1,234"` is 1.234.** A single `.` or `,` is always the decimal separator, so `Format(1234, ',', '.', -1, false)` writes `"1,234"`, which `Parse` reads back as 1.234. This affects integers from 1000 to 999999 formatted with a thousands separator and without decimals. Write decimals to make the output unambiguous: `Format(1234, ',', '.', 2, true)` is `"1,234.00"`, which parses back as 1234.
 - **`"1.000"` is 1**, not 1000. Parse German style integers with thousands separators only when they have at least two groups, or check the result against the expected magnitude.
 - **A detected decimal separator can be 0.** `ParseDetails("1'234")` returns `decimalSep` 0, which `Format` rejects with a panic. Pick a decimal separator that differs from `thousandsSep` before passing the detected separators back to `Format`.
-- **`ParseDetails` reports `'.'` for a comma in front of an exponent.** `ParseDetails("1,5e3")` returns 1500 with `decimalSep` `'.'`.
 - **The zero `FormatDef` panics in `Format`**, because its `DecimalSep` is 0.
 - **Negative values that round to zero lose the sign.** `Format(-0.001, 0, '.', 2, true)` is `"0.00"` and negative zero is `"0"`, unlike `strconv.FormatFloat`, which writes `"-0.00"` and `"-0"`. `RoundToDecimals(-0.001, 2)` still returns negative zero.
 - **`Tolerant` can't tell missing from zero.** JSON `null`, `""`, and `0` all decode to 0. Use a pointer field if the difference matters.

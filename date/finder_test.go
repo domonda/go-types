@@ -72,3 +72,11 @@ func TestFinder_FindsISO8601DateTimes(t *testing.T) {
 	require.Error(t, err)
 	assert.Nil(t, NewFinder().FindAllIndex([]byte("2023-12-25t10:00:00z"), -1))
 }
+
+// TestFinder_NoDateInWordsAndSingleDigits protects against false dates in
+// free text: "set" is a month name and "6 4" no day and year.
+func TestFinder_NoDateInWordsAndSingleDigits(t *testing.T) {
+	for _, text := range []string{"won the set 6 4 easily", "2023-12-25TOTAL"} {
+		assert.Empty(t, NewFinder().FindAllIndex([]byte(text), -1), text)
+	}
+}

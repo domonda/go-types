@@ -461,9 +461,15 @@ func (a Amount) SplitProportionally(weights []Amount) []Amount {
 	}
 	result := make([]Amount, count)
 	if !ok {
+		// Scaled by the largest weight, so that the sum of large
+		// weights can't overflow to infinity and zero every part
+		scale := Amount(1)
+		if maxWeight > 0 && !math.IsInf(maxWeight, 0) {
+			scale = Amount(maxWeight)
+		}
 		totalWeight := Amount(0)
 		for _, weight := range weights {
-			totalWeight += weight.Abs()
+			totalWeight += weight.Abs() / scale
 		}
 		if totalWeight == 0 {
 			// Like for the cents below, all zero weights
@@ -472,7 +478,7 @@ func (a Amount) SplitProportionally(weights []Amount) []Amount {
 			return result
 		}
 		for i, weight := range weights {
-			result[i] = a * (weight.Abs() / totalWeight)
+			result[i] = a * (weight.Abs() / scale / totalWeight)
 		}
 		return result
 	}

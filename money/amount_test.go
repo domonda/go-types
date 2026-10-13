@@ -1018,3 +1018,11 @@ func TestAmount_BigFloat(t *testing.T) {
 	assert.Equal(t, 1234.56, f)
 	assert.Equal(t, big.Exact, acc)
 }
+
+// TestAmount_SplitProportionallyLargeWeights protects that weights whose sum
+// overflows float64 still split the amount by their ratio instead of
+// returning zero parts, which would make the whole amount disappear.
+func TestAmount_SplitProportionallyLargeWeights(t *testing.T) {
+	parts := Amount(1e20).SplitProportionally([]Amount{1e308, 1e308})
+	assert.Equal(t, []Amount{5e19, 5e19}, parts)
+}

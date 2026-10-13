@@ -1570,3 +1570,32 @@ func TestDate_ZeroDateHasNoTime(t *testing.T) {
 		})
 	}
 }
+
+// TestNormalize_NoSingleDigitYear protects that a single digit is never read
+// as year: with month names like the Italian "set" the text "set 6 4" would
+// else be the date 2004-09-06 for Normalize and Finder.
+func TestNormalize_NoSingleDigitYear(t *testing.T) {
+	for _, str := range []string{"set 6 4", "6 set 4", "4 6 set", "12.12.5"} {
+		_, err := Normalize(str)
+		assert.Error(t, err, "Normalize(%q)", str)
+	}
+	for str, want := range map[string]Date{
+		"set 6 04":   "2004-09-06",
+		"6 set 2004": "2004-09-06",
+		"12.12.05":   "2005-12-12",
+	} {
+		got, err := Normalize(str)
+		require.NoError(t, err, "Normalize(%q)", str)
+		assert.Equal(t, want, got, "Normalize(%q)", str)
+	}
+}
+
+// TestNormalize_DateTimeNeedsTime protects that only a date-time is cut at
+// its "T", so a word like "2023-12-25TOTAL" is no date.
+func TestNormalize_DateTimeNeedsTime(t *testing.T) {
+	_, err := Normalize("2023-12-25TOTAL")
+	assert.Error(t, err)
+	got, err := Normalize("2023-12-25T10:00:00Z")
+	require.NoError(t, err)
+	assert.Equal(t, Date("2023-12-25"), got)
+}
