@@ -2,6 +2,7 @@ package email
 
 import (
 	"database/sql/driver"
+	"encoding/base64"
 	"encoding/json"
 	"net/mail"
 	"strings"
@@ -24,7 +25,12 @@ type Address string
 // If the address has a name part, returns the name as quoted string
 // followed by the address within angle brackets like mail.Address.String,
 // but a non-ASCII name is kept as UTF-8 instead of being RFC 2047 encoded,
-// so that the Address stays readable in JSON and databases.
+// so that the Address stays readable in JSON and databases,
+// and quotes, backslashes and runes that are not graphic are removed
+// from the name instead of being escaped, because ParseAddress reads
+// no escapes in names. A local part is quoted if net/mail or
+// ParseAddress can't read it unquoted, like "a b"@example.com.
+// A name containing "=?" is RFC 2047 encoded, see encodedName.
 // Use mail.Address.String to format an address for a message header.
 func AddressFrom(addr *mail.Address) Address {
 	if addr == nil {
@@ -33,34 +39,57 @@ func AddressFrom(addr *mail.Address) Address {
 	// The name is cleaned like by ParseAddress,
 	// so that the result parses back to the same address
 	name := cleanName(addr.Name)
-	if name == "" {
+	switch {
+	case name == "":
 		// Without name just return the address part.
 		// mail.Address.String always puts the address part
 		// within angle brackets which is only needed
 		// if there is also a name part.
 		return Address(addrSpec(addr))
+	case strings.Contains(name, "=?"):
+		return Address(encodedName(name) + " <" + addrSpec(addr) + ">")
 	}
 	return Address(`"` + name + `" <` + addrSpec(addr) + ">")
+}
+
+// encodedName returns name as RFC 2047 encoded-word, also if it is
+// ASCII, which mime.BEncoding.Encode would return unchanged.
+// It is used for names containing "=?", which ParseAddress and
+// mail clients would decode as encoded-word, also within quotes,
+// so that a name like "=?utf-8?q?x?=" reads back unchanged
+// instead of as "x", and normalizing it again gives the same address.
+func encodedName(name string) string {
+	return "=?utf-8?b?" + base64.StdEncoding.EncodeToString([]byte(name)) + "?="
 }
 
 // addrSpec returns the address part of addr (local-part@domain)
 // formatted like mail.Address.String, which quotes a local part
 // that needs quoting, like "a b"@example.com, but without angle brackets.
+// A local part that the parser would not read back unquoted, like one with
+// a leading apostrophe or letters it doesn't accept unquoted, is quoted too.
 func addrSpec(addr *mail.Address) string {
-	if !strings.Contains(addr.Address, "@") {
+	at := strings.LastIndexByte(addr.Address, '@')
+	if at < 0 {
 		// Not an address that mail.Address.String could format,
 		// it would append an @ to a hand-built value without domain
 		return addr.Address
 	}
 	s := (&mail.Address{Address: addr.Address}).String()
-	return strings.TrimSuffix(strings.TrimPrefix(s, "<"), ">")
+	s = strings.TrimSuffix(strings.TrimPrefix(s, "<"), ">")
+	if strings.HasPrefix(s, `"`) || isUnquotedLocalPart(addr.Address[:at]) {
+		return s
+	}
+	return quoteLocalPart(addr.Address[:at]) + addr.Address[at:]
 }
 
 // asciiAddress formats addr like AddressFrom, but RFC 2047 encodes
 // a non-ASCII name like mail.Address.String does.
 func asciiAddress(addr *mail.Address) string {
-	if addr.Name == "" {
+	switch {
+	case addr.Name == "":
 		return addrSpec(addr)
+	case strings.Contains(addr.Name, "=?"):
+		return encodedName(addr.Name) + " <" + addrSpec(addr) + ">"
 	}
 	return addr.String()
 }
@@ -173,6 +202,8 @@ func (a Address) NamePart() (string, error) {
 // AddressPartString returns the normalized lowercase address part
 // (local-part@domain without the display name) from an email address.
 // This strips any display name and returns just the email address.
+// A local part that needs quotes is returned quoted,
+// like "a b"@example.com.
 func (a Address) AddressPartString() (string, error) {
 	parsed, err := a.Parse()
 	if err != nil {
@@ -191,6 +222,7 @@ func (a Address) AddressPart() (Address, error) {
 
 // LocalPart returns the part of the email address before the @ symbol.
 // This is the local part of the email address (e.g., "user" from "user@example.com").
+// A local part that needs quotes is returned quoted, like "a b".
 func (a Address) LocalPart() (string, error) {
 	addr, err := a.AddressPartString()
 	if err != nil {

@@ -237,6 +237,9 @@ func (set Set[T]) String() string { //#nosec
 // MarshalJSON implements encoding/json.Marshaler.
 // A nil set is encoded as null, an empty set as [],
 // and any other set as an array of its values in ascending order.
+// Values whose MarshalJSON normalizes, like money.Currency,
+// are written normalized, so different values of the set can be
+// written as the same JSON value, like "eur" and "EUR" as "EUR".
 func (set Set[T]) MarshalJSON() ([]byte, error) {
 	if set.IsNull() {
 		return []byte(`null`), nil

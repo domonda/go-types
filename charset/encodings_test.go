@@ -68,16 +68,6 @@ func TestGetEncoding_EmptyName(t *testing.T) {
 // That includes the BOM handling: a UTF-16BE or UTF-16LE label must not
 // return a generic decoder that keeps a BOM as U+FEFF in the text and
 // decodes a BOM of the other byte order as garbage instead of an error.
-//
-// Value: protects=the IANA aliases csUTF16BE and csUTF16LE return this
-// package's UTF-16BE/LE Encoding with its BOM, like their display names;
-// fails_when=GetEncoding drops its UTF16 IgnoreBOM cases and wraps x/text
-// UTF-16 with the MIME name, which has the same name and bytes but No BOM;
-// why_new=no UTF-16 alias row existed, and name plus encoded bytes can't
-// tell the wrapped x/text encoding from this package's UTF-16 encoding;
-// seam=none;
-// no_claim=the "UTF-16" label with BOM detection, see
-// TestGetEncoding_IANAOnlyEncodings
 func TestGetEncoding_IANALabels(t *testing.T) {
 	const text = "Grüße"
 	tests := []struct {

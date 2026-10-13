@@ -81,15 +81,6 @@ func TestMoneyFormat_FormatCurrencyDecimalAmount(t *testing.T) {
 // A MoneyFormat without DecimalSep pads with a point like FormatAmount,
 // the zero rune must not end up in the text where it is invisible
 // but breaks CSV files and string comparisons.
-//
-// Value: protects=FormatDecimalAmount pads an amount without decimals with
-// '.' for a zero DecimalSep, like FormatAmount and FormatCentAmount;
-// fails_when=the padding writes string(format.DecimalSep) unconditionally,
-// so DecimalAmount 5 formats as "5\x0000" instead of "5.00";
-// why_new=every row had a DecimalSep, the zero DecimalSep default branch of
-// FormatDecimalAmount is run by no test;
-// seam=none;
-// no_claim=the thousands separator default or formatting of Inf and NaN
 func TestMoneyFormat_FormatCentAndDecimalAmount(t *testing.T) {
 	tests := []struct {
 		name    string

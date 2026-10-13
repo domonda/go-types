@@ -910,7 +910,6 @@ func TestNullableDate_MarshalJSON(t *testing.T) {
 // MarshalText must write the normalized date like Date.MarshalText and an
 // empty text for null, also for a null spelled with whitespace, so that
 // encoding/xml doesn't write a non-canonical date or blanks for NULL.
-// Value: protects=NullableDate.MarshalText writes "" for null, the normalized date, and an invalid date unchanged; fails_when=MarshalText returns []byte(n) instead of []byte(n.String()); why_new=MarshalText is a new method without any test or caller in the module; seam=none; no_claim=strfmt output, it formats dates through TypeFormatters
 func TestNullableDate_MarshalText(t *testing.T) {
 	for _, tt := range []struct {
 		date NullableDate

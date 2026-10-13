@@ -59,18 +59,22 @@ func ParseMIMEMessage(reader io.Reader) (msg *Message, err error) {
 			msg.Date = nil
 		}
 	}
-	msg.From, err = NormalizedAddress(envelope.GetHeader("From"))
+	// The address headers are read raw instead of RFC 2047 decoded like by
+	// envelope.GetHeader, so that the parser decodes only display names,
+	// and an encoded comma or @ in a name can't split off another address
+	header := envelope.Root.Header
+	msg.From, err = NormalizedAddress(header.Get("From"))
 	if err != nil {
 		parseErrs = append(parseErrs, fmt.Errorf("can't parse email header 'From': %w", err))
 		msg.From = ""
 	}
-	msg.ReplyTo, err = NormalizedNullableAddress(envelope.GetHeader("Reply-To"))
+	msg.ReplyTo, err = NormalizedNullableAddress(header.Get("Reply-To"))
 	if err != nil {
 		// intentionally ignoring parsing issues with Reply-To, unset the value.
 		// we've seen weird and unparsable values
 		msg.ReplyTo = NullableAddress("")
 	}
-	for _, to := range envelope.GetHeaderValues("To") {
+	for _, to := range header.Values("To") {
 		// Split returns all parsable addresses even when others fail,
 		// so keep the usable ones and collect the error.
 		addrs, err := AddressList(to).Split()
@@ -79,21 +83,21 @@ func ParseMIMEMessage(reader io.Reader) (msg *Message, err error) {
 		}
 		msg.To = msg.To.Append(addrs...)
 	}
-	for _, deliveredTo := range envelope.GetHeaderValues("Delivered-To") {
+	for _, deliveredTo := range header.Values("Delivered-To") {
 		// intentionally ignoring parsing issues with nullable lists
 		// (we've seen weird and unparsable values) but keep the
 		// addresses that could be parsed
 		addrs, _ := AddressList(deliveredTo).Split()
 		msg.DeliveredTo = msg.DeliveredTo.Append(addrs...)
 	}
-	for _, cc := range envelope.GetHeaderValues("Cc") {
+	for _, cc := range header.Values("Cc") {
 		// intentionally ignoring parsing issues with nullable lists
 		// (we've seen weird and unparsable values) but keep the
 		// addresses that could be parsed
 		addrs, _ := AddressList(cc).Split()
 		msg.Cc = msg.Cc.Append(addrs...)
 	}
-	for _, bcc := range envelope.GetHeaderValues("Bcc") {
+	for _, bcc := range header.Values("Bcc") {
 		// intentionally ignoring parsing issues with nullable lists
 		// (we've seen weird and unparsable values) but keep the
 		// addresses that could be parsed

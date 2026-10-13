@@ -50,7 +50,7 @@ Not supported: year-only or year-month strings (`"2014"`, `"2014-04"`), compact 
 Rules for numeric dates:
 
 - **Day first by default.** `"05/06/2024"` is 2024-06-05.
-- **Language hint.** The first `lang` argument is a hint. Only its first two letters count, normalized, so `language.EN`, `"EN"`, `"en-US"` and `"eng"` all mean English. Only English changes the result: it reads month first.
+- **Language hint.** The first `lang` argument is a hint, normalized with `language.Code.Normalized`, so `language.EN`, `"EN"`, `" en"`, `"en-US"` and `"eng"` all mean English. A hint that can't be normalized, like `"english"`, is ignored. Only English changes the result: it reads month first.
 - **The hint only decides ambiguous dates.** It applies only when both numbers are 1 to 12. `"15.06.2024"` and `"06/15/2024"` both give 2024-06-15 with any hint. The separator never matters.
 - **Ordinal suffix.** A suffix like `"1st"` marks the day for ambiguous dates and wins over the hint: `"02 1st 2003"` and `"1st 02 2003"` are 2003-02-01, also with `language.EN`. A number with a suffix is never the month, so `"13 1st 2024"` is an error.
 - **Two-digit years.** 00 to 44 become 2000 to 2044, 45 to 99 become 1945 to 1999.
@@ -138,7 +138,7 @@ Rules for numeric dates:
 | `LastMonday()`                                     | The Monday on or before the date.                  |
 | `NextSunday()`                                     | The Sunday on or after the date.                   |
 
-Implements: `fmt.Stringer`, `database/sql.Scanner`, `database/sql/driver.Valuer`, `strfmt.Scannable`, `types.Validator`, `types.ValidatErr` and `JSONSchema()` (`{"type":"string","format":"date"}`). `Date` has `MarshalJSON`, but no `UnmarshalJSON`. It is not a `types.NormalizableValidator` because `Normalized` takes optional language hints.
+Implements: `fmt.Stringer`, `database/sql.Scanner`, `database/sql/driver.Valuer`, `json.Marshaler`, `encoding.TextMarshaler`, `strfmt.Scannable`, `types.Validator`, `types.ValidatErr` and `JSONSchema()` (`{"type":"string","format":"date"}`). `Date` has no `UnmarshalJSON` and no `UnmarshalText`. It is not a `types.NormalizableValidator` because `Normalized` takes optional language hints.
 
 ## NullableDate
 
@@ -190,7 +190,7 @@ These methods mirror `Date` and add null rules:
 
 `NullableDate` has no `Time`, `TimeLocal`, `TimeUTC`, `WithinIncl`, `BetweenExcl` or `Nullable`.
 
-Implements: `fmt.Stringer`, `database/sql.Scanner`, `database/sql/driver.Valuer`, `json.Marshaler`, `json.Unmarshaler`, `strfmt.Scannable`, `nullable.NullSetable[Date]` and `JSONSchema()` (string with format `date`, or null).
+Implements: `fmt.Stringer`, `database/sql.Scanner`, `database/sql/driver.Valuer`, `json.Marshaler`, `json.Unmarshaler`, `encoding.TextMarshaler`, `strfmt.Scannable`, `nullable.NullSetable[Date]` and `JSONSchema()` (string with format `date`, or null).
 
 ## Periods
 
@@ -282,7 +282,7 @@ These plug dates into the [`strfmt`](../strfmt/README.md) package, which calls `
 
 | Identifier                       | Description                                        |
 |----------------------------------|----------------------------------------------------|
-| `NewFinder(lang...)`             | Returns a `*Finder` with the first two letters of the first `lang` as hint. |
+| `NewFinder(lang...)`             | Returns a `*Finder` with the normalized first `lang` as hint, no hint if it can't be normalized. |
 | `Finder.LangHint`                | The language hint field.                           |
 | `(*Finder).FindAllIndex(str, n)` | `[start, end)` byte offsets of dates in `str`. At most `n` results; `n < 0` returns all, `n == 0` none. |
 
@@ -299,17 +299,17 @@ These plug dates into the [`strfmt`](../strfmt/README.md) package, which calls `
 
 SQL `Value()` and JSON encoding:
 
-| Value                                              | SQL `Value()`                              | JSON (`json.Marshal`)         | `String()`       |
-|----------------------------------------------------|--------------------------------------------|-------------------------------|------------------|
-| `Date("")`                                         | `NULL`                                     | `""`                          | `""`             |
-| `Date("0001-01-01")`, `Date("0000-00-00")`         | `NULL`                                     | the string as is              | the string as is |
-| `Date("25.12.2023")` (valid, not normalized)       | `"2023-12-25"`                             | `"2023-12-25"`                | `"2023-12-25"`   |
-| `Date("2023-12-25")`                               | `"2023-12-25"`                             | `"2023-12-25"`                | `"2023-12-25"`   |
-| `Date("bad")` (invalid)                            | error                                      | `"bad"`                       | `"bad"`          |
-| `NullableDate` null or zero date                   | `NULL`                                     | `null`                        | `""`             |
-| `NullableDate("25.12.2023")`                       | `"2023-12-25"`                             | `"2023-12-25"`                | `"2023-12-25"`   |
-| `NullableDate("bad")`                              | error                                      | `"bad"`                       | `"bad"`          |
-| `YearMonth`, `YearQuarter` and their nullable types | the raw string, `""` for null (not `NULL`) | the raw string, `""` for null | the raw string   |
+| Value                                              | SQL `Value()`                              | JSON (`json.Marshal`)         | `String()`, `MarshalText` |
+|----------------------------------------------------|--------------------------------------------|-------------------------------|---------------------------|
+| `Date("")`                                         | `NULL`                                     | `""`                          | `""`                      |
+| `Date("0001-01-01")`, `Date("0000-00-00")`         | `NULL`                                     | the string as is              | the string as is          |
+| `Date("25.12.2023")` (valid, not normalized)       | `"2023-12-25"`                             | `"2023-12-25"`                | `"2023-12-25"`            |
+| `Date("2023-12-25")`                               | `"2023-12-25"`                             | `"2023-12-25"`                | `"2023-12-25"`            |
+| `Date("bad")` (invalid)                            | error                                      | `"bad"`                       | `"bad"`                   |
+| `NullableDate` null or zero date                   | `NULL`                                     | `null`                        | `""`                      |
+| `NullableDate("25.12.2023")`                       | `"2023-12-25"`                             | `"2023-12-25"`                | `"2023-12-25"`            |
+| `NullableDate("bad")`                              | error                                      | `"bad"`                       | `"bad"`                   |
+| `YearMonth`, `YearQuarter` and their nullable types | the raw string, `""` for null (not `NULL`) | the raw string, `""` for null | the raw string            |
 
 Reading values:
 

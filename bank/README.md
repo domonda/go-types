@@ -46,7 +46,7 @@ There is no uppercasing and no removal of dashes or other punctuation.
 | `iban.Scan(value) error`, `iban.Value()`           | See [Serialization](#serialization).               |
 | `IBAN.JSONSchema()`                                | String with the `IBANRegex` pattern.               |
 
-Implements: `sql.Scanner`, `driver.Valuer`, `json.Marshaler`, `fmt.Stringer`, `strfmt.Scannable`, `types.NormalizableValidator[IBAN]`. No `UnmarshalJSON` or text methods.
+Implements: `sql.Scanner`, `driver.Valuer`, `json.Marshaler`, `encoding.TextMarshaler`, `fmt.Stringer`, `strfmt.Scannable`, `types.NormalizableValidator[IBAN]`. No `UnmarshalJSON` or `UnmarshalText`.
 
 ## NullableIBAN
 
@@ -76,7 +76,7 @@ An `IBAN` where `""` is the null value. A whitespace only value is null too, lik
 | `Scan(value) error`, `Value()`, `MarshalJSON()` | See [Serialization](#serialization).               |
 | `JSONSchema()`                                  | `IBANRegex` string or null.                        |
 
-Implements: `sql.Scanner`, `driver.Valuer`, `json.Marshaler`, `json.Unmarshaler`, `fmt.Stringer`, `strfmt.Scannable`, `nullable.NullSetable[IBAN]`, `types.NormalizableValidator[NullableIBAN]`.
+Implements: `sql.Scanner`, `driver.Valuer`, `json.Marshaler`, `json.Unmarshaler`, `encoding.TextMarshaler`, `fmt.Stringer`, `strfmt.Scannable`, `nullable.NullSetable[IBAN]`, `types.NormalizableValidator[NullableIBAN]`.
 
 ## BIC
 
@@ -113,7 +113,7 @@ A BIC has 8 or 11 uppercase characters: a 4 letter institution code, a 2 letter 
 | `bic.Scan(value) error`, `bic.Value()`             | See [Serialization](#serialization).               |
 | `BIC.JSONSchema()`                                 | String with the `BICRegex` pattern.                |
 
-Implements: `sql.Scanner`, `driver.Valuer`, `json.Marshaler`, `fmt.Stringer`, `strfmt.Scannable`, `types.NormalizableValidator[BIC]`. No `UnmarshalJSON` or text methods.
+Implements: `sql.Scanner`, `driver.Valuer`, `json.Marshaler`, `encoding.TextMarshaler`, `fmt.Stringer`, `strfmt.Scannable`, `types.NormalizableValidator[BIC]`. No `UnmarshalJSON` or `UnmarshalText`.
 
 ## NullableBIC
 
@@ -141,7 +141,7 @@ A `BIC` where `""` is the null value. A whitespace only value is null too, like 
 | `Scan(value) error`, `Value()`, `MarshalJSON()` | See [Serialization](#serialization).               |
 | `JSONSchema()`                                  | `BICRegex` string or null.                         |
 
-Implements: `sql.Scanner`, `driver.Valuer`, `json.Marshaler`, `json.Unmarshaler`, `fmt.Stringer`, `strfmt.Scannable`, `nullable.NullSetable[BIC]`. There is no `CountryCode` or `NormalizedShort`, use `Get()` first.
+Implements: `sql.Scanner`, `driver.Valuer`, `json.Marshaler`, `json.Unmarshaler`, `encoding.TextMarshaler`, `fmt.Stringer`, `strfmt.Scannable`, `nullable.NullSetable[BIC]`. There is no `CountryCode` or `NormalizedShort`, use `Get()` first.
 
 ## Account
 
@@ -232,8 +232,8 @@ The tag paths start below the root element, which is not checked.
 
 | Type                          | `Value()` writes                             | `Scan` accepts                                     | JSON                                               | Text                                               |
 |-------------------------------|----------------------------------------------|----------------------------------------------------|----------------------------------------------------|----------------------------------------------------|
-| `IBAN`, `BIC`                 | Normalized if valid, else unchanged, `""` as `""`, not NULL | `string` and `[]byte` unchanged, NULL as `""`, other types are errors | `MarshalJSON` writes like `Value`, `""` as `""`. No `UnmarshalJSON`: a string is assigned unchanged, `null` leaves the value unchanged | No text methods, `ScanString` for `strfmt`         |
-| `NullableIBAN`, `NullableBIC` | Null (`""` or whitespace only) as NULL, else like `IBAN` and `BIC` | Like `IBAN`, NULL is null                          | `MarshalJSON` writes null as `null`, else like `IBAN` and `BIC`. `UnmarshalJSON` assigns strings unchanged and sets null for `null`, other JSON values are errors | No text methods, `ScanString` for `strfmt`         |
+| `IBAN`, `BIC`                 | Normalized if valid, else unchanged, `""` as `""`, not NULL | `string` and `[]byte` unchanged, NULL as `""`, other types are errors | `MarshalJSON` writes like `Value`, `""` as `""`. No `UnmarshalJSON`: a string is assigned unchanged, `null` leaves the value unchanged | `MarshalText` writes like `Value`. No `UnmarshalText`, `ScanString` for `strfmt` |
+| `NullableIBAN`, `NullableBIC` | Null (`""` or whitespace only) as NULL, else like `IBAN` and `BIC` | Like `IBAN`, NULL is null                          | `MarshalJSON` writes null as `null`, else like `IBAN` and `BIC`. `UnmarshalJSON` assigns strings unchanged and sets null for `null`, other JSON values are errors | `MarshalText` writes `""` for null, else like `IBAN` and `BIC`. No `UnmarshalText`, `ScanString` for `strfmt` |
 | `Account`                     | No `Valuer`, marshal to JSON yourself        | `string` or `[]byte` with JSON or an IBAN, see `UnmarshalJSON`. NULL is an error. | Marshal: `{"iban":"...","bic":"...","currency":"...","holder":"..."}`, `iban` always, the others omitted when empty. Unmarshal: a JSON object is assigned without normalization or validation, a JSON string must be a valid IBAN and is normalized, `BIC`, `Currency`, and `Holder` become null. `null` leaves the account unchanged. | `UnmarshalText` like `UnmarshalJSON` after trimming, also for an unquoted IBAN |
 
 ## Gotchas

@@ -2,6 +2,7 @@ package money
 
 import (
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"maps"
 	"slices"
@@ -611,4 +612,34 @@ func TestCurrency_ZWL(t *testing.T) {
 		}
 	}
 	assert.NotEqual(t, ZWD.EnglishName(), ZWL.EnglishName())
+}
+
+// TestCurrency_MarshalXML protects the documented use of the value receiver
+// MarshalText with encoding/xml: a currency is written normalized, a nil
+// pointer element is omitted, and a nil pointer attribute needs omitempty,
+// because encoding/xml calls MarshalText through the nil pointer and panics
+// without it, like for a *time.Time attribute.
+func TestCurrency_MarshalXML(t *testing.T) {
+	type invoice struct {
+		XMLName  xml.Name         `xml:"invoice"`
+		Currency *Currency        `xml:"currency,attr,omitempty"`
+		Nullable NullableCurrency `xml:"nullable,attr,omitempty"`
+		Element  *Currency        `xml:"element"`
+	}
+
+	data, err := xml.Marshal(invoice{})
+	require.NoError(t, err)
+	assert.Equal(t, `<invoice></invoice>`, string(data))
+
+	eur := Currency("eur")
+	data, err = xml.Marshal(invoice{Currency: &eur, Nullable: "usd", Element: &eur})
+	require.NoError(t, err)
+	assert.Equal(t, `<invoice currency="EUR" nullable="USD"><element>EUR</element></invoice>`, string(data))
+
+	assert.Panics(t, func() {
+		_, _ = xml.Marshal(struct {
+			XMLName  xml.Name  `xml:"invoice"`
+			Currency *Currency `xml:"currency,attr"`
+		}{})
+	}, "a nil pointer attribute without omitempty panics, documented in the CHANGELOG")
 }

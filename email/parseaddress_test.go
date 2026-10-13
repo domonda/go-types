@@ -171,6 +171,22 @@ func TestParseAddress(t *testing.T) {
 	}
 }
 
+// TestParseAddress_CommentNameCleaned protects that a name from the
+// RFC 2822 comment syntax "addr (name)" is cleaned like a quoted name:
+// written back in quotes, a quote or backslash it kept would end the
+// name early and turn the rest into another address.
+func TestParseAddress_CommentNameCleaned(t *testing.T) {
+	for addr, want := range map[string]string{
+		`a@trusted.com (x" attacker@evil.com, z)`: "x attacker@evil.com, z",
+		`a@trusted.com (back\slash)`:              "backslash",
+	} {
+		parsed, err := ParseAddress(addr)
+		require.NoError(t, err, addr)
+		assert.Equal(t, want, parsed.Name, addr)
+		assert.Equal(t, "a@trusted.com", parsed.Address, addr)
+	}
+}
+
 func TestFindAllAddresses(t *testing.T) {
 	tests := []struct {
 		text string
@@ -226,6 +242,9 @@ func TestParseAddressList(t *testing.T) {
 		"Withheld recipients:;",
 		"withheld-recipients:;",
 		"Withheld-recipients:;",
+		"undisclosed-recipients: ;",
+		"undisclosed-recipients:",
+		"undisclosed-recipients:;, ",
 	}
 	for _, tt := range emptyLists {
 		parsed, err := ParseAddressList(tt)

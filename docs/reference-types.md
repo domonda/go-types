@@ -200,6 +200,8 @@ type Finder interface {
 | `NewSet(3, 1, 2)`  | `[1,2,3]`      | `[1, 2, 3]`  |
 | `NewSet("b", "a")` | `["a","b"]`    | `["a", "b"]` |
 
+`MarshalJSON` writes the elements with their own `MarshalJSON`, so elements that normalize, like `money.Currency`, can be written twice: `NewSet[money.Currency]("eur", "EUR")` marshals as `["EUR","EUR"]`.
+
 `UnmarshalJSON` turns `null` into a nil set, `[]` into an empty non-nil set, and an array into a new set without duplicates. It always assigns a new map, so a map shared with another variable is never changed. A JSON object is an error.
 
 `*LenString` marshals as its string:

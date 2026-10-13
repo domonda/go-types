@@ -217,7 +217,6 @@ func TestAddressList_UniqueAddressParts(t *testing.T) {
 	// The set holds formatted address parts, so a quoted local part
 	// stays quoted: unquoted, "victim@evil.com>"@example.com would
 	// become a lookup key that reads as a mailbox at evil.com.
-	// Value: protects=UniqueAddressParts keeps quoted local parts quoted and dedups them case-insensitively; fails_when=UniqueAddressParts adds Address(addr.Address) instead of addrSpec(addr); why_new=existing set assertion has only unquoted local parts; seam=none; no_claim=that lower casing a quoted local part is RFC correct
 	set, err = AddressList(`"Victim@Evil.com>"@Example.com, X <"A B"@Example.com>, "a b"@example.com`).UniqueAddressParts()
 	require.NoError(t, err)
 	assert.Equal(t, MakeAddressSet(`"victim@evil.com>"@example.com`, `"a b"@example.com`), set)
@@ -308,7 +307,7 @@ func TestAddressList_ValueAndMarshalJSONNormalize(t *testing.T) {
 	}
 
 	// A valid list without addresses normalizes to the empty string,
-	// which Scan rejects, so Value writes it unchanged
+	// which Scan rejects, so Value writes the canonical placeholder
 	// to keep the written row readable
 	undisclosed := AddressList("undisclosed-recipients:;")
 	require.NoError(t, undisclosed.Validate())
@@ -317,6 +316,32 @@ func TestAddressList_ValueAndMarshalJSONNormalize(t *testing.T) {
 	assert.Equal(t, "undisclosed-recipients:;", v)
 	var scanned AddressList
 	require.NoError(t, scanned.Scan(v), "Scan(Value()) of a valid list")
+
+	// Other placeholder spellings are written as the canonical one
+	v, err = AddressList("Undisclosed recipients").Value()
+	require.NoError(t, err)
+	assert.Equal(t, "undisclosed-recipients:;", v)
+
+	// Text after a placeholder is no list without addresses: other
+	// parsers read the address in it, so it must not pass Validate
+	// as empty list that Value would write as placeholder
+	for _, hidden := range []AddressList{
+		"undisclosed-recipients:;, victim@example.com",
+		"Undisclosed-Recipients: victim@example.com;",
+	} {
+		assert.Error(t, hidden.Validate(), hidden)
+	}
+
+	// An address that starts like a placeholder is an address,
+	// Value must not replace it with the placeholder
+	for list, want := range map[AddressList]string{
+		"undisclosed-recipients@example.com":       "undisclosed-recipients@example.com",
+		"withheld recipients <victim@example.com>": `"withheld recipients" <victim@example.com>`,
+	} {
+		v, err = list.Value()
+		require.NoError(t, err)
+		assert.Equal(t, want, v)
+	}
 }
 
 // String and ASCII of a list work like those of Address,

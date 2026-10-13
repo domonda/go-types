@@ -141,8 +141,9 @@ func TestFormatConfig_CurrencyDecimalAmount(t *testing.T) {
 
 // TestFormatConfig_NullableMoneyTypes checks that the nullable money types
 // format a non-null value like the money type they wrap and null as the
-// configured Nil string. Without their type formatters a non-null
-// money.NullableAmount was written as the raw struct "{1234.5 true}".
+// configured Nil string, through the generic nullable.Type[T] path without
+// formatters of their own. Formatted by kind, a non-null
+// money.NullableAmount would be written as the raw struct "{1234.5 true}".
 func TestFormatConfig_NullableMoneyTypes(t *testing.T) {
 	decimal := money.NewDecimalAmount(123450, 2)
 	for _, config := range []*FormatConfig{NewGermanFormatConfig(), NewEnglishFormatConfig()} {

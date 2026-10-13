@@ -69,12 +69,12 @@ picking the semver baseline.
 - `strfmt.MoneyFormat.FormatCentAmount`, `FormatDecimalAmount` and
   `FormatCurrencyDecimalAmount`. `strfmt.NewFormatConfig` and the English and
   German presets register formatters for `money.CentAmount`,
-  `money.DecimalAmount`, `money.CurrencyDecimalAmount`,
-  `money.NullableAmount`, `money.NullableCentAmount` and
-  `money.NullableDecimalAmount`, so they format like `money.Amount`:
-  `CentAmount(123450)` formats as `1.234,50` with the German preset instead
-  of `123450`, a zero amount as `0,00` instead of the `Nil` placeholder, and a
-  null nullable amount as the `Nil` placeholder.
+  `money.DecimalAmount` and `money.CurrencyDecimalAmount`, so they format
+  like `money.Amount`: `CentAmount(123450)` formats as `1.234,50` with the
+  German preset instead of `123450`, and a zero amount as `0,00` instead of
+  the `Nil` placeholder. `money.NullableAmount`, `NullableCentAmount` and
+  `NullableDecimalAmount` format like their amount type, and null as the
+  `Nil` placeholder.
 
 ### Changed
 
@@ -103,10 +103,14 @@ picking the semver baseline.
   `country.Code` already worked this way. Because `Value` also encodes query
   parameters, `WHERE bic = $1` with `BIC("DEUTDEFF")` now sends
   `DEUTDEFFXXX`: normalize existing columns before comparing them with
-  values written by this version. The new value receiver `MarshalJSON` and
-  `String` methods and the pointer receiver `UnmarshalJSON` methods are
-  promoted into structs that embed these types, which changes the JSON of
-  such a struct to the embedded value; embed them as a named field instead.
+  values written by this version. The new value receiver `MarshalJSON`,
+  `MarshalText` and `String` methods and the pointer receiver
+  `UnmarshalJSON` methods are promoted into structs that embed these types,
+  which changes the JSON, XML and text form of such a struct to the embedded
+  value; embed them as a named field instead. `encoding/xml` calls the value
+  receiver `MarshalText` through a nil pointer in an attribute field, like
+  `Currency *money.Currency` with the tag `xml:"currency,attr"`, and panics,
+  as it does for a `*time.Time` attribute: add `omitempty` to such fields.
 - **Breaking:** `email.Address.Normalized`, `email.AddressFrom` and so the
   normalization of every `email` type keep a non-ASCII display name as
   quoted UTF-8 (RFC 6532) instead of encoding it with RFC 2047:
@@ -115,7 +119,11 @@ picking the semver baseline.
   readable in JSON and databases. The `From`, `ReplyTo`, `To`, `Cc`, `Bcc`
   and `DeliveredTo` of a message parsed by `ParseMIMEMessage` hold UTF-8
   names too. `Message.BuildRawMessage` still writes RFC 2047 encoded names,
-  because MIME headers must be ASCII. ASCII names are formatted as before.
+  because MIME headers must be ASCII. ASCII names are formatted as before,
+  except names containing `=?`, which are RFC 2047 encoded, because the
+  parser would decode them again: `"=?utf-8?q?x?=" <a@b.com>` normalizes to
+  `=?utf-8?b?PT91dGYtOD9xP3g/PQ==?= <a@b.com>` and stays that way, instead
+  of turning into `"x" <a@b.com>` when normalized once more.
 - **Breaking:** `email` normalization keeps the content of a quoted local
   part, only lower cased, instead of removing the quotes and turning spaces
   and commas into dots: `"Doe, John"@example.com` normalizes to
@@ -123,17 +131,32 @@ picking the semver baseline.
   `doe..john@example.com`, and `"x@evil.com>"@example.com` stays an address
   at example.com. `AddressPart`, `LocalPart`, `Message.Recipients`,
   `AddressList.UniqueAddressParts` and the headers of `BuildRawMessage`
-  quote such a local part like `net/mail` does. Display names lose quotes,
+  quote such a local part like `net/mail` does, and also where this
+  package can't read it unquoted, like `"'abc"@example.com` and
+  `"дмитрий"@example.com`. Escaped quotes and backslashes in a quoted local
+  part, like `"a\"b"@example.com`, are read. Display names lose quotes,
   backslashes and runes that are not graphic, like bidi overrides decoded
   from RFC 2047, instead of being written with escapes that the parser
-  can't read, which split one address into two.
+  can't read, which split one address into two. A local part with
+  consecutive, leading or trailing dots, like the `doe..john@example.com`
+  that earlier versions made of `"Doe, John"@example.com`, is now written
+  quoted as `"doe..john"@example.com`: normalize stored columns again
+  before comparing them with values written by this version.
+- `email.AddressList.Value` writes a list without addresses, like
+  `"Undisclosed recipients"`, as the placeholder `undisclosed-recipients:;`,
+  because `Scan` rejects the empty string of the normalized list.
+- **Breaking:** `email.ParseAddressList` reads only a whole placeholder,
+  like `undisclosed-recipients` or `undisclosed-recipients:;`, as a list
+  without addresses, instead of every list starting with one. The address
+  `undisclosed-recipients@example.com` and the name in
+  `withheld recipients <victim@example.com>` are read as such, and text
+  after a placeholder, like `undisclosed-recipients:;, victim@example.com`,
+  is parsed, so `Validate` rejects that list instead of accepting it as
+  empty while other parsers read the address in it.
 - **Breaking:** `money.Currency.Normalized` guesses EUR only from the words
   `EUR`, `Euro` and `Euros`, like the other units, instead of from any text
   containing `EUR`, so `TEUR` (thousands of euros) and `Amateur` are no
   currencies.
-- `strfmt.NewFormatConfig` no longer registers formatters for
-  `money.NullableAmount`, `NullableCentAmount` and `NullableDecimalAmount`;
-  they are formatted like every `nullable.Type[T]`, with the same output.
 - **Breaking:** `bank.BIC.Validate` and `Valid`, and so `NullableBIC`,
   `StringIsBIC` and `BIC.ScanString` with `validate`, remove whitespace like
   `Normalized`, so `"BKAU AT WW"` is valid. `CountryCode`, `IsTestBIC`,
@@ -586,6 +609,14 @@ picking the semver baseline.
 
 ### Fixed
 
+- `email.ParseMIMEMessage` RFC 2047 decoded the whole `From`, `Reply-To`,
+  `To`, `Cc`, `Bcc` and `Delivered-To` headers before splitting them into
+  addresses, so an encoded comma and `@` in a display name, like in
+  `To: =?utf-8?q?victim=40evil=2Ecom=2C?= <ok@good.com>`, added the
+  recipient `victim@evil.com`, which `net/mail` and mail clients don't see,
+  and a name like `=?UTF-8?Q?M=C3=BCller=2C_J=C3=BCrgen?=` failed to parse
+  at its comma. The headers are parsed raw now, and only display names are
+  decoded.
 - `strutil.TransliterateSpecialCharacters` and
   `TransliterateSpecialCharactersMaxLen` returned the input unchanged, with
   its invalid UTF-8, when it started with an invalid byte, like `"\xe4pfel"`.
@@ -597,12 +628,10 @@ picking the semver baseline.
   whitespace, so a padded `{...}` was stored as the literal text.
 - `bank.BIC.TrimBranchCode` trims the normalized BIC, so a BIC with
   whitespace, which `Valid` accepts, gives its 8 character form.
-- `email.AddressList.Value` writes a list without addresses, like
-  `"undisclosed-recipients:;"`, unchanged instead of `""`, which `Scan`
-  rejects.
 - The `date` functions normalize their language hint instead of using its
   first two bytes, so hints that `language.Code.Validate` accepts, like
-  `" en"` and `"EN-us"`, select English like `"en"`.
+  `" en"` and `"EN-us"`, select English like `"en"`. A hint that can't
+  be normalized, like `"english"`, is ignored.
 - `types.DeepValidate` never called a `Validate` or `Valid` method with a
   pointer receiver for a non-pointer value, so a `types.LenString` struct
   field was never validated. Such values are now validated through a pointer

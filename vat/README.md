@@ -95,7 +95,7 @@ The formats and checksum functions live in `formats.go` (`idRegex` and `checkSum
 | `Nullable()`                   | Plain conversion to `NullableID`, no normalization. |
 | `ScanString(source, validate)` | Assigns the canonical `source`. If that fails, returns the error when `validate` is true, else assigns `source` as is. |
 
-Implements: `fmt.Stringer`, `database/sql.Scanner`, `database/sql/driver.Valuer`, `json.Marshaler`, `strfmt.Scannable`, `types.NormalizableValidator[ID]` and `JSONSchema()` (string with `minLength` 4 and no `maxLength`, because formatted IDs can be longer than `IDMaxLength`). `ID` has no `UnmarshalJSON`.
+Implements: `fmt.Stringer`, `database/sql.Scanner`, `database/sql/driver.Valuer`, `json.Marshaler`, `encoding.TextMarshaler`, `strfmt.Scannable`, `types.NormalizableValidator[ID]` and `JSONSchema()` (string with `minLength` 4 and no `maxLength`, because formatted IDs can be longer than `IDMaxLength`). `ID` has no `UnmarshalJSON`.
 
 ## NullableID
 
@@ -127,7 +127,7 @@ const Null NullableID = ""
 | `IsMOSS()`, `Number()`             | Like `ID`; false and `""` for `Null`.              |
 | `ScanString(source, validate)`     | `""`, whitespace only, `"NULL"`, `"null"` and `"nil"` set `Null`; otherwise like `ID`. |
 
-Implements: `fmt.Stringer`, `database/sql.Scanner`, `database/sql/driver.Valuer`, `json.Marshaler`, `json.Unmarshaler`, `strfmt.Scannable`, `nullable.NullSetable[ID]` and `JSONSchema()` (the `ID` string or null).
+Implements: `fmt.Stringer`, `database/sql.Scanner`, `database/sql/driver.Valuer`, `json.Marshaler`, `json.Unmarshaler`, `encoding.TextMarshaler`, `strfmt.Scannable`, `nullable.NullSetable[ID]` and `JSONSchema()` (the `ID` string or null).
 
 ## Finding VAT IDs in text
 
@@ -143,15 +143,15 @@ var IDFinder idFinder
 
 ## Serialization
 
-| Value                         | SQL `Value()`     | JSON (`json.Marshal`) | `String()`      |
-|-------------------------------|-------------------|-----------------------|-----------------|
-| `ID("")`                      | `""` (not `NULL`) | `""`                  | `""`            |
-| `ID("atu 1022 3006")` (valid) | `"ATU10223006"`   | `"ATU10223006"`       | `"ATU10223006"` |
-| `ID("ATU10223006")`           | `"ATU10223006"`   | `"ATU10223006"`       | `"ATU10223006"` |
-| `ID("bad")` (invalid)         | `"bad"`, no error | `"bad"`               | `"bad"`         |
-| `NullableID` `Null`, `"  "`   | `NULL`            | `null`                | `""`            |
-| `NullableID("atu 1022 3006")` | `"ATU10223006"`   | `"ATU10223006"`       | `"ATU10223006"` |
-| `NullableID("bad")` (invalid) | `"bad"`, no error | `"bad"`               | `"bad"`         |
+| Value                         | SQL `Value()`     | JSON (`json.Marshal`) | `String()`, `MarshalText` |
+|-------------------------------|-------------------|-----------------------|---------------------------|
+| `ID("")`                      | `""` (not `NULL`) | `""`                  | `""`                      |
+| `ID("atu 1022 3006")` (valid) | `"ATU10223006"`   | `"ATU10223006"`       | `"ATU10223006"`           |
+| `ID("ATU10223006")`           | `"ATU10223006"`   | `"ATU10223006"`       | `"ATU10223006"`           |
+| `ID("bad")` (invalid)         | `"bad"`, no error | `"bad"`               | `"bad"`                   |
+| `NullableID` `Null`, `"  "`   | `NULL`            | `null`                | `""`                      |
+| `NullableID("atu 1022 3006")` | `"ATU10223006"`   | `"ATU10223006"`       | `"ATU10223006"`           |
+| `NullableID("bad")` (invalid) | `"bad"`, no error | `"bad"`               | `"bad"`                   |
 
 | Input                          | `ID`                                    | `NullableID`         |
 |--------------------------------|-----------------------------------------|----------------------|

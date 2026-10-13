@@ -92,6 +92,9 @@ func TestAddress_ValidAndValidAndNormalized(t *testing.T) {
 		{addr: `@example.com`, valid: false},
 		{addr: `user@`, valid: false},
 		{addr: `user@example`, valid: false}, // a top level domain is required
+		// A backslash can't escape the closing quote of a local part,
+		// unescaped it would leave the empty local part of @example.com
+		{addr: `"\"@example.com`, valid: false},
 	}
 	for _, tt := range tests {
 		t.Run(string(tt.addr), func(t *testing.T) {
@@ -139,15 +142,22 @@ func TestAddress_NormalizedRoundTrip(t *testing.T) {
 		`"victim@evil.com>"@example.com`,
 		`a@trusted.com (x" attacker@evil.com, z)`,
 		`=?utf-8?q?Bank=E2=80=AE_x=C2=85y?= <a@example.com>`,
+		// Local parts that net/mail writes unquoted but the parser doesn't
+		// read back unquoted: a leading apostrophe it strips, and letters
+		// it only accepts within quotes
+		`"'abc"@example.com`,
+		`"дмитрий"@example.com`,
 		`Jürgen Müller <J@Example.com>`,
 		`"Müller, Jürgen" <j@x.de>`,
 		`mike@doe.com (Mike Doe)`,
 		// The parser unescapes quoted-pairs and the formatter escapes
 		// again only what needs it. If one side is skipped, every write
 		// adds backslashes and the stored mailbox drifts away.
-		// Value: protects=quoted-pairs in a quoted local part keep Normalized idempotent and the same mailbox; fails_when=parseAddress keeps local[1:len-1] without calling unquoteLocalPart; why_new=no existing row has a backslash inside a quoted local part; seam=none; no_claim=which quoted-pairs RFC 5322 permits or how they are re-escaped
 		`"a\ b"@example.com`,
 		`"a\\b"@example.com`,
+		// A name that decodes to an encoded-word would be decoded again
+		// by every normalization if it was written back as quoted text
+		`"=?utf-8?q?=3D=3Futf-8=3Fq=3Fx=3F=3D?=" <a@example.com>`,
 	} {
 		t.Run(string(addr), func(t *testing.T) {
 			require.NoError(t, addr.Validate())
@@ -237,6 +247,20 @@ func TestAddress_StringAndASCII(t *testing.T) {
 	// The ASCII form parses back to the same normalized address
 	ascii := Address(Address(`Jürgen Müller <J@Example.com>`).ASCII())
 	assert.Equal(t, `"Jürgen Müller" <j@example.com>`, ascii.String())
+
+	// A name holding "=?" is written as encoded-word by String and ASCII,
+	// so that ParseAddress and net/mail read the name as written instead
+	// of decoding it once more and showing other text
+	const literal = "=?utf-8?q?x?="
+	encoded := Address(`"=?utf-8?q?=3D=3Futf-8=3Fq=3Fx=3F=3D?=" <a@example.com>`)
+	for _, written := range []string{encoded.String(), encoded.ASCII()} {
+		name, err := Address(written).NamePart()
+		require.NoError(t, err)
+		assert.Equal(t, literal, name, written)
+		stdlib, err := mail.ParseAddress(written)
+		require.NoError(t, err)
+		assert.Equal(t, literal, stdlib.Name, written)
+	}
 }
 
 // TestAddress_Parts protects the accessors used to compare and route
@@ -260,7 +284,6 @@ func TestAddress_Parts(t *testing.T) {
 		// A quoted local part keeps its quotes, else the address part
 		// would read as another mailbox, here one at evil.com, and the
 		// local part ends at the last @ because the quoted part has one.
-		// Value: protects=quoted local part stays quoted in AddressPart(String) and LocalPart cuts at the last @; fails_when=LocalPart uses strings.IndexByte (first @) instead of LastIndexByte; why_new=no existing Parts row has a quoted local part or an @ in it; seam=none; no_claim=that lower casing a quoted local part is RFC correct
 		{addr: `"Victim@Evil.com>"@Example.com`, name: ``, addressPart: `"victim@evil.com>"@example.com`, localPart: `"victim@evil.com>"`},
 		{addr: `"a b"@example.com`, name: ``, addressPart: `"a b"@example.com`, localPart: `"a b"`},
 	}

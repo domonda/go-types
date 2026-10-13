@@ -72,9 +72,6 @@ func (n NullableCode) Normalized() (NullableCode, error) {
 // which already maps the AltCodes to ISO 3166-1 alpha-2 codes.
 // It is kept for compatibility.
 func (n NullableCode) NormalizedWithAltCodes() (NullableCode, error) {
-	if norm, ok := AltCodes[strings.ToUpper(strutil.TrimSpace(string(n)))]; ok {
-		return norm.Nullable(), nil
-	}
 	return n.Normalized()
 }
 

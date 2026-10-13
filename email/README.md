@@ -27,16 +27,16 @@ A non-normalized address with an optional display name. All parsing goes through
 | `a.Validate() error` / `a.Valid() bool`            | Whether `Parse` succeeds.                          |
 | `a.ValidAndNormalized() bool`                      | Valid and equal to its normalized form.            |
 | `a.NamePart() (string, error)`                     | Decoded display name, `""` if there is none.       |
-| `a.AddressPart() (Address, error)`                 | Normalized `local@domain` without the display name. |
+| `a.AddressPart() (Address, error)`                 | Normalized `local@domain` without the display name, a local part that needs quotes quoted like `"a b"@example.com`. |
 | `a.AddressPartString() (string, error)`            | Same as `AddressPart` as string.                   |
-| `a.LocalPart() (string, error)`                    | Normalized part before the `@`.                    |
+| `a.LocalPart() (string, error)`                    | Normalized part before the `@`, quoted like `"a b"` if it needs quotes. |
 | `a.DomainPart() string`                            | Raw text after the last `@` with trailing `>` and whitespace trimmed, `""` without `@`. Not parsed or lowercased. |
 | `a.AsList() AddressList`                           | List containing only `a`.                          |
 | `a.Nullable() NullableAddress`                     | Type conversion.                                   |
 | `a.String() string`                                | Normalized with a UTF-8 name, else unchanged.      |
 | `a.ASCII() string`                                 | Like `String`, but a non-ASCII name RFC 2047 encoded for message headers. The address part is not encoded. |
 
-Implements: `fmt.Stringer`, `driver.Valuer`, `json.Marshaler`, `types.NormalizableValidator[Address]`, `JSONSchema()` (`string`, format `email`). No `Scanner` and no `UnmarshalJSON`, it is read as a plain string.
+Implements: `fmt.Stringer`, `driver.Valuer`, `json.Marshaler`, `encoding.TextMarshaler`, `types.NormalizableValidator[Address]`, `JSONSchema()` (`string`, format `email`). No `Scanner` and no `UnmarshalJSON`, it is read as a plain string.
 
 ## AddressList
 
@@ -48,7 +48,7 @@ A comma separated list. `Validate` and `Valid` accept the empty list, only `Scan
 
 | Function / Method                                  | Description                                        |
 |----------------------------------------------------|----------------------------------------------------|
-| `ParseAddressList(list) ([]*mail.Address, error)`  | Lenient. Skips a malformed entry up to the next comma and keeps parsing, returns all parsed addresses together with an `errors.Join` error. `""` and the `undisclosed-recipients` / `withheld-recipients` placeholders (also with a space instead of the dash) give nil without error. |
+| `ParseAddressList(list) ([]*mail.Address, error)`  | Lenient. Skips a malformed entry up to the next comma and keeps parsing, returns all parsed addresses together with an `errors.Join` error. `""` and a whole `undisclosed-recipients` / `withheld-recipients` placeholder (also with a space instead of the dash, or as empty group like `undisclosed-recipients:;`) give nil without error. Text after a placeholder is parsed like any list. |
 | `NormalizeAddressList(list) ([]string, error)`     | Strict. Normalized addresses, de-duplicated by address part, first spelling wins. Any bad entry returns `nil, err`, an empty list `nil, nil`. |
 | `AddressListJoin(addrs ...Address) AddressList`    | Joins with `", "`, skips empty addresses.          |
 | `AddressListJoinStrings(addrs ...string) AddressList` | Same for strings.                                  |
@@ -63,7 +63,7 @@ A comma separated list. `Validate` and `Valid` accept the empty list, only `Scan
 | `l.String() string`, `l.ASCII() string`            | Like `Address.String` and `Address.ASCII` for every address. |
 | `l.Scan(value) error`, `l.Value()`, `l.MarshalJSON()` | See [Serialization](#serialization).               |
 
-Implements: `fmt.Stringer`, `sql.Scanner`, `driver.Valuer`, `json.Marshaler`, `types.NormalizableValidator[AddressList]`. No `UnmarshalJSON`, it is read as a plain string.
+Implements: `fmt.Stringer`, `sql.Scanner`, `driver.Valuer`, `json.Marshaler`, `encoding.TextMarshaler`, `types.NormalizableValidator[AddressList]`. No `UnmarshalJSON`, it is read as a plain string.
 
 ## AddressSet
 
@@ -123,7 +123,7 @@ An `Address` where `""` is SQL NULL and JSON null. A whitespace only value is nu
 | `n.Set(Address)`, `n.SetNull()`                    | `Set("")` sets null.                               |
 | `n.AsList() NullableAddressList`                   | List containing only `n`, the null list if `n` is null. |
 
-Implements: `fmt.Stringer`, `sql.Scanner`, `driver.Valuer`, `json.Marshaler`, `json.Unmarshaler`, `encoding.TextUnmarshaler`, `JSONSchema()` (email string or null), `nullable.NullSetable[Address]`. There is no `Valid()` method, use `Validate() == nil`.
+Implements: `fmt.Stringer`, `sql.Scanner`, `driver.Valuer`, `json.Marshaler`, `json.Unmarshaler`, `encoding.TextMarshaler`, `encoding.TextUnmarshaler`, `JSONSchema()` (email string or null), `nullable.NullSetable[Address]`. There is no `Valid()` method, use `Validate() == nil`.
 
 ## NullableAddressList
 
@@ -146,7 +146,7 @@ An `AddressList` where `""` is the empty list, SQL NULL, and JSON null. Null cou
 | `n.StringOr(nullString)`                           | Normalized, or the default if null, without addresses, or invalid. |
 | `n.Set(AddressList)`, `n.SetNull()`                | `Set("")` sets null.                             |
 
-Implements: `fmt.Stringer`, `sql.Scanner`, `driver.Valuer`, `json.Marshaler`, `json.Unmarshaler`, `encoding.TextUnmarshaler`, `nullable.NullSetable[AddressList]`. No `Valid()` and no `JSONSchema`.
+Implements: `fmt.Stringer`, `sql.Scanner`, `driver.Valuer`, `json.Marshaler`, `json.Unmarshaler`, `encoding.TextMarshaler`, `encoding.TextUnmarshaler`, `nullable.NullSetable[AddressList]`. No `Valid()` and no `JSONSchema`.
 
 ## Message
 
@@ -270,19 +270,19 @@ None of the `Scan` or `Unmarshal*` methods validate or normalize. `Value` and `M
 
 | Type                  | `Value()` writes                                   | `Scan` accepts                                     | JSON                                               | Text                                               |
 |-----------------------|----------------------------------------------------|----------------------------------------------------|----------------------------------------------------|----------------------------------------------------|
-| `Address`             | Normalized, `""` as `""`                           | No `Scanner`, `database/sql` assigns `string` and `[]byte`, NULL is an error | `MarshalJSON` like `Value`. Decoded as plain string, `""` as `""` | No methods                                         |
-| `AddressList`         | Normalized, `""` as `""`. A list without addresses, like `undisclosed-recipients:;`, unchanged, because `Scan` rejects `""` | `string` or `[]byte`: a `{...}` PostgreSQL array literal is decoded, elements trimmed, empty ones skipped, joined with `", "` (so `{}` gives `""`). Any other string trimmed. NULL, `""` and whitespace only are errors. | `MarshalJSON` like `Value`. Decoded as plain string | No methods                                         |
+| `Address`             | Normalized, `""` as `""`                           | No `Scanner`, `database/sql` assigns `string` and `[]byte`, NULL is an error | `MarshalJSON` like `Value`. Decoded as plain string, `""` as `""` | `MarshalText` returns `String`, like `Value`       |
+| `AddressList`         | Normalized, `""` as `""`. A list without addresses, like `Undisclosed recipients`, as `undisclosed-recipients:;`, because `Scan` rejects `""` | `string` or `[]byte`: a `{...}` PostgreSQL array literal is decoded, elements trimmed, empty ones skipped, joined with `", "` (so `{}` gives `""`). Any other string trimmed. NULL, `""` and whitespace only are errors. | `MarshalJSON` like `Value`, but `""` for a list without addresses. Decoded as plain string | `MarshalText` returns `String`, like `MarshalJSON` |
 | `AddressSet`          | Normalized set. nil: NULL. Empty: `{}`. Else sorted array literal `{"a@example.com","b@example.com"}` | NULL: nil set. `{...}` array literal: elements trimmed, empty ones skipped, a `NULL` element or a nested array is an error. Any other string: a single element set, trimmed. `""` and whitespace only are errors. `[]byte` like `string`. | `MarshalJSON` writes the normalized set like a map: nil is `null`, a set is a JSON object `{"a@example.com":{}}`, which also unmarshals | No methods                                         |
-| `NullableAddress`     | Null (`""` or whitespace only): NULL. Else normalized | NULL, `""` and whitespace only: null. Any other `string` or `[]byte` as is. | Null marshals as `null`, else like `Value`. `null` and `""` unmarshal to null | `UnmarshalText` assigns the text as is, no `MarshalText` |
-| `NullableAddressList` | NULL if the normalized list is empty, so also for whitespace only and `undisclosed-recipients:;`. Else normalized | NULL, `""` and whitespace only: null. Other `string` and `[]byte` like `AddressList`. | `null` like `Value` writes NULL, else like `Value`. `null` and `""` unmarshal to null | `UnmarshalText` assigns the text as is, no `MarshalText` |
+| `NullableAddress`     | Null (`""` or whitespace only): NULL. Else normalized | NULL, `""` and whitespace only: null. Any other `string` or `[]byte` as is. | Null marshals as `null`, else like `Value`. `null` and `""` unmarshal to null | `UnmarshalText` assigns the text as is, `MarshalText` returns `String`, `""` for null |
+| `NullableAddressList` | NULL if the normalized list is empty, so also for whitespace only and `undisclosed-recipients:;`. Else normalized | NULL, `""` and whitespace only: null. Other `string` and `[]byte` like `AddressList`. | `null` like `Value` writes NULL, else like `Value`. `null` and `""` unmarshal to null | `UnmarshalText` assigns the text as is, `MarshalText` returns `String`, `""` for null |
 
 The array literals written by `AddressSet` and read by the `Scan` methods of `AddressSet`, `AddressList`, and `NullableAddressList` need PostgreSQL or an array-compatible database like CockroachDB or YugabyteDB. `NullableAddressList.Value` writes a plain string that works with any database.
 
 ## Gotchas
 
 - **Lenient vs strict.** `ParseAddressList`, `AddressList.Split`, and `NullableAddressList.Split`/`Parse` return the valid entries plus an error. `Validate`, `Normalized`, `UniqueAddressParts`, `NormalizeAddressList`, `NormalizedAddressSet`, and `NormalizedAddressPartSet` fail on the first bad entry. `Message.Recipients` drops bad entries silently. `"a@example.com, not an address"` gives `[a@example.com]` and an error from `Split`, and only an error from `Normalized`.
-- **Normalization is lossy.** The local part is lowercased (`John.Doe@Example.com` becomes `john.doe@example.com`). A quoted local part keeps its content and quotes: `"Doe, John"@Example.com` becomes `"doe, john"@example.com`, so it stays the same mailbox. Display names lose quotes, backslashes and runes that are not graphic, like bidi overrides, because the parser reads no escapes: `"Say \"Hi\"" <a@b.com>` becomes `"Say Hi" <a@b.com>`. A display name equal to the address is dropped, `<a@b.com>` becomes `a@b.com`, and `mike@doe.com (Mike Doe)` becomes `"Mike Doe" <mike@doe.com>`.
-- **Display names are quoted UTF-8.** `John Doe <j@example.com>` normalizes to `"John Doe" <j@example.com>`, so `ValidAndNormalized` is false for the unquoted form. A non-ASCII name stays UTF-8 (RFC 6532), also when the input was RFC 2047 encoded: `Jürgen Müller <J@X.de>` and `=?utf-8?q?J=C3=BCrgen_M=C3=BCller?= <j@x.de>` both normalize to `"Jürgen Müller" <j@x.de>`. Only `BuildRawMessage` RFC 2047 encodes names, because MIME headers must be ASCII.
+- **Normalization is lossy.** The local part is lowercased (`John.Doe@Example.com` becomes `john.doe@example.com`). A quoted local part keeps its content and quotes: `"Doe, John"@Example.com` becomes `"doe, john"@example.com`, so it stays the same mailbox. A local part is written without quotes only if `net/mail` and this parser both read it unquoted, so `doe..john@x.com` becomes `"doe..john"@x.com` and `"'abc"@x.com` stays quoted. Display names lose quotes, backslashes and runes that are not graphic, like bidi overrides, because the parser reads no escapes: `"Say \"Hi\"" <a@b.com>` becomes `"Say Hi" <a@b.com>`. A display name equal to the address is dropped, `<a@b.com>` becomes `a@b.com`, and `mike@doe.com (Mike Doe)` becomes `"Mike Doe" <mike@doe.com>`.
+- **Display names are quoted UTF-8.** `John Doe <j@example.com>` normalizes to `"John Doe" <j@example.com>`, so `ValidAndNormalized` is false for the unquoted form. A non-ASCII name stays UTF-8 (RFC 6532), also when the input was RFC 2047 encoded: `Jürgen Müller <J@X.de>` and `=?utf-8?q?J=C3=BCrgen_M=C3=BCller?= <j@x.de>` both normalize to `"Jürgen Müller" <j@x.de>`. Only `BuildRawMessage` RFC 2047 encodes names, because MIME headers must be ASCII, and a name containing `=?` is always RFC 2047 encoded, because the parser decodes encoded-words in names, also within quotes, and would read another name.
 - **A top level domain of two or more ASCII letters is required.** `user@example` and IP literals like `user@[192.0.2.1]` are invalid.
 - **`AddressRegexp` is not anchored.** `AddressRegexp.MatchString("xx a@b.com yy")` is true. Use `Address.Validate` to validate.
 - **`DomainPart` does not parse.** `Address("John <J@Example.COM>").DomainPart()` is `Example.COM`. Call it on a normalized address before looking it up in `ProviderDomains()`.

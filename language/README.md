@@ -40,7 +40,7 @@ names := language.Code("").EnumStrings() // []string{"aa", "ab", "af", ...}
 | `ISO6393Name(code)`          | English reference name of an ISO 639-3 code (`"deu"` gives `"German"`), `""` if unknown. |
 | `ISO6393Macrolanguage(code)` | ISO 639-3 macrolanguage of an individual language (`"twi"` gives `"aka"`), `""` if none. |
 
-Implements: `fmt.Stringer`, `database/sql.Scanner`, `database/sql/driver.Valuer`, `encoding/json.Marshaler`, `types.NormalizableValidator[Code]` and `JSONSchema()` (`{"type":"string","pattern":"^[a-z]{2}$"}`). `Code` has no `UnmarshalJSON` and no `ScanString` method, so it is not a `strfmt.Scannable`.
+Implements: `fmt.Stringer`, `database/sql.Scanner`, `database/sql/driver.Valuer`, `encoding/json.Marshaler`, `encoding.TextMarshaler`, `types.NormalizableValidator[Code]` and `JSONSchema()` (`{"type":"string","pattern":"^[a-z]{2}$"}`). `Code` has no `UnmarshalJSON` and no `ScanString` method, so it is not a `strfmt.Scannable`.
 
 `Valid`, `Validate` and `String` are hand-written and carry a `// #custom` marker, so go-enum keeps them. `Valid` is strict on purpose, unlike those of `country.Code` and `money.Currency`. `Validate` normalizes first like theirs, because `Value` and `MarshalJSON` write the normalized code.
 
@@ -71,12 +71,12 @@ On failure it returns the input unchanged and the error of `Normalized`.
 
 ## Serialization
 
-| Value                  | SQL `Value()`    | JSON (`json.Marshal`) | `String()` |
-|------------------------|------------------|-----------------------|------------|
-| `Null`                 | `NULL`           | `""`                  | `""`       |
-| `Code("en")`           | `"en"`           | `"en"`                | `"en"`     |
-| `Code("EN")`           | `"en"`           | `"en"`                | `"en"`     |
-| `Code("xx")` (invalid) | `"xx"`, no error | `"xx"`                | `"xx"`     |
+| Value                  | SQL `Value()`    | JSON (`json.Marshal`) | `String()`, `MarshalText` |
+|------------------------|------------------|-----------------------|---------------------------|
+| `Null`                 | `NULL`           | `""`                  | `""`                      |
+| `Code("en")`           | `"en"`           | `"en"`                | `"en"`                    |
+| `Code("EN")`           | `"en"`           | `"en"`                | `"en"`                    |
+| `Code("xx")` (invalid) | `"xx"`, no error | `"xx"`                | `"xx"`                    |
 
 | Input                          | Result                                  |
 |--------------------------------|-----------------------------------------|

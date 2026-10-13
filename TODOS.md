@@ -239,9 +239,6 @@ time.
 - [ ] **Multi-word currency names in `money.ParseCurrencyAmount`.** Only a
       single word is passed to `Currency.Normalized`, so
       `"100 Canadian Dollar"` does not parse.
-- [ ] **`strfmt` and other `nullable.Type[T]`.** `money.NullableRate` and
-      other `nullable.Type[T]` without a registered formatter are written
-      with `fmt.Sprint`.
 - [ ] **Time zones in the `strfmt` presets.** The English and German
       presets' time layouts end in `MST` without a numeric offset, so a
       formatted time only scans back where its zone abbreviation is known
@@ -271,6 +268,11 @@ time.
       `bank.BIC`. `money.CurrencyAmount` and `CurrencyDecimalAmount` write
       their currency normalized. Normalized email addresses keep non-ASCII
       names as UTF-8, only `BuildRawMessage` encodes them with RFC 2047.
+      **Completed:** 2026-10-13
+- [x] **`strfmt` and other `nullable.Type[T]`.** A non-null
+      `nullable.Type[T]` without a registered formatter, like
+      `money.NullableRate`, is formatted like its `T` instead of with
+      `fmt.Sprint`.
       **Completed:** 2026-10-13
 - [x] **Fixes from the code review of PR #28.** `date`: full "August"
       dates parse, a number with an ordinal suffix is never the month,

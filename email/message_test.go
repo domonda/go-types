@@ -129,7 +129,6 @@ func TestMessage_Recipients(t *testing.T) {
 
 	// A quoted local part must be compared in its formatted, quoted form,
 	// else the same mailbox from To, Cc and Bcc gets the message 3 times.
-	// Value: protects=Recipients dedups a quoted local part across To, Cc and Bcc and keeps it quoted; fails_when=exists compares a.Address instead of addrSpec(a), which never matches a quoted entry; why_new=existing recipients have only unquoted local parts, where both forms are equal; seam=none; no_claim=that lower casing a quoted local part is RFC correct
 	msg = &email.Message{
 		To:  `"a b"@example.com`,
 		Cc:  `X <"A B"@Example.com>`,
@@ -792,16 +791,6 @@ func TestBuildRawMessage_InlineParts(t *testing.T) {
 // An unparsable From or Reply-To is no recipient, but written into the
 // header as given it leaves the receiver no address to reply to,
 // so it is an error too instead of a message that can't be answered.
-//
-// Value: protects=BuildRawMessage returns an error instead of a message for
-// an unparsable From or Reply-To;
-// fails_when=From/Reply-To are written via Address.ASCII or as given, which
-// keep an unparsable address unchanged instead of failing;
-// why_new=the From/Reply-To error branches in BuildRawMessage are run by no
-// test, the table only had the To, Delivered-To, Cc and Bcc rows;
-// seam=none;
-// no_claim=which header encoding a valid non-ASCII From name gets, see
-// TestBuildRawMessage_NonASCIIFromName
 func TestBuildRawMessage_InvalidRecipients(t *testing.T) {
 	tests := []struct {
 		name string

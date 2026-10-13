@@ -90,15 +90,6 @@ func Test_ParseFloat(t *testing.T) {
 // instead of a guessed value. A separator in the exponent must be an
 // error, because dropping it like a thousands separator turns "1e3,5"
 // into 1e35, an amount 32 orders of magnitude off.
-//
-// Value: protects=a '.', ',', apostrophe or space in the exponent is an error;
-// fails_when=the exponent checks of ParseDetails are dropped, so "1e3,5" parses
-// as 1e35 without an error;
-// why_new=no tested input had a separator after the exponent marker, both
-// exponent separator error branches were run by no test;
-// seam=none;
-// no_claim=separators in front of the exponent, see
-// Test_ParseDetails_exponentAfterThousands
 func Test_ParseFloat_invalid(t *testing.T) {
 	invalidDecimalFloats := []string{
 		"",

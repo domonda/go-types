@@ -22,12 +22,11 @@ func rawMessage(lines ...string) []byte {
 // "mime: unhandled charset ...".
 //
 // It exercises the full ParseMIMEMessage pipeline. Note that enmime decodes
-// the addressed/structured headers (From, To, Cc, Subject, ...) itself via the
-// same x/net charset reader, so those assertions verify end-to-end correctness.
-// The extra-header loop in ParseMIMEMessage, however, decodes the *raw*
-// envelope.Root.Header values with our mimeHeaderDecoder, so the X-Original-From
-// assertion is the one that specifically guards the CharsetReader fix
-// (it fails with the plain stdlib mime.WordDecoder).
+// the Subject itself via the same x/net charset reader. The address headers
+// (From, To, Cc, ...) and the extra-header loop in ParseMIMEMessage, however,
+// decode the *raw* envelope.Root.Header values with our mimeHeaderDecoder,
+// so the From, To and X-Original-From assertions guard the CharsetReader fix
+// (they fail with the plain stdlib mime.WordDecoder).
 func TestParseMIMEMessage_NonStdlibCharset(t *testing.T) {
 	raw := rawMessage(
 		`From: =?iso-8859-2?Q?=A3ukasz?= <lukasz@example.pl>`,   // 0xA3 = Ł in ISO 8859-2
@@ -69,6 +68,27 @@ func TestParseMIMEMessage_NonStdlibCharset(t *testing.T) {
 	// An unsupported charset must degrade gracefully: the extra-header loop
 	// ignores the decode error and keeps the raw value instead of failing.
 	require.Equal(t, []string{`=?made-up-9999?Q?abc?=`}, msg.ExtraHeader["X-Bogus-Charset"])
+}
+
+// TestParseMIMEMessage_EncodedNameIsOneAddress protects that an RFC 2047
+// encoded display name is decoded only as a name: decoding the whole header
+// before splitting it turned an encoded comma and @ in a name into another
+// recipient, which net/mail and mail clients don't see.
+func TestParseMIMEMessage_EncodedNameIsOneAddress(t *testing.T) {
+	msg, err := email.ParseMessage(rawMessage(
+		`From: =?utf-8?q?attacker=40evil=2Ecom=2C?= <sender@example.com>`,
+		`To: =?utf-8?q?victim=40evil=2Ecom=2C?= <ok@good.com>, =?UTF-8?Q?M=C3=BCller=2C_J=C3=BCrgen?= <j@example.de>`,
+		`Cc: =?utf-8?q?cc=40evil=2Ecom=2C?= <cc@good.com>`,
+		`Date: Thu, 22 Jan 2026 16:21:11 +0100`,
+		`Content-Type: text/plain; charset=utf-8`,
+		``,
+		`Body`,
+	))
+	require.NoError(t, err)
+	require.Equal(t, email.Address(`"attacker@evil.com," <sender@example.com>`), msg.From)
+	require.Equal(t, email.AddressList(`"victim@evil.com," <ok@good.com>, "Müller, Jürgen" <j@example.de>`), msg.To)
+	require.Equal(t, email.NullableAddressList(`"cc@evil.com," <cc@good.com>`), msg.Cc)
+	require.Equal(t, []string{"ok@good.com", "j@example.de", "cc@good.com"}, msg.Recipients())
 }
 
 // TestParseMIMEMessage_PartialResult verifies that a message with usable data

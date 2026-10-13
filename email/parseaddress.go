@@ -24,7 +24,7 @@ const (
 	umlautChars       = `àáâãäåæāăąçćĉċčďđèéêëēĕėęěĝğġģĥħìíîïĩīĭįıðĵķĸĺļľłñńņňŋòóôõöøōŏőœŕŗřśŝşšţťŧùúûüũūŭůűųŵýŷÿźżžþßÀÁÂÃÄÅÆĀĂĄÇĆĈĊČĎĐÈÉÊËĒĔĖĘĚĜĞĠĢĤĦÌÍÎÏĨĪĬĮIÐĴĶĸĹĻĽŁÑŃŅŇŊÒÓÔÕÖØŌŎŐŒŔŖŘŚŜŞŠŢŤŦÙÚÛÜŨŪŬŮŰŲŴÝŶŸŹŻŽÞSS`
 	atextSpecialChars = `!#$%&'*+\-/=?^_{|}~` + "`" + umlautChars
 	atext             = `[a-zA-Z0-9` + atextSpecialChars + `][\.a-zA-Z0-9` + atextSpecialChars + `]*`
-	localPart         = `'?(?:[ \t]?(` + `[a-zA-Z0-9\.]` + `|` + atext + `|` + `"[^"]+"` + `))`
+	localPart         = `'?(?:[ \t]?(` + `[a-zA-Z0-9\.]` + `|` + atext + `|` + `"(?:[^"\\]|\\.)+"` + `))`
 	domainChars       = `a-zA-Z0-9` + umlautChars
 	domainPart        = `([` + domainChars + `][\-\.` + domainChars + `]*\.[a-zA-Z]{2,})`
 	addressRegex      = atext + `@` + domainPart
@@ -43,6 +43,15 @@ var (
 
 	// nameAddressRegexp is a regular expression for an email address with name part
 	nameAddressRegexp = regexp.MustCompile(nameAddressRegex)
+
+	// unquotedLocalPartRegexp matches a local part that the parser
+	// reads back without quotes, see localPart
+	unquotedLocalPartRegexp = regexp.MustCompile(`^(?:[a-zA-Z0-9\.]|` + atext + `)$`)
+
+	// placeholderListRegexp matches a whole lower case list that is only
+	// a placeholder for hidden recipients, like "undisclosed-recipients:;",
+	// but not an address or a list that only starts with such a word
+	placeholderListRegexp = regexp.MustCompile(`^(?:undisclosed|withheld)[- ]recipients(?: *: *;?)?$`)
 )
 
 func sanitizeAddr(s string) string {
@@ -93,6 +102,10 @@ func UniqueNormalizedAddressSlice(addrs []Address) []Address {
 // fixing malformed addresses and lower cases the address part.
 // If the name part is identical with the address part
 // then it will not be returned as name.
+// The Address of a quoted local part holds its content without quotes,
+// like mail.ParseAddress, so use AddressFrom or Address.AddressPart
+// to get the quoted form. Quotes, backslashes and runes that are not
+// graphic are removed from the name.
 func ParseAddress(addr string) (mailAddress *mail.Address, err error) {
 	addr = sanitizeAddr(addr)
 
@@ -203,8 +216,31 @@ func cleanName(name string) string {
 	))
 }
 
+// isUnquotedLocalPart reports if the parser reads local back
+// without quotes. localPart strips a leading apostrophe.
+func isUnquotedLocalPart(local string) bool {
+	return !strings.HasPrefix(local, "'") && unquotedLocalPartRegexp.MatchString(local)
+}
+
+// quoteLocalPart returns local as quoted string
+// with quotes and backslashes escaped as quoted-pairs.
+func quoteLocalPart(local string) string {
+	var b strings.Builder
+	b.WriteByte('"')
+	for _, r := range local {
+		if r == '"' || r == '\\' {
+			b.WriteByte('\\')
+		}
+		b.WriteRune(r)
+	}
+	b.WriteByte('"')
+	return b.String()
+}
+
 // unquoteLocalPart returns the content of a quoted local part
 // with its quoted-pairs (a backslash followed by a rune) unescaped.
+// The localPart regex reads a quoted-pair as one unit, so a backslash
+// can't escape the closing quote and leave the local part unterminated.
 func unquoteLocalPart(quoted string) string {
 	if !strings.Contains(quoted, `\`) {
 		return quoted
@@ -233,17 +269,13 @@ func unquoteLocalPart(quoted string) string {
 // should treat any non-nil error as a failure.
 //
 // The empty list and the common "undisclosed-recipients" /
-// "withheld-recipients" placeholders are parsed as an empty list
-// without an error.
+// "withheld-recipients" placeholders, alone or as empty group like
+// "undisclosed-recipients:;", are parsed as an empty list without an
+// error. Text after a placeholder is parsed like any other list, so an
+// address that other parsers would read there is never ignored.
 func ParseAddressList(list string) (addrs []*mail.Address, err error) {
 	list = strings.TrimRight(sanitizeAddr(list), ", ")
-
-	switch ll := strings.ToLower(list); {
-	case ll == "",
-		strings.HasPrefix(ll, "undisclosed-recipients"),
-		strings.HasPrefix(ll, "undisclosed recipients"),
-		strings.HasPrefix(ll, "withheld-recipients"),
-		strings.HasPrefix(ll, "withheld recipients"):
+	if list == "" || placeholderListRegexp.MatchString(strings.ToLower(list)) {
 		return nil, nil
 	}
 

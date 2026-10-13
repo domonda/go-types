@@ -1021,6 +1021,7 @@ func TestIDv7WithTime_OutOfRange(t *testing.T) {
 	got, ok := IDv7WithTime(before1970).V7Time()
 	require.True(t, ok)
 	require.False(t, got.Equal(before1970), "%s must not round trip", before1970)
+	require.Equal(t, before1970.UnixMilli()&(1<<48-1), got.UnixMilli(), "keeps only the lower 48 bits, as documented")
 }
 
 // TestIDv7_RFC9562Layout checks the byte layout of the 48 bit

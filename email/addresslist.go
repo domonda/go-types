@@ -207,15 +207,20 @@ func asciiAddressList(addrs []*mail.Address) string {
 }
 
 // Value implements the driver database/sql/driver.Valuer interface.
-// Returns the normalized list, or the unchanged string
-// if it can't be normalized or normalizes to a list without addresses,
-// like "undisclosed-recipients:;", because Scan rejects an empty string.
+// Returns the normalized list, or the unchanged string if it can't be
+// normalized or is empty or whitespace only. A list without addresses,
+// like "Undisclosed recipients", is written as the canonical placeholder
+// "undisclosed-recipients:;", because Scan rejects an empty string.
 func (l AddressList) Value() (driver.Value, error) {
 	norm, _ := l.Normalized()
-	if norm == "" {
+	switch {
+	case norm != "":
+		return string(norm), nil
+	case strutil.TrimSpace(string(l)) == "":
 		return string(l), nil
+	default:
+		return "undisclosed-recipients:;", nil
 	}
-	return string(norm), nil
 }
 
 // MarshalJSON implements encoding/json.Marshaler.
@@ -229,7 +234,7 @@ func (l AddressList) MarshalJSON() ([]byte, error) {
 // MarshalText implements encoding.TextMarshaler by returning String,
 // the normalized value or the unchanged string if it can't be
 // normalized, so that strfmt and encoding/xml write the canonical form
-// like Value and MarshalJSON. encoding/json writes map keys of string
+// like MarshalJSON. encoding/json writes map keys of string
 // types as they are and doesn't call MarshalText for them.
 func (l AddressList) MarshalText() ([]byte, error) {
 	return []byte(l.String()), nil

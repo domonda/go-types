@@ -946,7 +946,6 @@ func TestDate_MarshalJSON(t *testing.T) {
 // because encoding/xml uses it: without it XML output would carry
 // whatever spelling Validate accepted, like "25.12.2023". A date that
 // can't be normalized is written unchanged instead of failing the write.
-// Value: protects=Date.MarshalText and encoding/xml write the normalized date, an invalid date unchanged; fails_when=MarshalText returns []byte(date) instead of []byte(date.String()); why_new=MarshalText is a new method without any test or caller in the module; seam=none; no_claim=strfmt output, it formats dates through TypeFormatters
 func TestDate_MarshalText(t *testing.T) {
 	for _, tt := range []struct {
 		date Date
@@ -1375,7 +1374,6 @@ func TestDate_IsTodayInUTC(t *testing.T) {
 	assert.True(t, Date(today.Format("02.01.2006")).IsTodayInUTC())
 	// Normalizing first must not make other days or a parse error count
 	// as today, like IsToday in TestDate_IsToday.
-	// Value: protects=IsTodayInUTC is false for another day, the next UTC day and an invalid date; fails_when=IsTodayInUTC returns err == nil without comparing to OfNowInUTC; why_new=the test only had true cases, so an always-true-for-valid result passed; seam=none; no_claim=behavior across a UTC midnight between OfNowInUTC calls
 	assert.False(t, Date("2020-01-01").IsTodayInUTC())
 	assert.False(t, Date("invalid").IsTodayInUTC())
 	assert.False(t, today.AddDays(1).IsTodayInUTC())
@@ -1476,7 +1474,8 @@ func TestNormalize_HintOnlyDecidesAmbiguousOrder(t *testing.T) {
 		{name: "DE hint, ambiguous", str: "05/06/2024", lang: []language.Code{language.DE}, want: "2024-06-05"},
 		{name: "no hint, ambiguous", str: "05/06/2024", want: "2024-06-05"},
 		// language.Code.Validate accepts these spellings of English,
-		// so they must work as hint too and not be cut to " e" or "EN"
+		// so they must work as hint too: a padded hint must not be
+		// cut to " e", and a BCP-47 tag selects its language
 		{name: "padded EN hint, ambiguous", str: "05/06/2024", lang: []language.Code{" en"}, want: "2024-05-06"},
 		{name: "BCP-47 EN hint, ambiguous", str: "05/06/2024", lang: []language.Code{"EN-us"}, want: "2024-05-06"},
 		{name: "ordinal day, ambiguous", str: "02 1st 2003", want: "2003-02-01"},
