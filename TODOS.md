@@ -24,10 +24,10 @@ package: every listed behaviour is documented in the package READMEs.
       `email.NullableAddressList.Scan("  ")` is null, but
       `NullableAddressList("  ").IsNull()` is false. `date.NullableDate` JSON
       strings are stored as given while `Scan` normalizes them.
-      Recommendation: empty and whitespace-only input is null for every
-      nullable type, because an empty CSV cell or text column means
-      "no value".
-- [ ] **One rule for what `Value` writes.** `country.Code` and `vat.ID` write
+      Decided: empty and whitespace-only input is null for every nullable
+      type, see Design decisions in the [README](README.md).
+- [ ] **One rule for what `Value` writes.** Decided: the canonical form, see
+      Design decisions in the [README](README.md). `country.Code` and `vat.ID` write
       their normalized form, `money.Currency`, `language.Code`, `bank.IBAN`
       and `bank.BIC` write the raw string. `String()` normalizes for all of
       them, which hides the difference in logs. With a lenient `Validate`
@@ -161,13 +161,12 @@ time.
       `BOM()` always returns `NoBOM` as documented, also for
       `GetEncoding("UTF-16")`, which writes a BOM. Delete the field, or set
       it for UTF-16.
-- [ ] **Error constructors.** The module calls `errors.New` and
+- [ ] **Error constructors.** Decided: go-errs, see Design decisions in
+      the [README](README.md). The module still calls `errors.New` and
       `fmt.Errorf` about 340 times and go-errs `errs.New` four times, in
       `email/message.go`, `email/parsetnef.go`, and the whitespace-only
-      errors of `AddressList.Scan` and `AddressSet.Scan`. Decide whether the
-      module follows the go-errs rule. Recommendation: stay with the
-      standard library, the established pattern, and convert the four
-      outliers.
+      errors of `AddressList.Scan` and `AddressSet.Scan`. Convert the
+      standard library calls to `errs.New` and `errs.Errorf`.
 - [ ] **Commented-out code.** An old implementation after the `return` in
       `money.Amount.String`, old `From`/`ReplyTo` assignments in
       `email/parsemime.go`, `email/utils.go`, a debug print in

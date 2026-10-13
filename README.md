@@ -136,6 +136,34 @@ The [docs index](docs/README.md) lists everything. By what you need:
 - `types.Validate` and `types.DeepValidate` work with any type that implements
   `Validate() error` or `Valid() bool`, including your own.
 
+## Design decisions
+
+These rules decide how every type behaves, and how an inconsistency between
+types gets resolved. Types that don't follow a rule yet are tracked in
+[TODOS.md](TODOS.md).
+
+- **Be generous in accepting input, be canonical in generating output.**
+  Parsing, normalizing, validating and scanning accept every common way people
+  and other systems write a value: `country.Code("de")`,
+  `vat.ID("atu 1022 3006")` and `money.Currency("€")` are valid input. What a
+  type writes, its `Value`, its JSON and its `String`, is the canonical form:
+  `country.Code("de")` is stored and marshalled as `DE`. Lenient validation
+  and canonical output belong together, a value that passes `Validate` must
+  never be stored in another spelling.
+- **Empty input is null.** For a nullable type, an empty or whitespace-only
+  string from SQL, JSON or text is null, because an empty CSV cell or text
+  column means "no value".
+- **Fail loudly instead of guessing.** Input that contradicts itself, or whose
+  meaning depends on something the package can't know, is an error instead of
+  a silently wrong value. A number with an ordinal suffix is never read as the
+  month, so `"13 1st 2024"` is an error, and `strfmt` rejects a time zone
+  abbreviation whose offset is unknown on the machine instead of reading the
+  time as UTC. A documented default is no guess: an ambiguous date like
+  `05/06/2024` is day first unless a language hint says otherwise.
+- **Errors are created with
+  [`github.com/domonda/go-errs`](https://github.com/domonda/go-errs)**
+  (`errs.New`, `errs.Errorf`) instead of `errors.New` and `fmt.Errorf`.
+
 ## Development
 
 ```
