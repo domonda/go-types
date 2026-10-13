@@ -37,6 +37,50 @@ func TestScanConfig_ParseTime(t *testing.T) {
 	}
 }
 
+// TestScanConfig_ParseTimeUnknownZoneAbbreviation protects that a time with a
+// zone abbreviation but no numeric offset, as the English and German
+// FormatConfig presets write it, only scans when the offset of the
+// abbreviation is known. time.Parse gives an unknown abbreviation a zero
+// offset, so a CET time exported in Berlin would silently scan one hour off
+// on a UTC server. Failing is better than a shifted time.
+func TestScanConfig_ParseTimeUnknownZoneAbbreviation(t *testing.T) {
+	// Not parallel: changes the package-level time.Local
+	local := time.Local
+	t.Cleanup(func() { time.Local = local })
+	time.Local = time.UTC
+
+	config := NewScanConfig()
+	nineUTC := time.Date(2024, 3, 5, 9, 0, 0, 0, time.UTC)
+	tenUTC := time.Date(2024, 3, 5, 10, 0, 0, 0, time.UTC)
+
+	// time.Parse ignores the offset of "GMT+1" for the instant, it would be 10:00 UTC
+	for _, str := range []string{"05.03.2024 10:00:00 CET", "05/03/2024 10:00:00 XYZ", "05/03/2024 10:00:00 GMT+1"} {
+		_, ok := config.ParseTime(str)
+		assert.False(t, ok, "ParseTime(%q) with an unknown zone must fail", str)
+		var dest time.Time
+		assert.Error(t, Scan(reflect.ValueOf(&dest).Elem(), str, config), "Scan(%q)", str)
+	}
+
+	for str, want := range map[string]time.Time{
+		"05.03.2024 10:00:00 UTC": tenUTC,
+		"05.03.2024 10:00:00 GMT": tenUTC,
+		// A numeric offset decides, the abbreviation is only a name
+		"2024-03-05 10:00:00 +0100 XYZ": nineUTC,
+	} {
+		got, ok := config.ParseTime(str)
+		if assert.True(t, ok, "ParseTime(%q)", str) {
+			assert.True(t, want.Equal(got), "ParseTime(%q) = %s, want %s", str, got, want)
+		}
+	}
+
+	// An abbreviation of the local zone has a known offset
+	time.Local = time.FixedZone("CET", 3600)
+	got, ok := config.ParseTime("05.03.2024 10:00:00 CET")
+	if assert.True(t, ok, "ParseTime with the local zone abbreviation") {
+		assert.True(t, nineUTC.Equal(got), "ParseTime = %s, want %s", got, nineUTC)
+	}
+}
+
 // TestScanConfig_SetTypeScannerWithoutNewScanConfig protects that a
 // ScanConfig that was not created by NewScanConfig, like a struct literal
 // or one decoded from JSON, which excludes TypeScanners, can register a

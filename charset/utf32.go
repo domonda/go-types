@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"unicode/utf8"
 
 	"golang.org/x/text/encoding/unicode/utf32"
 )
@@ -48,21 +49,28 @@ func (e utf32Encoding) BOM() BOM {
 // DecodeUTF32 decodes the UTF-32 encoded bytes b using byteOrder and returns
 // the equivalent UTF-8 bytes. Like DecodeUTF16, an optional BOM at the start
 // of b is validated against byteOrder and then stripped before decoding.
-// Returns an error if b contains an unexpected BOM.
+// Returns an error if b starts with another BOM whose bytes are not a valid
+// UTF-32 character, the UTF-16LE BOM FF FE starts valid UTF-32LE text
+// like U+FFEFF.
 func DecodeUTF32(b []byte, byteOrder binary.ByteOrder) ([]byte, error) {
 	if len(b) == 0 {
 		return nil, nil
 	}
 	endian := utf32.LittleEndian
 	expected := BOMUTF32LE
+	var order binary.ByteOrder = binary.LittleEndian
 	if byteOrder == binary.BigEndian {
 		endian = utf32.BigEndian
 		expected = BOMUTF32BE
+		order = binary.BigEndian
 	}
-	// Match the expected BOM before falling back to BOMOfBytes like DecodeUTF16
+	// Match the expected BOM before falling back to BOMOfBytes like DecodeUTF16.
+	// Another BOM is only evidence of a wrong encoding if its bytes don't start
+	// with a valid UTF-32 character, the UTF-16LE BOM FF FE starts valid
+	// UTF-32LE text like U+FFEFF.
 	if bytes.HasPrefix(b, []byte(expected)) {
 		b = b[len(expected):]
-	} else if bom := BOMOfBytes(b); bom != NoBOM {
+	} else if bom := BOMOfBytes(b); bom != NoBOM && (len(b) < 4 || !utf8.ValidRune(rune(order.Uint32(b)))) { //#nosec G115 -- integer conversion OK, values beyond int32 are invalid runes either way
 		return nil, fmt.Errorf("expected %s BOM but got %s", expected, bom)
 	}
 	return utf32.UTF32(endian, utf32.IgnoreBOM).NewDecoder().Bytes(b)

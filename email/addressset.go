@@ -10,6 +10,7 @@ import (
 	"sort"
 	"unsafe"
 
+	"github.com/domonda/go-errs"
 	"github.com/domonda/go-types"
 	"github.com/domonda/go-types/mapset"
 	"github.com/domonda/go-types/notnull"
@@ -413,7 +414,7 @@ func (set *AddressSet) Scan(value any) error {
 			// Trimmed like the array elements by scanAddressArray
 			addr := strutil.TrimSpace(s)
 			if addr == "" {
-				return errors.New("can't scan whitespace only string as email.AddressSet")
+				return errs.New("can't scan whitespace only string as email.AddressSet")
 			}
 			*set = AddressSet{Address(addr): struct{}{}}
 		}

@@ -87,7 +87,9 @@ func DecodeUTF16(b []byte, byteOrder binary.ByteOrder) ([]byte, error) {
 	default:
 		// Only a BOM in b can make an unusable byteOrder fatal, BOM-less data
 		// decodes with any binary.ByteOrder including binary.NativeEndian.
-		if bom := BOMOfBytes(b); bom != NoBOM {
+		// The UTF-8 BOM EF BB BF is no evidence of a wrong encoding,
+		// because it starts valid UTF-16 text like U+BBEF in UTF-16LE.
+		if bom := BOMOfBytes(b); bom != NoBOM && bom != BOMUTF8 {
 			if expected == NoBOM {
 				return nil, fmt.Errorf("invalid binary.ByteOrder: %v", byteOrder)
 			}

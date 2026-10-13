@@ -51,6 +51,10 @@ func Test_Normalize(t *testing.T) {
 		"2 janv. 2019":  "2019-01-02",
 		"30 janv. 2019": "2019-01-30",
 		"23/gen/2019":   "2019-01-23",
+		// French also abbreviates juillet as juill. and février as fév.
+		"5 juill. 2021": "2021-07-05",
+		"15 fév. 2020":  "2020-02-15",
+		"15 fev 2020":   "2020-02-15",
 
 		// US "Month Day, Year" — comma is now a separator and
 		// abbreviated months may end in '.' (also a separator).
@@ -71,6 +75,14 @@ func Test_Normalize(t *testing.T) {
 		"7 Sep 1970":       "1970-09-07",
 		"7 June 1970":      "1970-06-07",
 		"7 September 1970": "1970-09-07",
+
+		// "august" ends in the ordinal suffix "st", which must only be
+		// stripped after digits, else the month name becomes "augu".
+		"17 August 2012":   "2012-08-17",
+		"August 17, 2012":  "2012-08-17",
+		"1. August 2016":   "2016-08-01",
+		"1st August 2020":  "2020-08-01",
+		"21st August 2020": "2020-08-21",
 
 		// Leading weekday name is now skipped when present.
 		"Mon Jan 02 2006": "2006-01-02",
@@ -300,6 +312,10 @@ func Test_PeriodRange(t *testing.T) {
 		"2018-Q5",
 		"2018-H0",
 		"2018-H3",
+		// 2021 has only 52 ISO weeks, its "week 53" would be 2022-W01
+		"2021-W53",
+		"2021-W54",
+		"2021-W00",
 		"2018-H03",
 		"2018-W0",
 		"2018-W00",
@@ -1098,6 +1114,40 @@ func TestDate_MidnightUTC(t *testing.T) {
 	d2 := Date("invalid")
 	tm2 := d2.MidnightUTC()
 	assert.True(t, tm2.IsZero())
+
+	// time.Parse accepts the year 0 that Valid rejects,
+	// an invalid date must still return the zero time.
+	assert.False(t, Date("0000-01-01").Valid())
+	assert.True(t, Date("0000-01-01").MidnightUTC().IsZero(), "year 0")
+	assert.True(t, Date("0000-01-01").MidnightInLocation(time.Local).IsZero(), "year 0 local")
+	assert.True(t, NullableDate("0000-05-05").MidnightUTC().IsNull(), "NullableDate year 0")
+}
+
+// TestDate_ComparisonsMatchValid protects that the comparison methods,
+// which parse each date only once, return false for exactly the dates
+// that Valid rejects and compare the same instants as MidnightUTC.
+func TestDate_ComparisonsMatchValid(t *testing.T) {
+	dates := []Date{
+		"", "invalid", "0000-00-00", "0000-01-01", "0001-01-01", "0001-01-02",
+		"2023-02-30", "2023-12-24", "2023-12-25", "25.12.2023", "12/26/2023",
+		" 2023-12-25 ", "1st August 2020",
+	}
+	for _, a := range dates {
+		for _, b := range dates {
+			valid := a.Valid() && b.Valid()
+			ta, tb := a.MidnightUTC(), b.MidnightUTC()
+			assert.Equal(t, valid && ta.After(tb), a.After(b), "Date(%q).After(%q)", a, b)
+			assert.Equal(t, valid && ta.Before(tb), a.Before(b), "Date(%q).Before(%q)", a, b)
+			assert.Equal(t, a.Valid() && ta.After(tb), a.AfterTime(tb), "Date(%q).AfterTime(%s)", a, tb)
+			assert.Equal(t, a.Valid() && ta.Before(tb), a.BeforeTime(tb), "Date(%q).BeforeTime(%s)", a, tb)
+			for _, c := range dates {
+				tc := c.MidnightUTC()
+				valid3 := valid && c.Valid()
+				assert.Equal(t, valid3 && !ta.Before(tb) && !ta.After(tc), a.WithinIncl(b, c), "Date(%q).WithinIncl(%q, %q)", a, b, c)
+				assert.Equal(t, valid3 && ta.After(tb) && ta.Before(tc), a.BetweenExcl(b, c), "Date(%q).BetweenExcl(%q, %q)", a, b, c)
+			}
+		}
+	}
 }
 
 func TestDate_Midnight(t *testing.T) {
@@ -1353,7 +1403,9 @@ func TestNormalize_HintOnlyDecidesAmbiguousOrder(t *testing.T) {
 	// A language hint (or an ordinal suffix marking the day) can only
 	// choose between dd/mm and mm/dd when both numbers are valid months.
 	// If only one ordering is a valid date, that date must be returned
-	// no matter the hint, a hint must never turn a valid date into an error.
+	// no matter the language hint, a hint must never turn a valid date
+	// into an error. An ordinal suffix is no guess but part of the input,
+	// a number with one is never read as the month.
 	tests := []struct {
 		name    string
 		str     string
@@ -1378,11 +1430,13 @@ func TestNormalize_HintOnlyDecidesAmbiguousOrder(t *testing.T) {
 		{name: "ordinal day second, ambiguous, EN hint", str: "02 1st 2003", lang: []language.Code{language.EN}, want: "2003-02-01"},
 		{name: "ordinal day first, ambiguous, DE hint", str: "1st 02 2003", lang: []language.Code{language.DE}, want: "2003-02-01"},
 		{name: "ordinal day second, ambiguous, DE hint", str: "02 1st 2003", lang: []language.Code{language.DE}, want: "2003-02-01"},
-		// The ordinal suffix marks "1st" as the day, but 13 can't be the
-		// month, so the only valid reading is the 13th of January.
-		// The suffix is just a hint like the language, and a hint must not
-		// turn an unambiguous date into an error.
-		{name: "ordinal day, unambiguous other order", str: "13 1st 2024", want: "2024-01-13"},
+		// The ordinal suffix marks "1st" and "5th" as the day, so 13 would
+		// have to be the month. Reading the ordinal as the month instead
+		// contradicts the input, so there is no valid date.
+		{name: "ordinal day, other number no month", str: "13 1st 2024", wantErr: true},
+		{name: "ordinal day, other number no month, 5th", str: "13 5th 2020", wantErr: true},
+		{name: "ordinal day first, other number no month", str: "1st 13 2024", wantErr: true},
+		{name: "ordinal day, other number no month, EN hint", str: "13 1st 2024", lang: []language.Code{language.EN}, wantErr: true},
 		{name: "EN hint, no valid ordering", str: "13/13/2024", lang: []language.Code{language.EN}, wantErr: true},
 	}
 	for _, tt := range tests {

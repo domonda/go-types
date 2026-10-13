@@ -1,13 +1,13 @@
 package bank
 
 import (
-	"bytes"
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
 
 	"github.com/invopop/jsonschema"
 
+	"github.com/domonda/go-types/internal"
 	"github.com/domonda/go-types/nullable"
 	"github.com/domonda/go-types/strutil"
 )
@@ -196,11 +196,7 @@ func (bic NullableBIC) MarshalJSON() ([]byte, error) {
 // A JSON string is assigned unchanged, without normalization or validation,
 // like encoding/json does for a string type, any other JSON value is an error.
 func (bic *NullableBIC) UnmarshalJSON(data []byte) error {
-	if bytes.Equal(data, []byte(`null`)) {
-		bic.SetNull()
-		return nil
-	}
-	return json.Unmarshal(data, (*string)(bic))
+	return internal.UnmarshalJSONStringOrNull(bic, data)
 }
 
 // JSONSchema returns the JSON schema definition for the NullableBIC type,

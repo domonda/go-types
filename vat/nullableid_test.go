@@ -355,9 +355,9 @@ func TestNullableID_JSONSchema(t *testing.T) {
 	str, null := s.OneOf[0], s.OneOf[1]
 	assert.Equal(t, "string", str.Type)
 	require.NotNil(t, str.MinLength)
-	require.NotNil(t, str.MaxLength)
 	assert.Equal(t, uint64(IDMinLength), *str.MinLength, "must match the ID length limits")
-	assert.Equal(t, uint64(IDMaxLength), *str.MaxLength, "must match the ID length limits")
+	// Like for ID: a valid formatted ID is longer than IDMaxLength
+	assert.Nil(t, str.MaxLength, "formatted IDs are encoded longer than IDMaxLength")
 	assert.Equal(t, "null", null.Type)
 
 	// The default is Null and must appear as JSON null in the schema,

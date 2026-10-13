@@ -6,6 +6,7 @@ import (
 	"net/mail"
 	"strings"
 
+	"github.com/domonda/go-errs"
 	"github.com/domonda/go-types"
 	"github.com/domonda/go-types/strutil"
 )
@@ -201,7 +202,7 @@ func (l *AddressList) Scan(value any) error {
 		// Trimmed like the array elements by scanAddressArray
 		list := strutil.TrimSpace(s)
 		if list == "" {
-			return errors.New("can't scan whitespace only string as email.AddressList")
+			return errs.New("can't scan whitespace only string as email.AddressList")
 		}
 		*l = AddressList(list)
 		return nil

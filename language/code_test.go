@@ -109,8 +109,8 @@ func TestCodeLanguageName(t *testing.T) {
 	assert.Equal(t, "", Code("xx").LanguageName())
 	assert.Equal(t, "", Null.LanguageName())
 
-	// Like Valid/Validate/String and country.Code.EnglishName, the name is
-	// looked up for the normalized code, so every input that Validate
+	// Like String and country.Code.EnglishName, the name is
+	// looked up for the normalized code, so every input that Normalized
 	// accepts has a name (e.g. language codes read from user input or HTTP headers).
 	assert.Equal(t, "English", Code("EN").LanguageName())
 	assert.Equal(t, "English", Code(" en ").LanguageName())
@@ -186,22 +186,23 @@ func TestCode_EnumsMatchCodeNames(t *testing.T) {
 // TestCode_ValidateStringAndNullSentinel covers the three parts of Code's
 // public surface that the //#enum migration created or had to protect.
 //
-// Validate carries a #custom marker because it normalizes first, like
-// country.Code and money.Currency, so input that types.Validate and
-// DeepValidate receive from users ("EN", "eng", "en-US") is not rejected.
-// The strict exact-match Validate that go-enum would generate instead
-// rejects all of them. Valid deliberately stays strict, see TestCodeValid.
+// Validate carries a #custom marker because its error names the offending
+// input, unlike the generic error that go-enum would generate. It is strict
+// like Valid: Value and JSON store a Code as given, so types.Validate and
+// DeepValidate must reject "EN", "eng" and "en-US", which the JSON schema
+// pattern ^[a-z]{2}$ rejects too. Normalized accepts them.
 // String carries a #custom marker because it normalizes; the plain string
 // conversion go-enum generates instead would return "EN" and "eng"
 // unchanged. Null is declared as the conversion Code("") rather than
 // `Null Code = ""` so that go-enum keeps it out of the enum value lists
 // while it stays a typed Code constant with working methods.
 //
-// Value: protects=language.Code's #custom Validate accepts what Normalized
-// accepts, its #custom String normalizes, and Null stays a typed sentinel
-// outside Enums and EnumStrings;
-// fails_when=go-enum regenerates Validate as the strict lookup or String as
-// the plain conversion, or Null is redeclared as `Null Code = ""`;
+// Value: protects=language.Code's #custom Validate agrees with Valid and
+// names the input, its #custom String normalizes, and Null stays a typed
+// sentinel outside Enums and EnumStrings;
+// fails_when=Validate accepts what Valid rejects, go-enum regenerates
+// Validate with its generic error or String as the plain conversion, or
+// Null is redeclared as `Null Code = ""`;
 // why_new=Validate and String have no test at all and
 // TestCode_EnumsMatchCodeNames never looks at EnumStrings or Null;
 // seam=none
@@ -212,10 +213,16 @@ func TestCode_ValidateStringAndNullSentinel(t *testing.T) {
 		}
 	})
 
-	t.Run("Validate accepts what Normalized accepts", func(t *testing.T) {
-		// Valid rejects all of these, Validate must not.
+	t.Run("Validate rejects what Valid rejects", func(t *testing.T) {
+		// Normalized accepts these, but Value would store them unnormalized,
+		// so validation must not pass them, see TestCodeValid.
 		for _, in := range []Code{"EN", " de ", "eng", "ger", "en-US", "zh_Hant"} {
-			require.NoError(t, in.Validate(), "Code(%q).Validate()", string(in))
+			_, err := in.Normalized()
+			require.NoError(t, err, "Code(%q).Normalized()", string(in))
+			require.False(t, in.Valid(), "Code(%q).Valid()", string(in))
+			err = in.Validate()
+			require.Error(t, err, "Code(%q).Validate() should error like Valid", string(in))
+			assert.ErrorContains(t, err, string(in))
 		}
 	})
 

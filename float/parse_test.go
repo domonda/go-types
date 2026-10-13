@@ -326,7 +326,19 @@ func Test_ParseDetails_exponentAfterThousands(t *testing.T) {
 		}
 	}
 
-	// A single '.' or ',' in front of the exponent stays the decimal separator
+	// A single '.' or ',' in front of the exponent stays the decimal separator,
+	// and ParseDetails reports that rune, not always '.', so that callers
+	// can format the number back in the style it was read in.
+	for _, sep := range []rune{',', '.'} {
+		str := "1" + string(sep) + "5e3"
+		f, thousandsSep, decimalSep, decimals, err := ParseDetails(str)
+		if assert.NoError(t, err, "ParseDetails(%q)", str) {
+			assert.Equal(t, 1500.0, f, "ParseDetails(%q) value", str)
+			assert.Equal(t, rune(0), thousandsSep, "ParseDetails(%q) thousandsSep", str)
+			assert.Equal(t, string(sep), string(decimalSep), "ParseDetails(%q) decimalSep", str)
+			assert.Equal(t, 1, decimals, "ParseDetails(%q) decimals", str)
+		}
+	}
 	f, err := Parse("1,5e3")
 	assert.NoError(t, err)
 	assert.Equal(t, 1500.0, f)

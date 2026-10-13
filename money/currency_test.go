@@ -375,6 +375,11 @@ func TestCurrency_MinorUnits(t *testing.T) {
 		{currency: GGP, want: 2}, // not part of ISO 4217
 		{currency: "", want: 2},
 		{currency: "XYZ", want: 2},
+		// Normalized first, else CurrencyAmount{"kwd", 1.234}.String()
+		// would drop the third decimal that "KWD" keeps
+		{currency: "kwd", want: 3},
+		{currency: " JPY ", want: 0},
+		{currency: "Kuwaiti Dinar", want: 3},
 	}
 	for _, tt := range tests {
 		assert.Equal(t, tt.want, tt.currency.MinorUnits(), "Currency(%q).MinorUnits()", string(tt.currency))
@@ -441,6 +446,21 @@ func TestCurrency_NormalizedNames(t *testing.T) {
 		// Euro guesses
 		{in: "Euro", want: EUR},
 		{in: "Euros", want: EUR},
+		// The ISO code qualifies its own unit
+		{in: "USD Dollars", want: USD},
+		{in: "Dollars (USD)", want: USD},
+		{in: "U.S.D.", want: USD},
+		{in: "CHF Francs", want: CHF},
+		{in: "GBP Pounds", want: GBP},
+		{in: "Pounds Sterling", want: GBP},
+		// German and French spellings
+		{in: "Pfund Sterling", want: GBP},
+		{in: "Pfund", want: GBP},
+		{in: "Livre sterling", want: GBP},
+		{in: "Great British Pound", want: GBP},
+		{in: "Francs suisses", want: CHF},
+		{in: "Schweizerischer Franken", want: CHF},
+		{in: "Schweizerische Franken", want: CHF},
 	}
 	for _, tt := range tests {
 		got, err := Currency(tt.in).Normalized()
@@ -455,9 +475,22 @@ func TestCurrency_NormalizedNames(t *testing.T) {
 		"Lunar Pound",
 		"Burundi-Franken",
 		"Dollar Franc",
+		// A country without the unit is free text, not a currency,
+		// StringIsCurrency would find currencies in every sentence
+		"Contact us",
+		"Made in USA",
+		"US Bank",
+		"United States",
+		"Swiss",
+		"Schweiz",
+		"Credit Suisse",
+		"British Airways",
+		"Livre", // French for book, a unit only together with sterling
+		"Great",
 	} {
 		got, err := Currency(in).Normalized()
 		assert.Error(t, err, "Currency(%q).Normalized() = %q must fail instead of guessing", in, string(got))
+		assert.False(t, StringIsCurrency(in), "StringIsCurrency(%q)", in)
 	}
 }
 

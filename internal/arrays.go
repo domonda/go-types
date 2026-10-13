@@ -3,6 +3,7 @@ package internal
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/domonda/go-types/strutil"
@@ -332,4 +333,45 @@ var escapeQuotedReplacer = strings.NewReplacer(`\`, `\\`, `"`, `\"`)
 
 func escapeQuoted(s string) string {
 	return escapeQuotedReplacer.Replace(s)
+}
+
+// ParseFloatArray parses a PostgreSQL float array literal like {1.5,2,3},
+// naming typeName in errors. An empty src and the empty array {} return
+// an empty, non-nil slice.
+func ParseFloatArray(src []byte, typeName string) ([]float64, error) {
+	return parseNumberArray(src, typeName, func(elem string) (float64, error) {
+		return strconv.ParseFloat(elem, 64)
+	})
+}
+
+// ParseIntArray parses a PostgreSQL integer array literal like {1,2,3},
+// naming typeName in errors. An empty src and the empty array {} return
+// an empty, non-nil slice.
+func ParseIntArray(src []byte, typeName string) ([]int64, error) {
+	return parseNumberArray(src, typeName, func(elem string) (int64, error) {
+		return strconv.ParseInt(elem, 10, 64)
+	})
+}
+
+func parseNumberArray[T any](src []byte, typeName string, parseElem func(string) (T, error)) ([]T, error) {
+	if len(src) == 0 {
+		return []T{}, nil
+	}
+	if src[0] != '{' || src[len(src)-1] != '}' {
+		return nil, fmt.Errorf("can't parse %q as %s", string(src), typeName)
+	}
+	if len(src) == 2 { // src == "{}"
+		return []T{}, nil
+	}
+
+	elements := strings.Split(string(src[1:len(src)-1]), ",")
+	array := make([]T, len(elements))
+	for i, elem := range elements {
+		value, err := parseElem(elem)
+		if err != nil {
+			return nil, fmt.Errorf("can't parse %q as %s because of: %w", string(src), typeName, err)
+		}
+		array[i] = value
+	}
+	return array, nil
 }

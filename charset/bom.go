@@ -134,9 +134,15 @@ func DecodeStringWithBOM(b []byte) (string, error) {
 // resolved that ambiguity and must not be second-guessed.
 //
 // Returns an error if data carries a different BOM than the expected one.
+// For the UTF-16 and UTF-32 BOMs that is left to DecodeUTF16 and DecodeUTF32,
+// which decode the bytes of another BOM if they are valid text.
 func trimExpectedBOM(data []byte, bom BOM) ([]byte, error) {
 	if bom != NoBOM && bytes.HasPrefix(data, []byte(bom)) {
 		return data[len(bom):], nil
+	}
+	switch bom {
+	case BOMUTF16LE, BOMUTF16BE, BOMUTF32LE, BOMUTF32BE:
+		return data, nil
 	}
 	if dataBOM := BOMOfBytes(data); dataBOM != NoBOM && dataBOM != bom {
 		return nil, fmt.Errorf("wrong BOM in data: %v, expected: %v", []byte(dataBOM), []byte(bom))

@@ -3,6 +3,7 @@ package types
 import (
 	"errors"
 	"fmt"
+	"math"
 	"slices"
 	"strings"
 	"testing"
@@ -712,8 +713,8 @@ func (v signedInt) Validate() error {
 }
 
 // strictValidLenientValidate implements both ValidatErr and Validator
-// with Valid deliberately disagreeing with Validate, like language.Code
-// whose Valid is a strict lookup while Validate normalizes first.
+// with Valid deliberately disagreeing with Validate, to pin which of
+// the two methods decides.
 type strictValidLenientValidate int
 
 func (v strictValidLenientValidate) Valid() bool { return false }
@@ -1067,7 +1068,10 @@ func TestDeepValidate_PointerReceiverValidators(t *testing.T) {
 	}{
 		{"field of struct by value", fields{}, []string{"struct field F: empty ptrValidatErr"}},
 		{"field of struct by pointer", &fields{}, []string{"struct field F: empty ptrValidatErr"}},
-		{"top-level value", ptrValidatErr(""), []string{"empty ptrValidatErr"}},
+		{"pointer to top-level value", new(ptrValidatErr), []string{"empty ptrValidatErr"}},
+		// Like Validate, a value passed by value is validated with the
+		// methods of its own type, see TestDeepValidate_PointerReceiverCallingDeepValidate
+		{"top-level value", ptrValidatErr(""), []string{}},
 		{"slice element", []ptrValidatErr{"x", ""}, []string{"element [1]: empty ptrValidatErr"}},
 		{"array element of struct by value", struct{ A [1]ptrValidatErr }{}, []string{"struct field A -> element [0]: empty ptrValidatErr"}},
 		{"map value", map[string]ptrValidatErr{"k": ""}, []string{`map value ["k"]: empty ptrValidatErr`}},
@@ -1097,6 +1101,66 @@ func TestDeepValidate_PointerReceiverValidators(t *testing.T) {
 			t.Errorf("DeepValidate() errors = %q, want one with prefix %q", errorStrings(errs), want)
 		}
 	})
+}
+
+// selfDeepValidating validates its fields with DeepValidate(*s) in a
+// pointer receiver Validate, the usual way to combine DeepValidate
+// with the own Validate method of a type.
+type selfDeepValidating struct {
+	Name nonEmptyString
+}
+
+func (s *selfDeepValidating) Validate() error {
+	return errors.Join(DeepValidate(*s)...)
+}
+
+// TestDeepValidate_PointerReceiverCallingDeepValidate checks that a pointer
+// receiver Validate calling DeepValidate on its dereferenced receiver
+// terminates. If DeepValidate validated the value passed to it through a
+// pointer to a copy, it would call that Validate method again for every
+// copy, until the stack overflows and the process crashes unrecoverably.
+func TestDeepValidate_PointerReceiverCallingDeepValidate(t *testing.T) {
+	type parent struct {
+		Child selfDeepValidating
+	}
+	// DeepValidate also descends into the fields of Child after calling
+	// its Validate method, so only the error of the method is checked
+	want := "struct field Child: struct field Name: string cannot be empty"
+	if got := errorStrings(DeepValidate(&parent{})); !slices.Contains(got, want) {
+		t.Errorf("DeepValidate(&parent{}) errors = %q, want them to contain %q", got, want)
+	}
+	if got := errorStrings(DeepValidate(parent{})); !slices.Contains(got, want) {
+		t.Errorf("DeepValidate(parent{}) errors = %q, want them to contain %q", got, want)
+	}
+	if err := (&selfDeepValidating{}).Validate(); err == nil || err.Error() != "struct field Name: string cannot be empty" {
+		t.Errorf("Validate() = %v, want struct field Name: string cannot be empty", err)
+	}
+}
+
+// TestDeepValidate_PointerToInterfaceWithPointerReceiver checks that only
+// the value passed to DeepValidate itself is validated without a copy.
+// A value behind a passed pointer to an interface is not addressable,
+// it must still be validated through a pointer to a copy.
+func TestDeepValidate_PointerToInterfaceWithPointerReceiver(t *testing.T) {
+	var v any = ptrValidatErr("")
+	want := []string{"empty ptrValidatErr"}
+	if got := errorStrings(DeepValidate(&v)); !slices.Equal(got, want) {
+		t.Errorf("DeepValidate(&v) errors = %q, want %q", got, want)
+	}
+}
+
+// TestDeepValidate_NaNMapKey checks that the value of a NaN map key is
+// validated like every other map value. A NaN key is not equal to itself,
+// so looking the value up with the key can't find it.
+func TestDeepValidate_NaNMapKey(t *testing.T) {
+	errs := DeepValidate(map[float64]nonEmptyString{math.NaN(): "", 1: ""})
+	if len(errs) != 2 {
+		t.Errorf("DeepValidate() errors = %q, want 2 errors", errorStrings(errs))
+	}
+	errs = DeepValidate(map[any]nonEmptyString{math.NaN(): "", "x": ""})
+	if len(errs) != 2 {
+		t.Errorf("DeepValidate() errors = %q, want 2 errors", errorStrings(errs))
+	}
 }
 
 // countingValidator counts the calls of its value receiver Valid method.

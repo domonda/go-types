@@ -430,11 +430,14 @@ func TestMessage_NewReplyMessage_Subject(t *testing.T) {
 // References of a reply are the parent's References followed by the
 // parent's Message-ID. Mail clients use the full chain to thread a
 // conversation, with only the parent's Message-ID a reply to a reply
-// loses its connection to the start of the thread.
+// loses its connection to the start of the thread. A parent without
+// References but with an In-Reply-To of a single message ID gets that ID
+// in place of its References.
 func TestMessage_NewReplyMessage_References(t *testing.T) {
 	tests := []struct {
 		name       string
 		messageID  nullable.TrimmedString
+		inReplyTo  nullable.TrimmedString
 		references nullable.TrimmedString
 		want       nullable.TrimmedString
 	}{
@@ -444,11 +447,17 @@ func TestMessage_NewReplyMessage_References(t *testing.T) {
 		{name: "comma separated parent", messageID: "<c@example.com>", references: "<a@example.com>, <b@example.com>", want: "<a@example.com> <b@example.com> <c@example.com>"},
 		{name: "parent without Message-ID", references: "<a@example.com> <b@example.com>", want: "<a@example.com> <b@example.com>"},
 		{name: "parent without IDs", want: ""},
+		{name: "parent with In-Reply-To only", messageID: "<b@example.com>", inReplyTo: "<a@example.com>", want: "<a@example.com> <b@example.com>"},
+		{name: "parent with In-Reply-To only, without Message-ID", inReplyTo: "<a@example.com>", want: "<a@example.com>"},
+		{name: "References win over In-Reply-To", messageID: "<c@example.com>", inReplyTo: "<b@example.com>", references: "<a@example.com> <b@example.com>", want: "<a@example.com> <b@example.com> <c@example.com>"},
+		// RFC 5322 3.6.4 only uses an In-Reply-To with a single message ID
+		{name: "parent with multiple In-Reply-To IDs", messageID: "<c@example.com>", inReplyTo: "<a@example.com> <b@example.com>", want: "<c@example.com>"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			original := newOriginalMessage()
 			original.MessageID = tt.messageID
+			original.InReplyTo = tt.inReplyTo
 			original.References = tt.references
 			re, err := original.NewReplyMessage("me@example.com", "Thanks", "", false, replyTextTemplate, replyHTMLTemplate)
 			require.NoError(t, err)
@@ -635,6 +644,43 @@ func TestBuildRawMessage_RecipientHeadersOnce(t *testing.T) {
 	require.Equal(t, msg.To, parsed.To)
 	require.Equal(t, msg.Cc, parsed.Cc)
 	require.Equal(t, msg.Bcc, parsed.Bcc)
+}
+
+// TestBuildRawMessage_NonASCIIFromName protects that the From and Reply-To
+// addresses stay parseable when their display name needs RFC 2047
+// encoding. Written raw, the whole header value including the <address>
+// became one encoded-word and RFC 5322 parsers could not find the
+// address, so replies went nowhere.
+func TestBuildRawMessage_NonASCIIFromName(t *testing.T) {
+	msg := &email.Message{
+		From:    "Jörg Müller <joerg@example.com>",
+		ReplyTo: "Zoë Bäcker <zoe@example.com>",
+		To:      "to@example.com",
+		Body:    "Body",
+	}
+	raw, err := msg.BuildRawMessage()
+	require.NoError(t, err)
+
+	parsed, err := mail.ReadMessage(strings.NewReader(string(raw)))
+	require.NoError(t, err)
+	from, err := mail.ParseAddress(parsed.Header.Get("From"))
+	require.NoError(t, err)
+	require.Equal(t, "joerg@example.com", from.Address)
+	require.Equal(t, "Jörg Müller", from.Name)
+	replyTo, err := mail.ParseAddress(parsed.Header.Get("Reply-To"))
+	require.NoError(t, err)
+	require.Equal(t, "zoe@example.com", replyTo.Address)
+	require.Equal(t, "Zoë Bäcker", replyTo.Name)
+}
+
+// TestBuildRawMessage_NilAttachment protects that a JSON null in the
+// attachments array, which encoding/json decodes as a nil pointer,
+// returns an error instead of crashing the caller with a nil dereference.
+func TestBuildRawMessage_NilAttachment(t *testing.T) {
+	var msg email.Message
+	require.NoError(t, json.Unmarshal([]byte(`{"from":"from@example.com","to":"to@example.com","attachments":[null]}`), &msg))
+	_, err := msg.BuildRawMessage()
+	require.Error(t, err)
 }
 
 // TestBuildRawMessage_InlineParts protects that inline parts like images

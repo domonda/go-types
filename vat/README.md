@@ -95,7 +95,7 @@ The formats and checksum functions live in `formats.go` (`idRegex` and `checkSum
 | `Nullable()`                   | Plain conversion to `NullableID`, no normalization. |
 | `ScanString(source, validate)` | Assigns the canonical `source`. If that fails, returns the error when `validate` is true, else assigns `source` as is. |
 
-Implements: `fmt.Stringer`, `database/sql.Scanner`, `database/sql/driver.Valuer`, `strfmt.Scannable`, `types.NormalizableValidator[ID]` and `JSONSchema()` (string with `minLength` 4 and `maxLength` 16). `ID` has no JSON methods.
+Implements: `fmt.Stringer`, `database/sql.Scanner`, `database/sql/driver.Valuer`, `strfmt.Scannable`, `types.NormalizableValidator[ID]` and `JSONSchema()` (string with `minLength` 4 and no `maxLength`, because formatted IDs can be longer than `IDMaxLength`). `ID` has no JSON methods.
 
 ## NullableID
 
@@ -168,7 +168,7 @@ var IDFinder idFinder
 - **Greece uses `EL`.** `"GR094019245"` fails with "unsupported country code", `"EL094019245"` is valid. `CountryCode()` returns `country.EL`, which `country.Code.IsEU` counts as an EU member.
 - **Only listed prefixes.** A valid country without a format, like `US`, is rejected.
 - **Format only for some countries.** CH, IE, IS, LI, NL, SM and `EU` have no checksum; CZ (9 and 10 digits), FR (letter keys), GB/XI (`GD`, `HA`) and LV (natural persons) are checked partly. A well-formed made-up number passes there.
-- **The length limit applies after normalization.** `"AT - U - 1022 - 3006"` (20 characters) is valid. The JSON schema puts `maxLength` 16 on the raw string, so a schema validator rejects input that `Normalized` accepts.
+- **The length limit applies after normalization.** `"AT - U - 1022 - 3006"` (20 characters) is valid. That's why the JSON schema has no `maxLength`: it would reject formatted IDs that `Normalized` accepts and that are written to JSON unnormalized.
 - **`"No."` is not Norway.** Input starting with `"No."` or `"no."` is rejected, because it is far more often the English abbreviation for number.
 - **`ID` is not nullable.** `ID("").Value()` writes an empty string, and `Scan(nil)` returns an error. Use `NullableID` for nullable columns.
 - **Output is only partly normalized.** `Value` writes valid IDs canonical, but JSON encodes the raw string for both types. Normalize before encoding if consumers expect the canonical form.

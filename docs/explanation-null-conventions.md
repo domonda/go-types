@@ -358,10 +358,11 @@ it by its underlying kind.
 The convention is not applied evenly yet. These differences exist in the
 current code:
 
-- **`Scan("")` of nullable strings.** `nullable.NonEmptyString.Scan("")` and
-  `email.NullableAddress.Scan("")` return an error (`can't scan empty string as
-  nullable.NonEmptyString`), while `nullable.TrimmedString.Scan("")` and the
-  other string based `NullableX` types store null.
+- **`Scan("")` of nullable strings.** `nullable.NonEmptyString.Scan("")`
+  returns an error (`can't scan empty string as nullable.NonEmptyString`),
+  while `nullable.TrimmedString.Scan("")` and the other string based
+  `NullableX` types, including `email.NullableAddress` and
+  `email.NullableAddressList`, store null.
 - **What a non-nullable zero value writes.** `date.Date`, `country.Code`,
   `language.Code`, `money.Currency` and `account.Number` write SQL NULL.
   `bank.IBAN`, `bank.BIC`, `vat.ID` and `notnull.TrimmedString` write `''`.

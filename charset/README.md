@@ -94,7 +94,7 @@ where `FF FE` can only mean UTF-16LE.
 
 ## UTF-16 and UTF-32 functions
 
-Lower level functions for code that doesn't need the `Encoding` interface. The decoders strip a leading BOM that matches `byteOrder` and return an error like `expected UTF-16LE BOM but got UTF-16BE` for any other BOM. The encoders never write a BOM.
+Lower level functions for code that doesn't need the `Encoding` interface. The decoders strip a leading BOM that matches `byteOrder` and return an error like `expected UTF-16LE BOM but got UTF-16BE` for any other BOM, unless its bytes are valid text in the expected encoding: the UTF-8 BOM bytes `EF BB BF` in UTF-16, or the UTF-16LE BOM bytes `FF FE` of U+FFEFF in UTF-32LE. The encoders never write a BOM.
 
 | Function                                          | Description                                        |
 |---------------------------------------------------|----------------------------------------------------|

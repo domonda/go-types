@@ -49,7 +49,7 @@ func TestNullableNumber_Valid(t *testing.T) {
 	assert.NoError(t, NumberNull.Validate())
 	assert.True(t, NullableNumber("AT-1").Valid())
 	assert.NoError(t, NullableNumber("AT-1").Validate())
-	assert.False(t, NullableNumber(" ").Valid(), "only the empty string is NULL")
+	assert.True(t, NullableNumber(" ").Valid(), "a whitespace-only value is NULL, see IsNull")
 	assert.ErrorIs(t, NullableNumber("-1").Validate(), ErrInvalidNumber)
 }
 
@@ -316,13 +316,40 @@ func TestNullableNumber_XML(t *testing.T) {
 // Value and MarshalJSON write a whitespace-only NullableNumber as NULL and
 // null, so IsNull must agree, or Get would return a number that is
 // stored as NULL.
+//
+// Every method must treat such a null like NumberNull: a null is valid
+// and converts to 0 or nil, it must not be reported as invalid. The
+// trimmed runes are those of strutil.TrimSpace like for the other nullable
+// types, which includes zero-width characters.
 func TestNullableNumber_WhitespaceIsNull(t *testing.T) {
-	n := NullableNumber("  ")
-	assert.True(t, n.IsNull())
-	assert.False(t, n.IsNotNull())
-	v, err := n.Value()
-	require.NoError(t, err)
-	assert.Nil(t, v)
+	for _, n := range []NullableNumber{"  ", "\t\n", "\u200b", " \u00a0 "} {
+		t.Run(string(n), func(t *testing.T) {
+			assert.True(t, n.IsNull())
+			assert.False(t, n.IsNotNull())
+			v, err := n.Value()
+			require.NoError(t, err)
+			assert.Nil(t, v)
+			j, err := json.Marshal(n)
+			require.NoError(t, err)
+			assert.Equal(t, `null`, string(j))
+
+			assert.True(t, n.Valid(), "Valid")
+			assert.NoError(t, n.Validate(), "Validate")
+			u, err := n.Uint()
+			assert.NoError(t, err, "Uint")
+			assert.Zero(t, u, "Uint")
+			up, err := n.UintPtr()
+			assert.NoError(t, err, "UintPtr")
+			assert.Nil(t, up, "UintPtr")
+			i, err := n.Int()
+			assert.NoError(t, err, "Int")
+			assert.Zero(t, i, "Int")
+
+			from, err := NullableNumberFrom(string(n))
+			require.NoError(t, err, "NullableNumberFrom")
+			assert.Equal(t, NumberNull, from, "NullableNumberFrom")
+		})
+	}
 }
 
 // Scan(int64(0)) and NullableNumberFromUint(0) give NumberNull, so the JSON

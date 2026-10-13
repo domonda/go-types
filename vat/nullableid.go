@@ -1,7 +1,6 @@
 package vat
 
 import (
-	"bytes"
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
@@ -9,6 +8,7 @@ import (
 	"github.com/invopop/jsonschema"
 
 	"github.com/domonda/go-types/country"
+	"github.com/domonda/go-types/internal"
 	"github.com/domonda/go-types/nullable"
 	"github.com/domonda/go-types/strutil"
 )
@@ -249,26 +249,21 @@ func (n NullableID) MarshalJSON() ([]byte, error) {
 // A JSON string is assigned unchanged, without normalization or validation,
 // like encoding/json does for a string type, any other JSON value is an error.
 func (n *NullableID) UnmarshalJSON(data []byte) error {
-	if bytes.Equal(data, []byte(`null`)) {
-		n.SetNull()
-		return nil
-	}
-	return json.Unmarshal(data, (*string)(n))
+	return internal.UnmarshalJSONStringOrNull(n, data)
 }
 
 // JSONSchema returns the JSON schema for NullableID, describing it with the
 // title "Nullable Value Added Tax ID" as a oneOf that accepts either a string
-// with the package-defined length constraints or a JSON null value.
+// with the package-defined minimum length or a JSON null value.
 func (NullableID) JSONSchema() *jsonschema.Schema {
+	// No MaxLength like for ID.JSONSchema
 	minLength := uint64(IDMinLength)
-	maxLength := uint64(IDMaxLength)
 	return &jsonschema.Schema{
 		Title: "Nullable Value Added Tax ID",
 		OneOf: []*jsonschema.Schema{
 			{
 				Type:      "string",
 				MinLength: &minLength,
-				MaxLength: &maxLength,
 			},
 			{Type: "null"},
 		},

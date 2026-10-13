@@ -11,22 +11,22 @@ package: every listed behaviour is documented in the package READMEs.
 - [ ] **Tag `v1.0.0`.** No git tags exist yet. `VERSION` holds the first
       pre-release, `v1.0.0-beta.1`, to tag before the final release.
 - [ ] **One rule for empty input to a nullable type.**
-      `Scan("")` returns an error for `nullable.NonEmptyString` and
-      `email.NullableAddress` but null for `nullable.TrimmedString` and
-      `account.NullableNumber`. JSON `""` is a present zero for
-      `money.NullableAmount`, `NullableDecimalAmount` and `NullableRate` but
-      an error for `NullableCentAmount` and `uu.NullableID`.
-      `uu.IDSlice.Scan("")` gives a nil slice, `uu.IDSet.Scan("")` an empty
-      non-nil set. Whitespace-only values are null for the country, vat,
-      bank, money, email address and date nullable types, but a real value
-      for `email.NullableAddressList`, `date.NullableYearMonth`,
-      `date.NullableYearQuarter` and `nullable.NonEmptyString`, and
-      `account.NullableNumber` reports one as not null while writing JSON
-      `null`. `email.NullableAddress.Scan("")` is an error while
-      `Scan("  ")` is null. `date.NullableDate` JSON strings are stored as
-      given while `Scan` normalizes them. Recommendation: empty and
-      whitespace-only input is null for every nullable type, because an
-      empty CSV cell or text column means "no value".
+      `Scan("")` returns an error for `nullable.NonEmptyString` but null for
+      `nullable.TrimmedString`, `email.NullableAddress`,
+      `email.NullableAddressList` and `account.NullableNumber`. JSON `""` is
+      a present zero for `money.NullableAmount`, `NullableDecimalAmount` and
+      `NullableRate` but an error for `NullableCentAmount` and
+      `uu.NullableID`. `uu.IDSlice.Scan("")` gives a nil slice,
+      `uu.IDSet.Scan("")` an empty non-nil set. Whitespace-only values are
+      null for the country, vat, bank, money, account number, email address
+      and date nullable types, but a real value for `date.NullableYearMonth`,
+      `date.NullableYearQuarter` and `nullable.NonEmptyString`.
+      `email.NullableAddressList.Scan("  ")` is null, but
+      `NullableAddressList("  ").IsNull()` is false. `date.NullableDate` JSON
+      strings are stored as given while `Scan` normalizes them.
+      Recommendation: empty and whitespace-only input is null for every
+      nullable type, because an empty CSV cell or text column means
+      "no value".
 - [ ] **One rule for what `Value` writes.** `country.Code` and `vat.ID` write
       their normalized form, `money.Currency`, `language.Code`, `bank.IBAN`
       and `bank.BIC` write the raw string. `String()` normalizes for all of
@@ -159,10 +159,11 @@ time.
       `GetEncoding("UTF-16")`, which writes a BOM. Delete the field, or set
       it for UTF-16.
 - [ ] **Error constructors.** The module calls `errors.New` and
-      `fmt.Errorf` about 340 times and go-errs `errs.New` twice, in
-      `email/message.go` and `email/parsetnef.go`. Decide whether the
+      `fmt.Errorf` about 340 times and go-errs `errs.New` four times, in
+      `email/message.go`, `email/parsetnef.go`, and the whitespace-only
+      errors of `AddressList.Scan` and `AddressSet.Scan`. Decide whether the
       module follows the go-errs rule. Recommendation: stay with the
-      standard library, the established pattern, and convert the two
+      standard library, the established pattern, and convert the four
       outliers.
 - [ ] **Commented-out code.** An old implementation after the `return` in
       `money.Amount.String`, old `From`/`ReplyTo` assignments in
@@ -178,6 +179,27 @@ time.
       metadata (`protects=… why_new=… seam=none`, "this branch changed").
       `charset/encoding_test.go` holds the tests of `utf16.go`, `utf32.go`
       and `bom.go`, some of them twice.
+- [ ] **Quadratic `email` address parsing.** `ParseAddressList` copies the
+      whole list into every per-element error and keeps all of them
+      (`email/parseaddress.go`, the two `errList = append` lines), and
+      `parseAddress` recurses once per address-like token, matching
+      `nameAddressRegexp` against the whole rest each time. Measured in the
+      2026-10-12 review: an invalid 40 KB list builds a 481 MB error in 9 s,
+      a 32 KB address without commas takes 3.5 s, and it is reachable from
+      `Address.Validate`, `AddressList.Validate` and the `Normalized` and
+      `Split` methods. Cap and truncate the collected errors, make the
+      duplicated-address case a single second attempt instead of a
+      recursion, and reject inputs beyond a few KB.
+- [ ] **Fast paths for the exact money and date math.** The exact
+      rewrites made hot paths slower, measured against master in the
+      2026-10-12 review: `CentAmount.MultipliedByRate`, `DividedByRate` and
+      `Percentage` 2.4 ns to about 630 ns with about 20 allocations
+      (`big.Rat`), `float.RoundToDecimals` and so `Amount.RoundToCents`,
+      `Cents` and `WithinOneCent` 2.5 ns to about 185 ns (a
+      `FormatFloat`/`ParseFloat` round trip). Keep the exact results:
+      int128 arithmetic with `math/bits` for the rates like
+      `DecimalAmount.Mul`, and `math.Round(f*pow)/pow` for rounding unless
+      the scaled value is within a few ulps of a tie.
 
 ## After v1.0
 

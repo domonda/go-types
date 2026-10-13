@@ -73,9 +73,10 @@ If a type implements both interfaces, `Validate()` wins and `Valid()` is not
 called.
 
 A pointer receiver (`func (l *Line) Validate() error`) also works with
-`types.DeepValidate`, which validates through a pointer when only the pointer
-type has the method. `types.Validate(line)` with a value does not find a
-pointer receiver method; pass `&line`.
+`types.DeepValidate`, which validates fields, elements and map values through
+a pointer when only the pointer type has the method. `types.Validate(line)` and
+`types.DeepValidate(line)` with a value don't find a pointer receiver method
+of `line` itself; pass `&line`.
 
 ### 3. Build the struct from validatable fields
 
@@ -340,11 +341,11 @@ cross-field rules in the struct's `Validate`, as in step 3.
 `types.CombinedValidatErr` wrap even a single error with `errors.Join`.
 Compare with `errors.Is(err, ErrSomething)`.
 
-**A `language.Code` field with the value `"EN"` passes, but `Valid()` is
-false.**
-`Validate()` normalizes first and accepts `"EN"`, `"eng"` and `"en-US"`, while
-`Valid()` is a strict lookup. Validation does not change the value: store the
-result of `Normalized()` if you need `"en"`.
+**A `language.Code` field with the value `"EN"` fails with `invalid
+language.Code: "EN"`.**
+`Valid()` and `Validate()` only accept the canonical lower-case code, because
+`Value()` stores the code unchanged. `Normalized()` accepts `"EN"`, `"eng"` and
+`"en-US"`: store its result before validating.
 
 **A `bank.BIC` with spaces fails with `invalid BIC "BKAU AT WW" length: 10`.**
 `bank.BIC.Validate` does not remove whitespace, `bank.BIC.Normalized` does.

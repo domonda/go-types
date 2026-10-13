@@ -210,6 +210,11 @@ func PeriodRange(period string) (from, until Date, err error) {
 		if err != nil || week < 1 || week > 53 {
 			return "", "", fmt.Errorf("invalid period format, can't parse week: %q", period)
 		}
+		// December 28th is always in the last ISO week of its year,
+		// a year with 52 weeks has no week 53
+		if _, lastWeek := time.Date(year, 12, 28, 0, 0, 0, 0, time.UTC).ISOWeek(); week > lastWeek {
+			return "", "", fmt.Errorf("invalid period, year %d has no ISO week %d: %q", year, week, period)
+		}
 		from, until = YearWeekRange(year, week)
 		return from, until, nil
 
@@ -353,23 +358,25 @@ func (date Date) String() string {
 // WithinIncl returns true if the date is within the inclusive range [from, until].
 // Returns false if any of the dates is not valid, see After.
 func (date Date) WithinIncl(from, until Date) bool {
-	if !date.Valid() || !from.Valid() || !until.Valid() {
+	t, valid := date.midnightInLocation(time.UTC)
+	tFrom, fromValid := from.midnightInLocation(time.UTC)
+	tUntil, untilValid := until.midnightInLocation(time.UTC)
+	if !valid || !fromValid || !untilValid {
 		return false
 	}
-	t := date.MidnightUTC()
-	tFrom := from.MidnightUTC()
-	tUntil := until.MidnightUTC()
 	return (t.Equal(tFrom) || t.After(tFrom)) && (t.Equal(tUntil) || t.Before(tUntil))
 }
 
 // BetweenExcl returns true if the date is strictly between (exclusive) after and before.
 // Returns false if any of the dates is not valid, see After.
 func (date Date) BetweenExcl(after, before Date) bool {
-	if !date.Valid() || !after.Valid() || !before.Valid() {
+	t, valid := date.midnightInLocation(time.UTC)
+	tAfter, afterValid := after.midnightInLocation(time.UTC)
+	tBefore, beforeValid := before.midnightInLocation(time.UTC)
+	if !valid || !afterValid || !beforeValid {
 		return false
 	}
-	t := date.MidnightUTC()
-	return t.After(after.MidnightUTC()) && t.Before(before.MidnightUTC())
+	return t.After(tAfter) && t.Before(tBefore)
 }
 
 // Nullable returns the date as a NullableDate.
@@ -446,19 +453,31 @@ func (date Date) Midnight() time.Time {
 // Returns a zero time.Time if the date is zero or not valid.
 // A valid date that is not in the normalized form is normalized first.
 func (date Date) MidnightInLocation(loc *time.Location) time.Time {
-	if date.IsZero() {
-		return time.Time{}
-	}
+	t, _ := date.midnightInLocation(loc)
+	return t
+}
+
+// midnightInLocation returns MidnightInLocation(loc) and Valid()
+// with a single parse for a date in the normalized form.
+func (date Date) midnightInLocation(loc *time.Location) (t time.Time, valid bool) {
 	t, err := time.ParseInLocation(Layout, string(date), loc)
-	if err == nil {
-		return t
-	}
-	// Not in the normalized YYYY-MM-DD form, but might still be valid
-	norm, err := date.Normalized()
 	if err != nil {
-		return time.Time{}
+		// Not in the normalized YYYY-MM-DD form, but might still be valid
+		norm, err := date.Normalized()
+		if err != nil {
+			return time.Time{}, false
+		}
+		return norm.midnightInLocation(loc)
 	}
-	return norm.MidnightInLocation(loc)
+	// time.Parse accepts the year 0 that Normalized rejects
+	if !validYear(t.Year()) {
+		return time.Time{}, false
+	}
+	if date.IsZero() {
+		// "0001-01-01" is valid but zero
+		return time.Time{}, true
+	}
+	return t, true
 }
 
 // Format formats the date using the given layout string (see time.Time.Format).
@@ -521,7 +540,9 @@ func (date Date) Compare(other Date) int {
 // so After returns false if either date is not valid,
 // like NormalizedEqual returns false for an invalid date.
 func (date Date) After(other Date) bool {
-	return date.Valid() && other.Valid() && date.MidnightUTC().After(other.MidnightUTC())
+	t, valid := date.midnightInLocation(time.UTC)
+	tOther, otherValid := other.midnightInLocation(time.UTC)
+	return valid && otherValid && t.After(tOther)
 }
 
 // EqualOrAfter returns true if the date is equal to or after the other date.
@@ -532,7 +553,9 @@ func (date Date) EqualOrAfter(other Date) bool {
 // Before returns true if the date is before the other date.
 // Returns false if either date is not valid, see After.
 func (date Date) Before(other Date) bool {
-	return date.Valid() && other.Valid() && date.MidnightUTC().Before(other.MidnightUTC())
+	t, valid := date.midnightInLocation(time.UTC)
+	tOther, otherValid := other.midnightInLocation(time.UTC)
+	return valid && otherValid && t.Before(tOther)
 }
 
 // EqualOrBefore returns true if the date is equal to or before the other date.
@@ -543,13 +566,15 @@ func (date Date) EqualOrBefore(other Date) bool {
 // AfterTime returns true if midnight of the date (in the location of the passed time) is after the time.
 // Returns false if the date is not valid, see After.
 func (date Date) AfterTime(other time.Time) bool {
-	return date.Valid() && date.MidnightInLocation(other.Location()).After(other)
+	t, valid := date.midnightInLocation(other.Location())
+	return valid && t.After(other)
 }
 
 // BeforeTime returns true if midnight of the date (in the location of the passed time) is before the time.
 // Returns false if the date is not valid, see After.
 func (date Date) BeforeTime(other time.Time) bool {
-	return date.Valid() && date.MidnightInLocation(other.Location()).Before(other)
+	t, valid := date.midnightInLocation(other.Location())
+	return valid && t.Before(other)
 }
 
 // AddDate returns a new date with the specified years, months, and days added.
@@ -890,10 +915,10 @@ func normalizeDate(str string, langHint language.Code) (string, bool, error) {
 		}
 		// Strip English ordinal suffixes (1st, 2nd, 3rd, 4th, 21st,
 		// 22nd, 23rd, 31st, …). The suffix is always at the end and
-		// the preceding characters must be digits — verified via the
-		// validDay()/validMonth() checks downstream.
+		// the preceding characters must be digits, so that a month
+		// name like "august" keeps its "st".
 		for _, suf := range [4]string{"st", "nd", "rd", "th"} {
-			if before, ok := strings.CutSuffix(parts[i], suf); ok && len(before) > 0 {
+			if before, ok := strings.CutSuffix(parts[i], suf); ok && before != "" && strings.Trim(before, "0123456789") == "" {
 				parts[i] = before
 				if len(parts[i]) == 1 {
 					parts[i] = "0" + parts[i]
@@ -1001,7 +1026,12 @@ func normalizeDate(str string, langHint language.Code) (string, bool, error) {
 		// An ordinal suffix in the input marks the day explicitly,
 		// so the language hint only applies without one.
 		ambiguous := validMonth(val0) && validMonth(val1)
-		if monthMustBeFirst || (ambiguous && (dayHint == 1 || (dayHint == -1 && langHint == "en"))) {
+		monthFirst := monthMustBeFirst || (ambiguous && (dayHint == 1 || (dayHint == -1 && langHint == "en")))
+		// A number with an ordinal suffix can't be the month
+		if (monthFirst && dayHint == 0) || (!monthFirst && dayHint == 1) {
+			return "", false, fmt.Errorf("invalid date: %q", str)
+		}
+		if monthFirst {
 			// MM DD YYYY
 			parts[0], parts[1] = parts[1], parts[0]
 			val0, val1 = val1, val0

@@ -1,6 +1,7 @@
 package vat
 
 import (
+	"encoding/json"
 	"slices"
 	"strings"
 	"testing"
@@ -510,14 +511,22 @@ func TestID_Value(t *testing.T) {
 	assert.Equal(t, "ATU10223006", v)
 }
 
-// The JSON schema limits must stay in sync with the length limits
-// that Normalized enforces, otherwise API validation and Go validation
-// would disagree.
+// The JSON schema must accept every valid ID as it is encoded as JSON,
+// otherwise API validation and Go validation would disagree.
+// The ID is encoded unnormalized, and IDMaxLength only limits
+// the length after removing whitespace and punctuation, so the schema
+// can't have a maximum length. Formatting only adds characters,
+// so the minimum length still holds.
 func TestID_JSONSchema(t *testing.T) {
 	s := ID("").JSONSchema()
 	assert.Equal(t, "string", s.Type)
 	require.NotNil(t, s.MinLength)
-	require.NotNil(t, s.MaxLength)
 	assert.Equal(t, uint64(IDMinLength), *s.MinLength)
-	assert.Equal(t, uint64(IDMaxLength), *s.MaxLength)
+	assert.Nil(t, s.MaxLength)
+
+	formatted := ID("NL 123 456 789 B 01")
+	require.True(t, formatted.Valid())
+	data, err := json.Marshal(formatted)
+	require.NoError(t, err)
+	assert.Greater(t, len(data)-2, IDMaxLength, "formatted ID is longer than IDMaxLength")
 }

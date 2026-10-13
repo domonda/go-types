@@ -1,15 +1,14 @@
 package email
 
 import (
-	"bytes"
 	"database/sql/driver"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/mail"
 
 	"github.com/invopop/jsonschema"
 
+	"github.com/domonda/go-types/internal"
 	"github.com/domonda/go-types/nullable"
 	"github.com/domonda/go-types/strutil"
 )
@@ -168,6 +167,7 @@ func (n *NullableAddress) SetNull() {
 }
 
 // Scan implements the database/sql.Scanner interface.
+// An empty or whitespace only string scans as null, see IsNull.
 func (n *NullableAddress) Scan(value any) error {
 	switch s := value.(type) {
 	case nil:
@@ -175,8 +175,9 @@ func (n *NullableAddress) Scan(value any) error {
 		return nil
 
 	case string:
-		if s == "" {
-			return errors.New("can't scan empty string as email.NullableAddress")
+		if NullableAddress(s).IsNull() {
+			n.SetNull()
+			return nil
 		}
 		*n = NullableAddress(s)
 		return nil
@@ -208,11 +209,7 @@ func (n *NullableAddress) UnmarshalText(text []byte) error {
 // setting the NullableAddress to null for the JSON null value
 // or an empty JSON string.
 func (n *NullableAddress) UnmarshalJSON(data []byte) error {
-	if bytes.Equal(data, []byte(`null`)) {
-		n.SetNull()
-		return nil
-	}
-	return json.Unmarshal(data, (*string)(n))
+	return internal.UnmarshalJSONStringOrNull(n, data)
 }
 
 // MarshalJSON implements the json.Marshaler interface

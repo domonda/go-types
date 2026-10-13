@@ -185,7 +185,7 @@ Implements: `sql.Scanner`, `driver.Valuer`, `json.Marshaler`, `json.Unmarshaler`
 | `ExtractBodyURLs(msg) strutil.StringSet`           | URLs starting with `http` found in `Body` and `BodyHTML`. |
 | `HTMLToPlaintext(html []byte, delimiter string) (string, error)` | Trimmed, non-empty text nodes joined with `delimiter`. On a parse error it returns the text so far with the error. |
 
-`NewReplyMessage` returns a message with `InReplyTo` set to the parent's `MessageID`, `InReplyToProviderID` to its `ProviderID`, `References` to the parent's References followed by its Message-ID (space separated), and `To` to the parent's `ReplyToAddress()`. The subject gets a `"Re: "` prefix unless it already starts with `Re:` in any case. `Body` is rendered from `textTempl` with `text/template`, `BodyHTML` from `htmlTempl` with `html/template`, the latter only if the parent has an HTML body or `replyHTML` is not empty. Both templates get a `ReplyTemplateData`:
+`NewReplyMessage` returns a message with `InReplyTo` set to the parent's `MessageID`, `InReplyToProviderID` to its `ProviderID`, `References` to the parent's References followed by its Message-ID (space separated), where a parent without References but with a single In-Reply-To ID contributes that ID, and `To` to the parent's `ReplyToAddress()`. The subject gets a `"Re: "` prefix unless it already starts with `Re:` in any case. `Body` is rendered from `textTempl` with `text/template`, `BodyHTML` from `htmlTempl` with `html/template`, the latter only if the parent has an HTML body or `replyHTML` is not empty. Both templates get a `ReplyTemplateData`:
 
 ```go
 type ReplyTemplateData struct {
@@ -198,7 +198,7 @@ type ReplyTemplateData struct {
 }
 ```
 
-`BuildRawMessage` writes `text/plain` and `text/html` bodies (as `multipart/alternative` if both exist), attachments with `Inline` set as inline parts with their Content-ID inside `multipart/related`, and all other attachments with an attachment disposition inside `multipart/mixed`. `To`, `Cc`, and `Bcc` are each written once with all addresses comma separated, `Delivered-To` once per address, then all `ExtraHeader` values.
+`BuildRawMessage` writes `text/plain` and `text/html` bodies (as `multipart/alternative` if both exist), attachments with `Inline` set as inline parts with their Content-ID inside `multipart/related`, and all other attachments with an attachment disposition inside `multipart/mixed`. `From`, `Reply-To`, `To`, `Cc`, and `Bcc` are written normalized, so a non-ASCII display name is RFC 2047 encoded without the address. `To`, `Cc`, and `Bcc` are each written once with all addresses comma separated, `Delivered-To` once per address, then all `ExtraHeader` values.
 
 ## Parsing messages
 
@@ -266,8 +266,8 @@ None of the `Scan` or `Unmarshal*` methods validate or normalize.
 | `Address`             | No `Valuer`, `database/sql` writes the string, `""` as `""` | No `Scanner`, `database/sql` assigns `string` and `[]byte`, NULL is an error | Plain string, `""` as `""`                         | No methods                                         |
 | `AddressList`         | No `Valuer`, `database/sql` writes the string      | `string` or `[]byte`: a `{...}` PostgreSQL array literal is decoded, elements trimmed, empty ones skipped, joined with `", "` (so `{}` gives `""`). Any other string trimmed. NULL, `""` and whitespace only are errors. | Plain string                                       | No methods                                         |
 | `AddressSet`          | nil: NULL. Empty: `{}`. Else sorted array literal `{"a@example.com","b@example.com"}` | NULL: nil set. `{...}` array literal: elements trimmed, empty ones skipped, a `NULL` element or a nested array is an error. Any other string: a single element set, trimmed. `""` and whitespace only are errors. `[]byte` like `string`. | No methods: nil is `null`, a set is a JSON object `{"a@example.com":{}}`, which also unmarshals | No methods                                         |
-| `NullableAddress`     | Null (`""` or whitespace only): NULL. Else the string | NULL: null. A non-empty `string` or `[]byte` as is. `""` is an error. | Null marshals as `null`. `null` and `""` unmarshal to null | `UnmarshalText` assigns the text as is, no `MarshalText` |
-| `NullableAddressList` | `""`: NULL. Else the string                        | NULL: null. `string` and `[]byte` like `AddressList`. `""` and whitespace only are errors. | `""` marshals as `null`. `null` and `""` unmarshal to null | `UnmarshalText` assigns the text as is, no `MarshalText` |
+| `NullableAddress`     | Null (`""` or whitespace only): NULL. Else the string | NULL, `""` and whitespace only: null. Any other `string` or `[]byte` as is. | Null marshals as `null`. `null` and `""` unmarshal to null | `UnmarshalText` assigns the text as is, no `MarshalText` |
+| `NullableAddressList` | `""`: NULL. Else the string                        | NULL, `""` and whitespace only: null. Other `string` and `[]byte` like `AddressList`. | `""` marshals as `null`. `null` and `""` unmarshal to null | `UnmarshalText` assigns the text as is, no `MarshalText` |
 
 The array literals written by `AddressSet` and read by the `Scan` methods of `AddressSet`, `AddressList`, and `NullableAddressList` need PostgreSQL or an array-compatible database like CockroachDB or YugabyteDB. `NullableAddressList.Value` writes a plain string that works with any database.
 
@@ -279,13 +279,13 @@ The array literals written by `AddressSet` and read by the `Scan` methods of `Ad
 - **A top level domain of two or more ASCII letters is required.** `user@example` and IP literals like `user@[192.0.2.1]` are invalid.
 - **`AddressRegexp` is not anchored.** `AddressRegexp.MatchString("xx a@b.com yy")` is true. Use `Address.Validate` to validate.
 - **`DomainPart` does not parse.** `Address("John <J@Example.COM>").DomainPart()` is `Example.COM`. Call it on a normalized address before looking it up in `ProviderDomains()`.
-- **Empty strings in SQL.** `AddressList.Scan`, `NullableAddress.Scan`, and `NullableAddressList.Scan` reject `""`. Store NULL instead of `""` (the nullable `Value` methods do).
+- **Empty strings in SQL.** `AddressList.Scan` and `AddressSet.Scan` reject `""` and whitespace only strings, `NullableAddress.Scan` and `NullableAddressList.Scan` read them as null. Store NULL instead of `""` (the nullable `Value` methods do).
 - **`AddressSet` is a plain map for JSON and iteration.** `json.Marshal` writes `{"a@example.com":{}}`, `All` and `range` iterate in random order. Use `Sorted`, `Strings`, or `AddressList` for a stable order.
 - **A nil `AddressSet` panics on `Insert`, `InsertAll`, `UnionWith`, and `SymmetricDifferenceWith`**, like a nil map assignment. Use `Add` and `AddSet` on fields that may be nil.
 - **Errors carry the raw message.** `ParseMessage`, `ParseMIMEMessage`, `ParseMIMEMessageBytes`, `ParseTNEFMessageBytes`, `NewReplyMessage`, and `BuildRawMessage` wrap errors with `errs.WrapWithFuncParams` from [go-errs](https://github.com/domonda/go-errs). `err.Error()` contains the call stack with the passed arguments, for the parse functions the raw message bytes, cut at `errs.FormatParamMaxLen` (5000 bytes by default) per argument and repeated for every wrapping function. This also applies to the joined header errors returned together with a usable message. `ParseAddressList` errors contain the whole list. Don't log these errors where message content must not appear.
 - **Named time zones in `Date`.** Zone abbreviations are parsed with `time.Parse`, which only knows `UTC` and the abbreviations of the local time zone. Others get offset zero: `Mon, 2 Jan 2006 15:04:05 EST` parses as `15:04:05 +0000 EST`.
 - **`ParseMessage` falls back to MIME.** Data that is not detected as JSON or TNEF is parsed as MIME. A truncated JSON document like `{"subject":"x"` returns a mostly empty, non-nil message with a `From` error instead of a JSON syntax error.
-- **`BuildRawMessage` writes `Bcc`.** Remove `Bcc` before encoding a message for the visible recipients. A missing `Date` is written as the current time, and an unparsable entry in `To`, `Cc`, `Bcc`, or `DeliveredTo` fails the whole build.
+- **`BuildRawMessage` writes `Bcc`.** Remove `Bcc` before encoding a message for the visible recipients. A missing `Date` is written as the current time, and an unparsable `From` or `ReplyTo`, an unparsable entry in `To`, `Cc`, `Bcc`, or `DeliveredTo`, or a nil attachment fails the whole build.
 - **Reply templates are not escaped.** `ReplyTemplateData.BodyHTML` and `ReplyHTML` are `template.HTML`, so `html/template` inserts them as is, including a plain text body converted with `<br>`.
 - **`NewReplyMessage` with `keepAttachments` shares** the parent's `Attachments` slice and its `*Attachment` values.
 - **TNEF attachments have no `ContentType` or `ContentID`.** Only `NewAttachment` detects the content type and creates a Content-ID.

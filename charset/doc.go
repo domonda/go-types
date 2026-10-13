@@ -18,7 +18,10 @@
 // Except for the IANA "UTF-16" encoding, the encoders don't write a BOM,
 // prepend the result of [Encoding.BOM] if the receiver needs one.
 // The UTF decoders strip a leading BOM that matches the expected encoding
-// and return an error for any other BOM.
+// and return an error for any other BOM, except that the UTF-16 decoders
+// decode the bytes of the UTF-8 BOM as text, because they are valid UTF-16,
+// and the UTF-32 decoders decode the bytes of another BOM as text
+// if they form a valid character, like U+FFEFF in UTF-32LE.
 //
 // The subpackage findencoding prints a file decoded with all legacy
 // charsets to find its encoding by eye while debugging.

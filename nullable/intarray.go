@@ -4,9 +4,8 @@ import (
 	"database/sql/driver"
 	"fmt"
 	"slices"
-	"strconv"
-	"strings"
 
+	"github.com/domonda/go-types/internal"
 	"github.com/domonda/go-types/notnull"
 )
 
@@ -68,30 +67,12 @@ func (a *IntArray) Scan(src any) error {
 	return fmt.Errorf("can't convert %T to nullable.IntArray", src)
 }
 
-func (a *IntArray) scanBytes(src []byte) (err error) {
-	if len(src) == 0 {
-		// Reached only for a non-nil empty string or []byte,
-		// because Scan maps an untyped nil source to a nil slice.
-		*a = IntArray{}
-		return nil
+func (a *IntArray) scanBytes(src []byte) error {
+	array, err := internal.ParseIntArray(src, "nullable.IntArray")
+	if err != nil {
+		return err
 	}
-	if src[0] != '{' || src[len(src)-1] != '}' {
-		return fmt.Errorf("can't parse %q as nullable.IntArray", string(src))
-	}
-	if len(src) == 2 { // src == "{}"
-		*a = IntArray{}
-		return nil
-	}
-
-	elements := strings.Split(string(src[1:len(src)-1]), ",")
-	newArray := make(IntArray, len(elements))
-	for i, elem := range elements {
-		newArray[i], err = strconv.ParseInt(elem, 10, 64)
-		if err != nil {
-			return fmt.Errorf("can't parse %q as nullable.IntArray because of: %w", string(src), err)
-		}
-	}
-	*a = newArray
+	*a = array
 	return nil
 }
 

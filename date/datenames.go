@@ -51,6 +51,8 @@ var monthNameMap = map[string]int{
 	"february": 2,
 	"févr":     2, // French (février)
 	"fevr":     2,
+	"fév":      2,
+	"fev":      2,
 	"février":  2,
 	"fevrier":  2,
 	"febbraio": 2, // Italian
@@ -112,6 +114,7 @@ var monthNameMap = map[string]int{
 	"julj":    7,
 	"jul1":    7,
 	"juil":    7, // French (juillet)
+	"juill":   7,
 	"juillet": 7,
 	"lug":     7, // Italian (luglio)
 	"luglio":  7,

@@ -24,6 +24,8 @@ import (
 // the binary value 1.00499999999999989342 to "1.00" and the tie 2.5 to even.
 // The special precision -1 uses the smallest number of digits
 // necessary such that ParseFloat will return f exactly.
+// Unlike by strconv.FormatFloat, negative zero and negative values that
+// round to zero are formatted without a minus sign, like "0.00".
 // If padPrecision is true, the fractional part is kept at exactly precision
 // digits, padding the end with '0' characters when needed.
 // If padPrecision is false, trailing fractional zeros are trimmed to return
@@ -52,6 +54,11 @@ func Format[T ~float32 | ~float64](f T, thousandsSep, decimalSep rune, precision
 	}
 	if precision >= 0 {
 		str = roundFormatted(str, precision)
+	}
+	// Negative zero and negative values rounded to zero are formatted
+	// without a sign, because "-0.00" is not a different number than "0.00"
+	if str[0] == '-' && strings.Trim(str[1:], "0.") == "" {
+		str = str[1:]
 	}
 
 	// With a non-negative precision str has exactly precision fractional

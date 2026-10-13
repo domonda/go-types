@@ -1,7 +1,6 @@
 package date
 
 import (
-	"bytes"
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
@@ -10,6 +9,7 @@ import (
 
 	"github.com/invopop/jsonschema"
 
+	"github.com/domonda/go-types/internal"
 	"github.com/domonda/go-types/language"
 	"github.com/domonda/go-types/nullable"
 	"github.com/domonda/go-types/strutil"
@@ -272,11 +272,11 @@ func (n NullableDate) Compare(other NullableDate) int {
 // and a null date is never after any date.
 // Returns false if either date is not null and not valid, see Date.After.
 func (n NullableDate) After(other NullableDate) bool {
-	if n.IsNull() || !n.Valid() || !other.Valid() {
+	if n.IsNull() {
 		return false
 	}
 	if other.IsNull() {
-		return true
+		return Date(n).Valid()
 	}
 	return Date(n).After(Date(other))
 }
@@ -290,11 +290,11 @@ func (n NullableDate) EqualOrAfter(other NullableDate) bool {
 // A null date is always before any non-null date.
 // Returns false if either date is not null and not valid, see Date.After.
 func (n NullableDate) Before(other NullableDate) bool {
-	if other.IsNull() || !n.Valid() || !other.Valid() {
+	if other.IsNull() {
 		return false
 	}
 	if n.IsNull() {
-		return true
+		return Date(other).Valid()
 	}
 	return Date(n).Before(Date(other))
 }
@@ -575,11 +575,11 @@ func (n NullableDate) BeforeTodayInUTC() bool {
 }
 
 // Format returns n.MidnightUTC().Format(layout),
-// or an empty string if n is Null or layout is an empty string.
+// or an empty string if n is null (see IsNull) or layout is an empty string.
 // If layout equals Layout constant, returns the normalized date
 // without a time conversion, or the date unchanged if it is not valid.
 func (n NullableDate) Format(layout string) string {
-	if n == Null || layout == "" {
+	if n.IsNull() || layout == "" {
 		return ""
 	}
 	if layout == Layout {
@@ -650,11 +650,7 @@ func (n NullableDate) MarshalJSON() ([]byte, error) {
 // A JSON string is assigned unchanged, without normalization or validation,
 // like encoding/json does for a string type, any other JSON value is an error.
 func (n *NullableDate) UnmarshalJSON(data []byte) error {
-	if bytes.Equal(data, []byte(`null`)) {
-		n.SetNull()
-		return nil
-	}
-	return json.Unmarshal(data, (*string)(n))
+	return internal.UnmarshalJSONStringOrNull(n, data)
 }
 
 // JSONSchema returns the JSON schema definition for the NullableDate type.

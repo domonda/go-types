@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/domonda/go-types"
@@ -41,6 +42,8 @@ type ScanConfig struct {
 	// TimeFormats are the layouts that ParseTime tries in order to parse
 	// a source string as time.Time or nullable.Time, so they have to be
 	// ordered from the most to the least specific one.
+	// A layout with a zone abbreviation like "MST" but no numeric offset
+	// only matches abbreviations with a known offset, see ParseTime.
 	TimeFormats []string `json:"timeFormats"`
 
 	// AcceptedMoneyAmountDecimals are the numbers of decimal digits that
@@ -172,14 +175,37 @@ func (c *ScanConfig) IsNil(str string) bool {
 // ParseTime tries to parse str using each of the configured TimeFormats in order,
 // returning the first successfully parsed time.Time and ok=true.
 // If no format matches, it returns the zero time.Time and ok=false.
+//
+// A format with a zone abbreviation like "MST" but no numeric offset
+// does not match an abbreviation whose offset is unknown. time.Parse
+// would silently give it a zero offset, so "05.03.2024 10:00:00 CET"
+// would be 10:00 UTC on a server whose local zone has no "CET".
+// Known are "UTC", "GMT", and the abbreviations of time.Local.
+// "GMT+1" is not, because time.Parse ignores its offset for the instant.
 func (c *ScanConfig) ParseTime(str string) (t time.Time, ok bool) {
 	for _, format := range c.TimeFormats {
 		t, err := time.Parse(format, str)
-		if err == nil {
+		if err == nil && !hasUnknownZoneAbbreviation(format, t) {
 			return t, true
 		}
 	}
 	return time.Time{}, false
+}
+
+// hasUnknownZoneAbbreviation reports whether time.Parse put t in a
+// fabricated location because the zone abbreviation of layout is neither
+// "UTC", "GMT", nor known in time.Local. The instant of such a time is the
+// parsed wall clock in UTC, whatever the abbreviation, also for "GMT+1".
+func hasUnknownZoneAbbreviation(layout string, t time.Time) bool {
+	if !strings.Contains(layout, "MST") || strings.Contains(layout, "-07") || strings.Contains(layout, "Z07") {
+		// No abbreviation, or a numeric offset that time.Parse uses instead
+		return false
+	}
+	if loc := t.Location(); loc == time.UTC || loc == time.Local {
+		return false
+	}
+	name, _ := t.Zone()
+	return name != "GMT"
 }
 
 // scanNilStringToNonOptional applies the nil source string handling of Scan

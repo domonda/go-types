@@ -232,7 +232,13 @@ func isNilFunc(v any) bool {
 //   - calls [Validate] on v itself, then on every reachable element,
 //     through a pointer to the element if only the pointer type
 //     implements ValidatErr or Validator, like [LenString]
-//     (an element that is not addressable is copied for that),
+//     (an element that is not addressable is copied for that,
+//     but not v itself: like [Validate], v passed by value is validated
+//     with the methods of its own type, so a pointer receiver Validate
+//     calling DeepValidate(*receiver) does not call itself again;
+//     such a nested call has its own cycle detection though,
+//     and its errors are reported again by the descent of an outer
+//     DeepValidate, so prefer to check only cross-field rules in Validate),
 //   - follows pointers and interfaces to any depth
 //     (nil pointers, interfaces, and funcs stop the descent),
 //   - recurses into exported struct fields, including the exported fields
@@ -311,6 +317,10 @@ func deepValidate(v reflect.Value, visiting map[visitKey]struct{}, onError func(
 	// An interface is not validated itself, but its dynamic value
 	// after unwrapping it, which has the same methods.
 	validated := false
+	// The value passed to DeepValidate is not copied: a pointer receiver
+	// Validate calling DeepValidate(*receiver) would otherwise be called
+	// again for every copy without end
+	isPassedValue := len(path) == 0
 	for {
 		switch v.Kind() {
 		case reflect.Pointer, reflect.Interface, reflect.Func:
@@ -328,7 +338,7 @@ func deepValidate(v reflect.Value, visiting map[visitKey]struct{}, onError func(
 			}
 		}
 		if !validated && v.Kind() != reflect.Interface && v.CanInterface() {
-			err, isValidatable := TryValidate(validationTarget(v))
+			err, isValidatable := TryValidate(validationTarget(v, !isPassedValue))
 			if err != nil {
 				if len(path) > 0 {
 					err = fmt.Errorf("%s: %w", strings.Join(path, " -> "), err)
@@ -342,6 +352,7 @@ func deepValidate(v reflect.Value, visiting map[visitKey]struct{}, onError func(
 			break
 		}
 		v = v.Elem()
+		isPassedValue = false
 	}
 
 	switch v.Kind() {
@@ -361,11 +372,17 @@ func deepValidate(v reflect.Value, visiting map[visitKey]struct{}, onError func(
 			deepValidate(v.Field(i), visiting, onError, append(path, name)...)
 		}
 	case reflect.Map:
-		keys := v.MapKeys()
-		slices.SortFunc(keys, CompareReflectValue)
-		for _, key := range keys {
-			name := fmt.Sprintf("map value [%#v]", key.Interface())
-			deepValidate(v.MapIndex(key), visiting, onError, append(path, name)...)
+		// Iterate the entries instead of looking up the values by key,
+		// because the value of a NaN key can't be looked up
+		type entry struct{ key, value reflect.Value }
+		entries := make([]entry, 0, v.Len())
+		for iter := v.MapRange(); iter.Next(); {
+			entries = append(entries, entry{iter.Key(), iter.Value()})
+		}
+		slices.SortFunc(entries, func(a, b entry) int { return CompareReflectValue(a.key, b.key) })
+		for _, e := range entries {
+			name := fmt.Sprintf("map value [%#v]", e.key.Interface())
+			deepValidate(e.value, visiting, onError, append(path, name)...)
 		}
 	case reflect.Slice, reflect.Array:
 		for i := range v.Len() {
@@ -384,9 +401,10 @@ var (
 // which must be interfaceable and not an interface.
 // That is v itself, unless only the pointer type of v implements
 // ValidatErr, or only the pointer type implements Validator, in which
-// case it is a pointer to v, or to a copy of v if v is not addressable.
+// case it is a pointer to v, or to a copy of v if v is not addressable
+// and copyUnaddressable is true.
 // Like Validate, a ValidatErr is preferred over a Validator.
-func validationTarget(v reflect.Value) any {
+func validationTarget(v reflect.Value, copyUnaddressable bool) any {
 	val := v.Interface()
 	if _, ok := val.(ValidatErr); ok {
 		return val
@@ -399,6 +417,9 @@ func validationTarget(v reflect.Value) any {
 	}
 	if v.CanAddr() {
 		return v.Addr().Interface()
+	}
+	if !copyUnaddressable {
+		return val
 	}
 	ptr := reflect.New(v.Type())
 	ptr.Elem().Set(v)

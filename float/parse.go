@@ -230,7 +230,7 @@ func ParseDetails(str string) (f float64, thousandsSep, decimalSep rune, decimal
 				} else {
 					floatBuilder.WriteByte('.')
 					pointWritten = true
-					decimalSep = '.'
+					decimalSep = lastGroupingRune
 				}
 			}
 			floatBuilder.WriteString(trimmedSignsStr[lastNonDigitIndex+1 : i+1]) // i+1 to write including the 'e'

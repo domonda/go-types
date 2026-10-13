@@ -32,7 +32,7 @@ names := language.Code("").EnumStrings() // []string{"aa", "ab", "af", ...}
 | `ParseCode(str)`             | Canonical code from a code, tag or English language name, see below. |
 | `Normalized()`               | The canonical ISO 639-1 code for the input shapes listed below. On failure returns the input unchanged and an error that quotes it. |
 | `Valid()`                    | Strict: true only for a canonical lower-case ISO 639-1 code. `Code("EN").Valid()` is false. |
-| `Validate()`                 | Lenient: the error of `Normalized()`, or nil. `Code("EN").Validate()` is nil. |
+| `Validate()`                 | Strict like `Valid()`: an error that quotes the input, or nil. `Code("EN").Validate()` is an error. |
 | `ValidAndNormalized()`       | True only for a canonical code; same result as `Valid()`. |
 | `LanguageName()`             | English name from the ISO 639-1 table. Normalizes first; `""` if invalid. |
 | `String()`                   | Normalized code, or the raw string if invalid.     |
@@ -42,11 +42,11 @@ names := language.Code("").EnumStrings() // []string{"aa", "ab", "af", ...}
 
 Implements: `fmt.Stringer`, `database/sql.Scanner`, `database/sql/driver.Valuer`, `types.NormalizableValidator[Code]` and `JSONSchema()` (`{"type":"string","pattern":"^[a-z]{2}$"}`). `Code` has no JSON methods and no `ScanString` method, so it is not a `strfmt.Scannable`.
 
-`Valid`, `Validate` and `String` are hand-written and carry a `// #custom` marker, so go-enum keeps them. `Valid` is strict on purpose; `Validate` normalizes first like `country.Code` and `money.Currency`.
+`Valid`, `Validate` and `String` are hand-written and carry a `// #custom` marker, so go-enum keeps them. `Valid` and `Validate` are strict on purpose, unlike those of `country.Code` and `money.Currency`, because `Value` writes the code unchanged.
 
 ### Normalized input shapes
 
-`Normalized()`, and so `Validate()`, `LanguageName()` and `String()`, accept:
+`Normalized()`, and so `LanguageName()` and `String()`, accept:
 
 - ISO 639-1 codes in any case with surrounding whitespace: `"en"`, `"EN"`, `" en "`.
 - ISO 639-2/T and ISO 639-3 codes that have an ISO 639-1 equivalent: `"eng"`, `"deu"`, `"fra"`.
@@ -88,10 +88,10 @@ On failure it returns the input unchanged and the error of `Normalized`.
 
 ## Gotchas
 
-- **`Valid` is strict, `Validate` is lenient.** `Code("EN").Valid()` is false while `Code("EN").Validate()` is nil. `types.Validate`, `types.DeepValidate` and `strfmt` scanning call `Validate`, so they accept `"EN"`, `"eng"` and `"en-US"` and store them unchanged. Call `Normalized` before storing, or check `Valid` to require the canonical form.
+- **`Valid` and `Validate` are strict.** `Code("EN").Valid()` is false and `Code("EN").Validate()` is an error, so `types.Validate`, `types.DeepValidate` and `strfmt` scanning reject `"EN"`, `"eng"` and `"en-US"`. Call `Normalized` first to accept them.
 - **`Value` does not normalize.** `Code("EN")` is written to SQL as `"EN"`, unlike `country.Code`, which writes normalized codes.
 - **Optional languages.** `Null` is SQL NULL but fails `Validate`, so an empty language field fails `types.DeepValidate`. Use a `*language.Code` for optional fields or check for `Null` before validating.
-- **JSON is the plain string.** `Null` encodes as `""`, not `null`. The JSON schema pattern `^[a-z]{2}$` rejects `"EN"`, which `Validate` accepts.
+- **JSON is the plain string.** `Null` encodes as `""`, not `null`. The JSON schema pattern `^[a-z]{2}$` rejects `"EN"` like `Validate` does.
 - **English names must match a table entry.** `ParseCode("Greek")` fails, because the names are `"Greek, Modern (1453-)"` (ISO 639-1) and `"Modern Greek (1453-)"` (ISO 639-3).
 - **Names may list synonyms.** `language.CA.LanguageName()` is `"Catalan; Valencian"`, `language.NL.LanguageName()` is `"Dutch; Flemish"`.
 - **Tags lose detail.** `"zh-Hant"` and `"zh-Hans"` both normalize to `"zh"`.
@@ -187,7 +187,7 @@ See [Add an enum code](../docs/howto-add-an-enum-code.md) for the full steps.
 - [`country`](../country/README.md): ISO 3166-1 country codes, built the same way.
 - [`date`](../date/README.md): uses `Code` as a hint for ambiguous dates.
 - [`gen-lang-maps`](gen-lang-maps/README.md): the generator for the ISO 639-3 tables.
-- [Validation and normalization](../docs/explanation-validation-and-normalization.md): why `Valid` is strict and `Validate` is lenient here.
+- [Validation and normalization](../docs/explanation-validation-and-normalization.md): why `Valid` and `Validate` are strict here.
 - [Null conventions](../docs/explanation-null-conventions.md)
 - [Lenient parsing](../docs/explanation-lenient-parsing.md): language hints for dates.
 - [Add an enum code](../docs/howto-add-an-enum-code.md)

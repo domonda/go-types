@@ -47,7 +47,8 @@ func TestEncodeUTF16_ByteLayout(t *testing.T) {
 func TestUTF16Encoding_RoundTrip(t *testing.T) {
 	for _, byteOrder := range []binary.ByteOrder{binary.LittleEndian, binary.BigEndian} {
 		enc := UTF16Encoding(byteOrder)
-		for _, text := range []string{"a", "Grüße 100 €", "世界 😀 𝄞", "\x00leading NUL"} {
+		// "\uBBEF\uC5BF" and "\uEFBB\uBF41" encode to bytes starting with the UTF-8 BOM
+		for _, text := range []string{"a", "Grüße 100 €", "世界 😀 𝄞", "\x00leading NUL", "\uBBEF\uC5BFx", "\uEFBB\uBF41"} {
 			encoded, err := enc.Encode([]byte(text))
 			require.NoError(t, err)
 			assert.Len(t, encoded, 2*len(utf16.Encode([]rune(text))), "%s %q", enc, text)
@@ -112,6 +113,11 @@ func TestDecodeUTF16_BOMVariants(t *testing.T) {
 		{name: "BE opposite BOM", b: []byte{0xFF, 0xFE, 'h', 0}, byteOrder: binary.BigEndian, wantErr: "expected UTF-16BE BOM but got UTF-16LE"},
 		{name: "LE no BOM", b: []byte{'h', 0, 'i', 0}, byteOrder: binary.LittleEndian, want: "hi"},
 		{name: "BE no BOM", b: []byte{0, 'h', 0, 'i'}, byteOrder: binary.BigEndian, want: "hi"},
+		// Valid UTF-16 text can start with the bytes of the UTF-8 BOM EF BB BF,
+		// so they must not be mistaken for one: U+BBEF U+C5BF 'x' in LE
+		// and U+EFBB U+BF41 in BE, as EncodeUTF16 writes them.
+		{name: "LE text starting with UTF-8 BOM bytes", b: []byte{0xEF, 0xBB, 0xBF, 0xC5, 'x', 0}, byteOrder: binary.LittleEndian, want: "\uBBEF\uC5BFx"},
+		{name: "BE text starting with UTF-8 BOM bytes", b: []byte{0xEF, 0xBB, 0xBF, 0x41}, byteOrder: binary.BigEndian, want: "\uEFBB\uBF41"},
 	}
 	for _, d := range decoders {
 		for _, tt := range tests {

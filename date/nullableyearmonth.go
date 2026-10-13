@@ -1,12 +1,11 @@
 package date
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
 
+	"github.com/domonda/go-types/internal"
 	"github.com/domonda/go-types/nullable"
 )
 
@@ -108,11 +107,7 @@ func (ym NullableYearMonth) StringOr(nullString string) string {
 // A JSON string is assigned unchanged, without normalization or validation,
 // like encoding/json does for a string type, any other JSON value is an error.
 func (ym *NullableYearMonth) UnmarshalJSON(data []byte) error {
-	if bytes.Equal(data, []byte(`null`)) {
-		ym.SetNull()
-		return nil
-	}
-	return json.Unmarshal(data, (*string)(ym))
+	return internal.UnmarshalJSONStringOrNull(ym, data)
 }
 
 // Compare compares the year-month with another NullableYearMonth.

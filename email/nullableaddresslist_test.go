@@ -59,19 +59,21 @@ func TestNullableAddressList_Scan(t *testing.T) {
 		// and the padding would end up in the first and last address.
 		{name: "padded plain string", value: " a@example.com, b@example.com\t\n", want: "a@example.com, b@example.com"},
 		{name: "padded plain bytes", value: []byte(" a@example.com "), want: "a@example.com"},
-		// Whitespace only is no list, like the empty string
-		{name: "whitespace only plain string", value: " \t ", wantErr: true},
+		// An empty or whitespace only string holds no address,
+		// so it is the null list like the empty array {}
+		{name: "whitespace only plain string", value: " \t ", want: ""},
+		{name: "whitespace only plain bytes", value: []byte(" \t "), want: ""},
 		{name: "bytes", value: []byte(`{"a@example.com"}`), want: "a@example.com"},
-		// SQL NULL is the empty list, unlike the empty string which is
-		// rejected because it can only come from a non-NULL column.
 		{name: "null", value: nil, want: ""},
-		{name: "empty string", value: "", wantErr: true},
+		{name: "empty string", value: "", want: ""},
+		{name: "empty bytes", value: []byte{}, want: ""},
 		{name: "invalid array", value: `{,}`, wantErr: true},
 		{name: "unsupported type", value: 123, wantErr: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var n NullableAddressList
+			// Not null, so that Scan has to set a null result
+			n := NullableAddressList("previous@example.com")
 			err := n.Scan(tt.value)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("Scan() error = %v, wantErr %t", err, tt.wantErr)

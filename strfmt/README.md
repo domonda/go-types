@@ -101,7 +101,7 @@ var DefaultScanConfig = NewScanConfig()
 | `(*ScanConfig).IsTrue(str) bool`                   | `str` is in `TrueStrings`, exact match.            |
 | `(*ScanConfig).IsFalse(str) bool`                  | `str` is in `FalseStrings`, exact match.           |
 | `(*ScanConfig).IsNil(str) bool`                    | `str` is in `NilStrings`, exact match.             |
-| `(*ScanConfig).ParseTime(str) (time.Time, bool)`   | The result of the first of `TimeFormats` that `time.Parse` accepts, or the zero time and false. |
+| `(*ScanConfig).ParseTime(str) (time.Time, bool)`   | The result of the first of `TimeFormats` that `time.Parse` accepts, or the zero time and false. A layout with a zone abbreviation but no numeric offset only matches `UTC`, `GMT` and the abbreviations of `time.Local`. |
 | `(*ScanConfig).SetTypeScanner(t reflect.Type, s Scanner)` | Registers or replaces the `Scanner` for `t`, allocating `TypeScanners` if it is nil. |
 
 The scanners registered by `NewScanConfig`:
@@ -224,7 +224,8 @@ What the presets write, and whether `Scan` with the default `ScanConfig` reads i
 - **Strings are not trimmed.** A `string` destination and `Scannable.ScanString` get the source with its whitespace, bools and integers are compared and parsed trimmed.
 - **Bool strings are an exact list.** `y`, `on`, and `X` are errors with the defaults.
 - **The English preset writes dates as DD/MM/YYYY**, the British order: `31/01/2024`, not the US `01/31/2024`.
-- **Zone abbreviations lose the offset.** The preset time layouts end with `MST`. `time.Parse` uses the offset of an abbreviation only if the local time zone knows it, so `31.01.2024 10:00:00 CET` scanned on a server in UTC is 10:00 in a zone named CET with offset 0. Times without a zone scan as UTC. Use `NewFormatConfig` with RFC 3339 for lossless times.
+- **Zone abbreviations need a known offset.** The preset time layouts end with `MST`. `time.Parse` knows the offset of an abbreviation only if it is `UTC`, `GMT` or one of the local time zone, and silently uses offset 0 for any other. So `ParseTime` and `Scan` reject `31.01.2024 10:00:00 CET` on a server in UTC instead of returning 10:00 UTC, but accept it on a server in Europe/Vienna. Times without a zone scan as UTC. Use `NewFormatConfig` with RFC 3339 for lossless times.
+- **The English preset time layout is day first.** `"02/01/2006 15:04:05 MST"` reads the US month-first `01/02/2024 10:00:00 EST` as the 1st of February when `EST` is known locally.
 - **Money presets use 2 decimals for every currency.** `CurrencyAmountJPY(1234.5)` formats as `JPY 1,234.50`, while `CurrencyAmount.String` writes `JPY 1235`.
 - **Registered formatters run before the null check.** A zero `money.Amount` formats as `0.00`, not as `config.Nil`.
 - **Kinds win over `String` methods.** A type with a `string` or number kind and no registered formatter is formatted by its kind: `money.Currency("eur")` formats as `eur` although its `String` returns `EUR`, and `money.Rate(0.19)` as `0.19`.

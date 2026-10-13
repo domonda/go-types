@@ -74,8 +74,12 @@ func Test_JSON_UnmarshalTo(t *testing.T) {
 	assert.Equal(t, map[string]int{}, dest)
 }
 
+// A nil or empty JSON is written as {}, so it is valid. Else the zero
+// value of a struct with a JSON field would fail types.DeepValidate
+// while it marshals to valid JSON.
 func Test_JSON_Valid(t *testing.T) {
-	assert.False(t, JSON(nil).Valid(), "nil JSON is not considered valid")
+	assert.True(t, JSON(nil).Valid(), "nil JSON stands for {}")
+	assert.True(t, JSON{}.Valid(), "empty JSON stands for {}")
 	assert.True(t, JSON(`{"a":1}`).Valid())
 	assert.True(t, JSON(`[1,2,3]`).Valid())
 	assert.True(t, JSON(`"hello"`).Valid())
@@ -188,6 +192,17 @@ func Test_JSON_EmptyLikeNil(t *testing.T) {
 	b, err = json.Marshal(struct{ J JSON }{J: JSON("")})
 	require.NoError(t, err)
 	assert.Equal(t, `{"J":{}}`, string(b))
+
+	// The other methods treat empty JSON like nil as well,
+	// so they agree with what MarshalJSON and Value write
+	assert.Equal(t, "{}", JSON{}.String())
+	var buf bytes.Buffer
+	_, err = JSON{}.PrettyPrint(&buf)
+	require.NoError(t, err)
+	assert.Equal(t, "`{}`", buf.String())
+	var dest map[string]int
+	require.NoError(t, JSON{}.UnmarshalTo(&dest))
+	assert.Equal(t, map[string]int{}, dest)
 }
 
 func Test_MarshalJSON_Package(t *testing.T) {

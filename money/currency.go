@@ -112,14 +112,16 @@ func (c *Currency) ValidPtr() bool {
 // and the ISO 4217 currency names of two or more words like
 // "Canadian Dollar", all compared case-insensitively.
 //
-// Other strings are guessed by the unit or the country they name:
-// anything containing EUR as EUR, an unqualified "Dollar(s)" or one
-// qualified as US, U.S., USA or United States as USD, an unqualified
-// "Franc(s)" or "Franken" or one qualified as Swiss, Schweizer or suisse
-// as CHF, and an unqualified "Pound(s)" or one qualified as British or
-// Sterling as GBP. A unit qualified with anything else is an error
+// Other strings are guessed by the unit they name: anything containing
+// EUR as EUR, "Dollar(s)" as USD, "Franc(s)" or "Franken" as CHF, and
+// "Pound(s)", "Pfund" or "Sterling" as GBP. The unit may be qualified with
+// the country (US, U.S., USA or United States for USD, Swiss, Schweizer,
+// Schweizerische(r) or suisse(s) for CHF, British, Great British or livre
+// for GBP) or with the ISO code like in
+// "Dollars (USD)". A unit qualified with anything else is an error
 // instead of a guess, because a dollar, franc or pound of another
-// country is a different currency.
+// country is a different currency, and so is a country without a unit,
+// because "Made in USA" is free text and not a currency.
 //
 // Returns the Currency unchanged in case of an error.
 func (c Currency) Normalized() (Currency, error) {
@@ -146,11 +148,11 @@ func (c Currency) Normalized() (Currency, error) {
 		switch {
 		case strings.Contains(str, "EUR"):
 			return "EUR", nil
-		case containsAnyOf(str, "SWISS", "SCHWEIZ", "SCHWEITZ", "SUISSE") || onlyWordsOf(words, "FRANC", "FRANCS", "FRANKEN"):
+		case unitWithQualifiers(words, []string{"FRANC", "FRANCS", "FRANKEN", "CHF"}, "SWISS", "SCHWEIZER", "SCHWEITZER", "SCHWEIZERISCHE", "SCHWEIZERISCHER", "SCHWEIZERISCHEN", "SUISSE", "SUISSES"):
 			return "CHF", nil
-		case containsAnyOf(str, "BRITISH", "STERLING") || onlyWordsOf(words, "POUND", "POUNDS"):
+		case unitWithQualifiers(words, []string{"POUND", "POUNDS", "PFUND", "STERLING", "GBP"}, "GREAT", "BRITISH", "LIVRE", "LIVRES"):
 			return "GBP", nil
-		case slices.Contains(words, "US") || slices.Contains(words, "USA") || strings.Contains(str, "UNITED STATES") || onlyWordsOf(words, "DOLLAR", "DOLLARS"):
+		case unitWithQualifiers(words, []string{"DOLLAR", "DOLLARS", "USD"}, "US", "USA", "UNITED", "STATES"):
 			return "USD", nil
 		}
 	}
@@ -162,15 +164,20 @@ func (c Currency) Normalized() (Currency, error) {
 	return Currency(str), nil
 }
 
-// containsAnyOf returns if str contains any of the substrings.
-func containsAnyOf(str string, substrings ...string) bool {
-	return slices.ContainsFunc(substrings, func(sub string) bool { return strings.Contains(str, sub) })
-}
-
-// onlyWordsOf returns if there is at least one word
-// and all words are one of the allowed words.
-func onlyWordsOf(words []string, allowed ...string) bool {
-	return len(words) > 0 && !slices.ContainsFunc(words, func(word string) bool { return !slices.Contains(allowed, word) })
+// unitWithQualifiers returns if the words contain at least one of the
+// units and all other words are qualifiers, so that a unit qualified
+// with an unknown word or a qualifier without a unit is not a currency.
+func unitWithQualifiers(words, units []string, qualifiers ...string) bool {
+	hasUnit := false
+	for _, word := range words {
+		switch {
+		case slices.Contains(units, word):
+			hasUnit = true
+		case !slices.Contains(qualifiers, word):
+			return false
+		}
+	}
+	return hasUnit
 }
 
 // NormalizedOrNull returns the normalized currency or CurrencyNull
@@ -231,8 +238,11 @@ func (c Currency) EnglishName() string {
 // 0 for JPY and 3 for the fils of KWD.
 // Codes without a minor unit defined by ISO 4217, like XDR,
 // codes that are not part of ISO 4217, like GGP, and invalid codes
-// return 2. Like EnglishName it does not normalize the currency.
+// return 2. The currency is normalized first, so "kwd" returns 3.
 func (c Currency) MinorUnits() int {
+	if norm, err := c.Normalized(); err == nil {
+		c = norm
+	}
 	if minorUnits, ok := currencyCodeToMinorUnits[c]; ok {
 		return minorUnits
 	}

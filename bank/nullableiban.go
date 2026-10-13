@@ -1,7 +1,6 @@
 package bank
 
 import (
-	"bytes"
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
@@ -10,6 +9,7 @@ import (
 
 	"github.com/domonda/go-types"
 	"github.com/domonda/go-types/country"
+	"github.com/domonda/go-types/internal"
 	"github.com/domonda/go-types/nullable"
 	"github.com/domonda/go-types/strutil"
 )
@@ -228,11 +228,7 @@ func (iban NullableIBAN) MarshalJSON() ([]byte, error) {
 // A JSON string is assigned unchanged, without normalization or validation,
 // like encoding/json does for a string type, any other JSON value is an error.
 func (iban *NullableIBAN) UnmarshalJSON(data []byte) error {
-	if bytes.Equal(data, []byte(`null`)) {
-		iban.SetNull()
-		return nil
-	}
-	return json.Unmarshal(data, (*string)(iban))
+	return internal.UnmarshalJSONStringOrNull(iban, data)
 }
 
 // JSONSchema returns the JSON schema definition for the NullableIBAN type,

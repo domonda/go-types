@@ -70,18 +70,18 @@ Implements: `fmt.Stringer`, `driver.Valuer`, `sql.Scanner`, `encoding.TextMarsha
 
 ## JSON
 
-`type JSON []byte` holds raw JSON text. A nil `JSON` stands for the empty object `{}`.
+`type JSON []byte` holds raw JSON text. A nil or empty `JSON` stands for the empty object `{}`.
 
 | Function or method    | Description                                        |
 |-----------------------|----------------------------------------------------|
 | `MarshalJSON(source)` | `json.Marshal(source)` as `JSON`.                  |
 | `MarshalFrom(source)` | Marshals `source` into the receiver. A nil `source` stores `null`. |
-| `UnmarshalTo(dest)`   | `json.Unmarshal` into `dest`. A nil `JSON` unmarshals `{}`. |
+| `UnmarshalTo(dest)`   | `json.Unmarshal` into `dest`. A nil or empty `JSON` unmarshals `{}`. |
 | `IsEmpty()`           | True for nil, `""`, `{}` and `[]`.                 |
-| `Valid()`             | `json.Valid`, but false for nil.                   |
-| `String()`            | The text, or `{}` for nil.                         |
+| `Valid()`             | `json.Valid`, but true for nil and empty.          |
+| `String()`            | The text, or `{}` for nil and empty.               |
 | `GoString()`          | ``notnull.JSON(`...`)``.                           |
-| `PrettyPrint(w)`      | The text in backticks, `{}` for nil, for `github.com/domonda/go-pretty`. |
+| `PrettyPrint(w)`      | The text in backticks, `{}` for nil and empty, for `github.com/domonda/go-pretty`. |
 | `Clone()`             | Copy. nil stays nil.                               |
 
 Implements: `driver.Valuer`, `sql.Scanner`, `json.Marshaler`, `json.Unmarshaler`, `fmt.Stringer`, `fmt.GoStringer`.

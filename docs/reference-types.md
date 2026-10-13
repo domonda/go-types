@@ -99,7 +99,7 @@ Entry points:
 
 `DeepValidate` walks `v` with reflection:
 
-- It calls `Validate` on `v` and then on every reachable value. If only the pointer type implements an interface, like `*LenString`, it validates through a pointer to the value, or to a copy if the value is not addressable.
+- It calls `Validate` on `v` and then on every reachable value. If only the pointer type implements an interface, like `*LenString`, it validates through a pointer to the value, or to a copy if the value is not addressable. `v` itself is not copied: passed by value it is validated with the methods of its own type like by `Validate`, so a pointer receiver `Validate` calling `DeepValidate(*receiver)` doesn't call itself again. The nested call has its own cycle detection, and an outer `DeepValidate` reports the field errors twice.
 - It follows pointers and interfaces to any depth. nil pointers, interfaces and funcs stop the descent.
 - It descends into exported struct fields, the exported fields of unexported embedded structs, slice and array elements, and map values. Unexported fields and map keys are not validated. Map keys are sorted with `CompareReflectValue`, so the error order is deterministic.
 - A value that is validatable itself is still descended into, so a struct can report its own error and errors of its fields.
@@ -222,7 +222,7 @@ type Finder interface {
 - A `ValidatErr` method wins over a `Validator` method on the same type, so `Validate` can accept a value whose `Valid()` is false.
 - The error for a failed `Validator` contains the value formatted with `%#v`: a pointer shows up as an address, and a secret like a password ends up in the message, for example `invalid main.secret value: "pw"`. Implement `ValidatErr` with your own message for such types.
 - A nil func like `types.ValidatorFunc(nil)` counts as valid: `Validate` returns nil for it, and `Validators`, `ValidatErrs` and `DeepValidate` skip it, also if its method could handle nil. So do nil elements of `Validators` and `ValidatErrs`.
-- `DeepValidate` calls `Validate` methods with pointer receivers through a pointer to addressable data, so a `Validate` that changes its receiver changes the caller's data when you pass a pointer. Map values and values passed by value are validated through a copy.
+- `DeepValidate` calls `Validate` methods with pointer receivers through a pointer to addressable data, so a `Validate` that changes its receiver changes the caller's data when you pass a pointer. Map values and the fields and elements of values passed by value are validated through a copy.
 - `LenString` counts bytes: `NewLenString("äö", 0, 3).Validate()` fails because `"äö"` has 4 bytes.
 - All `LenString` methods have pointer receivers. A `LenString` field of a struct marshalled by value encodes as `{}`, and `types.MustLenString("abc", 1, 3).String()` does not compile. Use `*LenString` fields or marshal a pointer to the struct.
 - The zero `LenString{}` has `min` and `max` 0 and accepts only `""`.

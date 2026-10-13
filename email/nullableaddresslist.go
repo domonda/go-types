@@ -1,14 +1,13 @@
 package email
 
 import (
-	"bytes"
 	"database/sql/driver"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/mail"
 	"strings"
 
+	"github.com/domonda/go-types/internal"
 	"github.com/domonda/go-types/nullable"
 	"github.com/domonda/go-types/strutil"
 )
@@ -153,7 +152,8 @@ func (n *NullableAddressList) SetNull() {
 // array-compatible database such as CockroachDB or YugabyteDB; Value
 // always writes a plain string and works with any database.
 // Whitespace around the array elements or a plain string is trimmed
-// like by AddressSet.Scan.
+// like by AddressSet.Scan. An empty or whitespace only string scans
+// as null like the empty array {}.
 func (n *NullableAddressList) Scan(value any) error {
 	switch s := value.(type) {
 	case nil:
@@ -161,8 +161,11 @@ func (n *NullableAddressList) Scan(value any) error {
 		return nil
 
 	case string:
-		if s == "" {
-			return errors.New("can't scan empty string as email.NullableAddressList")
+		// Trimmed like the array elements by scanAddressArray
+		list := strutil.TrimSpace(s)
+		if list == "" {
+			n.SetNull()
+			return nil
 		}
 		if s[0] == '{' && s[len(s)-1] == '}' {
 			// Elements that are empty after the helper's trim are
@@ -173,11 +176,6 @@ func (n *NullableAddressList) Scan(value any) error {
 			}
 			*n = NullableAddressListJoinStrings(stringArray...)
 			return nil
-		}
-		// Trimmed like the array elements by scanAddressArray
-		list := strutil.TrimSpace(s)
-		if list == "" {
-			return errors.New("can't scan whitespace only string as email.NullableAddressList")
 		}
 		*n = NullableAddressList(list)
 		return nil
@@ -208,11 +206,7 @@ func (n *NullableAddressList) UnmarshalText(text []byte) error {
 // setting the NullableAddressList to null for the JSON null value
 // or an empty JSON string.
 func (n *NullableAddressList) UnmarshalJSON(data []byte) error {
-	if bytes.Equal(data, []byte("null")) {
-		n.SetNull()
-		return nil
-	}
-	return json.Unmarshal(data, (*string)(n))
+	return internal.UnmarshalJSONStringOrNull(n, data)
 }
 
 // MarshalJSON implements the json.Marshaler interface.

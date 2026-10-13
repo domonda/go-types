@@ -202,6 +202,26 @@ func Test_BOM_Decode_WrongBOM(t *testing.T) {
 	}
 }
 
+// Test_BOM_Decode_UTF32TextStartingWithUTF16BOM checks that the BOM aware
+// functions decode valid UTF-32LE text like DecodeUTF32 does, even if its
+// first bytes FF FE look like the UTF-16LE BOM.
+func Test_BOM_Decode_UTF32TextStartingWithUTF16BOM(t *testing.T) {
+	const text = "\U000FFEFFabc"
+	encoded, err := EncodeUTF32([]byte(text), binary.LittleEndian)
+	require.NoError(t, err)
+	require.Equal(t, BOMUTF16LE, BOMOfBytes(encoded))
+
+	decoded, err := BOMUTF32LE.Decode(encoded)
+	require.NoError(t, err)
+	assert.Equal(t, text, string(decoded), "BOM.Decode")
+	str, err := BOMUTF32LE.DecodeString(encoded)
+	require.NoError(t, err)
+	assert.Equal(t, text, str, "BOM.DecodeString")
+	decoded, err = DecodeWithBOM(append([]byte(BOMUTF32LE), encoded...))
+	require.NoError(t, err)
+	assert.Equal(t, text, string(decoded), "DecodeWithBOM")
+}
+
 func Test_BOM_Decode_NoBOM(t *testing.T) {
 	// NoBOM means UTF-8 without BOM, the bytes are passed through
 	decoded, err := NoBOM.Decode([]byte("Grüße"))

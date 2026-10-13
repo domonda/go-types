@@ -762,6 +762,9 @@ func TestAmount_RoundingConventionAgrees(t *testing.T) {
 		{amount: 1234.565, cents: 123457, str: "1234.57"},
 		{amount: 0.144999, cents: 14, str: "0.14"}, // not a tie
 		{amount: 0.1 + 0.2, cents: 30, str: "0.30"},
+		// Zero cents are formatted without a sign like the DecimalAmount,
+		// "EUR -0.00" would be stored by CurrencyAmount.Value
+		{amount: -0.004, cents: 0, str: "0.00"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.str, func(t *testing.T) {

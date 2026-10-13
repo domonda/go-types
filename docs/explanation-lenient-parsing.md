@@ -147,7 +147,7 @@ A numeric date with the year last is ambiguous when both numbers can be the mont
                   or an ordinal suffix on the second      02 1st 2003 -> 2003-02-01
 ```
 
-The hint is the first `lang` argument. Only its first two letters count, normalized, so `language.EN`, `"en-US"` and `"eng"` all mean English, and only English changes the result. An ordinal suffix decides before the hint, so `1st 02 2003` is 2003-02-01 also with `language.EN`. The hint and an ordinal suffix only decide ambiguous dates. A date with one valid reading, like `15.06.2024`, gives 2024-06-15 with any hint, and the separator never matters.
+The hint is the first `lang` argument. Only its first two letters count, normalized, so `language.EN`, `"en-US"` and `"eng"` all mean English, and only English changes the result. An ordinal suffix decides before the hint, so `1st 02 2003` is 2003-02-01 also with `language.EN`. The hint and an ordinal suffix only decide ambiguous dates, but a number with an ordinal suffix is never read as the month, so `13 1st 2024` is an error and not 2024-01-13. A date with one valid reading, like `15.06.2024`, gives 2024-06-15 with any hint, and the separator never matters.
 
 ### Detecting the date order of a whole document
 

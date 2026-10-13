@@ -116,6 +116,12 @@ func TestDecodeUTF32_BOMVariants(t *testing.T) {
 		{name: "BE opposite BOM", b: append(bomLE, hiLE...), byteOrder: binary.BigEndian, wantErr: "expected UTF-32BE BOM but got UTF-32LE"},
 		{name: "LE no BOM", b: hiLE, byteOrder: binary.LittleEndian, want: "hi"},
 		{name: "BE no BOM", b: hiBE, byteOrder: binary.BigEndian, want: "hi"},
+		// Valid UTF-32LE text can start with the UTF-16LE BOM FF FE,
+		// like U+FFEFF, so it must not be mistaken for one
+		{name: "LE text starting with UTF-16LE BOM bytes", b: append([]byte{0xFF, 0xFE, 0x0F, 0}, hiLE...), byteOrder: binary.LittleEndian, want: "\U000FFEFFhi"},
+		// The same BOM followed by UTF-16LE text is no valid UTF-32LE character
+		{name: "LE UTF-16LE text", b: []byte{0xFF, 0xFE, 'h', 0, 'i', 0, 'x', 0}, byteOrder: binary.LittleEndian, wantErr: "expected UTF-32LE BOM but got UTF-16LE"},
+		{name: "BE UTF-8 BOM", b: []byte{0xEF, 0xBB, 0xBF, 'h'}, byteOrder: binary.BigEndian, wantErr: "expected UTF-32BE BOM but got UTF-8"},
 	}
 	for _, d := range decoders {
 		for _, tt := range tests {

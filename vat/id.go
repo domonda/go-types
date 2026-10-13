@@ -254,15 +254,15 @@ func (id ID) Value() (driver.Value, error) {
 }
 
 // JSONSchema returns the JSON schema for ID, describing it as a string with
-// the title "Value Added Tax ID" and the package-defined minimum and maximum
-// length constraints.
+// the title "Value Added Tax ID" and the package-defined minimum length.
+// It has no maximum length, see IDMaxLength.
 func (ID) JSONSchema() *jsonschema.Schema {
+	// No MaxLength, because IDMaxLength limits the normalized ID
+	// while JSON holds the ID unnormalized, which can be longer
 	minLength := uint64(IDMinLength)
-	maxLength := uint64(IDMaxLength)
 	return &jsonschema.Schema{
 		Title:     "Value Added Tax ID",
 		Type:      "string",
 		MinLength: &minLength,
-		MaxLength: &maxLength,
 	}
 }

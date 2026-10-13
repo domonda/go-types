@@ -1,14 +1,13 @@
 package country
 
 import (
-	"bytes"
 	"database/sql/driver"
-	"encoding/json"
 	"fmt"
 	"strings"
 
 	"github.com/invopop/jsonschema"
 
+	"github.com/domonda/go-types/internal"
 	"github.com/domonda/go-types/nullable"
 	"github.com/domonda/go-types/strutil"
 )
@@ -197,11 +196,7 @@ func (n NullableCode) MarshalJSON() ([]byte, error) {
 // A JSON string is assigned unchanged, without normalization or validation,
 // like encoding/json does for a string type, any other JSON value is an error.
 func (n *NullableCode) UnmarshalJSON(data []byte) error {
-	if bytes.Equal(data, []byte(`null`)) {
-		n.SetNull()
-		return nil
-	}
-	return json.Unmarshal(data, (*string)(n))
+	return internal.UnmarshalJSONStringOrNull(n, data)
 }
 
 // JSONSchema returns the JSON schema definition for the NullableCode type.

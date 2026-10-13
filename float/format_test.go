@@ -187,8 +187,14 @@ func Test_FormatFloat_precisionRounding(t *testing.T) {
 	assert.Equal(t, "1,000.00", Format(999.995, ',', '.', 2, true))
 	// float32 values round their shortest float32 decimal
 	assert.Equal(t, "1.01", Format(float32(1.005), 0, '.', 2, false))
-	// Negative zero after rounding keeps its sign like strconv does
-	assert.Equal(t, "-0.00", Format(-0.001, 0, '.', 2, true))
+	// A value that is zero after rounding is formatted without a sign,
+	// unlike by strconv, because "-0.00" is no amount: money.Amount(-0.004)
+	// must format like the money.DecimalAmount -0.004, which is "0.00"
+	assert.Equal(t, "0.00", Format(-0.001, 0, '.', 2, true))
+	assert.Equal(t, "0", Format(-0.4, 0, '.', 0, false))
+	assert.Equal(t, "0", Format(math.Copysign(0, -1), 0, '.', -1, false))
+	assert.Equal(t, "0,00", Format(math.Copysign(0, -1), '.', ',', 2, true))
+	assert.Equal(t, "-0.01", Format(-0.005, 0, '.', 2, true), "rounded away from zero keeps the sign")
 }
 
 // Test_FormatFloat_zero checks formatting of zero across separator and

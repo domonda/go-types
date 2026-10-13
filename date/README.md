@@ -52,7 +52,7 @@ Rules for numeric dates:
 - **Day first by default.** `"05/06/2024"` is 2024-06-05.
 - **Language hint.** The first `lang` argument is a hint. Only its first two letters count, normalized, so `language.EN`, `"EN"`, `"en-US"` and `"eng"` all mean English. Only English changes the result: it reads month first.
 - **The hint only decides ambiguous dates.** It applies only when both numbers are 1 to 12. `"15.06.2024"` and `"06/15/2024"` both give 2024-06-15 with any hint. The separator never matters.
-- **Ordinal suffix.** A suffix like `"1st"` marks the day for ambiguous dates and wins over the hint: `"02 1st 2003"` and `"1st 02 2003"` are 2003-02-01, also with `language.EN`.
+- **Ordinal suffix.** A suffix like `"1st"` marks the day for ambiguous dates and wins over the hint: `"02 1st 2003"` and `"1st 02 2003"` are 2003-02-01, also with `language.EN`. A number with a suffix is never the month, so `"13 1st 2024"` is an error.
 - **Two-digit years.** 00 to 44 become 2000 to 2044, 45 to 99 become 1945 to 1999.
 
 ### Functions
@@ -202,7 +202,7 @@ Implements: `fmt.Stringer`, `database/sql.Scanner`, `database/sql/driver.Valuer`
 | `YearWeekRange(year, week)`                | Monday and Sunday of an ISO 8601 week.             |
 | `FromUntilFromYearAndMonths(year, months)` | First and last day of a month range: `("2024", "3-9")` gives 2024-03-01 and 2024-09-30. Empty `months` means `"1-12"`; empty `year` returns empty dates and no error. |
 
-An ISO week runs Monday to Sunday and can start or end in the neighbouring year: `PeriodRange("2021-W01")` is 2021-01-04 to 2021-01-10, `PeriodRange("2019-W01")` is 2018-12-31 to 2019-01-06. Week numbers 1 to 53 are accepted; week 53 of a year with only 52 weeks is week 1 of the next year.
+An ISO week runs Monday to Sunday and can start or end in the neighbouring year: `PeriodRange("2021-W01")` is 2021-01-04 to 2021-01-10, `PeriodRange("2019-W01")` is 2018-12-31 to 2019-01-06. Week 53 is only accepted for years that have 53 ISO weeks: `PeriodRange("2020-W53")` is 2020-12-28 to 2021-01-03, `PeriodRange("2021-W53")` is an error.
 
 ## YearMonth and NullableYearMonth
 

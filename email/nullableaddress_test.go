@@ -192,11 +192,13 @@ func TestNullableAddress_Scan(t *testing.T) {
 	}{
 		{name: "NULL", value: nil, want: AddressNull},
 		{name: "string", value: `"Doe, John" <john@example.com>`, want: `"Doe, John" <john@example.com>`},
-		{name: "empty string", value: "", wantErr: true},
+		// An empty or whitespace only string is null, see IsNull
+		{name: "empty string", value: "", want: AddressNull},
+		{name: "whitespace only string", value: " \t ", want: AddressNull},
 		// Drivers may return text columns as []byte, which must scan like
 		// the same string, as for AddressList and NullableAddressList.
 		{name: "[]byte", value: []byte("a@example.com"), want: "a@example.com"},
-		{name: "empty []byte", value: []byte{}, wantErr: true},
+		{name: "empty []byte", value: []byte{}, want: AddressNull},
 		{name: "unsupported type", value: 123, wantErr: true},
 	}
 	for _, tt := range tests {
@@ -214,7 +216,7 @@ func TestNullableAddress_Scan(t *testing.T) {
 }
 
 // TestNullableAddress_ValueScanRoundTrip protects that NULL is written to SQL
-// as nil (not as an empty string, which Scan would reject) and that every
+// as nil (not as an empty string) and that every
 // written value scans back unchanged.
 func TestNullableAddress_ValueScanRoundTrip(t *testing.T) {
 	tests := []struct {

@@ -143,7 +143,7 @@ The package has no SQL support.
 - **A detected decimal separator can be 0.** `ParseDetails("1'234")` returns `decimalSep` 0, which `Format` rejects with a panic. Pick a decimal separator that differs from `thousandsSep` before passing the detected separators back to `Format`.
 - **`ParseDetails` reports `'.'` for a comma in front of an exponent.** `ParseDetails("1,5e3")` returns 1500 with `decimalSep` `'.'`.
 - **The zero `FormatDef` panics in `Format`**, because its `DecimalSep` is 0.
-- **Negative values that round to zero keep the sign.** `Format(-0.001, 0, '.', 2, false)` is `"-0"`, like `strconv.FormatFloat`.
+- **Negative values that round to zero lose the sign.** `Format(-0.001, 0, '.', 2, true)` is `"0.00"` and negative zero is `"0"`, unlike `strconv.FormatFloat`, which writes `"-0.00"` and `"-0"`. `RoundToDecimals(-0.001, 2)` still returns negative zero.
 - **`Tolerant` can't tell missing from zero.** JSON `null`, `""`, and `0` all decode to 0. Use a pointer field if the difference matters.
 - **Unquoted `NaN` needs a direct call.** `Tolerant.UnmarshalJSON([]byte("NaN"))` works, but `json.Unmarshal` rejects `NaN` as invalid JSON before calling it. Only the quoted `"NaN"` works through `encoding/json`.
 - **Rounded floats are still binary floats.** `RoundToDecimals(0.145, 2)` returns the `float64` closest to 0.15. Use `money.DecimalAmount` or `money.CentAmount` for exact decimal arithmetic.

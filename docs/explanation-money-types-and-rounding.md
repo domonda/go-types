@@ -298,7 +298,7 @@ Not every currency has cents. ISO 4217 defines the number of decimals of each cu
 | 3           | BHD, IQD, JOD, KWD, LYD, OMR, TND                  |
 | 2           | every other code, including codes without an ISO minor unit like XDR, non-ISO codes like GGP, and invalid codes |
 
-`MinorUnits` doesn't normalize, so `Currency("jpy").MinorUnits()` is 2. Normalize the currency first.
+`MinorUnits` normalizes the currency first, so `Currency("jpy").MinorUnits()` is 0 like for `"JPY"`.
 
 Who uses it:
 

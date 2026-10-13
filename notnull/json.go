@@ -32,9 +32,9 @@ func (j *JSON) MarshalFrom(source any) error {
 }
 
 // UnmarshalTo unmarshals the JSON of j to dest.
-// A nil j is unmarshalled as the empty object {}.
+// A nil or empty j is unmarshalled as the empty object {}.
 func (j JSON) UnmarshalTo(dest any) error {
-	if j == nil {
+	if len(j) == 0 {
 		return json.Unmarshal([]byte("{}"), dest)
 	}
 	return json.Unmarshal(j, dest)
@@ -66,11 +66,10 @@ func (j *JSON) UnmarshalJSON(sourceJSON []byte) error {
 }
 
 // Valid reports whether j is a valid JSON encoding.
+// A nil or empty j is valid because it stands for
+// the empty object {} that MarshalJSON and Value write.
 func (j JSON) Valid() bool {
-	if j == nil {
-		return false
-	}
-	return json.Valid(j)
+	return len(j) == 0 || json.Valid(j)
 }
 
 // Value returns j as a SQL value.
@@ -122,10 +121,11 @@ func (j *JSON) Scan(src any) error {
 	return nil
 }
 
-// String returns the JSON as string.
+// String returns the JSON as string,
+// or {} for a nil or empty j.
 // String implements the fmt.Stringer interface.
 func (j JSON) String() string {
-	if j == nil {
+	if len(j) == 0 {
 		return "{}"
 	}
 	return string(j)

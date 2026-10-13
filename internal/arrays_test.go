@@ -4,6 +4,9 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/domonda/go-types/internal/pq"
 )
 
@@ -693,4 +696,35 @@ func TestUnescapeSQLArrayElem(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestParseNumberArray protects the PostgreSQL number array parser shared
+// by notnull and nullable FloatArray and IntArray: "" and {} are empty but
+// non-nil, and errors name the type of the caller, not the helper.
+func TestParseNumberArray(t *testing.T) {
+	floats, err := ParseFloatArray([]byte(`{1.5,-2,3e2}`), "pkg.FloatArray")
+	require.NoError(t, err)
+	assert.Equal(t, []float64{1.5, -2, 300}, floats)
+
+	ints, err := ParseIntArray([]byte(`{1,-2,3}`), "pkg.IntArray")
+	require.NoError(t, err)
+	assert.Equal(t, []int64{1, -2, 3}, ints)
+
+	for _, src := range []string{``, `{}`} {
+		floats, err := ParseFloatArray([]byte(src), "pkg.FloatArray")
+		require.NoError(t, err)
+		assert.NotNil(t, floats, "%q", src)
+		assert.Empty(t, floats, "%q", src)
+		ints, err := ParseIntArray([]byte(src), "pkg.IntArray")
+		require.NoError(t, err)
+		assert.NotNil(t, ints, "%q", src)
+		assert.Empty(t, ints, "%q", src)
+	}
+
+	_, err = ParseIntArray([]byte(`1,2`), "pkg.IntArray")
+	assert.EqualError(t, err, `can't parse "1,2" as pkg.IntArray`)
+	_, err = ParseIntArray([]byte(`{1,x}`), "pkg.IntArray")
+	assert.ErrorContains(t, err, `can't parse "{1,x}" as pkg.IntArray because of: `)
+	_, err = ParseFloatArray([]byte(`{1,}`), "pkg.FloatArray")
+	assert.ErrorContains(t, err, `can't parse "{1,}" as pkg.FloatArray because of: `)
 }

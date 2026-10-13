@@ -39,19 +39,20 @@ func (c Code) Valid() bool {
 	return ok
 }
 
-// Validate returns an error if c can not be normalized to a valid
-// ISO 639-1 language code.
-// See Normalized for the accepted input shapes.
+// Validate returns an error if c is not a valid ISO 639-1 language code,
+// exactly like Valid. Value and encoding/json store c as given, so
+// validation only accepts the normalized code. Use Normalized to accept
+// other spellings like "EN", "eng" and "en-US".
 //
-// Hand-written: normalizes first like country.Code and money.Currency,
-// so it accepts more than the strict Valid, and returns the error from
-// Normalized, which names the offending input, instead of the generic
-// error of the strict lookup that go-enum would generate.
+// Hand-written: returns an error that names the offending input
+// instead of the generic error that go-enum would generate.
 //
 // #custom
 func (c Code) Validate() error {
-	_, err := c.Normalized()
-	return err
+	if !c.Valid() {
+		return fmt.Errorf("invalid language.Code: %q", string(c))
+	}
+	return nil
 }
 
 // ValidAndNormalized returns true if the Code is valid and already normalized.

@@ -78,36 +78,18 @@ check `ValidAndNormalized` or store the result of `Normalized`.
 Each type decides how far its leniency goes. `bank.IBAN` removes whitespace
 but doesn't change the letter case, so `de89370400440532013000` fails with
 `invalid IBAN country code`. `country.Code` accepts German names and ITU codes
-from `AltCodes` but not English names; `country.ParseCode` adds those. The
+from `AltCodes` but not English names; `country.ParseCode` adds those.
+`language.Code` is not lenient at all: `Valid` and `Validate` only accept the
+canonical lower-case code, because `Value` writes the code unchanged, while
+`Normalized` accepts `"EN"`, `"eng"` and `"en-US"`. The
 package READMEs and [Lenient parsing](explanation-lenient-parsing.md) list the
 details.
 
 ## Where the methods disagree
 
-### `language.Code`: strict `Valid`, lenient `Validate`
-
-`language.Code` is the one type whose `Valid` and `Validate` disagree on
-purpose:
-
-| Value     | `Valid()` | `Validate()`                  | `Normalized()` |
-|-----------|-----------|-------------------------------|----------------|
-| `"en"`    | `true`    | `nil`                         | `en`           |
-| `"EN"`    | `false`   | `nil`                         | `en`           |
-| `"eng"`   | `false`   | `nil`                         | `en`           |
-| `"en-US"` | `false`   | `nil`                         | `en`           |
-| `"xx"`    | `false`   | `invalid language.Code: "xx"` | error          |
-
-`Valid` is a lookup in the ISO 639-1 table and answers "is this exactly a
-two-letter code?". `Validate` normalizes first, like `country.Code` and
-`money.Currency`, and answers "can this be read as a language?". `Validate`
-was added in this form while `Valid` stayed the strict lookup, see the
-Unreleased section of [CHANGELOG.md](../CHANGELOG.md). Which of the two a
-generic validator calls therefore matters; the next section explains which one
-wins.
-
 ### `bank.BIC`: lenient `Normalized`, strict `Validate`
 
-`bank.BIC` is the opposite case, and deliberate too. `Normalized` removes all
+`bank.BIC` is deliberate. `Normalized` removes all
 whitespace before it checks the code, `Valid` and `Validate` do not, because
 `Parse`, `IsTestBIC`, `IsPassiveSWIFT` and `ReceiverPaysFees` read fixed
 character positions once the BIC is valid:
@@ -127,11 +109,10 @@ both, only `Validate()` is called. There are two reasons:
 
 1. **The error says why.** A `false` from `Valid()` carries no reason, so
    `types.Validate` can only build a generic message from it.
-2. **A type can pair a lenient `Validate` with a strict `Valid`.** If
-   `types.Validate` called `Valid`, the input `"EN"` for a `language.Code`
-   field would fail validation although `Normalized` accepts it.
-   `types.DeepValidate` and the scanning in `strfmt` prefer `Validate` for the
-   same reason.
+2. **A type can pair a lenient `Validate` with a strict `Valid`.** Then
+   `Validate` decides, because it is the method the type wrote to explain its
+   rules. `types.DeepValidate` and the scanning in `strfmt` prefer `Validate`
+   for the same reason.
 
 The test case `strictValidLenientValidate` in
 [validator_test.go](../validator_test.go) pins this precedence.
@@ -154,12 +135,13 @@ func main() {
 	lang := language.Code("EN")
 	fmt.Println(lang.Valid(), lang.Validate())
 
-	// types.Validate calls Validate, not Valid
-	fmt.Println(types.Validate(lang))
+	// Normalize input in another spelling before validating it
+	norm, _ := lang.Normalized()
+	fmt.Println(types.Validate(norm))
 	fmt.Println(types.DeepValidate(Profile{Language: "xx"}))
 
 	// Output:
-	// false <nil>
+	// false invalid language.Code: "EN"
 	// <nil>
 	// [struct field Language: invalid language.Code: "xx"]
 }
@@ -217,7 +199,12 @@ The rules of the walk, from the doc comment of `DeepValidate` and its tests:
 - **Pointer receivers** are found: if only `*T` implements the interface, like
   `types.LenString`, the value is validated through a pointer to it. A value
   that is not addressable, like a map value, is copied first, so validation
-  never writes into the map.
+  never writes into the map. Only the value passed to `DeepValidate` is not
+  copied, so a pointer receiver `Validate` method calling
+  `types.DeepValidate(*receiver)` doesn't call itself again. Such a nested
+  call has its own cycle detection, and an outer `DeepValidate` reports the
+  field errors a second time while descending, so check only rules that
+  span several fields in `Validate`.
 - **Struct fields:** exported fields, including the exported fields promoted
   from an unexported embedded struct. Other unexported fields are skipped,
   reflection can't call methods on them.

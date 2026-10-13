@@ -282,6 +282,8 @@ type ReplyTemplateData struct {
 // unless it already starts with a case-insensitive "Re:" (RFC 5322 3.6.5).
 // The References of the reply are the original message's References
 // followed by its Message-ID, separated by spaces (RFC 5322 3.6.4).
+// Without References, the original message's In-Reply-To is used instead
+// if it holds a single message ID.
 func (msg *Message) NewReplyMessage(from Address, replyText, replyHTML string, keepAttachments bool, textTempl, htmlTempl string) (re *Message, err error) {
 	defer errs.WrapWithFuncParams(&err, from, replyText, replyHTML, keepAttachments, textTempl, htmlTempl)
 
@@ -290,6 +292,11 @@ func (msg *Message) NewReplyMessage(from Address, replyText, replyHTML string, k
 		subject = "Re: " + subject
 	}
 	references := msg.ReferencesMessageIDs()
+	if len(references) == 0 {
+		if inReplyTo := strings.Fields(string(msg.InReplyTo)); len(inReplyTo) == 1 {
+			references = inReplyTo
+		}
+	}
 	if msg.MessageID.IsNotNull() {
 		references = append(references, msg.MessageID.Get())
 	}
@@ -404,7 +411,10 @@ func (msg *Message) BuildRawMessage() (raw []byte, err error) {
 		root.AddChild(part)
 	}
 	var inlines, attachments []*Attachment
-	for _, att := range msg.Attachments {
+	for i, att := range msg.Attachments {
+		if att == nil {
+			return nil, errs.Errorf("attachment %d is nil", i)
+		}
 		if att.Inline {
 			inlines = append(inlines, att)
 		} else {
@@ -447,9 +457,22 @@ func (msg *Message) BuildRawMessage() (raw []byte, err error) {
 	if msg.References.IsNotNull() {
 		root.Header.Set("References", msg.References.Get())
 	}
-	root.Header.Set("From", string(msg.From))
+	// Normalized like the To, Cc, and Bcc addresses by Split, so that
+	// a non-ASCII name is RFC 2047 encoded without the address part
+	from := msg.From
+	if from != "" {
+		from, err = from.Normalized()
+		if err != nil {
+			return nil, err
+		}
+	}
+	root.Header.Set("From", string(from))
 	if msg.ReplyTo.IsNotNull() {
-		root.Header.Set("Reply-To", string(msg.ReplyTo))
+		replyTo, err := msg.ReplyTo.Normalized()
+		if err != nil {
+			return nil, err
+		}
+		root.Header.Set("Reply-To", string(replyTo))
 	}
 	tos, err := msg.To.Split()
 	if err != nil {

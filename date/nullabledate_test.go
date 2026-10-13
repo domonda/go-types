@@ -250,6 +250,14 @@ func TestNullableDate_Format(t *testing.T) {
 	d := NullableDate("2023-12-25")
 	assert.Equal(t, "2023-12-25", d.Format(Layout))
 	assert.Equal(t, "", Null.Format(Layout))
+
+	// Every null date formats as "" with every layout, not only Null:
+	// Layout must not return the raw zero or whitespace string.
+	for _, null := range []NullableDate{Null, "0001-01-01", "0000-00-00", "  "} {
+		require.True(t, null.IsNull(), "%q.IsNull()", null)
+		assert.Equal(t, "", null.Format(Layout), "%q.Format(Layout)", null)
+		assert.Equal(t, "", null.Format("02.01.2006"), "%q.Format(02.01.2006)", null)
+	}
 }
 
 func TestNullableDate_Compare(t *testing.T) {
