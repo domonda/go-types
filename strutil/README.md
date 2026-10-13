@@ -80,7 +80,7 @@ The four filter functions pass every invalid UTF-8 byte to the predicates as `ut
 | `TransliterateSpecialCharacters(str string) string` | Replace 71 special Latin letters and ligatures with ASCII, like `"ö"` to `"oe"`, `"Æ"` to `"AE"`, `"ß"` to `"ss"`. Drops invalid UTF-8 and `\ufffd`. Other runes pass through, so `"Łódź"` gives `"Lodź"`. |
 | `TransliterateSpecialCharactersMaxLen(str string, maxLen int) string` | Same, stopping at `maxLen` output runes. A transliteration that starts below the limit is written completely, so `("Ä", 1)` gives `"Ae"`. Negative `maxLen` means no limit, `0` gives `""`. |
 | `SanitizeFileName(name string) string`             | ASCII file name from arbitrary input, see below. Never returns `""`. |
-| `MakeValidFileName(name string) string`            | Only trims and replaces `\ / : * " < > \|`, newline, carriage return and tab with `_`; at the start and end of the name they are removed. Keeps spaces and non-ASCII runes. Returns `"_"` for an empty result. |
+| `MakeValidFileName(name string) string`            | Only trims and replaces `\ / : * " < > \|`, newline, carriage return and tab with `_`; at the start and end of the name they are removed. Keeps spaces and non-ASCII runes. Returns `"_"` for an empty result. Not a sanitizer: `".."` and NUL bytes pass unchanged, use `SanitizeFileName` for untrusted names. |
 | `NormalizeExt(ext string) string`                  | Lower-case the extension and map `.jpg` to `.jpeg`, `.tif` to `.tiff`, `"."` to `""`. Other runes are replaced like in `SanitizeFileName`. |
 
 `SanitizeFileName` applies these steps:

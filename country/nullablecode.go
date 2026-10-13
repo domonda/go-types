@@ -194,6 +194,15 @@ func (n NullableCode) MarshalJSON() ([]byte, error) {
 	return Code(n).MarshalJSON()
 }
 
+// MarshalText implements encoding.TextMarshaler by returning String,
+// the normalized value, "" for null, or the unchanged string if it can't be
+// normalized, so that strfmt and encoding/xml write the canonical form
+// like Value and MarshalJSON. encoding/json writes map keys of string
+// types as they are and doesn't call MarshalText for them.
+func (n NullableCode) MarshalText() ([]byte, error) {
+	return []byte(n.String()), nil
+}
+
 // UnmarshalJSON implements encoding/json.Unmarshaler
 // by setting the NullableCode to null for the JSON null value,
 // so that decoding null into a field that holds a value resets it.

@@ -153,21 +153,8 @@ func (v ValidatorAsValidatErr) Validate() error {
 // If v is a nil func like ValidatorFunc(nil), whose method would call
 // the nil func, then nil is returned, like [DeepValidate] skips nil funcs.
 func Validate(v any) error {
-	switch x := v.(type) {
-	case ValidatErr:
-		if isNilFunc(v) || isNilPointerWithValueMethod(v, validatErrType) {
-			return nil
-		}
-		return x.Validate()
-	case Validator:
-		if isNilFunc(v) || isNilPointerWithValueMethod(v, validatorType) {
-			return nil
-		}
-		if !x.Valid() {
-			return fmt.Errorf("invalid %T value: %#v", v, v)
-		}
-	}
-	return nil
+	err, _ := TryValidate(v)
+	return err
 }
 
 // TryValidate returns an error and true if v implements ValidatErr or Validator

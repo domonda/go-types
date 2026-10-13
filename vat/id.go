@@ -263,6 +263,15 @@ func (id ID) MarshalJSON() ([]byte, error) {
 	return json.Marshal(string(norm))
 }
 
+// MarshalText implements encoding.TextMarshaler by returning String,
+// the normalized value or the unchanged string if it can't be
+// normalized, so that strfmt and encoding/xml write the canonical form
+// like Value and MarshalJSON. encoding/json writes map keys of string
+// types as they are and doesn't call MarshalText for them.
+func (id ID) MarshalText() ([]byte, error) {
+	return []byte(id.String()), nil
+}
+
 // JSONSchema returns the JSON schema for ID, describing it as a string with
 // the title "Value Added Tax ID" and the package-defined minimum length.
 // It has no maximum length, see IDMaxLength.

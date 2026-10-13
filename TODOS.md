@@ -96,7 +96,10 @@ none in this module or in the local checkouts of the domonda repos.
       PostgreSQL read the single element `a,b`. Options: delete the dead
       code and keep both parsers, or implement the two types on
       `internal.SplitArray` and delete `internal/pq`. Recommendation: the
-      second, so every array type parses like PostgreSQL.
+      second, so every array type parses like PostgreSQL. The parsers also
+      accept different booleans: `nullable.BoolArray` rejects
+      `{true,false}`, which `nullable.NullBoolArray` and
+      `notnull.NullBoolArray` accept like PostgreSQL does.
 - [ ] **`email.Rule`, `RuleFunc`, `BoolRule`, `AllRule` and `AnyRule`.**
       Nothing accepts a `Rule` or calls `AppliesToMessage`, and the message
       filter that `email/doc.go` implies doesn't exist. No caller. Remove
@@ -205,6 +208,16 @@ time.
       int128 arithmetic with `math/bits` for the rates like
       `DecimalAmount.Mul`, and `math.Round(f*pow)/pow` for rounding unless
       the scaled value is within a few ulps of a tie.
+      The /ship review of 2026-10-13 measured more:
+      `Amount.DecimalAmount` 9 ns to 95 ns (a string round trip),
+      `internal.UnmarshalJSONStringOrNull` about twice as slow as decoding a
+      plain string (a nested `json.Unmarshal`, a fast path for unescaped
+      strings would do), `CurrencyAmount.ScanString` parses twice,
+      `types.DeepValidate` formats a path label for every slice element
+      (about 4 allocations per byte of a `[]byte` field, skip element types
+      that can't hold a validator), uncached reflection per value in
+      `strfmt.FormatValue`, and `vat.ID.Normalized` copies a huge invalid
+      input several times before its length check rejects it.
 
 ## After v1.0
 

@@ -370,6 +370,13 @@ func TestBoolSets(t *testing.T) {
 	x := OfBool("a", "b")
 	y := OfBool("b", "c")
 
+	// Documented: membership is the presence of the key, so a key stored
+	// with false by code that predates the set functions is still a member
+	legacy := map[string]bool{"a": false}
+	if !Contains(legacy, "a") || !Equal(legacy, OfBool("a")) {
+		t.Error("a key with the value false must be a member")
+	}
+
 	if !Contains(x, "a") || !Equal(x, OfBool("b", "a")) || !Intersects(x, y) {
 		t.Error("query functions on a map[K]bool set returned the wrong result")
 	}

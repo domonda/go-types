@@ -2,6 +2,7 @@ package findencoding
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -33,6 +34,31 @@ func TestPrintFileWithAllEncodings_NegativeMaxBytes(t *testing.T) {
 	assert.NotPanics(t, func() {
 		assert.NoError(t, PrintFileWithAllEncodings(file, -1))
 	})
+}
+
+// TestPrintFileWithAllEncodings_WithoutBOM protects the purpose of the
+// helper: without a BOM the text is printed in every encoding, so the
+// reader can spot the one in which it reads correctly. "Grüße" written
+// as ISO 8859-1 bytes must come out readable under that heading and as
+// UTF-8, where the single ü and ß bytes are invalid.
+func TestPrintFileWithAllEncodings_WithoutBOM(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "latin1.txt")
+	require.NoError(t, os.WriteFile(file, []byte("Gr\xfc\xdfe"), 0o600))
+
+	stdout := os.Stdout
+	r, w, err := os.Pipe()
+	require.NoError(t, err)
+	os.Stdout = w
+	printErr := PrintFileWithAllEncodings(file, 0)
+	os.Stdout = stdout
+	require.NoError(t, w.Close())
+	out, err := io.ReadAll(r)
+	require.NoError(t, err)
+
+	require.NoError(t, printErr)
+	assert.Contains(t, string(out), "ISO 8859-1\n--------------------\nGrüße\n")
+	assert.Contains(t, string(out), "UTF-8\n--------------------\n")
+	assert.NotContains(t, string(out), "IBM Code Page 037", "EBCDIC is skipped as never useful")
 }
 
 // A file with a BOM is only printed in the encoding of the BOM.

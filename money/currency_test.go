@@ -478,6 +478,8 @@ func TestCurrency_NormalizedNames(t *testing.T) {
 		// Euro guesses
 		{in: "Euro", want: EUR},
 		{in: "Euros", want: EUR},
+		{in: "EUR (Euro)", want: EUR},
+		{in: "Euro (EUR)", want: EUR},
 		// The ISO code qualifies its own unit
 		{in: "USD Dollars", want: USD},
 		{in: "Dollars (USD)", want: USD},
@@ -519,6 +521,13 @@ func TestCurrency_NormalizedNames(t *testing.T) {
 		"British Airways",
 		"Livre", // French for book, a unit only together with sterling
 		"Great",
+		// Containing EUR is no euro: TEUR and KEUR are thousands of euros,
+		// written as EUR they would lose their scale, and words like
+		// Amateur are free text
+		"TEUR",
+		"KEUR",
+		"Amateur",
+		"Neuro",
 	} {
 		got, err := Currency(in).Normalized()
 		assert.Error(t, err, "Currency(%q).Normalized() = %q must fail instead of guessing", in, string(got))

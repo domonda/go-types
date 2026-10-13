@@ -17,7 +17,7 @@ Application code should call `NewID(ctx)`, so tests can replace the generator pe
 | `NewID(ctx)`                                     | New ID from the function stored with `ContextWithIDFunc` without keys, or `IDvDefault()` if there is none. |
 | `IDvDefault`                                     | Variable holding the default generator used by `NewID` and `IDFromContext`. It is `IDv7`. |
 | `IDv7()`                                         | Version 7 ID for `time.Now()`.                     |
-| `IDv7WithTime(t)`                                | Version 7 ID: the big-endian Unix time of `t` in milliseconds in the first 48 bits as specified by RFC 9562, followed by 74 random bits. |
+| `IDv7WithTime(t)`                                | Version 7 ID: the big-endian Unix time of `t` in milliseconds in the first 48 bits as specified by RFC 9562, followed by 74 random bits. A time before 1970 or after the year 10889 keeps only its lower 48 bits, so `V7Time` returns another time. |
 | `IDv7Deterministic(unixMilli)`                   | Version 7 ID with the passed timestamp and all random bits zero, for tests. `IDv7Deterministic(1)` is `00000000-0001-7000-8000-000000000000`. |
 | `IDv7DeterministicFunc(startAtUnixMilli)`        | Returns a goroutine-safe `func() ID` that returns `IDv7Deterministic(start)`, then `start+1`, and so on. |
 | `IDv4()`                                         | Version 4 ID with 122 random bits from `crypto/rand`. |

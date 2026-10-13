@@ -135,6 +135,11 @@ func TestSet_Map(t *testing.T) {
 	if want := NewSet(1, 2, 3); !set.Equal(want) {
 		t.Errorf("Map modified its receiver to %v", set)
 	}
+	// Documented: the result is never nil, also not for a nil set,
+	// so a caller can insert into it without a nil check
+	if got := Set[int](nil).Map(func(v int) (int, bool) { return v, true }); got == nil {
+		t.Error("Map of a nil set returned nil")
+	}
 	// Mapping several values onto the same result deduplicates them.
 	got = set.Map(func(int) (int, bool) { return 0, true })
 	if want := NewSet(0); !got.Equal(want) {

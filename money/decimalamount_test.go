@@ -1136,6 +1136,21 @@ func TestDecimalAmount_RateInterop(t *testing.T) {
 
 	// Dividing by a zero rate yields +Inf instead of panicking.
 	assert.True(t, price.DividedByRate(Rate(0)).IsInf(1))
+
+	// Documented: a rate whose shortest decimal has more than 18 decimals
+	// can't be an exact DecimalAmount, so the result is the float64
+	// product or quotient, rounded to the 18 decimals a DecimalAmount
+	// holds, instead of an error or an overflowed scale.
+	tiny := 1.2345678901234567e-5 // shortest decimal has 21 decimals
+	one := NewDecimalAmount(1, 0)
+	for name, got := range map[string]DecimalAmount{
+		"MultipliedByRate": one.MultipliedByRate(Rate(tiny)),
+		"Percentage":       one.Percentage(tiny * 100),
+	} {
+		assert.InDelta(t, tiny, got.Float(), 1e-18, name)
+		assert.LessOrEqual(t, got.Scale(), MaxDecimalAmountScale, name)
+	}
+	assert.InDelta(t, 1/tiny, one.DividedByRate(Rate(tiny)).Float(), 1e-9)
 }
 
 // TestDecimalAmount_rateMethodsRoundShortestDecimal protects the rounding

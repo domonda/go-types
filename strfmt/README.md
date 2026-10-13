@@ -174,7 +174,12 @@ All three register the same `TypeFormatters`:
 | `money.DecimalAmount`                              | `config.MoneyAmount.FormatDecimalAmount`, also for zero. |
 | `money.CurrencyAmount`                             | `config.MoneyAmount.FormatCurrencyAmount`.         |
 | `money.CurrencyDecimalAmount`                      | `config.MoneyAmount.FormatCurrencyDecimalAmount`.  |
-| `money.NullableAmount`, `money.NullableCentAmount`, `money.NullableDecimalAmount` | Like the wrapped type, `config.Nil` for null.      |
+
+The nullable money types `money.NullableAmount`, `money.NullableCentAmount` and
+`money.NullableDecimalAmount` need no formatter of their own: like every
+`nullable.Type[T]` they are formatted like the wrapped type, and as `config.Nil`
+for null. The types that normalize their `Value` and JSON, like `money.Currency`,
+`bank.IBAN` and `email.Address`, are formatted normalized by their `MarshalText`.
 
 ## MoneyFormat
 

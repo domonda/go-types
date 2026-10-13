@@ -31,9 +31,9 @@ type FormatConfig struct {
 // It pre-registers type-specific formatters for date.Date,
 // date.NullableDate, time.Time, nullable.Time, time.Duration,
 // money.Amount, money.CentAmount, money.DecimalAmount,
-// money.CurrencyAmount, money.CurrencyDecimalAmount,
-// money.NullableAmount, money.NullableCentAmount,
-// and money.NullableDecimalAmount.
+// money.CurrencyAmount, and money.CurrencyDecimalAmount.
+// The nullable money types, like any nullable.Type[T],
+// are formatted like T or as config.Nil for null without own formatters.
 func NewFormatConfig() *FormatConfig {
 	return &FormatConfig{
 		Float:       EnglishFloatFormat(-1),
@@ -54,9 +54,6 @@ func NewFormatConfig() *FormatConfig {
 			reflect.TypeFor[money.DecimalAmount]():         FormatterFunc(formatMoneyDecimalAmountString),
 			reflect.TypeFor[money.CurrencyAmount]():        FormatterFunc(formatMoneyCurrencyAmountString),
 			reflect.TypeFor[money.CurrencyDecimalAmount](): FormatterFunc(formatMoneyCurrencyDecimalAmountString),
-			reflect.TypeFor[money.NullableAmount]():        nullableMoneyFormatter((*MoneyFormat).FormatAmount),
-			reflect.TypeFor[money.NullableCentAmount]():    nullableMoneyFormatter((*MoneyFormat).FormatCentAmount),
-			reflect.TypeFor[money.NullableDecimalAmount](): nullableMoneyFormatter((*MoneyFormat).FormatDecimalAmount),
 		},
 	}
 }
@@ -143,17 +140,4 @@ func formatMoneyCurrencyAmountString(val reflect.Value, config *FormatConfig) st
 
 func formatMoneyCurrencyDecimalAmountString(val reflect.Value, config *FormatConfig) string {
 	return config.MoneyAmount.FormatCurrencyDecimalAmount(val.Interface().(money.CurrencyDecimalAmount))
-}
-
-// nullableMoneyFormatter returns a Formatter for the nullable.Type of the
-// money type T that formats null as config.Nil and a non-null value with
-// formatMoney using config.MoneyAmount, like T itself is formatted.
-func nullableMoneyFormatter[T any](formatMoney func(*MoneyFormat, T) string) FormatterFunc {
-	return func(val reflect.Value, config *FormatConfig) string {
-		n := val.Interface().(nullable.Type[T])
-		if n.IsNull() {
-			return config.Nil
-		}
-		return formatMoney(&config.MoneyAmount, n.Get())
-	}
 }

@@ -702,6 +702,25 @@ func TestBuildRawMessage_NonASCIIFromName(t *testing.T) {
 	require.Equal(t, email.NullableAddressList(`"Bjørn" <bjoern@example.com>`), msgParsed.Bcc)
 }
 
+// TestBuildRawMessage_QuotedLocalPart protects that the headers name the
+// mailbox that was validated: a quoted local part with special characters
+// written without its quotes reads as another address, here at evil.com,
+// and Recipients, which sends the message, must keep the quotes too.
+func TestBuildRawMessage_QuotedLocalPart(t *testing.T) {
+	const addr = `"victim@evil.com>"@example.com`
+	msg := &email.Message{From: addr, To: addr, Body: "Body"}
+	raw, err := msg.BuildRawMessage()
+	require.NoError(t, err)
+	require.Contains(t, string(raw), "From: "+addr+"\r\n")
+	require.Contains(t, string(raw), "To: "+addr+"\r\n")
+	require.Equal(t, []string{addr}, msg.Recipients())
+
+	parsed, err := email.ParseMIMEMessage(strings.NewReader(string(raw)))
+	require.NoError(t, err)
+	require.Equal(t, email.Address(addr), parsed.From)
+	require.Equal(t, []string{addr}, parsed.Recipients())
+}
+
 // TestBuildRawMessage_NilAttachment protects that a JSON null in the
 // attachments array, which encoding/json decodes as a nil pointer,
 // returns an error instead of crashing the caller with a nil dereference.

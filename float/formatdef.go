@@ -15,6 +15,8 @@ import (
 // FormatDef implements encoding/json.Marshaler and encoding/json.Unmarshaler
 // representing the separators as JSON strings of one character like ","
 // or as empty string for a zero separator, see FormatDef.UnmarshalJSON.
+// The json tags of the fields name the keys of that representation,
+// but the separators are not written as numbers like their rune type.
 type FormatDef struct {
 	ThousandsSep rune `json:"thousandsSep,omitempty"`
 	DecimalSep   rune `json:"decimalSep"`

@@ -178,8 +178,8 @@ go test ./...          # all tests
 
 `go-enum` and `gosec` are pinned as tool dependencies in `tools/go.mod`, so the
 main module does not depend on them. CI builds, vets, checks that the
-generated enum methods are up to date and runs the tests on every pull
-request.
+generated enum methods are up to date and runs the tests with the race
+detector on every pull request.
 
 ## Status
 

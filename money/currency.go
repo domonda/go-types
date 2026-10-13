@@ -113,8 +113,8 @@ func (c *Currency) ValidPtr() bool {
 // and the ISO 4217 currency names of two or more words like
 // "Canadian Dollar", all compared case-insensitively.
 //
-// Other strings are guessed by the unit they name: anything containing
-// EUR as EUR, "Dollar(s)" as USD, "Franc(s)" or "Franken" as CHF, and
+// Other strings are guessed by the unit they name: "EUR", "Euro(s)"
+// as EUR, "Dollar(s)" as USD, "Franc(s)" or "Franken" as CHF, and
 // "Pound(s)", "Pfund" or "Sterling" as GBP. The unit may be qualified with
 // the country (US, U.S., USA or United States for USD, Swiss, Schweizer,
 // Schweizerische(r) or suisse(s) for CHF, British, Great British or livre
@@ -147,7 +147,7 @@ func (c Currency) Normalized() (Currency, error) {
 		// and "US-Dollar" the two words "US" and "DOLLAR"
 		words := strings.FieldsFunc(strings.ReplaceAll(str, ".", ""), func(r rune) bool { return !unicode.IsLetter(r) })
 		switch {
-		case strings.Contains(str, "EUR"):
+		case unitWithQualifiers(words, []string{"EUR", "EURO", "EUROS"}):
 			return "EUR", nil
 		case unitWithQualifiers(words, []string{"FRANC", "FRANCS", "FRANKEN", "CHF"}, "SWISS", "SCHWEIZER", "SCHWEITZER", "SCHWEIZERISCHE", "SCHWEIZERISCHER", "SCHWEIZERISCHEN", "SUISSE", "SUISSES"):
 			return "CHF", nil
@@ -229,6 +229,15 @@ func (c Currency) Value() (driver.Value, error) {
 func (c Currency) MarshalJSON() ([]byte, error) {
 	norm, _ := c.Normalized()
 	return json.Marshal(string(norm))
+}
+
+// MarshalText implements encoding.TextMarshaler by returning String,
+// the normalized value or the unchanged string if it can't be
+// normalized, so that strfmt and encoding/xml write the canonical form
+// like Value and MarshalJSON. encoding/json writes map keys of string
+// types as they are and doesn't call MarshalText for them.
+func (c Currency) MarshalText() ([]byte, error) {
+	return []byte(c.String()), nil
 }
 
 // Symbol returns the currency symbol like € for EUR if available,

@@ -524,6 +524,8 @@ func TestNullableIDFromAny(t *testing.T) {
 		{name: "invalid version string", val: invalidVersion.String(), want: invalidVersion.Nullable(), wantErr: true},
 		{name: "invalid version []byte text", val: []byte(invalidVersion.String()), want: invalidVersion.Nullable(), wantErr: true},
 		{name: "invalid version []byte binary", val: invalidVersion.Bytes(), want: invalidVersion.Nullable(), wantErr: true},
+		// Bytes that are neither text nor 16 binary bytes are an error, not NULL
+		{name: "invalid []byte length", val: []byte{1, 2, 3}, want: IDNull, wantErr: true},
 		{name: "empty string", val: "", want: IDNull, wantErr: true},
 		{name: "invalid string", val: "not-a-uuid", want: IDNull, wantErr: true},
 		{name: "unsupported type", val: 42, want: IDNull, wantErr: true},

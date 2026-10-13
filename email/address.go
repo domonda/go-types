@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"net/mail"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/invopop/jsonschema"
 
@@ -31,44 +30,35 @@ func AddressFrom(addr *mail.Address) Address {
 	if addr == nil {
 		return ""
 	}
-	if addr.Name == "" {
+	// The name is cleaned like by ParseAddress,
+	// so that the result parses back to the same address
+	name := cleanName(addr.Name)
+	if name == "" {
 		// Without name just return the address part.
 		// mail.Address.String always puts the address part
 		// within angle brackets which is only needed
 		// if there is also a name part.
-		return Address(addr.Address)
+		return Address(addrSpec(addr))
 	}
-	// Without name String formats only the address part,
-	// quoting the local part where needed
-	addrPart := (&mail.Address{Address: addr.Address}).String()
-	return Address(quoteName(addr.Name) + " " + addrPart)
+	return Address(`"` + name + `" <` + addrSpec(addr) + ">")
 }
 
-// quoteName returns name as quoted string like mail.Address.String
-// does for an ASCII name, also for a non-ASCII name, which is allowed
-// as UTF-8 by RFC 6532. Like mail.Address.String, it escapes quotes and
-// backslashes and drops ASCII control characters other than tab.
-func quoteName(name string) string {
-	var b strings.Builder
-	b.WriteByte('"')
-	for _, r := range name {
-		switch {
-		case r == '"' || r == '\\':
-			b.WriteByte('\\')
-			b.WriteRune(r)
-		case r == ' ' || r == '\t' || ('!' <= r && r <= '~') || r >= utf8.RuneSelf:
-			b.WriteRune(r)
-		}
+// addrSpec returns the address part of addr (local-part@domain)
+// formatted like mail.Address.String, which quotes a local part
+// that needs quoting, like "a b"@example.com, but without angle brackets.
+func addrSpec(addr *mail.Address) string {
+	if addr.Address == "" {
+		return ""
 	}
-	b.WriteByte('"')
-	return b.String()
+	s := (&mail.Address{Address: addr.Address}).String()
+	return strings.TrimSuffix(strings.TrimPrefix(s, "<"), ">")
 }
 
 // asciiAddress formats addr like AddressFrom, but RFC 2047 encodes
 // a non-ASCII name like mail.Address.String does.
 func asciiAddress(addr *mail.Address) string {
 	if addr.Name == "" {
-		return addr.Address
+		return addrSpec(addr)
 	}
 	return addr.String()
 }
@@ -136,6 +126,15 @@ func (a Address) MarshalJSON() ([]byte, error) {
 	return json.Marshal(string(norm))
 }
 
+// MarshalText implements encoding.TextMarshaler by returning String,
+// the normalized value or the unchanged string if it can't be
+// normalized, so that strfmt and encoding/xml write the canonical form
+// like Value and MarshalJSON. encoding/json writes map keys of string
+// types as they are and doesn't call MarshalText for them.
+func (a Address) MarshalText() ([]byte, error) {
+	return []byte(a.String()), nil
+}
+
 // Validate checks if the Address is a valid email address format.
 // Returns an error if the address cannot be parsed.
 func (a Address) Validate() error {
@@ -177,7 +176,7 @@ func (a Address) AddressPartString() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return parsed.Address, nil
+	return addrSpec(parsed), nil
 }
 
 // AddressPart returns the normalized lowercase address part
@@ -191,11 +190,12 @@ func (a Address) AddressPart() (Address, error) {
 // LocalPart returns the part of the email address before the @ symbol.
 // This is the local part of the email address (e.g., "user" from "user@example.com").
 func (a Address) LocalPart() (string, error) {
-	parsed, err := a.Parse()
+	addr, err := a.AddressPartString()
 	if err != nil {
 		return "", err
 	}
-	return parsed.Address[:strings.IndexByte(parsed.Address, '@')], nil
+	// The last @, because a quoted local part can contain one
+	return addr[:strings.LastIndexByte(addr, '@')], nil
 }
 
 // DomainPart returns the domain part of the email address (after the @ symbol).

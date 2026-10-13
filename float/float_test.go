@@ -141,6 +141,11 @@ func TestRoundToDecimals_overflow(t *testing.T) {
 	assert.Equal(t, 1.2345e-300, RoundToDecimals(1.2345e-300, 310))
 	assert.Equal(t, 0.0, RoundToDecimals(1.5, -400))
 	assert.Equal(t, 0.0, RoundToDecimals(1e300, -400))
+	// Rounding to a power of ten more than ten times the value is zero,
+	// while one ten times the value or less rounds to it
+	assert.Zero(t, RoundToDecimals(4.0, -2))
+	assert.Zero(t, RoundToDecimals(-4.0, -2))
+	assert.Equal(t, 100.0, RoundToDecimals(51.0, -2))
 	assert.Equal(t, float32(math.MaxFloat32), RoundToDecimals(float32(math.MaxFloat32), 2))
 	assert.Equal(t, float32(1.5), RoundToDecimals(float32(1.5), 400))
 

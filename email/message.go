@@ -128,24 +128,24 @@ func NewMessage(from Address, to AddressList, subject, body string, bodyHTML nul
 func (msg *Message) Recipients() []string {
 	var recipients []string
 	exists := func(a *mail.Address) bool {
-		return slices.Contains(recipients, a.Address)
+		return slices.Contains(recipients, addrSpec(a))
 	}
 	to, _ := msg.To.Parse()
 	for _, a := range to {
 		if !exists(a) {
-			recipients = append(recipients, a.Address)
+			recipients = append(recipients, addrSpec(a))
 		}
 	}
 	cc, _ := msg.Cc.Parse()
 	for _, a := range cc {
 		if !exists(a) {
-			recipients = append(recipients, a.Address)
+			recipients = append(recipients, addrSpec(a))
 		}
 	}
 	bcc, _ := msg.Bcc.Parse()
 	for _, a := range bcc {
 		if !exists(a) {
-			recipients = append(recipients, a.Address)
+			recipients = append(recipients, addrSpec(a))
 		}
 	}
 	return recipients

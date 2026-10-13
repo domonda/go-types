@@ -12,10 +12,14 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/domonda/go-types/bank"
+	"github.com/domonda/go-types/country"
 	"github.com/domonda/go-types/date"
+	"github.com/domonda/go-types/email"
+	"github.com/domonda/go-types/language"
 	"github.com/domonda/go-types/money"
 	"github.com/domonda/go-types/nullable"
 	"github.com/domonda/go-types/uu"
+	"github.com/domonda/go-types/vat"
 )
 
 var caseSet = map[*FormatConfig]map[any]string{
@@ -183,6 +187,43 @@ func TestFormatTextMarshaler(t *testing.T) {
 	got = Format(nullable.TrimmedString(" trimmed "), config)
 	if got != "trimmed" {
 		t.Errorf("Format(nullable.TrimmedString(%q)) = %q, want %q", " trimmed ", got, "trimmed")
+	}
+}
+
+// TestFormatNormalizingTypes protects that CSV and other strfmt output
+// writes the types that normalize their Value and JSON in the same
+// canonical form, through their MarshalText method. Formatted as their
+// string kind, "eur" and "EUR" would be different currencies in an export
+// that is read back or compared with the database.
+func TestFormatNormalizingTypes(t *testing.T) {
+	config := NewEnglishFormatConfig()
+	tests := []struct {
+		value any
+		want  string
+	}{
+		{value: money.Currency("eur"), want: "EUR"},
+		{value: money.NullableCurrency("eur"), want: "EUR"},
+		{value: language.Code("EN"), want: "en"},
+		{value: country.Code("de"), want: "DE"},
+		{value: country.NullableCode("Österreich"), want: "AT"},
+		{value: bank.IBAN("DE89 3704 0044 0532 0130 00"), want: "DE89370400440532013000"},
+		{value: bank.NullableIBAN("DE89 3704 0044 0532 0130 00"), want: "DE89370400440532013000"},
+		{value: bank.BIC("BKAU AT WW"), want: "BKAUATWWXXX"},
+		{value: bank.NullableBIC("BKAU AT WW"), want: "BKAUATWWXXX"},
+		{value: vat.ID("atu 1022 3006"), want: "ATU10223006"},
+		{value: vat.NullableID("atu 1022 3006"), want: "ATU10223006"},
+		{value: email.Address("Jürgen <J@Example.com>"), want: `"Jürgen" <j@example.com>`},
+		{value: email.NullableAddress("J@Example.com"), want: "j@example.com"},
+		{value: email.AddressList("A@Example.com,B@Example.com"), want: "a@example.com, b@example.com"},
+		{value: email.NullableAddressList("A@Example.com"), want: "a@example.com"},
+		// Invalid values are written unchanged like by Value
+		{value: money.Currency("XYZ"), want: "XYZ"},
+		// Null is the Nil placeholder, not the empty text
+		{value: money.NullableCurrency(""), want: config.Nil},
+		{value: email.NullableAddress("  "), want: config.Nil},
+	}
+	for _, tt := range tests {
+		assert.Equal(t, tt.want, Format(tt.value, config), "Format(%T(%#v))", tt.value, tt.value)
 	}
 }
 

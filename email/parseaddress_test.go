@@ -46,9 +46,11 @@ var (
 		"Erik\nUnger <�erik@domonda.com�>":                  {Name: "Erik Unger", Address: "erik@domonda.com"},
 		`erik.unger@domonda.com <erik.unger@domonda.com>`: {Name: "", Address: "erik.unger@domonda.com"},
 
-		// Not standard conform, but we still have to be able to parse them:
-		`"scanner@" <"example.at scanner"@example.at>`:     {Name: "scanner@", Address: "example.at.scanner@example.at"},
-		`"Unger, Erik" <"Unger, Erik"@domonda.com>`:        {Name: "Unger, Erik", Address: "unger..erik@domonda.com"},
+		// Quoted local parts keep their content, only lower cased, so the
+		// address stays the same mailbox. Like for net/mail.ParseAddress,
+		// mail.Address.Address holds the content without the quotes.
+		`"scanner@" <"example.at scanner"@example.at>`:     {Name: "scanner@", Address: "example.at scanner@example.at"},
+		`"Unger, Erik" <"Unger, Erik"@domonda.com>`:        {Name: "Unger, Erik", Address: "unger, erik@domonda.com"},
 		`"\"Example\" <ar1@example.com>" <ar@example.com>`: {Name: "Example", Address: "ar@example.com"}, // Use "ar1" in name part vs "ar" in address part to test picking up the right part
 		`<xy=erik@example.com>`:                            {Name: "", Address: "xy=erik@example.com"},
 		// `A!#$%&'*+-/=?^_` + "`" + `{|}~@example.com`:      {Name: "", Address: "a!#$%&'*+-/=?^_`{|}~@example.com"},

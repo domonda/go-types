@@ -134,7 +134,7 @@ func (l AddressList) UniqueAddressParts() (AddressSet, error) {
 	}
 	set := make(AddressSet, len(parsed))
 	for _, addr := range parsed {
-		set.Add(Address(addr.Address))
+		set.Add(Address(addrSpec(addr)))
 	}
 	return set, nil
 }
@@ -224,6 +224,15 @@ func (l AddressList) Value() (driver.Value, error) {
 func (l AddressList) MarshalJSON() ([]byte, error) {
 	norm, _ := l.Normalized()
 	return json.Marshal(string(norm))
+}
+
+// MarshalText implements encoding.TextMarshaler by returning String,
+// the normalized value or the unchanged string if it can't be
+// normalized, so that strfmt and encoding/xml write the canonical form
+// like Value and MarshalJSON. encoding/json writes map keys of string
+// types as they are and doesn't call MarshalText for them.
+func (l AddressList) MarshalText() ([]byte, error) {
+	return []byte(l.String()), nil
 }
 
 // Nullable converts the AddressList to a NullableAddressList type.

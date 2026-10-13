@@ -276,6 +276,15 @@ func (bic BIC) MarshalJSON() ([]byte, error) {
 	return json.Marshal(string(norm))
 }
 
+// MarshalText implements encoding.TextMarshaler by returning String,
+// the normalized value or the unchanged string if it can't be
+// normalized, so that strfmt and encoding/xml write the canonical form
+// like Value and MarshalJSON. encoding/json writes map keys of string
+// types as they are and doesn't call MarshalText for them.
+func (bic BIC) MarshalText() ([]byte, error) {
+	return []byte(bic.String()), nil
+}
+
 // JSONSchema returns the JSON schema definition for the BIC type.
 func (BIC) JSONSchema() *jsonschema.Schema {
 	return &jsonschema.Schema{

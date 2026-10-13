@@ -275,7 +275,11 @@ like `"Jürgen Müller" <j@x.de>` stays readable; the email types have an
 extra `ASCII()` method that RFC 2047 encodes non-ASCII names for message
 headers. `StringOr(alternative)` of the nullable types returns the
 normalized form, or the alternative for a null value and for a value that
-can't be normalized. The set types are the exception: the `String()` of
+can't be normalized. `MarshalText` returns `String()`, so `strfmt` and
+`encoding/xml` write the canonical form too. One output stays raw:
+`encoding/json` writes the keys of a map with a string key type as they are,
+so `map[money.Currency]int{"eur": 1}` marshals as `{"eur":1}`; normalize
+such keys before building the map. The set types are the exception: the `String()` of
 `email.AddressSet`, `types.Set`, `uu.IDSet` and `strutil.StringSet` lists
 the elements as given, because normalizing could merge two elements and
 the string would no longer show every element of the set.

@@ -225,6 +225,15 @@ func (iban NullableIBAN) MarshalJSON() ([]byte, error) {
 	return IBAN(iban).MarshalJSON()
 }
 
+// MarshalText implements encoding.TextMarshaler by returning String,
+// the normalized value, "" for null, or the unchanged string if it can't be
+// normalized, so that strfmt and encoding/xml write the canonical form
+// like Value and MarshalJSON. encoding/json writes map keys of string
+// types as they are and doesn't call MarshalText for them.
+func (iban NullableIBAN) MarshalText() ([]byte, error) {
+	return []byte(iban.String()), nil
+}
+
 // UnmarshalJSON implements encoding/json.Unmarshaler
 // by setting the NullableIBAN to null for the JSON null value,
 // so that decoding null into a field that holds a value resets it.

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/mail"
 	"testing"
+	"unicode"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -43,10 +44,16 @@ func TestAddressFrom(t *testing.T) {
 		// Unlike mail.Address.String, a non-ASCII name is not RFC 2047
 		// encoded, so the Address stays readable in JSON and databases.
 		{name: `non-ASCII name`, addr: &mail.Address{Name: "Jürgen Müller", Address: "j@example.com"}, want: `"Jürgen Müller" <j@example.com>`},
-		// Quoted like mail.Address.String: quotes and backslashes escaped,
-		// control characters that would break a header line dropped.
-		{name: `escaped name`, addr: &mail.Address{Name: `Say "Hi" \ Bye`, Address: "j@example.com"}, want: `"Say \"Hi\" \\ Bye" <j@example.com>`},
-		{name: `control characters`, addr: &mail.Address{Name: "A\r\nB\x00C", Address: "j@example.com"}, want: `"ABC" <j@example.com>`},
+		// Quotes and backslashes are dropped instead of escaped, because
+		// the parser reads no escapes in names, an escaped quote would end
+		// the name and turn the rest into another address. Whitespace becomes
+		// a space and other runes that are not graphic, like the control
+		// characters that would break a header line, are dropped.
+		{name: `quotes and backslashes`, addr: &mail.Address{Name: `Say "Hi" \ Bye`, Address: "j@example.com"}, want: `"Say Hi  Bye" <j@example.com>`},
+		{name: `control characters`, addr: &mail.Address{Name: "A\r\nB\x00C", Address: "j@example.com"}, want: `"A  BC" <j@example.com>`},
+		{name: `only quotes`, addr: &mail.Address{Name: `""`, Address: "j@example.com"}, want: `j@example.com`},
+		// A local part that needs quoting is quoted like by mail.Address.String
+		{name: `quoted local part`, addr: &mail.Address{Address: "a b@example.com"}, want: `"a b"@example.com`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -111,6 +118,50 @@ func TestAddress_NormalizedIsIdempotent(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, once, twice)
 			assert.True(t, once.ValidAndNormalized())
+		})
+	}
+}
+
+// TestAddress_NormalizedRoundTrip protects that what Value, MarshalJSON
+// and String persist is the same mailbox as the valid input: normalizing
+// is idempotent, and the written value parses back as exactly one address
+// with the same address part. A quoted local part that lost its quotes
+// became another mailbox or even another domain, and a display name with
+// an escaped quote, which the parser doesn't read, split into two
+// addresses, so stored data could name an extra recipient.
+func TestAddress_NormalizedRoundTrip(t *testing.T) {
+	for _, addr := range []Address{
+		`"a b"@example.com`,
+		`"Doe, John"@example.com`,
+		`"victim@evil.com>"@example.com`,
+		`a@trusted.com (x" attacker@evil.com, z)`,
+		`=?utf-8?q?Bank=E2=80=AE_x=C2=85y?= <a@example.com>`,
+		`Jürgen Müller <J@Example.com>`,
+		`"Müller, Jürgen" <j@x.de>`,
+		`mike@doe.com (Mike Doe)`,
+	} {
+		t.Run(string(addr), func(t *testing.T) {
+			require.NoError(t, addr.Validate())
+			wantPart, err := addr.AddressPart()
+			require.NoError(t, err)
+
+			norm, err := addr.Normalized()
+			require.NoError(t, err)
+			again, err := norm.Normalized()
+			require.NoError(t, err)
+			assert.Equal(t, norm, again, "Normalized must be idempotent")
+			for _, r := range string(norm) {
+				assert.True(t, r == ' ' || unicode.IsGraphic(r), "rune %U in %q", r, norm)
+			}
+
+			v, err := addr.Value()
+			require.NoError(t, err)
+			written, err := Address(v.(string)).AsList().Split()
+			require.NoError(t, err)
+			require.Len(t, written, 1, "Value %q must be one address", v)
+			gotPart, err := written[0].AddressPart()
+			require.NoError(t, err)
+			assert.Equal(t, wantPart, gotPart, "Value %q must be the same mailbox", v)
 		})
 	}
 }

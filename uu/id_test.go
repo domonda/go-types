@@ -995,6 +995,10 @@ func TestID_V7Time(t *testing.T) {
 		{name: "version 4 UUID", id: IDv4(), want: time.Time{}, wantOK: false},
 		{name: "version 7 UUID fixed timestamp", id: IDv7WithTime(timestamp), want: timestamp, wantOK: true},
 		{name: "version 7 UUID current timestamp", id: IDv7WithTime(now), want: now, wantOK: true},
+		// RFC 9562 stores unsigned 48 bit milliseconds since 1970,
+		// so the first and the last representable time round trip
+		{name: "version 7 UUID Unix epoch", id: IDv7WithTime(time.UnixMilli(0)), want: time.UnixMilli(0), wantOK: true},
+		{name: "version 7 UUID last 48 bit time", id: IDv7WithTime(time.UnixMilli(1<<48 - 1)), want: time.UnixMilli(1<<48 - 1), wantOK: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1006,6 +1010,17 @@ func TestID_V7Time(t *testing.T) {
 			require.Equal(t, tt.want, got)
 		})
 	}
+}
+
+// A time outside of what RFC 9562 can store, before 1970 or after the
+// year 10889, keeps only its lower 48 bits and so doesn't round trip.
+// The README documents it, this pins that it is a documented limit
+// of the format, not a time that silently comes back correct.
+func TestIDv7WithTime_OutOfRange(t *testing.T) {
+	before1970 := time.Date(1960, 1, 1, 0, 0, 0, 0, time.UTC)
+	got, ok := IDv7WithTime(before1970).V7Time()
+	require.True(t, ok)
+	require.False(t, got.Equal(before1970), "%s must not round trip", before1970)
 }
 
 // TestIDv7_RFC9562Layout checks the byte layout of the 48 bit

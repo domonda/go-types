@@ -131,16 +131,19 @@ func parseAddress(addr string) (mailAddress *mail.Address, unparsed string, err 
 		if err != nil {
 			return nil, "", err
 		}
-		name = strings.ReplaceAll(name, `"`, ``)
-		name = strings.ReplaceAll(name, `\`, ``)
-		name = strings.ReplaceAll(name, "\t", " ")
-		name = strutil.TrimSpace(name)
+		// Cleaned after decoding, because an encoded word
+		// can hold runes that sanitizeAddr removed from the input
+		name = cleanName(name)
 	}
 
 	local := strings.ToLower(addr[i[6]:i[7]])
-	local = strings.ReplaceAll(local, `"`, ``)
-	local = strings.ReplaceAll(local, " ", ".")
-	local = strings.ReplaceAll(local, ",", ".")
+	if len(local) >= 2 && local[0] == '"' && local[len(local)-1] == '"' {
+		// A quoted local part keeps its content, so the address
+		// stays the same mailbox. Like for net/mail.ParseAddress
+		// the quotes are not part of mail.Address.Address,
+		// addrSpec adds them again where needed.
+		local = unquoteLocalPart(local[1 : len(local)-1])
+	}
 
 	domain := strings.ToLower(addr[i[8]:i[9]])
 
@@ -151,7 +154,7 @@ func parseAddress(addr string) (mailAddress *mail.Address, unparsed string, err 
 	// Example: mike@doe.com (Mike Doe)
 	if name == "" && strings.HasPrefix(unparsed, "(") {
 		if end := strings.Index(unparsed, ")"); end != -1 {
-			name = strutil.TrimSpace(unparsed[1:end])
+			name = cleanName(unparsed[1:end])
 			unparsed = strings.TrimLeft(unparsed[end+1:], " ")
 		}
 	}
@@ -177,6 +180,46 @@ func parseAddress(addr string) (mailAddress *mail.Address, unparsed string, err 
 	}
 
 	return mailAddress, unparsed, nil
+}
+
+// cleanName returns a display name without the quotes and backslashes
+// that the parser can't read escaped (quotedNamePart has no escapes),
+// without runes that are not graphic, like bidi overrides and control
+// characters, and with whitespace mapped to spaces.
+func cleanName(name string) string {
+	return strutil.TrimSpace(strings.Map(
+		func(r rune) rune {
+			switch {
+			case r == '"' || r == '\\':
+				return -1
+			case unicode.IsSpace(r):
+				return ' '
+			case !unicode.IsGraphic(r):
+				return -1
+			}
+			return r
+		},
+		name,
+	))
+}
+
+// unquoteLocalPart returns the content of a quoted local part
+// with its quoted-pairs (a backslash followed by a rune) unescaped.
+func unquoteLocalPart(quoted string) string {
+	if !strings.Contains(quoted, `\`) {
+		return quoted
+	}
+	var b strings.Builder
+	escaped := false
+	for _, r := range quoted {
+		if r == '\\' && !escaped {
+			escaped = true
+			continue
+		}
+		escaped = false
+		b.WriteRune(r)
+	}
+	return b.String()
 }
 
 // ParseAddressList parses an email address list less strict

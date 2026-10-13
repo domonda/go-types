@@ -23,6 +23,9 @@ func TestLenString_Validate(t *testing.T) {
 		{name: "min equals max", s: NewLenString("abc", 3, 3)},
 		{name: "one shorter than min", s: NewLenString("a", 2, 4), wantErr: "shorter than minimum of 2"},
 		{name: "one longer than max", s: NewLenString("abcde", 2, 4), wantErr: "longer than maximum of 4"},
+		// Documented: the length is counted in bytes, so the 2 runes
+		// of "äö" with 4 bytes exceed a maximum of 3
+		{name: "multi-byte runes count as bytes", s: NewLenString("äö", 0, 3), wantErr: "longer than maximum of 3"},
 		{name: "negative min", s: NewLenString("a", -1, 4), wantErr: "negative minimum length -1"},
 		{name: "negative max", s: NewLenString("a", 0, -1), wantErr: "negative maximum length -1"},
 		{name: "min greater than max", s: NewLenString("abc", 4, 2), wantErr: "minimum length 4 is greater than maximum length 2"},

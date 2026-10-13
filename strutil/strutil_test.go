@@ -109,6 +109,12 @@ func Test_MakeValidFileName(t *testing.T) {
 		"../Back\\Path":                    ".._Back_Path",
 		"\nHello/Darkness<my>old\\Friend:": "Hello_Darkness_my_old_Friend",
 		":nix>":                            "nix",
+
+		// Documented limits: only the listed characters are replaced,
+		// so a name of dots and NUL bytes pass unchanged,
+		// use SanitizeFileName for untrusted names
+		"..":     "..",
+		"a\x00b": "a\x00b",
 	}
 
 	for filename, expected := range filenameTable {
