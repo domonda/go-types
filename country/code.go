@@ -17,11 +17,10 @@ import (
 
 // Invalid represents an invalid country code.
 //
-// Declared as a conversion instead of `Invalid Code = ""` so that go-enum
-// does not pick it up as one of the Code enum values: Invalid is not a
-// valid country code and must stay out of Code.Enums() and
-// Code.EnumStrings().
-const Invalid = Code("")
+// Marked with //#exclude so that go-enum does not pick it up as one of the
+// Code enum values: Invalid is not a valid country code and must stay out
+// of Code.Enums() and Code.EnumStrings().
+const Invalid Code = "" //#exclude
 
 // Compile-time check that Code implements types.NormalizableValidator[Code]
 var _ types.NormalizableValidator[Code] = Code("")
@@ -264,9 +263,7 @@ func (c Code) Nullable() NullableCode {
 ///////////////////////////////////////////////////////////////////////////////
 // ISO 3166-1 alpha-2 country code constants
 //
-// These represent all officially recognized country codes and have to live
-// in the same file as `type Code string //#enum` because go-enum collects
-// the enum values of a type from the file that declares it.
+// These represent all officially recognized country codes.
 
 const (
 	AF Code = "AF" // Afghanistan

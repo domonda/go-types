@@ -9,10 +9,10 @@ ISO 3166-1 alpha-2 country codes. `Code` normalizes the ways people and other sy
 ```go
 type Code string //#enum
 
-const Invalid = Code("")
+const Invalid Code = "" //#exclude
 ```
 
-`Invalid` is written as a conversion so that go-enum leaves it out of `Enums()`.
+`Invalid` is marked `//#exclude` so that go-enum leaves it out of `Enums()`.
 
 ### Constants
 
@@ -206,7 +206,7 @@ func main() {
 
 ## Adding a country code
 
-1. Add the constant to the `const` block in `country/code.go`: `XX Code = "XX" // Name`. It must live in the file that declares `type Code string //#enum`, because go-enum only reads that file.
+1. Add the constant to the `const` block in `country/code.go`: `XX Code = "XX" // Name`.
 2. Add `XX: "Name"` to `countryMap` in `country/data.go`. `TestCode_EnumsMatchCountryMap` and `TestCode_EnglishName` fail if the two lists differ. If it applies, also add the code to `euCountries`, alternative spellings to `AltCodes`, and a VAT format to `vat/formats.go`.
 3. Run `./run-go-enum.sh` from the repository root to regenerate `Enums()` and `EnumStrings()`, then `go test ./...`.
 4. CI runs `go-enum -validate` and fails if the generated methods are stale.

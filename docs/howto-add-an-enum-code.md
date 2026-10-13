@@ -8,7 +8,7 @@ runs. The three types are string enums marked `//#enum`; their `Enums()` and
 ## Prerequisites
 
 - A clone of the repository, with your working directory at its root.
-- Go 1.26 or later. go-enum v1.1.0 is pinned as a tool in `tools/go.mod`, a
+- Go 1.26 or later. go-enum v1.2.0 is pinned as a tool in `tools/go.mod`, a
   separate module, so `go tool` downloads it on the first run. That run needs
   network access or a module cache that already has it.
 - `bash`, to run `./run-go-enum.sh`.
@@ -20,8 +20,9 @@ with the real code and name.
 
 ### 1. Add the constant to the file that declares the type
 
-go-enum collects the enum values of a type only from the file that declares
-it, so the constant must go into that file's constant block:
+go-enum collects the typed constants of an enum type from every file of the
+package, but all codes of a type live in the constant block of the file that
+declares it:
 
 | Type             | File                | Add to the `const` block after the type       |
 |------------------|---------------------|-----------------------------------------------|
@@ -183,26 +184,27 @@ the `Enums()` and `EnumStrings()` methods of the changed type.
 ## Troubleshooting
 
 **CI or `./run-go-enum.sh -validate` fails with
-`go-enum error: found 2 missing or outdated enum method(s)`,** preceded by
-one line per stale method, like
-`/path/to/go-types/country/code.go:527:1: missing or outdated Replacement for Code`.
+`go-enum error: found 1 enum type(s) with missing or outdated methods`,**
+preceded by one line per stale enum type, like
+`/path/to/go-types/country/code.go:32: missing or outdated methods of enum type Code`.
 The generated `Enums()` and `EnumStrings()` don't list the new constant yet.
 Run `./run-go-enum.sh` and commit the regenerated file.
 
 **The new code is missing from `Enums()`, although `./run-go-enum.sh` ran and
 `-validate` passes.**
-The constant is declared in another file than the type, for example in
-`country/data.go`. go-enum doesn't see it, so it neither adds it nor reports
-it. The tests catch it: `TestCode_EnumsMatchCountryMap` fails with
-`Enums() = [...] want the countryMap keys [...]`. Move the constant into the
-`const` block of `code.go` or `currency.go` and run `./run-go-enum.sh` again.
+The constant is untyped, like `QZ = "QZ"`. go-enum doesn't see it, so it
+neither adds it nor reports it. The tests catch it:
+`TestCode_EnumsMatchCountryMap` fails with
+`Enums() = [...] want the countryMap keys [...]`. Write the constant with its
+type, like `QZ Code = "QZ"`, and run `./run-go-enum.sh` again.
 
 **An empty sentinel shows up in `Enums()`.**
-A constant like `Invalid Code = ""` is a typed enum constant, so go-enum lists
-it. Declare sentinels as conversions, the way the packages do:
-`const Invalid = Code("")` in `country`, `const Null = Code("")` in
-`language`. `money.CurrencyNull` is an untyped constant in
-`money/constants.go`; keep it there.
+A constant like `Invalid Code = ""` or `Invalid = Code("")` is a typed enum
+constant, so go-enum lists it. Mark sentinels with `//#exclude` at the end of
+the const line, the way the packages do: `const Invalid Code = "" //#exclude`
+in `country`, `const Null Code = "" //#exclude` in `language`.
+`money.CurrencyNull` is an untyped constant in `money/constants.go`; keep it
+there.
 
 **After regeneration `Code("de").Valid()` is false, or `String()` stops
 normalizing.**

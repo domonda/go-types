@@ -130,17 +130,16 @@ func TestCode_EnumsMatchCountryMap(t *testing.T) {
 // through Normalized and therefore accept non-normalized input (lower case,
 // surrounding whitespace, AltCodes and German names). The exact-match switch
 // over the enum constants that go-enum generates instead would reject all of
-// it, and String would stop normalizing. Invalid is declared as the
-// conversion Code("") rather than `Invalid Code = ""` so that go-enum keeps
-// it out of the enum value lists while it stays a typed Code constant with
-// working methods.
+// it, and String would stop normalizing. Invalid is marked //#exclude so
+// that go-enum keeps it out of the enum value lists while it stays a typed
+// Code constant with working methods.
 //
 // Value: protects=country.Code's #custom Valid/Validate/String keep accepting
 // non-normalized input, and Invalid stays a typed sentinel outside Enums and
 // EnumStrings;
 // fails_when=a go-enum run replaces them with the generated exact-match
-// switch and plain string conversion, or Invalid is redeclared as
-// `Invalid Code = ""`;
+// switch and plain string conversion, or Invalid loses its //#exclude
+// marker;
 // why_new=no country test calls Valid, Validate, String or Invalid at all,
 // and TestCode_EnumsMatchCountryMap never looks at EnumStrings;
 // seam=none

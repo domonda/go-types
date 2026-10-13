@@ -21,10 +21,10 @@ type Code string //#enum
 // Null is an empty string and will be treated as SQL NULL.
 // language.Null.Valid() == false
 //
-// Declared as a conversion instead of `Null Code = ""` so that go-enum
-// does not pick it up as one of the Code enum values: Null is not a valid
-// language code and must stay out of Code.Enums() and Code.EnumStrings().
-const Null = Code("")
+// Marked with //#exclude so that go-enum does not pick it up as one of the
+// Code enum values: Null is not a valid language code and must stay out of
+// Code.Enums() and Code.EnumStrings().
+const Null Code = "" //#exclude
 
 // Compile-time check that Code implements types.NormalizableValidator[Code]
 var _ types.NormalizableValidator[Code] = Code("")
@@ -265,9 +265,6 @@ func (Code) JSONSchema() *jsonschema.Schema {
 // ISO 639-1 language code constants
 //
 // Source: https://iso639-3.sil.org/code_tables/download_tables
-//
-// These have to live in the same file as `type Code string //#enum` because
-// go-enum collects the enum values of a type from the file that declares it.
 
 const (
 	AA Code = "aa" // Afar

@@ -196,15 +196,14 @@ func TestCode_EnumsMatchCodeNames(t *testing.T) {
 // deliberately stays strict, see TestCodeValid.
 // String carries a #custom marker because it normalizes; the plain string
 // conversion go-enum generates instead would return "EN" and "eng"
-// unchanged. Null is declared as the conversion Code("") rather than
-// `Null Code = ""` so that go-enum keeps it out of the enum value lists
-// while it stays a typed Code constant with working methods.
+// unchanged. Null is marked //#exclude so that go-enum keeps it out of the
+// enum value lists while it stays a typed Code constant with working methods.
 //
 // Value: protects=language.Code's #custom Validate accepts what Normalized
 // accepts and names the input, its #custom String normalizes, and Null
 // stays a typed sentinel outside Enums and EnumStrings;
 // fails_when=go-enum regenerates Validate as the strict lookup or String as
-// the plain conversion, or Null is redeclared as `Null Code = ""`;
+// the plain conversion, or Null loses its //#exclude marker;
 // why_new=Validate and String have no test at all and
 // TestCode_EnumsMatchCodeNames never looks at EnumStrings or Null;
 // seam=none

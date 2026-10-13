@@ -9,10 +9,10 @@ ISO 639-1 two-letter language codes. `Code` normalizes the language identifiers 
 ```go
 type Code string //#enum
 
-const Null = Code("")
+const Null Code = "" //#exclude
 ```
 
-`Value` writes `Null` as SQL NULL and `Scan` reads SQL NULL as `Null`. The constant is declared as a conversion so that go-enum leaves it out of `Enums()`. `Null` is not a valid code: `Null.Valid()` is false and `Null.Validate()` returns an error. There is no nullable code type in this package.
+`Value` writes `Null` as SQL NULL and `Scan` reads SQL NULL as `Null`. The constant is marked `//#exclude` so that go-enum leaves it out of `Enums()`. `Null` is not a valid code: `Null.Valid()` is false and `Null.Validate()` returns an error. There is no nullable code type in this package.
 
 ### Constants
 
@@ -178,7 +178,7 @@ Refresh the two generated tables with `go generate ./language/...` (needs networ
 
 ## Adding a language code
 
-1. Add the constant to the `const` block in `language/code.go`: `XX Code = "xx" // Name`. It must live in the file that declares `type Code string //#enum`, because go-enum only reads that file.
+1. Add the constant to the `const` block in `language/code.go`: `XX Code = "xx" // Name`.
 2. Add `"xx": "Name"` to `codeNames` in `language/constants.go`. `TestCode_EnumsMatchCodeNames` fails if the two lists differ.
 3. Add the ISO 639-2/T, 639-2/B and 639-3 codes of the language to `iso6393To1` in `language/iso6393.go`, so that `Normalized` maps them.
 4. Run `./run-go-enum.sh` from the repository root to regenerate `Enums()` and `EnumStrings()`, then `go test ./...`.

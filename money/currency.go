@@ -290,10 +290,6 @@ func (c Currency) String() string {
 ///////////////////////////////////////////////////////////////////////////////
 // ISO 4217 currency code constants
 //
-// These have to live in the same file as `type Currency string //#enum`
-// because go-enum collects the enum values of a type from the file that
-// declares it.
-//
 // CurrencyNull stays untyped in constants.go because it is shared with
 // NullableCurrency. It is not a valid Currency, so do not move it here.
 
