@@ -91,6 +91,31 @@ func TestParseMIMEMessage_EncodedNameIsOneAddress(t *testing.T) {
 	require.Equal(t, []string{"ok@good.com", "j@example.de", "cc@good.com"}, msg.Recipients())
 }
 
+// TestParseMIMEMessage_AddressHeadersOfOtherSenders protects that reading
+// the raw address headers loses no sender or recipient that the decoded
+// headers gave: a name in a charset that can't be decoded drops only the
+// name, IANA charset labels like cp850 decode, a value encoded as a whole
+// is decoded as a whole, and a name written as comment is decoded too.
+// An encoded name holding a comma and @ must end at its own address
+// and not hide the one after it.
+func TestParseMIMEMessage_AddressHeadersOfOtherSenders(t *testing.T) {
+	msg, err := email.ParseMessage(rawMessage(
+		`From: =?utf-8?B?TWF4IE11c3Rlcm1hbm4gPG1heEBleGFtcGxlLmNvbT4=?=`,
+		`Reply-To: mueller@example.com (=?utf-8?q?M=C3=BCller?=)`,
+		`To: =?utf-8?q?a@b,?= <hidden@example.com>, =?utf-8?q?c?= <shown@example.com>`,
+		`Cc: =?cp850?q?M=81ller?= <cc1@example.com>, =?utf-7?q?x?= <cc2@example.com>, cc3@example.com`,
+		`Date: Thu, 22 Jan 2026 16:21:11 +0100`,
+		`Content-Type: text/plain; charset=utf-8`,
+		``,
+		`Body`,
+	))
+	require.NoError(t, err)
+	require.Equal(t, email.Address(`"Max Mustermann" <max@example.com>`), msg.From)
+	require.Equal(t, email.NullableAddress(`"Müller" <mueller@example.com>`), msg.ReplyTo)
+	require.Equal(t, email.AddressList(`"a@b," <hidden@example.com>, "c" <shown@example.com>`), msg.To)
+	require.Equal(t, email.NullableAddressList(`"Müller" <cc1@example.com>, cc2@example.com, cc3@example.com`), msg.Cc)
+}
+
 // TestParseMIMEMessage_PartialResult verifies that a message with usable data
 // is returned together with the joined header parsing errors instead of being
 // dropped entirely when individual headers (Date, From, To) can't be parsed.

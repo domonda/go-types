@@ -158,6 +158,9 @@ func TestAddress_NormalizedRoundTrip(t *testing.T) {
 		// A name that decodes to an encoded-word would be decoded again
 		// by every normalization if it was written back as quoted text
 		`"=?utf-8?q?=3D=3Futf-8=3Fq=3Fx=3F=3D?=" <a@example.com>`,
+		// An encoded name with invalid UTF-8 decodes to a replacement
+		// character, which the parser removes from the written name
+		`=?utf8?B?X700?=<0@0.AA`,
 	} {
 		t.Run(string(addr), func(t *testing.T) {
 			require.NoError(t, addr.Validate())
@@ -237,6 +240,9 @@ func TestAddress_StringAndASCII(t *testing.T) {
 		{addr: `John@Example.com`, wantStr: `john@example.com`, wantASCII: `john@example.com`},
 		{addr: `John Doe <John@Example.com>`, wantStr: `"John Doe" <john@example.com>`, wantASCII: `"John Doe" <john@example.com>`},
 		{addr: `Jürgen Müller <J@Example.com>`, wantStr: `"Jürgen Müller" <j@example.com>`, wantASCII: `=?utf-8?q?J=C3=BCrgen_M=C3=BCller?= <j@example.com>`},
+		// The address part is quoted like the parser reads it back,
+		// net/mail would write 'abc@example.com, which is abc@example.com
+		{addr: `"N" <"'abc"@example.com>`, wantStr: `"N" <"'abc"@example.com>`, wantASCII: `"N" <"'abc"@example.com>`},
 		{addr: `not an address`, wantStr: `not an address`, wantASCII: `not an address`},
 	}
 	for _, tt := range tests {

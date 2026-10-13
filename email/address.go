@@ -4,8 +4,10 @@ import (
 	"database/sql/driver"
 	"encoding/base64"
 	"encoding/json"
+	"mime"
 	"net/mail"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/invopop/jsonschema"
 
@@ -85,13 +87,31 @@ func addrSpec(addr *mail.Address) string {
 // asciiAddress formats addr like AddressFrom, but RFC 2047 encodes
 // a non-ASCII name like mail.Address.String does.
 func asciiAddress(addr *mail.Address) string {
+	name := cleanName(addr.Name)
 	switch {
-	case addr.Name == "":
+	case name == "":
 		return addrSpec(addr)
-	case strings.Contains(addr.Name, "=?"):
-		return encodedName(addr.Name) + " <" + addrSpec(addr) + ">"
+	case strings.Contains(name, "=?"):
+		name = encodedName(name)
+	case !isASCII(name) && strings.ContainsAny(name, "\"#$%&'(),.:;<>@[]^`{|}~"):
+		// Like mail.Address.String, because an encoded-word
+		// in a name must not hold these characters unencoded
+		name = mime.BEncoding.Encode("utf-8", name)
+	case !isASCII(name):
+		name = mime.QEncoding.Encode("utf-8", name)
+	default:
+		name = `"` + name + `"`
 	}
-	return addr.String()
+	return name + " <" + addrSpec(addr) + ">"
+}
+
+func isASCII(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] >= utf8.RuneSelf {
+			return false
+		}
+	}
+	return true
 }
 
 // NormalizedAddress parses an email address using lenient validation

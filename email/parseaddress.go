@@ -31,7 +31,8 @@ const (
 
 	quotedNamePart         = `"([^"]*)"[ \t]*<?`
 	unquotedNamePart       = `([^<@]*[^<@\s]|[^<,]*[^<,\s])[ \t]*<`
-	rfc2047EncodedNamePart = `=\?[[:ascii:]]+\?[[:ascii:]]+\?[[:ascii:]]+\?=[ \t]*<` // Example: =?utf-8?b?wqFIb2xhLCBzZcOxb3Ih?= <
+	rfc2047EncodedNamePart = `((?:` + encodedWord + `[ \t]*)+)<` // Example: =?utf-8?b?wqFIb2xhLCBzZcOxb3Ih?= <
+	encodedWord            = `=\?[^?\s]+\?[bBqQ]\?[^?\s]*\?=`
 	emptyNamePart          = `<?`
 	namePart               = `(?:` + quotedNamePart + `|` + unquotedNamePart + `|` + rfc2047EncodedNamePart + `|` + emptyNamePart + `)`
 	nameAddressRegex       = `^` + namePart + localPart + `@` + domainPart + `\s?'?>?`
@@ -47,6 +48,10 @@ var (
 	// unquotedLocalPartRegexp matches a local part that the parser
 	// reads back without quotes, see localPart
 	unquotedLocalPartRegexp = regexp.MustCompile(`^(?:[a-zA-Z0-9\.]|` + atext + `)$`)
+
+	// encodedWordsRegexp matches a header value that is only
+	// RFC 2047 encoded-words separated by whitespace
+	encodedWordsRegexp = regexp.MustCompile(`^(?:\s*` + encodedWord + `)+\s*$`)
 
 	// placeholderListRegexp matches a whole lower case list that is only
 	// a placeholder for hidden recipients, like "undisclosed-recipients:;",
@@ -127,7 +132,7 @@ func ParseAddress(addr string) (mailAddress *mail.Address, err error) {
 
 func parseAddress(addr string) (mailAddress *mail.Address, unparsed string, err error) {
 	i := nameAddressRegexp.FindStringSubmatchIndex(addr)
-	if len(i) != 10 {
+	if len(i) != 12 {
 		// fmt.Println("REGEX:", nameAddressRegex)
 		return nil, "", fmt.Errorf("could not parse email address: %s", addr)
 	}
@@ -135,21 +140,14 @@ func parseAddress(addr string) (mailAddress *mail.Address, unparsed string, err 
 	var name string
 	switch {
 	case i[3] != -1:
-		name = addr[i[2]:i[3]]
+		name = decodeName(addr[i[2]:i[3]])
 	case i[5] != -1:
-		name = addr[i[4]:i[5]]
-	}
-	if name != "" {
-		name, err = mimeHeaderDecoder.DecodeHeader(name)
-		if err != nil {
-			return nil, "", err
-		}
-		// Cleaned after decoding, because an encoded word
-		// can hold runes that sanitizeAddr removed from the input
-		name = cleanName(name)
+		name = decodeName(addr[i[4]:i[5]])
+	case i[7] != -1:
+		name = decodeName(addr[i[6]:i[7]])
 	}
 
-	local := strings.ToLower(addr[i[6]:i[7]])
+	local := strings.ToLower(addr[i[8]:i[9]])
 	if len(local) >= 2 && local[0] == '"' && local[len(local)-1] == '"' {
 		// A quoted local part keeps its content, so the address
 		// stays the same mailbox. Like for net/mail.ParseAddress
@@ -158,7 +156,7 @@ func parseAddress(addr string) (mailAddress *mail.Address, unparsed string, err 
 		local = unquoteLocalPart(local[1 : len(local)-1])
 	}
 
-	domain := strings.ToLower(addr[i[8]:i[9]])
+	domain := strings.ToLower(addr[i[10]:i[11]])
 
 	unparsed = addr[i[1]:]
 	unparsed = strings.TrimLeft(unparsed, " ")
@@ -167,7 +165,7 @@ func parseAddress(addr string) (mailAddress *mail.Address, unparsed string, err 
 	// Example: mike@doe.com (Mike Doe)
 	if name == "" && strings.HasPrefix(unparsed, "(") {
 		if end := strings.Index(unparsed, ")"); end != -1 {
-			name = cleanName(unparsed[1:end])
+			name = decodeName(unparsed[1:end])
 			unparsed = strings.TrimLeft(unparsed[end+1:], " ")
 		}
 	}
@@ -195,15 +193,31 @@ func parseAddress(addr string) (mailAddress *mail.Address, unparsed string, err 
 	return mailAddress, unparsed, nil
 }
 
+// decodeName returns the display name with its RFC 2047 encoded-words
+// decoded and cleaned by cleanName. Cleaned after decoding, because an
+// encoded-word can hold runes that sanitizeAddr removed from the input.
+// A name that can't be decoded, like one in an unknown charset,
+// is dropped instead of failing its address, so that no sender
+// or recipient is lost because of its name.
+func decodeName(name string) string {
+	decoded, err := mimeHeaderDecoder.DecodeHeader(name)
+	if err != nil {
+		return ""
+	}
+	return cleanName(decoded)
+}
+
 // cleanName returns a display name without the quotes and backslashes
 // that the parser can't read escaped (quotedNamePart has no escapes),
 // without runes that are not graphic, like bidi overrides and control
-// characters, and with whitespace mapped to spaces.
+// characters, and without the replacement character, which sanitizeAddr
+// removes when the name is parsed again, and with whitespace mapped
+// to spaces.
 func cleanName(name string) string {
 	return strutil.TrimSpace(strings.Map(
 		func(r rune) rune {
 			switch {
-			case r == '"' || r == '\\':
+			case r == '"' || r == '\\' || r == unicode.ReplacementChar:
 				return -1
 			case unicode.IsSpace(r):
 				return ' '
@@ -271,8 +285,8 @@ func unquoteLocalPart(quoted string) string {
 // The empty list and the common "undisclosed-recipients" /
 // "withheld-recipients" placeholders, alone or as empty group like
 // "undisclosed-recipients:;", are parsed as an empty list without an
-// error. Text after a placeholder is parsed like any other list, so an
-// address that other parsers would read there is never ignored.
+// error. Text after a placeholder is parsed like any other list.
+// Group syntax like "Team: a@example.com;" is not supported.
 func ParseAddressList(list string) (addrs []*mail.Address, err error) {
 	list = strings.TrimRight(sanitizeAddr(list), ", ")
 	if list == "" || placeholderListRegexp.MatchString(strings.ToLower(list)) {

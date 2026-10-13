@@ -142,9 +142,10 @@ picking the semver baseline.
   that earlier versions made of `"Doe, John"@example.com`, is now written
   quoted as `"doe..john"@example.com`: normalize stored columns again
   before comparing them with values written by this version.
-- `email.AddressList.Value` writes a list without addresses, like
-  `"Undisclosed recipients"`, as the placeholder `undisclosed-recipients:;`,
-  because `Scan` rejects the empty string of the normalized list.
+- `email.AddressList.Value`, `String`, `MarshalJSON` and `MarshalText`
+  write a list without addresses, like `"Undisclosed recipients"`, as the
+  placeholder `undisclosed-recipients:;`, because `Scan` rejects the empty
+  string of the normalized list, also after a JSON round trip.
 - **Breaking:** `email.ParseAddressList` reads only a whole placeholder,
   like `undisclosed-recipients` or `undisclosed-recipients:;`, as a list
   without addresses, instead of every list starting with one. The address
@@ -616,7 +617,14 @@ picking the semver baseline.
   recipient `victim@evil.com`, which `net/mail` and mail clients don't see,
   and a name like `=?UTF-8?Q?M=C3=BCller=2C_J=C3=BCrgen?=` failed to parse
   at its comma. The headers are parsed raw now, and only display names are
-  decoded.
+  decoded. A header value that is only encoded-words, which MIME encoders
+  write for a non-ASCII address part, is decoded as a whole, and
+  `BuildRawMessage` no longer encodes names a second time for it.
+- `email` display names in a charset that only has an IANA label, like
+  `cp850`, are decoded, and a name that can't be decoded is dropped instead
+  of failing its address. A name in the comment syntax
+  `a@example.com (=?utf-8?q?M=C3=BCller?=)` is decoded, and an encoded name
+  holding a comma and `@` no longer swallows the address after it.
 - `strutil.TransliterateSpecialCharacters` and
   `TransliterateSpecialCharactersMaxLen` returned the input unchanged, with
   its invalid UTF-8, when it started with an invalid byte, like `"\xe4pfel"`.

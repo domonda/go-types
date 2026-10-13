@@ -317,10 +317,21 @@ func TestAddressList_ValueAndMarshalJSONNormalize(t *testing.T) {
 	var scanned AddressList
 	require.NoError(t, scanned.Scan(v), "Scan(Value()) of a valid list")
 
-	// Other placeholder spellings are written as the canonical one
-	v, err = AddressList("Undisclosed recipients").Value()
+	// Other placeholder spellings are written as the canonical one,
+	// also as JSON and text, so that a list read from JSON can be
+	// written to SQL and scanned again
+	placeholder := AddressList("Undisclosed recipients")
+	v, err = placeholder.Value()
 	require.NoError(t, err)
 	assert.Equal(t, "undisclosed-recipients:;", v)
+	assert.Equal(t, "undisclosed-recipients:;", placeholder.String())
+	j, err := json.Marshal(placeholder)
+	require.NoError(t, err)
+	var fromJSON AddressList
+	require.NoError(t, json.Unmarshal(j, &fromJSON))
+	v, err = fromJSON.Value()
+	require.NoError(t, err)
+	require.NoError(t, scanned.Scan(v), "Scan(Value()) of a list read from JSON")
 
 	// Text after a placeholder is no list without addresses: other
 	// parsers read the address in it, so it must not pass Validate

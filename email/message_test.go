@@ -571,6 +571,43 @@ func TestBuildRawMessage_RoundTrip(t *testing.T) {
 	require.True(t, parsed.BodyHTML.IsNull())
 }
 
+// TestBuildRawMessage_RoundTripEncodedAddresses protects that the
+// package reads its own messages back: names that need RFC 2047 encoding,
+// quoted local parts and non-ASCII address parts, for which the MIME
+// encoder encodes the whole header value, so that names must not be
+// encoded before and the parser must decode such a value as a whole.
+func TestBuildRawMessage_RoundTripEncodedAddresses(t *testing.T) {
+	for _, msg := range []*email.Message{
+		{
+			From: `"Jürgen Müller" <j@example.com>`,
+			To:   `"N" <"'abc"@example.com>, "Ivan" <"иван"@example.com>, "=?utf-8?q?x?=" <x@example.com>`,
+			Body: "Body",
+		},
+		{
+			From: `"Jürgen" <jürgen@müller.de>`,
+			To:   `"Jürgen Müller" <j@example.com>, "Ivan" <jürgen@müller.de>`,
+			Cc:   `jürgen@müller.de`,
+			Body: "Body",
+		},
+	} {
+		raw, err := msg.BuildRawMessage()
+		require.NoError(t, err)
+		parsed, err := email.ParseMessage(raw)
+		require.NoError(t, err)
+
+		wantFrom, err := msg.From.Normalized()
+		require.NoError(t, err)
+		require.Equal(t, wantFrom, parsed.From, "From of %s", raw)
+		wantTo, err := msg.To.Normalized()
+		require.NoError(t, err)
+		require.Equal(t, wantTo, parsed.To, "To of %s", raw)
+		wantCc, err := msg.Cc.Normalized()
+		require.NoError(t, err)
+		require.Equal(t, wantCc, parsed.Cc, "Cc of %s", raw)
+		require.NotContains(t, string(raw), "=3D=3Futf-8", "a name must not be encoded twice")
+	}
+}
+
 func TestBuildRawMessage_Bodies(t *testing.T) {
 	tests := []struct {
 		name        string

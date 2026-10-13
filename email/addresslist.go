@@ -176,18 +176,30 @@ func (l AddressList) Normalized() (AddressList, error) {
 	return AddressList(b.String()), nil
 }
 
+// undisclosedRecipients is the canonical placeholder
+// for a valid list without addresses, see AddressList.String.
+const undisclosedRecipients = "undisclosed-recipients:;"
+
 // String returns the normalized list,
 // or the unchanged list if it can't be normalized.
+// A list without addresses, like "Undisclosed recipients",
+// is returned as the canonical placeholder "undisclosed-recipients:;",
+// because Scan rejects the empty string of the normalized list.
 // Non-ASCII names stay UTF-8, see ASCII.
 // String implements the fmt.Stringer interface.
 func (l AddressList) String() string {
 	norm, _ := l.Normalized()
+	if norm == "" && strutil.TrimSpace(string(l)) != "" {
+		return undisclosedRecipients
+	}
 	return string(norm)
 }
 
 // ASCII returns the normalized list like String, but with
 // non-ASCII names RFC 2047 encoded like Address.ASCII,
 // or the unchanged list if it can't be normalized.
+// A list without addresses is returned as "" for a message header,
+// which BuildRawMessage doesn't write for it.
 func (l AddressList) ASCII() string {
 	parsed, err := l.Parse()
 	if err != nil {
@@ -206,35 +218,43 @@ func asciiAddressList(addrs []*mail.Address) string {
 	return strings.Join(formatted, ", ")
 }
 
-// Value implements the driver database/sql/driver.Valuer interface.
-// Returns the normalized list, or the unchanged string if it can't be
-// normalized or is empty or whitespace only. A list without addresses,
-// like "Undisclosed recipients", is written as the canonical placeholder
-// "undisclosed-recipients:;", because Scan rejects an empty string.
-func (l AddressList) Value() (driver.Value, error) {
-	norm, _ := l.Normalized()
-	switch {
-	case norm != "":
-		return string(norm), nil
-	case strutil.TrimSpace(string(l)) == "":
-		return string(l), nil
-	default:
-		return "undisclosed-recipients:;", nil
+// headerAddresses formats addrs for a message header with
+// asciiAddressList, or like AddressFrom if an address part is not ASCII,
+// because the MIME encoder then encodes the whole header value,
+// which would encode the RFC 2047 encoded names a second time.
+func headerAddresses(addrs ...*mail.Address) string {
+	for _, addr := range addrs {
+		if !isASCII(addr.Address) {
+			formatted := make([]string, len(addrs))
+			for i, a := range addrs {
+				formatted[i] = string(AddressFrom(a))
+			}
+			return strings.Join(formatted, ", ")
+		}
 	}
+	return asciiAddressList(addrs)
 }
 
-// MarshalJSON implements encoding/json.Marshaler.
-// Returns the normalized list as JSON string,
-// or the unchanged string if it can't be normalized.
+// Value implements the driver database/sql/driver.Valuer interface.
+// Returns String, or the unchanged string if it is empty
+// or whitespace only.
+func (l AddressList) Value() (driver.Value, error) {
+	if strutil.TrimSpace(string(l)) == "" {
+		return string(l), nil
+	}
+	return l.String(), nil
+}
+
+// MarshalJSON implements encoding/json.Marshaler
+// by returning String as JSON string.
 func (l AddressList) MarshalJSON() ([]byte, error) {
-	norm, _ := l.Normalized()
-	return json.Marshal(string(norm))
+	return json.Marshal(l.String())
 }
 
 // MarshalText implements encoding.TextMarshaler by returning String,
 // the normalized value or the unchanged string if it can't be
 // normalized, so that strfmt and encoding/xml write the canonical form
-// like MarshalJSON. encoding/json writes map keys of string
+// like Value and MarshalJSON. encoding/json writes map keys of string
 // types as they are and doesn't call MarshalText for them.
 func (l AddressList) MarshalText() ([]byte, error) {
 	return []byte(l.String()), nil

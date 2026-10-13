@@ -457,8 +457,8 @@ func (msg *Message) BuildRawMessage() (raw []byte, err error) {
 	if msg.References.IsNotNull() {
 		root.Header.Set("References", msg.References.Get())
 	}
-	// The addresses are parsed and written with asciiAddress, like ASCII
-	// does, so that a non-ASCII name is RFC 2047 encoded without the
+	// The addresses are parsed and written with headerAddresses,
+	// so that a non-ASCII name is RFC 2047 encoded without the
 	// address part. The MIME encoder would otherwise encode the whole
 	// header value including the address part.
 	var from string
@@ -467,7 +467,7 @@ func (msg *Message) BuildRawMessage() (raw []byte, err error) {
 		if err != nil {
 			return nil, err
 		}
-		from = asciiAddress(parsed)
+		from = headerAddresses(parsed)
 	}
 	root.Header.Set("From", from)
 	if msg.ReplyTo.IsNotNull() {
@@ -475,35 +475,35 @@ func (msg *Message) BuildRawMessage() (raw []byte, err error) {
 		if err != nil {
 			return nil, err
 		}
-		root.Header.Set("Reply-To", asciiAddress(replyTo))
+		root.Header.Set("Reply-To", headerAddresses(replyTo))
 	}
 	tos, err := msg.To.Parse()
 	if err != nil {
 		return nil, err
 	}
 	if len(tos) > 0 {
-		root.Header.Set("To", asciiAddressList(tos))
+		root.Header.Set("To", headerAddresses(tos...))
 	}
 	deliveredTos, err := msg.DeliveredTo.Parse()
 	if err != nil {
 		return nil, err
 	}
 	for _, deliveredTo := range deliveredTos {
-		root.Header.Add("Delivered-To", asciiAddress(deliveredTo))
+		root.Header.Add("Delivered-To", headerAddresses(deliveredTo))
 	}
 	ccs, err := msg.Cc.Parse()
 	if err != nil {
 		return nil, err
 	}
 	if len(ccs) > 0 {
-		root.Header.Set("Cc", asciiAddressList(ccs))
+		root.Header.Set("Cc", headerAddresses(ccs...))
 	}
 	bccs, err := msg.Bcc.Parse()
 	if err != nil {
 		return nil, err
 	}
 	if len(bccs) > 0 {
-		root.Header.Set("Bcc", asciiAddressList(bccs))
+		root.Header.Set("Bcc", headerAddresses(bccs...))
 	}
 	root.Header.Set("Date", formatDate(msg.Date))
 	for key, vals := range msg.ExtraHeader {
