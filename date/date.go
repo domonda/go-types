@@ -758,13 +758,17 @@ func (date Date) ISOWeek() (year, week int) {
 // IsToday returns true if the date is today in local time.
 // A valid date that is not in the normalized form is normalized first.
 func (date Date) IsToday() bool {
-	return date.NormalizedEqual(OfToday())
+	// OfToday is normalized, so only the receiver needs normalization
+	norm, err := date.Normalized()
+	return err == nil && norm == OfToday()
 }
 
 // IsTodayInUTC returns true if the date is today in UTC time.
 // A valid date that is not in the normalized form is normalized first.
 func (date Date) IsTodayInUTC() bool {
-	return date.NormalizedEqual(OfNowInUTC())
+	// OfNowInUTC is normalized, so only the receiver needs normalization
+	norm, err := date.Normalized()
+	return err == nil && norm == OfNowInUTC()
 }
 
 // AfterToday returns true if the date is after today in local time.
@@ -898,7 +902,10 @@ func normalizeDate(str string, langHint language.Code) (string, bool, error) {
 
 	trimmed = strings.ToLower(trimmed)
 
-	langHint, _ = langHint.Normalized()
+	if langHint != "" {
+		// An empty hint would only build a discarded error
+		langHint, _ = langHint.Normalized()
+	}
 
 	parts := strings.FieldsFunc(trimmed, isDateSeparatorRune)
 	if len(parts) == 4 {
@@ -951,9 +958,6 @@ func normalizeDate(str string, langHint language.Code) (string, bool, error) {
 	month0, _ := monthNameMap[parts[0]]
 	month1, _ := monthNameMap[parts[1]]
 	month2, _ := monthNameMap[parts[2]]
-
-	// fmt.Println(len0, len1, len2)
-	// fmt.Println(val0, val1, val2)
 
 	expandVal2ToFullYear := func() {
 		if len2 != 2 {
@@ -1071,9 +1075,16 @@ func validDay(day int) bool {
 	return day >= 1 && day <= 31
 }
 
+// getLangHint returns the first hint normalized, or "" if there is none
+// or it can't be normalized. It is normalized instead of cut to two bytes,
+// because language.Code.Validate accepts hints like " en" and "EN-us".
 func getLangHint(lang []language.Code) language.Code {
-	if len(lang) == 0 || len(lang[0]) < 2 {
+	if len(lang) == 0 {
 		return ""
 	}
-	return lang[0][:2]
+	hint, err := lang[0].Normalized()
+	if err != nil {
+		return ""
+	}
+	return hint
 }

@@ -186,10 +186,11 @@ func (n *NullableAddressList) Scan(value any) error {
 			n.SetNull()
 			return nil
 		}
-		if s[0] == '{' && s[len(s)-1] == '}' {
+		// Detected on the trimmed list, so a padded array is one too
+		if list[0] == '{' && list[len(list)-1] == '}' {
 			// Elements that are empty after the helper's trim are
 			// skipped by the join.
-			stringArray, err := scanAddressArray(s, "NullableAddressList")
+			stringArray, err := scanAddressArray(list, "NullableAddressList")
 			if err != nil {
 				return err
 			}

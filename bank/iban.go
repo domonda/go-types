@@ -114,7 +114,6 @@ func (iban IBAN) Normalized() (IBAN, error) {
 		return iban, errors.New("invalid IBAN country code")
 	}
 	if len(normalized) != countryLength {
-		// fmt.Println(normalized, len(normalized), countryLength)
 		return iban, errors.New("wrong IBAN length")
 	}
 	if !ibanRegexp.MatchString(string(normalized)) {

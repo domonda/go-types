@@ -100,7 +100,7 @@ func (a *NullFloatArray) scanBytes(src []byte) error {
 		return nil
 	}
 	if src[0] != '{' || src[len(src)-1] != '}' {
-		return fmt.Errorf("can't parse %q as NullFloatArray", string(src))
+		return fmt.Errorf("can't parse %q as nullable.NullFloatArray", string(src))
 	}
 	if len(src) == 2 { // src == "{}"
 		*a = NullFloatArray{}
@@ -115,7 +115,7 @@ func (a *NullFloatArray) scanBytes(src []byte) error {
 		}
 		val, err := strconv.ParseFloat(elem, 64)
 		if err != nil {
-			return fmt.Errorf("can't parse %q as NullFloatArray because of: %w", string(src), err)
+			return fmt.Errorf("can't parse %q as nullable.NullFloatArray because of: %w", string(src), err)
 		}
 		newArray[i] = TypeFrom(val)
 	}

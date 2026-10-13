@@ -74,6 +74,17 @@ Found in a code audit on 2026-10-12. Each item removes or changes exported
 API or behaviour, so it should be decided before `v1.0.0`. "No caller" means
 none in this module or in the local checkouts of the domonda repos.
 
+- [ ] **`GetOr` of the nullable types.** `money.NullableCurrency.GetOr`
+      returns the default for null and for an invalid currency, while
+      `GetOr` of `bank.NullableIBAN`, `bank.NullableBIC`,
+      `country.NullableCode`, `vat.NullableID`, `date.NullableDate` and
+      `email.NullableAddress` returns it only for null, and the invalid
+      value otherwise. Pick one meaning, or give the validating variant
+      another name.
+- [ ] **`country.NullableCode.NormalizedWithAltCodes`.** It returns the
+      same result as `Normalized`, which already maps the `AltCodes`, and
+      `country.Code` has no such method. Remove it or deprecate it.
+
 - [ ] **`internal/pq`, a vendored copy of `lib/pq` from 2022.** Its README
       says "until refactored for go-types". Only `StringArray` and
       `BoolArray` are used, as the aliases `nullable.StringArray` and
@@ -252,7 +263,8 @@ time.
       dates parse, a number with an ordinal suffix is never the month,
       year 0 dates give the zero time, `NullableDate.Format(Layout)` is
       `""` for every null date, comparisons parse each date once.
-      `language.Code.Validate` is strict like `Valid`. UTF-16 text starting
+      `language.Code.Validate` was strict like `Valid` (since normalizing
+      like the other types, see the entry above). UTF-16 text starting
       with the UTF-8 BOM bytes decodes. `account.NullableNumber` treats a
       whitespace-only value as null in every method.
       `float.ParseDetails("1,5e3")` reports `,`. `email.NullableAddress`

@@ -252,7 +252,8 @@ func (c Currency) EnglishName() string {
 // codes that are not part of ISO 4217, like GGP, and invalid codes
 // return 2. The currency is normalized first, so "kwd" returns 3.
 func (c Currency) MinorUnits() int {
-	if norm, err := c.Normalized(); err == nil {
+	norm, err := c.Normalized()
+	if err == nil {
 		c = norm
 	}
 	if minorUnits, ok := currencyCodeToMinorUnits[c]; ok {

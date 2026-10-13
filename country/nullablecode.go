@@ -68,8 +68,9 @@ func (n NullableCode) Normalized() (NullableCode, error) {
 	return n, fmt.Errorf("invalid country.NullableCode: '%s'", string(n))
 }
 
-// NormalizedWithAltCodes uses AltCodes to map to ISO 3166-1 alpha-2 codes
-// or returns the result of Normalized() if no mapping exists.
+// NormalizedWithAltCodes returns the same result as Normalized,
+// which already maps the AltCodes to ISO 3166-1 alpha-2 codes.
+// It is kept for compatibility.
 func (n NullableCode) NormalizedWithAltCodes() (NullableCode, error) {
 	if norm, ok := AltCodes[strings.ToUpper(strutil.TrimSpace(string(n)))]; ok {
 		return norm.Nullable(), nil

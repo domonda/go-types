@@ -215,7 +215,8 @@ give an empty non-nil value. The rule holds for:
 - the `nullable` arrays, for SQL, and for JSON through `encoding/json`'s
   default slice encoding;
 - `types.Set[T]`, for JSON (it has no SQL methods);
-- `email.AddressSet`, for SQL (its JSON is Go's default map encoding).
+- `email.AddressSet`, for SQL (its JSON is an object keyed by the normalized
+  addresses, like Go's default map encoding).
 
 Before the 2026-09-02 release, `uu.IDSet.Value` wrote NULL for an empty set
 and silently nulled the column; see [CHANGELOG.md](../CHANGELOG.md).
@@ -337,7 +338,8 @@ it by its underlying kind.
 | `language.Code`                                    | `""`       | NULL               | `""`            | `""`           |
 | `account.Number`                                   | `""`       | NULL               | `null`          | error          |
 | `account.NullableNumber`                           | `""`       | NULL               | `null`          | null           |
-| `email.Address`                                    | `""`       | no SQL methods     | `""`            | no SQL methods |
+| `email.Address`                                    | `""`       | `''`               | `""`            | no SQL methods |
+| `email.AddressList`                                | `""`       | `''`               | `""`            | error          |
 | `email.NullableAddress`                            | `""`       | NULL               | `null`          | null           |
 | `email.AddressSet`                                 | nil        | NULL               | `null`          | nil            |
 | `money.Amount`, `money.Rate`                       | `0`        | `float64` 0 (kind) | `0`             | error          |

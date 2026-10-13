@@ -12,10 +12,10 @@
 //     ISO 20022 CAMT.053 bank statements, without parsing logic of their own
 //
 // [IBAN.Normalized] removes all whitespace before validating,
-// so Valid and Validate of an IBAN accept spaced input.
 // [BIC.Normalized] also removes all whitespace and appends "XXX"
-// to an 8 character BIC, but Valid and Validate of a BIC check
-// the value as it is.
+// to an 8 character BIC. Valid and Validate of both normalize first,
+// so they accept spaced input, and Value and MarshalJSON write the
+// normalized form. Only [BIC.Parse] and [BICParser] read the BIC as given.
 //
 // The Scan methods of IBAN, BIC, NullableIBAN, and NullableBIC
 // don't validate. Only NullableIBAN and NullableBIC write SQL NULL

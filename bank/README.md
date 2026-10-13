@@ -103,7 +103,7 @@ A BIC has 8 or 11 uppercase characters: a 4 letter institution code, a 2 letter 
 | `bic.ValidAndNormalized() bool`                    | Valid 11 character form.                           |
 | `bic.Parse() (bankCode string, countryCode country.Code, branchCode string, isValid bool)` | The institution code, the country code, and the branch code (`""` for 8 characters). All empty and `false` if invalid. There is no location part. Parses the value as given, so whitespace makes it invalid. |
 | `bic.CountryCode() country.Code`                   | Characters 5 and 6 of the normalized BIC, `""` if invalid. |
-| `bic.TrimBranchCode() BIC`                         | The first 8 characters.                            |
+| `bic.TrimBranchCode() BIC`                         | The first 8 characters of the normalized BIC, or of the unchanged BIC if invalid. |
 | `bic.IsTestBIC() bool`                             | Valid and the 8th character of the normalized BIC is `0`. |
 | `bic.IsPassiveSWIFT() bool`                        | Valid and the 8th character of the normalized BIC is `1`. |
 | `bic.ReceiverPaysFees() bool`                      | Valid and the 8th character of the normalized BIC is `2`. |

@@ -29,6 +29,14 @@ func TestAddressSet_Scan(t *testing.T) {
 			value: "{single_quote'@example.com}",
 			want:  MakeAddressSet("single_quote'@example.com"),
 		},
+		// Padding around the whole literal is trimmed like around a plain
+		// string, so the array must still be decoded instead of becoming
+		// a single bogus element with braces and quotes
+		{
+			name:  "padded array literal",
+			value: " {\"a@example.com\",b@example.com} ",
+			want:  MakeAddressSet("a@example.com", "b@example.com"),
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

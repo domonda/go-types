@@ -39,6 +39,10 @@ func TestNullableAddressList_Scan(t *testing.T) {
 		// elements. The padding is not part of the address.
 		{name: "padded elements", value: `{ a@example.com , b@example.com }`, want: "a@example.com, b@example.com"},
 		{name: "whitespace only array", value: `{ }`, want: ""},
+		// Padding around the whole literal is trimmed like around a plain
+		// string, so the array must still be decoded instead of being
+		// stored as the literal text with braces and quotes
+		{name: "padded array literal", value: " {\"a@example.com\",b@example.com} ", want: "a@example.com, b@example.com"},
 		// Regression cases for the array codec swap (nullable.SplitArray ->
 		// notnull.StringArray). Each behaves differently than before, so each
 		// is pinned rather than left to be discovered in production.

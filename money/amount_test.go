@@ -429,6 +429,9 @@ func TestAmount_SplitProportionally_apportionment(t *testing.T) {
 		assert.True(t, part.IsNaN())
 	}
 	assert.Equal(t, []Amount{2.5e19, 7.5e19}, Amount(1e20).SplitProportionally([]Amount{1, 3}), "beyond the CentAmount range")
+	// All zero weights put the whole amount into the last part also
+	// when it is split without rounding, instead of NaN parts from 0/0
+	assert.Equal(t, []Amount{0, 1e20}, Amount(1e20).SplitProportionally([]Amount{0, 0}), "zero weights beyond the CentAmount range")
 }
 
 func TestAmount_UnmarshalJSON(t *testing.T) {

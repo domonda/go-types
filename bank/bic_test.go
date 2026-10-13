@@ -303,6 +303,9 @@ func TestBIC_TrimBranchCode(t *testing.T) {
 	assert.Equal(t, BIC("GENODEF1"), BIC("GENODEF1JEV").TrimBranchCode())
 	assert.Equal(t, BIC("BELADEBE"), BIC("BELADEBE").TrimBranchCode())
 	assert.Equal(t, BIC("SHORT"), BIC("SHORT").TrimBranchCode(), "must not panic for short strings")
+	// Valid accepts whitespace, so the branch code must be trimmed
+	// from the normalized BIC instead of slicing the raw string
+	assert.Equal(t, BIC("GENODEF1"), BIC(" GENO DEF1 JEV ").TrimBranchCode())
 }
 
 func TestBIC_LocationFlags(t *testing.T) {

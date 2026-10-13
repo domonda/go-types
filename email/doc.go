@@ -10,8 +10,9 @@
 //     is the null value and is written as SQL NULL and JSON null
 //
 // Normalization lowercases the address part and formats the display name
-// like [net/mail.Address.String], so normalized addresses can be compared
-// as strings. [ParseAddressList] and the Split methods are lenient and
+// like [net/mail.Address.String], but keeps a non-ASCII name as UTF-8,
+// so normalized addresses can be compared as strings. The ASCII methods
+// and [Message.BuildRawMessage] encode non-ASCII names with RFC 2047. [ParseAddressList] and the Split methods are lenient and
 // return the valid addresses together with the joined parsing errors,
 // while the Validate and Normalized methods fail on any invalid address.
 //

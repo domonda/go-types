@@ -210,8 +210,14 @@ func (bic BIC) CountryCode() country.Code {
 	return cc
 }
 
-// TrimBranchCode returns the BIC with the branch code removed (first 8 characters).
+// TrimBranchCode returns the normalized BIC with the branch code removed
+// (first 8 characters), or the first 8 characters of the unchanged BIC
+// if it can't be normalized.
 func (bic BIC) TrimBranchCode() BIC {
+	norm, err := bic.Normalized()
+	if err == nil {
+		bic = norm
+	}
 	if len(bic) <= 8 {
 		return bic
 	}

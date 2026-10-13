@@ -93,7 +93,13 @@ picking the semver baseline.
   JSON, `FormatSep` and the `strfmt` money formatters, `"jpy 1235"` is now
   `"JPY 1235"`. A value that can't be normalized is still written unchanged,
   and the `Value` of the `date` types still returns an error for it.
-  `country.Code` already worked this way.
+  `country.Code` already worked this way. Because `Value` also encodes query
+  parameters, `WHERE bic = $1` with `BIC("DEUTDEFF")` now sends
+  `DEUTDEFFXXX`: normalize existing columns before comparing them with
+  values written by this version. The new value receiver `MarshalJSON` and
+  `String` methods and the pointer receiver `UnmarshalJSON` methods are
+  promoted into structs that embed these types, which changes the JSON of
+  such a struct to the embedded value; embed them as a named field instead.
 - **Breaking:** `email.Address.Normalized`, `email.AddressFrom` and so the
   normalization of every `email` type keep a non-ASCII display name as
   quoted UTF-8 (RFC 6532) instead of encoding it with RFC 2047:
@@ -555,6 +561,23 @@ picking the semver baseline.
 
 ### Fixed
 
+- `strutil.TransliterateSpecialCharacters` and
+  `TransliterateSpecialCharactersMaxLen` returned the input unchanged, with
+  its invalid UTF-8, when it started with an invalid byte, like `"\xe4pfel"`.
+- `money.Amount.SplitProportionally` returned NaN parts for all zero weights
+  when the amount is beyond the `CentAmount` range or not finite; the whole
+  amount now goes to the last part like for all other amounts.
+- The `Scan` methods of `email.AddressList`, `NullableAddressList` and
+  `AddressSet` detected a PostgreSQL array literal only without surrounding
+  whitespace, so a padded `{...}` was stored as the literal text.
+- `bank.BIC.TrimBranchCode` trims the normalized BIC, so a BIC with
+  whitespace, which `Valid` accepts, gives its 8 character form.
+- `email.AddressList.Value` writes a list without addresses, like
+  `"undisclosed-recipients:;"`, unchanged instead of `""`, which `Scan`
+  rejects.
+- The `date` functions normalize their language hint instead of using its
+  first two bytes, so hints that `language.Code.Validate` accepts, like
+  `" en"` and `"EN-us"`, select English like `"en"`.
 - `types.DeepValidate` never called a `Validate` or `Valid` method with a
   pointer receiver for a non-pointer value, so a `types.LenString` struct
   field was never validated. Such values are now validated through a pointer

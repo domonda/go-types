@@ -208,9 +208,13 @@ func asciiAddressList(addrs []*mail.Address) string {
 
 // Value implements the driver database/sql/driver.Valuer interface.
 // Returns the normalized list, or the unchanged string
-// if it can't be normalized, so an empty list is written as empty string.
+// if it can't be normalized or normalizes to a list without addresses,
+// like "undisclosed-recipients:;", because Scan rejects an empty string.
 func (l AddressList) Value() (driver.Value, error) {
 	norm, _ := l.Normalized()
+	if norm == "" {
+		return string(l), nil
+	}
 	return string(norm), nil
 }
 
@@ -237,20 +241,21 @@ func (l *AddressList) Scan(value any) error {
 		if s == "" {
 			return errors.New("can't scan empty string as email.AddressList")
 		}
-		if s[0] == '{' && s[len(s)-1] == '}' {
+		// Trimmed like the array elements by scanAddressArray,
+		// before detecting an array, so a padded array is one too
+		list := strutil.TrimSpace(s)
+		if list == "" {
+			return errs.New("can't scan whitespace only string as email.AddressList")
+		}
+		if list[0] == '{' && list[len(list)-1] == '}' {
 			// Elements that are empty after the helper's trim are
 			// skipped by AddressListJoinStrings.
-			stringArray, err := scanAddressArray(s, "AddressList")
+			stringArray, err := scanAddressArray(list, "AddressList")
 			if err != nil {
 				return err
 			}
 			*l = AddressListJoinStrings(stringArray...)
 			return nil
-		}
-		// Trimmed like the array elements by scanAddressArray
-		list := strutil.TrimSpace(s)
-		if list == "" {
-			return errs.New("can't scan whitespace only string as email.AddressList")
 		}
 		*l = AddressList(list)
 		return nil

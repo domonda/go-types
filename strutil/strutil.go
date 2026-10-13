@@ -209,7 +209,6 @@ func KeepRunes(str []byte, keepRunes ...IsRuneFunc) []byte {
 // If no rune was removed and str is valid UTF-8, the string is not copied.
 func RemoveRunesString(str string, removeRunes ...IsRuneFunc) string {
 	var b strings.Builder
-	b.Grow(len(str))
 	changed := false
 	for i, r := range str {
 		doRemove := false
@@ -230,6 +229,8 @@ func RemoveRunesString(str string, removeRunes ...IsRuneFunc) string {
 			invalid := r == utf8.RuneError && !strings.HasPrefix(str[i:], string(utf8.RuneError))
 			if doRemove || invalid {
 				changed = true
+				// Allocate only when the string changes
+				b.Grow(len(str))
 				b.WriteString(str[:i])
 				if !doRemove {
 					b.WriteRune(r)
@@ -522,16 +523,19 @@ func TransliterateSpecialCharactersMaxLen(str string, maxLen int) string {
 		return ""
 	}
 	b := strings.Builder{}
+	// changed is set when the first rune is dropped or transliterated,
+	// b.Len() can't tell, because a dropped first rune writes nothing
+	changed := false
 	numRunes := 0
 	for i, r := range str {
 		if maxLen > 0 && numRunes >= maxLen {
-			if b.Len() > 0 {
+			if changed {
 				return b.String()
 			}
 			return str[:i]
 		}
 		if r == unicode.ReplacementChar {
-			if b.Len() == 0 {
+			if !changed {
 				// If unchanged yet, write from start of string up to first change
 				if maxLen > 0 {
 					b.Grow(maxLen)
@@ -539,11 +543,12 @@ func TransliterateSpecialCharactersMaxLen(str string, maxLen int) string {
 					b.Grow(len(str))
 				}
 				b.WriteString(str[:i])
+				changed = true
 			}
 			continue // Ignore invalid UTF-8 sequences
 		}
 		if repl, ok := transliterations[r]; ok {
-			if b.Len() == 0 {
+			if !changed {
 				// If unchanged yet, write from start of string up to first change
 				if maxLen > 0 {
 					b.Grow(maxLen)
@@ -551,18 +556,19 @@ func TransliterateSpecialCharactersMaxLen(str string, maxLen int) string {
 					b.Grow(len(str))
 				}
 				b.WriteString(str[:i])
+				changed = true
 			}
 			b.WriteString(repl)
 			numRunes += len(repl)
 		} else {
-			if b.Len() > 0 {
+			if changed {
 				// Only write if there was a change before
 				b.WriteRune(r)
 			}
 			numRunes++
 		}
 	}
-	if b.Len() > 0 {
+	if changed {
 		// Return changed string in b
 		return b.String()
 	}

@@ -81,8 +81,8 @@ func main() {
 
 ## Related
 
-- [`strutil`](../README.md): string helpers of the parent package, including `Ptr`, `DerefPtr` and `StringToPtrEmptyToNil` for `*string`.
-- [Root package reference](../../docs/reference-types.md): `types.Ptr`, `types.FromPtr` and `types.FromPtrOr` for pointers of any type.
+- [`strutil`](../README.md): string helpers of the parent package, including `DerefPtr` and `StringToPtrEmptyToNil` for `*string`.
+- [Root package reference](../../docs/reference-types.md): `types.FromPtr` and `types.FromPtrOr` for pointers of any type. Go 1.26's `new(expr)` replaces the removed `Ptr` functions.
 - [`uu`](../../uu/README.md): the `uu.ID` type formatted by `UUIDPtr`.
 - [`nullable`](../../nullable/README.md): optional values as types instead of pointers.
 - [How to store optional values](../../docs/howto-store-optional-values.md)

@@ -402,8 +402,14 @@ func (set *AddressSet) Scan(value any) error {
 		if s == "" {
 			return errors.New("can't scan empty string as email.AddressSet")
 		}
-		if s[0] == '{' && s[len(s)-1] == '}' {
-			array, err := scanAddressArray(s, "AddressSet")
+		// Trimmed like the array elements by scanAddressArray,
+		// before detecting an array, so a padded array is one too
+		trimmed := strutil.TrimSpace(s)
+		if trimmed == "" {
+			return errs.New("can't scan whitespace only string as email.AddressSet")
+		}
+		if trimmed[0] == '{' && trimmed[len(trimmed)-1] == '}' {
+			array, err := scanAddressArray(trimmed, "AddressSet")
 			if err != nil {
 				return err
 			}
@@ -417,12 +423,7 @@ func (set *AddressSet) Scan(value any) error {
 				set.Add(Address(addr))
 			}
 		} else {
-			// Trimmed like the array elements by scanAddressArray
-			addr := strutil.TrimSpace(s)
-			if addr == "" {
-				return errs.New("can't scan whitespace only string as email.AddressSet")
-			}
-			*set = AddressSet{Address(addr): struct{}{}}
+			*set = AddressSet{Address(trimmed): struct{}{}}
 		}
 		return nil
 
@@ -442,7 +443,8 @@ func (set *AddressSet) Scan(value any) error {
 // Writes the normalized set, or the set unchanged
 // if any of its addresses can't be normalized.
 func (set AddressSet) Value() (driver.Value, error) {
-	if norm, err := set.Normalized(); err == nil {
+	norm, err := set.Normalized()
+	if err == nil {
 		set = norm
 	}
 	if set == nil {
@@ -460,7 +462,8 @@ func (set AddressSet) Value() (driver.Value, error) {
 // as JSON object with the addresses as keys like encoding/json writes a map,
 // so the JSON still unmarshals into an AddressSet. A nil set is JSON null.
 func (set AddressSet) MarshalJSON() ([]byte, error) {
-	if norm, err := set.Normalized(); err == nil {
+	norm, err := set.Normalized()
+	if err == nil {
 		set = norm
 	}
 	return json.Marshal(map[Address]struct{}(set))

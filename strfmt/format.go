@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"reflect"
 	"strconv"
+	"sync"
 	"unsafe"
 
 	"github.com/domonda/go-types/float"
@@ -25,6 +26,11 @@ func Format(value any, config *FormatConfig) string {
 	return FormatValue(val, config)
 }
 
+// defaultFormatConfig is the config for a nil config, built once
+// instead of on every call. FormatValue and the default formatters
+// only read it.
+var defaultFormatConfig = sync.OnceValue(NewFormatConfig)
+
 // FormatValue formats the passed reflect.Value following the format config.
 // A nil config formats with the defaults of NewFormatConfig.
 // If the value implements encoding.TextMarshaler and MarshalText
@@ -38,7 +44,7 @@ func Format(value any, config *FormatConfig) string {
 // conversions based on its kind and fmt.Sprint.
 func FormatValue(val reflect.Value, config *FormatConfig) string {
 	if config == nil {
-		config = NewFormatConfig()
+		config = defaultFormatConfig()
 	}
 	if !val.IsValid() {
 		return config.Nil

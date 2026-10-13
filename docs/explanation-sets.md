@@ -20,19 +20,21 @@ operations, but not one encoding.
 
 ## The six set implementations
 
-| Implementation      | What it is                                         | Elements         | SQL                 | JSON                |
-|---------------------|----------------------------------------------------|------------------|---------------------|---------------------|
-| `mapset`            | functions over `~map[K]struct{}` and `~map[K]bool` | any `comparable` | none                | Go map default      |
-| `set`               | functions over `map[T]struct{}`                    | `cmp.Ordered`    | none                | Go map default      |
-| `types.Set[T]`      | `map[T]struct{}` with methods                      | `cmp.Ordered`    | none                | array, three states |
-| `uu.IDSet`          | `map[uu.ID]struct{}` with methods                  | `uu.ID`          | array, three states | array, three states |
-| `strutil.StringSet` | `map[string]struct{}` with methods                 | `string`         | none                | Go map default      |
-| `email.AddressSet`  | `map[email.Address]struct{}` with methods          | `email.Address`  | array, three states | Go map default      |
+| Implementation      | What it is                                         | Elements         | SQL                 | JSON                         |
+|---------------------|----------------------------------------------------|------------------|---------------------|------------------------------|
+| `mapset`            | functions over `~map[K]struct{}` and `~map[K]bool` | any `comparable` | none                | Go map default               |
+| `set`               | functions over `map[T]struct{}`                    | `cmp.Ordered`    | none                | Go map default               |
+| `types.Set[T]`      | `map[T]struct{}` with methods                      | `cmp.Ordered`    | none                | array, three states          |
+| `uu.IDSet`          | `map[uu.ID]struct{}` with methods                  | `uu.ID`          | array, three states | array, three states          |
+| `strutil.StringSet` | `map[string]struct{}` with methods                 | `string`         | none                | Go map default               |
+| `email.AddressSet`  | `map[email.Address]struct{}` with methods          | `email.Address`  | array, three states | map default, normalized keys |
 
 "Go map default" is what `encoding/json` does with a map that has no
 `MarshalJSON` method: an object with empty object values, `{"a":{}}`. "Three
 states" means nil, empty and populated sets encode to three different values,
 see [Null conventions](explanation-null-conventions.md#three-states-for-sets-and-slices).
+`email.AddressSet` has a `MarshalJSON` that writes the same object shape with
+the normalized addresses as keys.
 
 All six work on plain maps, so `len` and `range` work on each of them, and a
 set converts to another set type with the same element type, like

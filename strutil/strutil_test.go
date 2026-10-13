@@ -228,6 +228,11 @@ func TestTransliterateSpecialCharactersMaxLen(t *testing.T) {
 		// The result must be valid UTF-8, invalid bytes are dropped
 		{name: "invalid byte in the middle", args: args{"ab\xffc", -1}, want: "abc"},
 		{name: "invalid byte at the end", args: args{"abc\xff", -1}, want: "abc"},
+		// A dropped first byte writes nothing, the result must still
+		// be the cleaned string and not the invalid input unchanged
+		{name: "invalid byte at the start", args: args{"\xe4pfel", -1}, want: "pfel"},
+		{name: "only invalid bytes before valid ones", args: args{"\xff\xffxy", -1}, want: "xy"},
+		{name: "invalid byte at the start with maxLen", args: args{"\xffabc", 2}, want: "ab"},
 		// Dropped invalid bytes don't count towards maxLen
 		{name: "invalid byte with maxLen", args: args{"ab\xffcd", 3}, want: "abc"},
 	}
@@ -585,6 +590,10 @@ func TestRemoveRunesString_NoCopyIfUnchanged(t *testing.T) {
 	got := RemoveRunesString(str, unicode.IsDigit)
 	require.Equal(t, str, got)
 	assert.Same(t, unsafe.StringData(str), unsafe.StringData(got), "unchanged string must not be copied")
+	// And not allocate either: it runs on the Normalized path of IBAN,
+	// BIC and vat.ID, which Value, MarshalJSON and String call
+	allocs := testing.AllocsPerRun(100, func() { _ = RemoveRunesString(str, unicode.IsDigit) })
+	assert.Zero(t, allocs, "unchanged string must not allocate")
 
 	// Removing the very first rune must not keep any of the original prefix
 	assert.Equal(t, "bc", RemoveRunesString("abc", IsRune('a')))

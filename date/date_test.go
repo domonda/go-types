@@ -1444,6 +1444,10 @@ func TestNormalize_HintOnlyDecidesAmbiguousOrder(t *testing.T) {
 		{name: "DE hint, unambiguous month first", str: "06/15/2024", lang: []language.Code{language.DE}, want: "2024-06-15"},
 		{name: "DE hint, ambiguous", str: "05/06/2024", lang: []language.Code{language.DE}, want: "2024-06-05"},
 		{name: "no hint, ambiguous", str: "05/06/2024", want: "2024-06-05"},
+		// language.Code.Validate accepts these spellings of English,
+		// so they must work as hint too and not be cut to " e" or "EN"
+		{name: "padded EN hint, ambiguous", str: "05/06/2024", lang: []language.Code{" en"}, want: "2024-05-06"},
+		{name: "BCP-47 EN hint, ambiguous", str: "05/06/2024", lang: []language.Code{"EN-us"}, want: "2024-05-06"},
 		{name: "ordinal day, ambiguous", str: "02 1st 2003", want: "2003-02-01"},
 		// The ordinal suffix is written into the input and marks the day
 		// explicitly, while the language hint is only a guess about the

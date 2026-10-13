@@ -104,7 +104,7 @@ func (a *NullBoolArray) scanBytes(src []byte) error {
 		return nil
 	}
 	if src[0] != '{' || src[len(src)-1] != '}' {
-		return fmt.Errorf("can't parse %q as NullBoolArray", string(src))
+		return fmt.Errorf("can't parse %q as nullable.NullBoolArray", string(src))
 	}
 	if len(src) == 2 { // src == "{}"
 		*a = NullBoolArray{}
@@ -122,7 +122,7 @@ func (a *NullBoolArray) scanBytes(src []byte) error {
 		case "null":
 			// Stays a null Type[bool]
 		default:
-			return fmt.Errorf("can't parse %q as NullBoolArray: invalid element %q at index %d", string(src), elem, i)
+			return fmt.Errorf("can't parse %q as nullable.NullBoolArray: invalid element %q at index %d", string(src), elem, i)
 		}
 	}
 	*a = newArray

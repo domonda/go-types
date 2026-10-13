@@ -19,13 +19,11 @@ func (idFinder) FindAllIndex(str []byte, n int) (indices [][]int) {
 	}
 
 	wordIndices := strutil.SplitAndTrimIndex(str, isVATIDSplitRune, isVATIDTrimRune)
-	// fmt.Println("STRING", string(str), wordIndices)
 
 	for begSpace := range wordIndices {
 		for endSpace := begSpace; endSpace < begSpace+3 && endSpace < len(wordIndices); endSpace++ {
 			beg := wordIndices[begSpace][0]
 			end := wordIndices[endSpace][1]
-			// fmt.Println("TEST", str[beg:end])
 			if BytesAreVATID(str[beg:end]) {
 				indices = append(indices, []int{beg, end})
 				if n > 0 && len(indices) == n {

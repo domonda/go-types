@@ -311,7 +311,8 @@ func (r *Rate) UnmarshalJSON(j []byte) error {
 	// Decode a JSON string through the standard library so \uXXXX and other
 	// escape sequences are resolved, not just the surrounding quotes stripped.
 	if len(s) > 0 && s[0] == '"' {
-		if err := json.Unmarshal(j, &s); err != nil {
+		err := json.Unmarshal(j, &s)
+		if err != nil {
 			return fmt.Errorf("can't unmarshal JSON(%s) as money.Rate because of: %w", j, err)
 		}
 	}
