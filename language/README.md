@@ -114,8 +114,11 @@ func main() {
 		fmt.Println(c, err)
 	}
 
+	// Valid and Validate are strict, Normalized accepts other spellings
 	c := language.Code("EN")
 	fmt.Println(c.Valid(), c.Validate(), c.LanguageName())
+	norm, err := c.Normalized()
+	fmt.Println(norm, err, norm.Validate())
 
 	// Output:
 	// en <nil>
@@ -126,7 +129,8 @@ func main() {
 	// zh <nil>
 	// de <nil>
 	// Klingon invalid language.Code: "Klingon"
-	// false <nil> English
+	// false invalid language.Code: "EN" English
+	// en <nil> <nil>
 }
 ```
 

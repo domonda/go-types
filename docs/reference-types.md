@@ -335,7 +335,7 @@ type Profile struct {
 }
 
 func main() {
-	fmt.Println(*types.Ptr(42), types.FromPtr[int](nil), types.FromPtrOr(nil, "default"))
+	fmt.Println(*new(42), types.FromPtr[int](nil), types.FromPtrOr(nil, "default"))
 	for v, err := range types.Seq2NilError(types.Yield("only")) {
 		fmt.Println(v, err)
 	}
