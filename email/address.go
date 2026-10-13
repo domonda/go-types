@@ -47,8 +47,10 @@ func AddressFrom(addr *mail.Address) Address {
 // formatted like mail.Address.String, which quotes a local part
 // that needs quoting, like "a b"@example.com, but without angle brackets.
 func addrSpec(addr *mail.Address) string {
-	if addr.Address == "" {
-		return ""
+	if !strings.Contains(addr.Address, "@") {
+		// Not an address that mail.Address.String could format,
+		// it would append an @ to a hand-built value without domain
+		return addr.Address
 	}
 	s := (&mail.Address{Address: addr.Address}).String()
 	return strings.TrimSuffix(strings.TrimPrefix(s, "<"), ">")

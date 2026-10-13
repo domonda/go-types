@@ -54,6 +54,9 @@ func TestAddressFrom(t *testing.T) {
 		{name: `only quotes`, addr: &mail.Address{Name: `""`, Address: "j@example.com"}, want: `j@example.com`},
 		// A local part that needs quoting is quoted like by mail.Address.String
 		{name: `quoted local part`, addr: &mail.Address{Address: "a b@example.com"}, want: `"a b"@example.com`},
+		// A hand-built value without @ is no address to format,
+		// it is returned unchanged instead of with an appended @
+		{name: `no @`, addr: &mail.Address{Address: "foo"}, want: `foo`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
