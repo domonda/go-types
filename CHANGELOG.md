@@ -186,9 +186,13 @@ See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut.
   `"03.04.2024"` is 2024-04-03. This applies to `Normalize`, `Normalized`,
   `Scan`, JSON and XML decoding, `ScanString`, `Parser`, `Finder` and
   `NullableDate`, which have no hint, so a US date read from JSON is no
-  longer stored with day and month swapped. With a hint, `language.EN`
-  reads month first and every other language day first, also with
-  slashes. A hint that can't be normalized counts as no hint in
+  longer stored with day and month swapped. A hint only decides dates
+  with slashes: `language.EN` reads them month first, every other
+  language day first. Dots, dashes, spaces and mixed separators are read
+  day first with every hint, so `date.Normalize("05.06.2024",
+  language.EN)` is 2024-06-05, which was 2024-05-06, and an ambiguous US
+  date with dashes like `"05-06-2024"` can no longer be read month first.
+  A hint that can't be normalized counts as no hint in
   `ScanStringWithLang` and `Finder`, and `monthMustBeFirst` is true only
   when month first is the only valid reading.
 - **Breaking:** `strfmt.NewEnglishFormatConfig` is renamed to
@@ -824,6 +828,11 @@ See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut.
   and memory for a list of unparsable entries: every error held the whole
   list, so 10,000 entries took seconds and hundreds of megabytes. Errors
   hold at most 100 bytes of the input, and parsing stops after 100 errors.
+- `date.YearQuarter.AddQuarters` and `NullableYearQuarter.AddQuarters`
+  looped once per year, so a large count from input took about 400 ms for
+  `1<<32` and never returned for `math.MaxInt`. They compute the year by
+  division without overflow; a result past `9999-Q4` or before the year 1
+  stays invalid, so `Value` refuses it.
 - `email.ParseAddress` and `ParseAddressList`, and so the `Validate` and
   `Normalized` methods and `ParseMIMEMessage`, read the comment in
   `addr (Name)` without the RFC 5322 nesting and `\)` escapes that

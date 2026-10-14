@@ -191,7 +191,7 @@ time.
         without a To header; set the placeholder when a To header was
         present without addresses.
       - `date` language hints are languages only, so `"en-GB"` reads
-        ambiguous dates month first like US English.
+        ambiguous dates with slashes month first like US English.
       - `types.DeepValidate` calls a `Validate` method that a struct
         promotes from an embedded field twice, for the struct and for the
         field.
