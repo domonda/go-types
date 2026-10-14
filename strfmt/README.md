@@ -203,8 +203,8 @@ type MoneyFormat struct {
 | `(*MoneyFormat).FormatAmount(money.Amount) string` | `amount.FormatSep(ThousandsSep, DecimalSep, Precision)`: rounded half away from zero and padded to `Precision`, `-1` for the shortest exact form. |
 | `(*MoneyFormat).FormatCentAmount(money.CentAmount) string` | Like `FormatDecimalAmount` of the amount with scale 2. |
 | `(*MoneyFormat).FormatDecimalAmount(money.DecimalAmount) string` | Rounded half away from zero to `Precision` if it has more decimals, padded with zeros if it has fewer. A negative `Precision` writes the decimals of the amount's scale. NaN and ±Inf as `NaN`, `Inf`, `-Inf`. |
-| `(*MoneyFormat).FormatCurrencyAmount(money.CurrencyAmount) string` | The amount like `FormatAmount`, with the normalized currency code and a space before it if `CurrencyFirst`, else after it. No code for an empty currency. |
-| `(*MoneyFormat).FormatCurrencyDecimalAmount(money.CurrencyDecimalAmount) string` | Like `FormatCurrencyAmount` with the amount from `FormatDecimalAmount`. |
+| `(*MoneyFormat).FormatCurrencyAmount(money.CurrencyAmount) string` | The amount like `FormatAmount`, with the normalized currency code and a space before it if `CurrencyFirst`, else after it. No code for an empty currency. A `Precision` of 0 or more is raised to the currency's `MinorUnits()`, which are 2 without currency: `KWD 1,234.567` with the 3 decimals of the Kuwaiti dinar. |
+| `(*MoneyFormat).FormatCurrencyDecimalAmount(money.CurrencyDecimalAmount) string` | Like `FormatCurrencyAmount` with the amount from `FormatDecimalAmount` and the same raised `Precision`. |
 | `EnglishFloatFormat(precision) float.FormatDef`    | `{0, '.', precision, false}`: no grouping, trailing zeros trimmed. |
 | `GermanFloatFormat(precision) float.FormatDef`     | `{0, ',', precision, false}`.                      |
 
@@ -220,6 +220,7 @@ What the presets write, and whether `Scan` with the default `ScanConfig` reads i
 | `money.CentAmount(123450)`                      | `1,234.50`             | `1,234.50`                | `1.234,50`                | yes                      |
 | `money.CurrencyAmountEUR(1234.5)`               | `EUR 1,234.50`         | `EUR 1,234.50`            | `EUR 1.234,50`            | yes                      |
 | `money.CurrencyAmountJPY(1234.5)`               | `JPY 1,234.50`         | `JPY 1,234.50`            | `JPY 1.234,50`            | yes                      |
+| `money.CurrencyAmount{"KWD", 1.234}`            | `KWD 1.234`            | `KWD 1.234`               | `KWD 1,234`               | yes                      |
 | `date.Date("2024-01-31")`                       | `2024-01-31`           | `31/01/2024`              | `31.01.2024`              | yes                      |
 | `time.Date(2024, 1, 31, 10, 0, 0, 0, time.UTC)` | `2024-01-31T10:00:00Z` | `31/01/2024 10:00:00 UTC` | `31.01.2024 10:00:00 UTC` | yes, see the zone gotcha |
 | `90 * time.Minute`                              | `1h30m0s`              | `1h30m0s`                 | `1h30m0s`                 | yes                      |
@@ -227,7 +228,7 @@ What the presets write, and whether `Scan` with the default `ScanConfig` reads i
 
 ## Gotchas
 
-- **`"1,000"` scans as 1.** Floats and the money types except `money.CurrencyAmount`, which rejects 3 decimals, parse with the separator rules of `float.Parse`, where a single `.` or `,` is the decimal separator. Integers are plain base 10, so `"1.000"` and `"1,000"` into an `int` are errors.
+- **`"1,000"` scans as 1.** Floats and the money types parse with the separator rules of `float.Parse`, where a single `.` or `,` is the decimal separator. `money.CurrencyAmount` rejects 3 decimals instead, except for a currency with 3 minor unit decimals: `"KWD 1,000"` is 1, as the German preset writes it, while the presets write 1000 with decimals, `KWD 1.000,000`. Integers are plain base 10, so `"1.000"` and `"1,000"` into an `int` are errors.
 - **Empty cells scan as zero.** `""`, `NULL`, and the other nil strings scan as `0` into numbers and `money.Amount`, which can't be told apart from a real zero. Use a pointer field like `*money.Amount`, a nullable type like `money.NullableAmount` or `date.NullableDate`, or set `StrictEmptyStringParsing`.
 - **A nil string into a `string` field is kept.** `"NULL"` and `"nil"` scan as the strings `"NULL"` and `"nil"`. Use `nullable.TrimmedString` or a `*string` to get null.
 - **Strings are not trimmed.** A `string` destination and `Scannable.ScanString` get the source with its whitespace, bools and integers are compared and parsed trimmed.
@@ -235,7 +236,7 @@ What the presets write, and whether `Scan` with the default `ScanConfig` reads i
 - **The English preset writes dates as DD/MM/YYYY**, the British order: `31/01/2024`, not the US `01/31/2024`.
 - **Zone abbreviations need a known offset.** The preset time layouts end with `MST`. `time.Parse` knows the offset of an abbreviation only if it is `UTC`, `GMT` or one of the local time zone, and silently uses offset 0 for any other. So `ParseTime` and `Scan` reject `31.01.2024 10:00:00 CET` on a server in UTC instead of returning 10:00 UTC, but accept it on a server in Europe/Vienna. Times without a zone scan as UTC. Use `NewFormatConfig` with RFC 3339 for lossless times.
 - **The English preset time layout is day first.** `"02/01/2006 15:04:05 MST"` reads the US month-first `01/02/2024 10:00:00 EST` as the 1st of February when `EST` is known locally.
-- **Money presets use 2 decimals for every currency.** `CurrencyAmountJPY(1234.5)` formats as `JPY 1,234.50` like `CurrencyAmount.String`, but a KWD amount of 1.234 formats as `KWD 1.23`, while `CurrencyAmount.String` writes the 3 decimals of the currency. Set `MoneyFormat.Precision` to 3 for such currencies.
+- **The currency amount formats never write fewer decimals than the currency has.** A `Precision` of 0 or more is raised to `Currency.MinorUnits()`, so a KWD amount of 1.234 formats as `KWD 1,234` with the German preset, and a `Precision` of 0 still writes `EUR 1,234.50`, and 2 decimals without currency. It is only raised, so `CurrencyAmountJPY(1234.5)` keeps the 2 decimals of the presets, `JPY 1,234.50`, like `CurrencyAmount.String`, and only a `Precision` of 0 writes whole yen. `FormatAmount` and the other amount types without currency use `Precision` as it is. A `Precision` of -1 writes the shortest form, which doesn't scan back as `money.CurrencyAmount` if it has 1 decimal like `EUR 1.234,5`.
 - **Registered formatters run before the null check.** A zero `money.Amount` formats as `0.00`, not as `config.Nil`.
 - **Kinds win over `String` methods.** A type with a `string` or number kind and no registered formatter or `MarshalText` method is formatted by its kind: `money.RoundHalfToEven` formats as `1` although its `String` returns `RoundHalfToEven`, and `money.Rate(0.19)` as `0.19`.
 - **Formatters are looked up by the dereferenced type.** A formatter registered for `*T` only runs for a nil `*T`. Register it for `T`.

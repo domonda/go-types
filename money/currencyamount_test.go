@@ -408,32 +408,34 @@ func TestCurrencyAmount_NormalizedCurrencyOutput(t *testing.T) {
 	assert.JSONEq(t, `{"Currency":"XYZ","Amount":1.5}`, string(j))
 }
 
-// TestCurrencyAmount_ScanStringMinorUnitsWithComma protects that the extra
-// decimal places of a currency like KWD are only read the way String writes
-// them, with a point: "KWD 1,234" can be 1234 with thousands grouping,
-// so reading it as 1.234 would silently divide the amount by 1000.
+// TestCurrencyAmount_ScanStringMinorUnitsWithComma protects that the three
+// decimals of a currency like KWD are read with a decimal comma too, because
+// the German strfmt money format writes KWD 1.234 as "KWD 1,234" and has to
+// scan it back. A single separator is a decimal separator like for
+// ParseAmount, so "KWD 1,234" is 1.234, while the formats write 1234 with
+// decimals, like "KWD 1.234,000". Currencies with two or zero decimals
+// still reject three decimals as an ambiguous thousands grouping.
 func TestCurrencyAmount_ScanStringMinorUnitsWithComma(t *testing.T) {
-	var ca CurrencyAmount
-	require.NoError(t, ca.ScanString("KWD 1.234", true))
-	assert.Equal(t, CurrencyAmount{Currency: "KWD", Amount: 1.234}, ca)
-
-	for _, source := range []string{"KWD 1,234", "BHD 999,999"} {
-		ca = CurrencyAmount{}
-		err := ca.ScanString(source, true)
-		if err == nil {
-			assert.NotEqual(t, 3, decimalsOf(float64(ca.Amount)), "%q must not be read with 3 decimals: %v", source, ca)
+	tests := []struct {
+		source string
+		want   CurrencyAmount
+	}{
+		{source: "KWD 1.234", want: CurrencyAmount{Currency: KWD, Amount: 1.234}},
+		{source: "KWD 1,234", want: CurrencyAmount{Currency: KWD, Amount: 1.234}},
+		{source: "999,999 BHD", want: CurrencyAmount{Currency: BHD, Amount: 999.999}},
+		{source: "KWD 1.234,567", want: CurrencyAmount{Currency: KWD, Amount: 1234.567}},
+		{source: "KWD 1,234.567", want: CurrencyAmount{Currency: KWD, Amount: 1234.567}},
+		{source: "KWD 1.234,000", want: CurrencyAmount{Currency: KWD, Amount: 1234}},
+	}
+	for _, tt := range tests {
+		var ca CurrencyAmount
+		if assert.NoError(t, ca.ScanString(tt.source, true), "ScanString(%q)", tt.source) {
+			assert.Equal(t, tt.want, ca, "ScanString(%q)", tt.source)
 		}
 	}
-}
 
-// decimalsOf returns the number of decimal places of f
-// in its shortest representation.
-func decimalsOf(f float64) int {
-	s := fmt.Sprint(f)
-	for i, r := range s {
-		if r == '.' {
-			return len(s) - i - 1
-		}
+	for _, source := range []string{"EUR 1,234", "JPY 1,234", "USD 1.234"} {
+		var ca CurrencyAmount
+		assert.Error(t, ca.ScanString(source, true), "ScanString(%q) of a currency without three decimals", source)
 	}
-	return 0
 }

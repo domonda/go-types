@@ -277,7 +277,7 @@ func main() {
 }
 ```
 
-The `strfmt` presets avoid both traps. Their money formats always write two decimals, so `1,234.50` and `1.234,50` read back exactly. Their float formats don't group thousands. `NewEnglishFormatConfig` writes dates as `02/01/2006`, day first, which is the default reading. If you define your own formats, write decimals whenever you group thousands, and pass `language.EN` when you read back dates you wrote month first. For data exchanged between programs, use the canonical forms.
+The `strfmt` presets avoid both traps. Their money formats always write two decimals, or the three of a currency like KWD, so `1,234.50`, `1.234,50` and `KWD 1.234,000` read back exactly. Their float formats don't group thousands. `NewEnglishFormatConfig` writes dates as `02/01/2006`, day first, which is the default reading. If you define your own formats, write decimals whenever you group thousands, and pass `language.EN` when you read back dates you wrote month first. For data exchanged between programs, use the canonical forms.
 
 ## Trade-offs
 

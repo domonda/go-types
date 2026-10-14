@@ -74,6 +74,89 @@ func TestMoneyFormat_FormatCurrencyDecimalAmount(t *testing.T) {
 	assert.Equal(t, "EUR 1.234,50", f.FormatCurrencyDecimalAmount(money.CurrencyDecimalAmount{Currency: "€", Amount: amount.Amount}))
 }
 
+// TestMoneyFormat_CurrencyMinorUnits protects that the money formats keep
+// every decimal of the minor unit of a currency: a Kuwaiti dinar has 1000
+// fils, and the two decimals of the presets rounded KWD 1.234 to "KWD 1.23",
+// losing a fils that money.CurrencyAmount.String keeps. The precision is
+// only raised, so JPY keeps the two decimals of the presets like String,
+// and a precision of 0 still writes whole yen, but no longer whole euros.
+// A precision of -1 keeps writing the shortest exact form.
+// CurrencyDecimalAmount is formatted the same way as CurrencyAmount.
+func TestMoneyFormat_CurrencyMinorUnits(t *testing.T) {
+	precision0 := MoneyFormat{CurrencyFirst: true, ThousandsSep: ',', DecimalSep: '.', Precision: 0}
+	tests := []struct {
+		name   string
+		format MoneyFormat
+		amount money.CurrencyAmount
+		want   string
+	}{
+		{name: "English KWD", format: EnglishMoneyFormat(true), amount: money.CurrencyAmount{Currency: money.KWD, Amount: 1.234}, want: "KWD 1.234"},
+		{name: "German KWD", format: GermanMoneyFormat(true), amount: money.CurrencyAmount{Currency: money.KWD, Amount: 1.234}, want: "KWD 1,234"},
+		{name: "German KWD rounded to fils", format: GermanMoneyFormat(false), amount: money.CurrencyAmount{Currency: money.KWD, Amount: 1234.5678}, want: "1.234,568 KWD"},
+		{name: "currency normalized for its minor units", format: EnglishMoneyFormat(true), amount: money.CurrencyAmount{Currency: "bhd", Amount: 0.5}, want: "BHD 0.500"},
+		{name: "JPY keeps the two decimals of the presets", format: EnglishMoneyFormat(true), amount: money.CurrencyAmountJPY(1234.5), want: "JPY 1,234.50"},
+		{name: "precision 0 writes whole yen", format: precision0, amount: money.CurrencyAmountJPY(1234.5), want: "JPY 1,235"},
+		{name: "precision 0 raised to euro cents", format: precision0, amount: money.CurrencyAmountEUR(1234.5), want: "EUR 1,234.50"},
+		// MinorUnits is 2 without currency, like String writes 2 decimals
+		{name: "precision 0 raised to 2 decimals without currency", format: precision0, amount: money.CurrencyAmount{Amount: 1234.5}, want: "1,234.50"},
+		{name: "precision above the minor units", format: MoneyFormat{DecimalSep: '.', Precision: 4}, amount: money.CurrencyAmount{Currency: money.KWD, Amount: 1.23456}, want: "1.2346 KWD"},
+		{name: "precision -1 writes the shortest form", format: MoneyFormat{DecimalSep: ',', Precision: -1}, amount: money.CurrencyAmount{Currency: money.KWD, Amount: 1.5}, want: "1,5 KWD"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, tt.format.FormatCurrencyAmount(tt.amount), "FormatCurrencyAmount")
+			decimal := money.NewCurrencyDecimalAmount(tt.amount.Currency, money.DecimalAmountFrom(tt.amount.Amount))
+			assert.Equal(t, tt.want, tt.format.FormatCurrencyDecimalAmount(decimal), "FormatCurrencyDecimalAmount")
+		})
+	}
+}
+
+// TestMoneyFormat_CurrencyAmountRoundTrip protects that Scan reads back what
+// the presets write for a currency amount, for currencies with 0, 2 and 3
+// decimals: the German "KWD 1,234" is 1.234 and not rejected as a thousands
+// grouping, and no decimal of KWD was rounded away by the format.
+func TestMoneyFormat_CurrencyAmountRoundTrip(t *testing.T) {
+	amounts := []money.CurrencyAmount{
+		{Currency: money.KWD, Amount: 1.234},
+		{Currency: money.KWD, Amount: 1234.567},
+		{Currency: money.KWD, Amount: -0.001},
+		{Currency: money.JPY, Amount: 1234},
+		{Currency: money.JPY, Amount: 1234.5},
+		{Currency: money.EUR, Amount: 1234.56},
+		{Currency: money.EUR, Amount: 0.01},
+	}
+	germanShortest := NewGermanFormatConfig()
+	germanShortest.MoneyAmount.Precision = -1
+	configs := []struct {
+		name    string
+		config  *FormatConfig
+		amounts []money.CurrencyAmount
+	}{
+		{name: "default", config: NewFormatConfig(), amounts: amounts},
+		{name: "English", config: NewEnglishFormatConfig(), amounts: amounts},
+		{name: "German", config: NewGermanFormatConfig(), amounts: amounts},
+		// The shortest form of 1234.5 has one decimal, which no currency accepts
+		{name: "German precision -1", config: germanShortest, amounts: []money.CurrencyAmount{{Currency: money.KWD, Amount: 1.234}, {Currency: money.EUR, Amount: 1234.56}}},
+	}
+	for _, c := range configs {
+		for _, ca := range c.amounts {
+			str := Format(ca, c.config)
+			var scanned money.CurrencyAmount
+			if assert.NoError(t, Scan(reflect.ValueOf(&scanned).Elem(), str, NewScanConfig()), "%s: Scan(%q)", c.name, str) {
+				assert.Equal(t, ca, scanned, "%s: Scan(%q)", c.name, str)
+			}
+
+			decimal := money.NewCurrencyDecimalAmount(ca.Currency, money.DecimalAmountFrom(ca.Amount))
+			str = Format(decimal, c.config)
+			var scannedDecimal money.CurrencyDecimalAmount
+			if assert.NoError(t, Scan(reflect.ValueOf(&scannedDecimal).Elem(), str, NewScanConfig()), "%s: Scan(%q)", c.name, str) {
+				assert.Equal(t, decimal.Currency, scannedDecimal.Currency, "%s: Scan(%q)", c.name, str)
+				assert.True(t, decimal.Amount.Equal(scannedDecimal.Amount), "%s: Scan(%q) is %s, want %s", c.name, str, scannedDecimal.Amount, decimal.Amount)
+			}
+		}
+	}
+}
+
 // TestMoneyFormat_FormatCentAndDecimalAmount checks that the exact money
 // types honor the separators and the precision of a MoneyFormat like
 // FormatAmount does for money.Amount, so a custom format applies to all
