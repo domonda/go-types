@@ -510,7 +510,10 @@ See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut.
   config. `Format` panicked and `Scan` returned an error.
 - The default `strfmt.ScanConfig` accepts what the format presets write:
   `ja` and `nein` as booleans and the presets' date and time layouts, so
-  formatted values scan back.
+  formatted values scan back. The English time layout
+  `"02/01/2006 15:04:05 MST"` is day first like `date.Date`, so a US time
+  like `"03/04/2024 10:00:00 UTC"`, which failed to scan, is now read as
+  3 April. Replace the layout in `TimeFormats` to scan US times.
 - **Breaking:** `strfmt.ScanConfig.ParseTime`, and so `strfmt.Scan` into
   `time.Time` and `nullable.Time`, does not match a layout with a zone
   abbreviation but no numeric offset, like the `MST` layouts of the English

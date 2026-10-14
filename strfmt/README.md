@@ -88,7 +88,7 @@ var DefaultScanConfig = NewScanConfig()
 | `TrueStrings`                 | `true`, `True`, `TRUE`, `yes`, `Yes`, `YES`, `ja`, `Ja`, `JA`, `1` |
 | `FalseStrings`                | `false`, `False`, `FALSE`, `no`, `No`, `NO`, `nein`, `Nein`, `NEIN`, `0` |
 | `NilStrings`                  | `""`, `nil`, `<nil>`, `null`, `NULL`               |
-| `TimeFormats`                 | In this order: `time.RFC3339Nano`, `time.RFC3339`, `"2006-01-02 15:04:05.999999999 -0700 MST"` (`time.Time.String`), `time.DateTime`, `"2006-01-02 15:04"`, `"2006-01-02T15:04"` (browser `datetime-local`), `"02/01/2006 15:04:05 MST"` (English preset), `"02.01.2006 15:04:05 MST"` (German preset), `time.DateOnly` |
+| `TimeFormats`                 | In this order: `time.RFC3339Nano`, `time.RFC3339`, `"2006-01-02 15:04:05.999999999 -0700 MST"` (`time.Time.String`), `time.DateTime`, `"2006-01-02 15:04"`, `"2006-01-02T15:04"` (browser `datetime-local`), `"02/01/2006 15:04:05 MST"` (English preset, day first like `date.Date`, so US month first times are read with day and month swapped; replace it with `"01/02/2006 15:04:05 MST"` for US input), `"02.01.2006 15:04:05 MST"` (German preset), `time.DateOnly` |
 | `AcceptedMoneyAmountDecimals` | `0, 2, 4`. Not used by `Scan`, it's there to pass on to `money.ParseAmount` or `money.NewAmountParser`. |
 | `StrictEmptyStringParsing`    | `false`: a nil string scans as the zero value of a type that can't be nil or null. |
 | `TypeScanners`                | Scanners for `time.Time`, `nullable.Time`, and `time.Duration`, see below. |

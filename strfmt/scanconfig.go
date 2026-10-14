@@ -107,6 +107,12 @@ type ScanConfig struct {
 // NewFormatConfig, NewEnglishFormatConfig and NewGermanFormatConfig,
 // like "ja" and "nein", so that what those presets format can be
 // scanned back.
+//
+// The time layout "02/01/2006 15:04:05 MST" of NewEnglishFormatConfig is
+// day first, like date.Date reads "03/04/2024" as 3 April, so a US month
+// first time like "03/04/2024 10:00:00 UTC" is read as 3 April without an
+// error. Replace it in TimeFormats with "01/02/2006 15:04:05 MST" to scan
+// US times.
 func NewScanConfig() *ScanConfig {
 	c := &ScanConfig{
 		TrueStrings:  []string{"true", "True", "TRUE", "yes", "Yes", "YES", "ja", "Ja", "JA", "1"},
