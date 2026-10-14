@@ -849,8 +849,54 @@ func (a DecimalAmount) Percentage(percent float64) DecimalAmount {
 // shortest representation needs more than MaxDecimalAmountScale decimal
 // places or doesn't fit the coefficient range.
 func exactDecimalFromFloat(f float64) (DecimalAmount, bool) {
+	if coefficient, scale, ok := shortestDecimalFast(f); ok {
+		return packDecimalAmount(coefficient, scale), true
+	}
+	return exactDecimalFromFloatFormatted(f)
+}
+
+// exactDecimalFromFloatFormatted is exactDecimalFromFloat without the
+// float64 fast path, parsing the digits formatted by strconv.FormatFloat.
+func exactDecimalFromFloatFormatted(f float64) (DecimalAmount, bool) {
 	d, err := ParseDecimalAmount(strconv.FormatFloat(f, 'f', -1, 64))
 	return d, err == nil && d.IsFinite()
+}
+
+// shortestDecimalFast returns the shortest decimal representation of f as
+// coefficient and scale, the digits that strconv.FormatFloat(f, 'f', -1, 64)
+// writes, and whether it could prove them with a few float64 operations,
+// which is an order of magnitude faster than formatting and parsing them.
+// It proves them for every f written with up to 15 significant digits
+// and at most MaxDecimalAmountScale decimal places.
+//
+// A decimal k·10^-s with float64 integers k and 10^s parses back to f if the
+// correctly rounded IEEE 754 division k/10^s equals f, because parsing rounds
+// the same way. Such a k lies within the rounding interval of f scaled by
+// 10^s, which is at most |f·10^s|·2^-52 wide, and the float64 f·10^s rounds
+// by at most |f·10^s|·2^-53. Below 2^50 these are less than 1/4 and 1/8, so
+// the interval holds one k at most, and that is math.Round of the float64
+// f·10^s. The relative bounds hold because a nonzero k·10^-s with s up to
+// MaxDecimalAmountScale never parses to a subnormal f.
+// Below 2^50 no integer other than f itself parses to f, and all k·10^-s that
+// do lie within a relative 2^-52 of f, so they share the position of their
+// leading digit unless one of them is a power of ten, which then is the only
+// one of the smallest scale. So the smallest scale has the fewest digits and
+// its k is the one FormatFloat writes. A k below 2^50 is never a midpoint
+// between two float64 values, which needs 54 significant bits, so this
+// doesn't depend on how a shortest algorithm treats the ends of the rounding
+// interval either.
+func shortestDecimalFast(f float64) (coefficient int64, scale int, ok bool) {
+	for scale = 0; scale <= MaxDecimalAmountScale; scale++ {
+		pow10 := math.Pow10(scale) // exact up to 10^22
+		scaled := f * pow10
+		if !(math.Abs(scaled) < 1<<50) { // also NaN and ±Inf
+			return 0, 0, false
+		}
+		if k := math.Round(scaled); k/pow10 == f {
+			return int64(k), scale, true
+		}
+	}
+	return 0, 0, false
 }
 
 // withoutTrailingZeros returns a with the trailing zero decimal places of its

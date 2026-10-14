@@ -3,8 +3,11 @@ package money
 import (
 	"database/sql/driver"
 	"encoding/json"
+	"fmt"
 	"math"
 	"math/big"
+	"math/rand/v2"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -397,6 +400,155 @@ func TestCentAmount_rateMethodsRoundShortestDecimal(t *testing.T) {
 	for _, tt := range tests {
 		assert.Equal(t, tt.want, tt.got, tt.name)
 	}
+}
+
+// TestCentAmount_rateFastPathMatchesExact protects that the float64 fast path
+// of MultipliedByRate, DividedByRate and Percentage never changes a result.
+// It is only allowed to skip the exact big.Rat arithmetic where it provably
+// rounds to the same cents, so every input must round exactly like the exact
+// arithmetic with the shortest decimal of the rate does, most of all the
+// decimal ties and their float64 neighbors where float64 arithmetic alone
+// gets it wrong, and the amounts beyond 2^53 cents that float64 can't hold.
+func TestCentAmount_rateFastPathMatchesExact(t *testing.T) {
+	check := func(c CentAmount, rate float64) {
+		t.Helper()
+		if got, want := c.MultipliedByRate(Rate(rate)), c.multipliedByRateExact(Rate(rate)); got != want {
+			t.Fatalf("CentAmount(%d).MultipliedByRate(%v) = %d, exact = %d", c, rate, got, want)
+		}
+		if got, want := c.DividedByRate(Rate(rate)), c.dividedByRateExact(Rate(rate)); got != want {
+			t.Fatalf("CentAmount(%d).DividedByRate(%v) = %d, exact = %d", c, rate, got, want)
+		}
+		if got, want := c.Percentage(rate), c.percentageExact(rate); got != want {
+			t.Fatalf("CentAmount(%d).Percentage(%v) = %d, exact = %d", c, rate, got, want)
+		}
+	}
+	// checkSigns checks c with both signs times rate and its float64 neighbors
+	checkSigns := func(c CentAmount, rate float64) {
+		t.Helper()
+		for _, r := range []float64{rate, math.Nextafter(rate, 0), math.Nextafter(rate, math.Inf(1))} {
+			check(c, r)
+			check(-c, r)
+		}
+	}
+
+	targetedCents := []CentAmount{
+		0, 1, 7, 100, 1000, 12345, 999999, 1e15,
+		1<<53 - 1, 1 << 53, 1<<53 + 1, MaxCentAmount,
+	}
+	targetedRates := []float64{
+		0, 0.5, 1.5, 0.145, 1.005, 2.675, 0.0025, 0.0035, 0.272, 14.5, 1.14,
+		1.0845, 0.92137, 0.1 + 0.2, 3, 1e-300, 5e-324, 1e300, math.MaxFloat64,
+		math.Inf(1), math.NaN(),
+	}
+	for _, c := range targetedCents {
+		for _, rate := range targetedRates {
+			checkSigns(c, rate)
+			checkSigns(c, -rate)
+		}
+	}
+	check(MinCentAmount, 0.5)
+	check(MinCentAmount, -1)
+
+	rng := rand.New(rand.NewPCG(1, 2))
+	for range 2000 {
+		// A rate of up to 15 digits ending in a 5 at the decimal place
+		// decimals, like 0.145 or 1.005, is a tie of its shortest decimal
+		// multiplied by every odd multiple of 10^(decimals-1) cents, and
+		// a percent like it of every odd multiple of 10^(decimals+1) cents.
+		decimals := 1 + rng.IntN(12)
+		digits := rng.Int64N(int64(math.Pow10(rng.IntN(16 - decimals))))
+		tie, err := strconv.ParseFloat(fmt.Sprintf("%d5e-%d", digits, decimals), 64)
+		require.NoError(t, err)
+		odd := 2*rng.Int64N(1000) + 1
+		checkSigns(CentAmount(odd*int64(math.Pow10(decimals-1))), tie)
+		checkSigns(CentAmount(odd*int64(math.Pow10(decimals+1))), tie)
+
+		// c divided by the rate 2c/5^a, which is exactly 2c·2^a/10^a,
+		// is the tie 5^a/2
+		c := 1 + rng.Int64N(1e9)
+		a := 1 + rng.IntN(8)
+		rate, err := strconv.ParseFloat(fmt.Sprintf("%de-%d", 2*c<<a, a), 64)
+		require.NoError(t, err)
+		checkSigns(CentAmount(c), rate)
+	}
+
+	for range rateSweepSize() {
+		check(randomCents(rng), randomRate(rng))
+	}
+}
+
+// TestCentAmount_rateFastPathTaken protects the reason for the fast path:
+// converting amounts with real exchange rates and tax percentages must not
+// take the exact big.Rat arithmetic, which is an order of magnitude slower.
+// Only results within a tiny relative distance of a tie may take it.
+func TestCentAmount_rateFastPathTaken(t *testing.T) {
+	rng := rand.New(rand.NewPCG(3, 4))
+	exact := 0
+	for range 100_000 {
+		c := CentAmount(rng.Int64N(2e10) - 1e10)
+		rate := []float64{1.0845, 0.92137, 7.4602, 25.317, 0.0067}[rng.IntN(5)]
+		percent := []float64{19, 20, 7.7, 2.5, 33.333}[rng.IntN(5)]
+		for _, result := range []float64{float64(c) * rate, float64(c) / rate, float64(c) * percent / 100} {
+			if _, ok := roundCentsFast(c, result); !ok {
+				exact++
+			}
+		}
+	}
+	// Only the exact arithmetic can round exact ties, like 20 cents times
+	// 2.5% or 50 cents times 19%. They are 760 of the 300,000 results here.
+	assert.Less(t, exact, 1000, "results that took the exact path")
+}
+
+// randomCents returns random cents for the rate sweeps,
+// from small amounts up to beyond 2^53 cents.
+func randomCents(rng *rand.Rand) CentAmount {
+	var c CentAmount
+	switch rng.IntN(4) {
+	case 0:
+		c = CentAmount(rng.Int64N(1e5))
+	case 1:
+		c = CentAmount(rng.Int64N(1e13))
+	case 2:
+		c = CentAmount(1<<53 - 100 + rng.Int64N(200))
+	default:
+		c = CentAmount(rng.Int64N(int64(MaxCentAmount)))
+	}
+	if rng.IntN(2) == 0 {
+		c = -c
+	}
+	return c
+}
+
+// randomRate returns a random finite rate or percent for the rate sweeps:
+// a short decimal like a stored rate, the product of one with a random
+// factor, which has a long binary fraction, the float64 neighbor of one,
+// or any mantissa with an exponent from -80 to 80. The extreme exponents
+// are among the targeted rates, here they would only slow down the
+// big.Rat arithmetic.
+func randomRate(rng *rand.Rand) float64 {
+	decimal := float64(rng.Int64N(int64(math.Pow10(1+rng.IntN(15))))) / math.Pow10(rng.IntN(13))
+	if rng.IntN(2) == 0 {
+		decimal = -decimal
+	}
+	switch rng.IntN(4) {
+	case 0:
+		return decimal
+	case 1:
+		return decimal * (rng.Float64() * 2)
+	case 2:
+		return math.Nextafter(decimal, math.Inf(1-2*rng.IntN(2)))
+	default:
+		return math.Ldexp(1+rng.Float64(), rng.IntN(161)-80)
+	}
+}
+
+// rateSweepSize returns the number of random inputs
+// for the rate sweeps, fewer with -short.
+func rateSweepSize() int {
+	if testing.Short() {
+		return 10_000
+	}
+	return 100_000
 }
 
 func TestCentAmount_SplitEqually(t *testing.T) {
@@ -847,5 +999,47 @@ func TestParseCentAmount_exponentMatchesDecimalAmount(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, fromDecimal, cents, "%q parsed differently by the two parsers", str)
 		})
+	}
+}
+
+// benchCents, benchRates and benchPercents are realistic inputs for the
+// benchmarks of the rate methods, varied so that the branch predictor
+// can't learn a single input.
+var (
+	benchCents    = makeBenchCents()
+	benchRates    = []Rate{1.0845, 0.92137, 1.5, 0.145, 7.4602, 0.0067, 25.317, 1}
+	benchPercents = []float64{19, 20, 7.7, 2.5, 10, 13, 0.5, 33.333}
+)
+
+func makeBenchCents() []CentAmount {
+	rng := rand.New(rand.NewPCG(1, 2))
+	cents := make([]CentAmount, 1024)
+	for i := range cents {
+		cents[i] = CentAmount(rng.Int64N(2e8) - 1e8)
+	}
+	return cents
+}
+
+func BenchmarkCentAmount_MultipliedByRate(b *testing.B) {
+	i := 0
+	for b.Loop() {
+		benchCents[i%len(benchCents)].MultipliedByRate(benchRates[i%len(benchRates)])
+		i++
+	}
+}
+
+func BenchmarkCentAmount_DividedByRate(b *testing.B) {
+	i := 0
+	for b.Loop() {
+		benchCents[i%len(benchCents)].DividedByRate(benchRates[i%len(benchRates)])
+		i++
+	}
+}
+
+func BenchmarkCentAmount_Percentage(b *testing.B) {
+	i := 0
+	for b.Loop() {
+		benchCents[i%len(benchCents)].Percentage(benchPercents[i%len(benchPercents)])
+		i++
 	}
 }

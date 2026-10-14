@@ -1211,6 +1211,69 @@ func TestDecimalAmount_rateMethodsRoundShortestDecimal(t *testing.T) {
 	}
 }
 
+// TestExactDecimalFromFloat_fastPathMatchesFormatted protects that the
+// float64 fast path, which converts the rates of MultipliedByRate,
+// DividedByRate and Percentage to their shortest decimal, never changes a
+// rate. It is only allowed to skip formatting and parsing the shortest digits
+// where it provably finds the identical coefficient and scale, so every
+// float64 must convert exactly like its formatted digits parse, most of all
+// the short decimals that rates are written with and their float64 neighbors,
+// whose shortest decimals have 16 or 17 digits that need not be unique.
+func TestExactDecimalFromFloat_fastPathMatchesFormatted(t *testing.T) {
+	check := func(f float64) {
+		t.Helper()
+		got, gotOK := exactDecimalFromFloat(f)
+		want, wantOK := exactDecimalFromFloatFormatted(f)
+		if got != want || gotOK != wantOK {
+			t.Fatalf("exactDecimalFromFloat(%v) = %v, %t, formatted digits parse to %v, %t", f, got, gotOK, want, wantOK)
+		}
+	}
+	// checkNeighbors checks f with both signs and its float64 neighbors
+	checkNeighbors := func(f float64) {
+		t.Helper()
+		for _, g := range []float64{f, math.Nextafter(f, math.Inf(1)), math.Nextafter(f, math.Inf(-1))} {
+			check(g)
+			check(-g)
+		}
+	}
+	for _, f := range []float64{
+		0, 0.1, 0.3, 0.1 + 0.2, 0.145, 1.005, 1.0845, 0.92137, 1.19, 19, 1e-18,
+		1.2345678901234567e-5, 5e-324, 2.2250738585072014e-308, 1e-300, 1e300,
+		math.MaxFloat64, math.Inf(1), math.NaN(), 0x1p52 - 0.5, 0x1p52, 0x1p53,
+	} {
+		checkNeighbors(f)
+	}
+	for exp := -25; exp <= 25; exp++ {
+		checkNeighbors(math.Pow10(exp))
+		checkNeighbors(math.Ldexp(1, 3*exp))
+	}
+
+	rng := rand.New(rand.NewSource(4711))
+	for range 20_000 {
+		// A decimal of up to 17 significant digits at up to 21 decimal places
+		digits, scale := 1+rng.Intn(17), rng.Intn(22)
+		f, err := strconv.ParseFloat(fmt.Sprintf("%de-%d", rng.Int63n(int64(math.Pow10(digits))), scale), 64)
+		require.NoError(t, err)
+		checkNeighbors(f)
+		// A decimal of up to 15 digits scales to below 2^50, so the fast path
+		// must take every rate written with them, which are all real rates.
+		if _, _, ok := shortestDecimalFast(f); !ok && digits <= 15 && scale <= MaxDecimalAmountScale {
+			t.Fatalf("shortestDecimalFast(%v) took the exact path", f)
+		}
+	}
+	for range 2 * rateSweepSize() {
+		switch rng.Intn(3) {
+		case 0:
+			check(math.Float64frombits(rng.Uint64()))
+		case 1:
+			check(math.Ldexp(1+rng.Float64(), rng.Intn(141)-70))
+		default:
+			// The product of a short decimal and a random factor
+			check(float64(rng.Int63n(1e9)) / math.Pow10(rng.Intn(10)) * rng.Float64())
+		}
+	}
+}
+
 func TestDecimalAmount_CentAmount(t *testing.T) {
 	tests := []struct {
 		decimal  DecimalAmount
@@ -1804,4 +1867,28 @@ func TestDecimalAmount_DividedByNegativeZeroRate(t *testing.T) {
 	assert.True(t, q.IsInf(-1), "1 / -0 = %s, want -Inf", q)
 	q = NewDecimalAmount(100, 0).DividedByRate(0)
 	assert.True(t, q.IsInf(1), "1 / 0 = %s, want +Inf", q)
+}
+
+func BenchmarkDecimalAmount_MultipliedByRate(b *testing.B) {
+	i := 0
+	for b.Loop() {
+		benchCents[i%len(benchCents)].DecimalAmount().MultipliedByRate(benchRates[i%len(benchRates)])
+		i++
+	}
+}
+
+func BenchmarkDecimalAmount_DividedByRate(b *testing.B) {
+	i := 0
+	for b.Loop() {
+		benchCents[i%len(benchCents)].DecimalAmount().DividedByRate(benchRates[i%len(benchRates)])
+		i++
+	}
+}
+
+func BenchmarkDecimalAmount_Percentage(b *testing.B) {
+	i := 0
+	for b.Loop() {
+		benchCents[i%len(benchCents)].DecimalAmount().Percentage(benchPercents[i%len(benchPercents)])
+		i++
+	}
 }

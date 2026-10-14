@@ -1026,3 +1026,34 @@ func TestAmount_SplitProportionallyLargeWeights(t *testing.T) {
 	parts := Amount(1e20).SplitProportionally([]Amount{1e308, 1e308})
 	assert.Equal(t, []Amount{5e19, 5e19}, parts)
 }
+
+// benchAmounts are realistic amounts for the rounding and formatting
+// benchmarks: every other one is a cent amount as stored,
+// the rest are rate products with a long binary fraction.
+var benchAmounts = func() []Amount {
+	amounts := make([]Amount, len(benchCents))
+	for i, c := range benchCents {
+		amounts[i] = c.Amount()
+		if i%2 == 1 {
+			amounts[i] *= Amount(benchRates[i%len(benchRates)])
+		}
+	}
+	return amounts
+}()
+
+func BenchmarkAmount_RoundToCents(b *testing.B) {
+	i := 0
+	for b.Loop() {
+		benchAmounts[i%len(benchAmounts)].RoundToCents()
+		i++
+	}
+}
+
+func BenchmarkAmount_String(b *testing.B) {
+	b.ReportAllocs()
+	i := 0
+	for b.Loop() {
+		_ = benchAmounts[i%len(benchAmounts)].String()
+		i++
+	}
+}

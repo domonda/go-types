@@ -406,6 +406,14 @@ func (c CentAmount) WithNegSign(negative bool) CentAmount {
 // A NaN result yields zero and an out of range result is clamped
 // to MinCentAmount or MaxCentAmount.
 func (c CentAmount) MultipliedByRate(rate Rate) CentAmount {
+	if cents, ok := roundCentsFast(c, float64(c)*float64(rate)); ok {
+		return cents
+	}
+	return c.multipliedByRateExact(rate)
+}
+
+// multipliedByRateExact is MultipliedByRate without the float64 fast path.
+func (c CentAmount) multipliedByRateExact(rate Rate) CentAmount {
 	r, ok := ratFromShortestFloat(float64(rate))
 	if !ok {
 		return centAmountFromFloat(float64(c) * float64(rate))
@@ -420,6 +428,14 @@ func (c CentAmount) MultipliedByRate(rate Rate) CentAmount {
 // A zero rate yields MinCentAmount or MaxCentAmount
 // and a NaN result yields zero.
 func (c CentAmount) DividedByRate(rate Rate) CentAmount {
+	if cents, ok := roundCentsFast(c, float64(c)/float64(rate)); ok {
+		return cents
+	}
+	return c.dividedByRateExact(rate)
+}
+
+// dividedByRateExact is DividedByRate without the float64 fast path.
+func (c CentAmount) dividedByRateExact(rate Rate) CentAmount {
 	r, ok := ratFromShortestFloat(float64(rate))
 	if !ok || r.Sign() == 0 {
 		return centAmountFromFloat(float64(c) / float64(rate))
@@ -434,6 +450,14 @@ func (c CentAmount) DividedByRate(rate Rate) CentAmount {
 // A NaN result yields zero and an out of range result is clamped
 // to MinCentAmount or MaxCentAmount.
 func (c CentAmount) Percentage(percent float64) CentAmount {
+	if cents, ok := roundCentsFast(c, float64(c)*percent/100); ok {
+		return cents
+	}
+	return c.percentageExact(percent)
+}
+
+// percentageExact is Percentage without the float64 fast path.
+func (c CentAmount) percentageExact(percent float64) CentAmount {
 	p, ok := ratFromShortestFloat(percent)
 	if !ok {
 		return centAmountFromFloat(float64(c) * percent / 100)
@@ -582,6 +606,39 @@ func centAmountFromFloat(f float64) CentAmount {
 		return MinCentAmount
 	}
 	return CentAmount(rounded)
+}
+
+// roundCentsFast returns result, a float64 rate operation on c,
+// rounded half away from zero and whether that provably equals the exact
+// rounding of the same operation with the shortest decimal representation
+// of the rate. The float64 operations are an order of magnitude faster
+// than the exact big.Rat arithmetic.
+//
+// Up to 2^53 cents c is exactly a float64. The shortest decimal of the rate
+// lies within half an ulp of the float64 rate, so within a factor of 1±2^-53,
+// and each of the at most two float64 operations rounds by at most another
+// such factor. So result differs from the exact value by less than
+// |result|·2^-51, and if its distance to the nearest half-integer exceeds the
+// four times larger |result|·2^-49, both lie strictly between the same two
+// half-integers and round to the same integer. The relative bounds don't hold
+// for subnormal floats, but those make the result either far below 1/2,
+// rounding to zero either way, or too large for the condition to hold.
+// The distance result-rounded is exact (Sterbenz lemma), and 0.5 minus it is
+// either exact or above 1/4, which exceeds the error below 2^48, the only
+// range where the condition can hold. It never holds for NaN and ±Inf.
+// If Go fuses a final multiplication into the distance, the distance is
+// computed from the exact product and rounded once by at most 2^-54 instead,
+// which is far below the bound for a nonzero rounded and changes nothing
+// for a zero one.
+func roundCentsFast(c CentAmount, result float64) (CentAmount, bool) {
+	if c < -1<<53 || c > 1<<53 {
+		return 0, false
+	}
+	rounded := math.Round(result)
+	if 0.5-math.Abs(result-rounded) > math.Abs(result)*0x1p-49 {
+		return CentAmount(rounded), true
+	}
+	return 0, false
 }
 
 // ratFromShortestFloat returns the shortest decimal representation of f,
