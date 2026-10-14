@@ -731,7 +731,7 @@ See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut.
 - `bank.BIC` accepted the false BICs of 8 characters with the `XXX` branch
   code that `Normalized` appends, like `"AUTOBANKXXX"` and `"AUTOBANK XXX"`.
 - `charset.DecodeUTF16` and `EncodeUTF16` panicked for a nil
-  `binary.ByteOrder`; it is an error.
+  `binary.ByteOrder`; it is an error, also for empty input.
 
 - `email.ParseMIMEMessage` RFC 2047 decoded the whole `From`, `Reply-To`,
   `To`, `Cc`, `Bcc` and `Delivered-To` headers before splitting them into

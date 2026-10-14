@@ -62,11 +62,11 @@ func decodeUTF16Runes(b []byte, byteOrder binary.ByteOrder) []rune {
 // Returns an error if b has odd length or contains an unexpected BOM,
 // or if byteOrder is nil.
 func DecodeUTF16(b []byte, byteOrder binary.ByteOrder) ([]byte, error) {
-	if len(b) == 0 {
-		return nil, nil
-	}
 	if byteOrder == nil {
 		return nil, errs.New("nil binary.ByteOrder for UTF-16")
+	}
+	if len(b) == 0 {
+		return nil, nil
 	}
 	if len(b)&1 != 0 {
 		return nil, fmt.Errorf("odd length of UTF-16 string: %d", len(b))
@@ -118,11 +118,11 @@ func DecodeUTF16(b []byte, byteOrder binary.ByteOrder) ([]byte, error) {
 // a valid U+FFFD replacement character is encoded like any other rune,
 // or if byteOrder is nil.
 func EncodeUTF16(b []byte, byteOrder binary.ByteOrder) ([]byte, error) {
-	if len(b) == 0 {
-		return nil, nil
-	}
 	if byteOrder == nil {
 		return nil, errs.New("nil binary.ByteOrder for UTF-16")
+	}
+	if len(b) == 0 {
+		return nil, nil
 	}
 	buf := bytes.Buffer{}
 	buf.Grow(len(b) * 2)

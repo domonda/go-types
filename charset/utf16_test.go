@@ -196,10 +196,14 @@ func TestEncodeUTF16_InvalidUTF8(t *testing.T) {
 }
 
 // TestUTF16_NilByteOrder protects against a nil pointer panic:
-// a nil binary.ByteOrder is an error like an invalid one.
+// a nil binary.ByteOrder is an error like an invalid one,
+// also for empty input, so a misconfigured encoding fails
+// on the first call and not only on the first non-empty one.
 func TestUTF16_NilByteOrder(t *testing.T) {
-	_, err := DecodeUTF16([]byte{'a', 0}, nil)
-	assert.Error(t, err)
-	_, err = EncodeUTF16([]byte("a"), nil)
-	assert.Error(t, err)
+	for _, input := range [][]byte{nil, {}, {'a', 0}} {
+		_, err := DecodeUTF16(input, nil)
+		assert.Error(t, err, "DecodeUTF16(%v, nil)", input)
+		_, err = EncodeUTF16(input, nil)
+		assert.Error(t, err, "EncodeUTF16(%v, nil)", input)
+	}
 }
