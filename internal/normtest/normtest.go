@@ -136,11 +136,12 @@ func Run[T Type[T], P Ptr[T]](t *testing.T, spec Spec[T]) {
 		got["XML attribute"] = doc.Attr
 		got["XML element"] = doc.Elem
 
-		if s, ok := any(P(new(T))).(stringScanner); ok {
+		var scannedString T
+		if s, ok := any(P(&scannedString)).(stringScanner); ok {
 			if err := s.ScanString(string(input), false); err != nil {
 				t.Errorf("ScanString(%q, false) error: %v", input, err)
 			}
-			got["ScanString(validate=false)"] = *any(s).(P)
+			got["ScanString(validate=false)"] = scannedString
 		}
 		return got
 	}
@@ -213,21 +214,21 @@ func Run[T Type[T], P Ptr[T]](t *testing.T, spec Spec[T]) {
 		if _, ok := any(P(new(T))).(stringScanner); !ok {
 			t.Skipf("%s has no ScanString method", typeName)
 		}
+		scanString := func(input T) (v T, err error) {
+			return v, any(P(&v)).(stringScanner).ScanString(string(input), true)
+		}
 		for _, input := range valid {
-			var v T
-			if err := any(P(&v)).(stringScanner).ScanString(string(input), true); err != nil || v != spec.Canonical {
+			if v, err := scanString(input); err != nil || v != spec.Canonical {
 				t.Errorf("ScanString(%q, true) = %q, %v; want %q, nil", input, v, err, spec.Canonical)
 			}
 		}
 		for _, input := range spec.Invalid {
-			var v T
-			if err := any(P(&v)).(stringScanner).ScanString(string(input), true); err == nil {
+			if _, err := scanString(input); err == nil {
 				t.Errorf("ScanString(%q, true) error = nil, want an error for an invalid value", input)
 			}
 		}
 		// A required value can't be missing, a nullable one can
-		var v T
-		err := any(P(&v)).(stringScanner).ScanString("", true)
+		v, err := scanString("")
 		if spec.Nullable && (err != nil || v != "") {
 			t.Errorf("ScanString(\"\", true) = %q, %v; want null", v, err)
 		}
@@ -329,8 +330,8 @@ func Run[T Type[T], P Ptr[T]](t *testing.T, spec Spec[T]) {
 		}
 		// JSON and XML write an invalid value unchanged and read it back
 		// unchanged, so they round-trip every value
-		for _, input := range append(append([]T{}, valid...), spec.Invalid...) {
-			want := normalizedOrInput(input)
+		roundTrip := func(input, want T) {
+			t.Helper()
 			data, err := json.Marshal(input)
 			if err != nil {
 				t.Fatalf("json.Marshal(%q) error: %v", input, err)
@@ -347,6 +348,12 @@ func Run[T Type[T], P Ptr[T]](t *testing.T, spec Spec[T]) {
 			if err := xml.Unmarshal(data, &doc); err != nil || doc.Attr != want || doc.Elem != want {
 				t.Errorf("XML round trip of %q = %q, %q, %v; want %q", input, doc.Attr, doc.Elem, err, want)
 			}
+		}
+		for _, input := range valid {
+			roundTrip(input, spec.Canonical)
+		}
+		for _, input := range spec.Invalid {
+			roundTrip(input, input)
 		}
 	})
 
@@ -437,16 +444,6 @@ func Run[T Type[T], P Ptr[T]](t *testing.T, spec Spec[T]) {
 			}
 		}
 	})
-}
-
-func normalizedOrInput[T interface {
-	~string
-	Normalized() (T, error)
-}](v T) T {
-	if norm, err := v.Normalized(); err == nil {
-		return norm
-	}
-	return v
 }
 
 func jsonString(s string) []byte {
