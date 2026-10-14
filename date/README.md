@@ -11,9 +11,9 @@ Calendar dates as ISO 8601 strings (`YYYY-MM-DD`) that parse the many ways peopl
 | `Date`                | A calendar date, canonical form `YYYY-MM-DD`. Empty and the zero dates are not valid. |
 | `NullableDate`        | Like `Date`, but `Null` (`""`) and the zero dates are valid and SQL NULL. |
 | `YearMonth`           | A month, `YYYY-MM`.                                |
-| `NullableYearMonth`   | `YearMonth` where `""` and whitespace are null.    |
+| `NullableYearMonth`   | `YearMonth` where `""`, whitespace and the zero values `0001-01` and `0000-00` are null. |
 | `YearQuarter`         | A quarter, `YYYY-Qn` with an upper-case `Q`.       |
-| `NullableYearQuarter` | `YearQuarter` where `""` and whitespace are null.  |
+| `NullableYearQuarter` | `YearQuarter` where `""`, whitespace and the zero values `0001-Q1` and `0000-Q0` are null. |
 | `Format`              | Layout plus nil and zero placeholders, for reflection based formatting. |
 | `Formatter`           | A `time` layout string that formats and parses dates. |
 | `Parser`              | Parses any accepted input to `YYYY-MM-DD`.         |

@@ -654,17 +654,32 @@ func TestDate_IsZero(t *testing.T) {
 		{name: "month name", date: "Jan 1, 0001", want: true},
 		{name: "year 2000", date: "01.01.2000", want: false},
 		{name: "year 1000", date: "1000-01-01", want: false},
+		// Zeros of a time part are no zero date
+		{name: "fractional zero seconds", date: "2024-05-17T10:30:00.0000000Z", want: false},
+		// Zero-like strings that are no date stay invalid values that
+		// Validate reports, instead of being read as ""
+		{name: "only a zero year", date: "0000", want: false},
+		{name: "two parts", date: "00.0000", want: false},
+		{name: "year and month", date: "0000-00", want: false},
+		{name: "five digit year", date: "00000-00-00", want: false},
+		{name: "three digit year", date: "000-00-0000", want: false},
+		{name: "three digit month", date: "0000.000.00", want: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			require.Equal(t, tt.want, tt.date.IsZero())
+			if !tt.want && tt.date != "" {
+				var scanned Date
+				require.NoError(t, scanned.Scan(string(tt.date)))
+				require.NotEqual(t, Date(""), scanned, "Scan must not read a non-zero value as blank")
+			}
 		})
 	}
 }
 
 // TestDate_IsZeroYearShortcut protects the shortcut of IsZero that tells
-// a date without "0000" or "0001" apart from the zero dates without parsing
-// it: a spelling of the zero date 0001-01-01 that Normalize accepts without
+// a date whose date part has no "0000" or "0001" apart from the zero dates
+// without parsing it: a spelling of the zero date 0001-01-01 that Normalize accepts without
 // one of them would not be zero anymore, so reading would store it unchanged
 // and Value would fail on it.
 func TestDate_IsZeroYearShortcut(t *testing.T) {
@@ -691,8 +706,8 @@ func TestDate_IsZeroYearShortcut(t *testing.T) {
 			continue
 		}
 		zeros++
-		if !strings.Contains(spelling, "0000") && !strings.Contains(spelling, "0001") {
-			t.Errorf("%q normalizes to the zero date without the year 0000 or 0001", spelling)
+		if part := datePart(spelling); !strings.Contains(part, "0000") && !strings.Contains(part, "0001") {
+			t.Errorf("%q normalizes to the zero date without the year 0000 or 0001 in its date part", spelling)
 		}
 		if !Date(spelling).IsZero() {
 			t.Errorf("Date(%q).IsZero() = false, want true", spelling)
@@ -1500,6 +1515,12 @@ func TestDate_ScanStringWithLang(t *testing.T) {
 		{name: "unambiguous US order with EN hint", source: "06/15/2024", lang: language.EN, want: "2024-06-15", wantMonthMustBeFirst: true},
 		{name: "empty", source: "", wantErr: true},
 		{name: "invalid", source: "invalid", wantErr: true},
+		// Every spelling of a zero date is assigned as "" like Scan does,
+		// also those that normalizeDate rejects for their month and day 0
+		{name: "zero date", source: "0001-01-01", lang: language.EN, want: ""},
+		{name: "zero date DE", source: "01.01.0001", lang: language.DE, want: ""},
+		{name: "zeros date", source: "0000-00-00", lang: language.EN, want: ""},
+		{name: "zeros date DE", source: "00.00.0000", lang: language.DE, want: ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

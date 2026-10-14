@@ -2,9 +2,11 @@ package date
 
 import (
 	"encoding/json"
+	"regexp"
 	"testing"
 	"time"
 
+	"github.com/invopop/jsonschema"
 	"github.com/stretchr/testify/require"
 
 	"github.com/domonda/go-types/internal/normtest"
@@ -490,4 +492,69 @@ func TestYearMonth_ScanTime(t *testing.T) {
 	require.Equal(t, YearMonth("2023-07"), ym)
 	require.NoError(t, ym.Scan(time.Time{}))
 	require.Equal(t, YearMonth(""), ym)
+}
+
+// A zero year-month is blank like a zero Date, so Format returns ""
+// for every layout, like Date.Format and NullableYearMonth.Format.
+func TestYearMonth_FormatZero(t *testing.T) {
+	for _, ym := range []YearMonth{"", "  ", "0001-01", "0000-00", " 0001-01 "} {
+		require.Equal(t, "", ym.Format(YearMonthLayout), "%q", ym)
+		require.Equal(t, "", ym.Format("01/2006"), "%q", ym)
+	}
+}
+
+// Every spelling of the blank value is the same "no value" for IsZero,
+// Value and MarshalJSON, so Compare must not order them apart,
+// like Date.Compare doesn't order the zero dates apart.
+func TestYearMonthAndYearQuarter_CompareBlank(t *testing.T) {
+	require.Equal(t, 0, YearMonth("").Compare("0001-01"))
+	require.Equal(t, 0, YearMonth(" ").Compare(""))
+	require.Equal(t, 0, YearMonth("0000-00").Compare("0001-01"))
+	require.Equal(t, 0, YearQuarter("0001-q1").Compare("0001-Q1"))
+	require.Equal(t, 0, YearQuarter("0000-Q0").Compare(""))
+	require.Equal(t, 0, YearQuarter(" ").Compare(""))
+	require.Equal(t, -1, YearMonth("").Compare("2023-01"))
+	require.Equal(t, -1, YearQuarter("0000-Q0").Compare("2023-Q1"))
+}
+
+// Like Date.Scan, a time.Time is read in its own location, not in UTC,
+// so a TIMESTAMPTZ returned in the session time zone gives the period
+// of that zone.
+func TestYearMonthAndYearQuarter_ScanTimeLocation(t *testing.T) {
+	loc := time.FixedZone("UTC-5", -5*60*60)
+	tm := time.Date(2023, 7, 1, 2, 0, 0, 0, time.UTC).In(loc)
+	var ym YearMonth
+	require.NoError(t, ym.Scan(tm))
+	require.Equal(t, YearMonth("2023-06"), ym)
+	var yq YearQuarter
+	require.NoError(t, yq.Scan(tm))
+	require.Equal(t, YearQuarter("2023-Q2"), yq)
+}
+
+// The schemas document the canonical form that MarshalJSON writes,
+// and the nullable ones also null, which is their default,
+// like TestNullableDate_JSONSchema checks for NullableDate.
+func TestYearMonthAndYearQuarter_JSONSchema(t *testing.T) {
+	re := regexp.MustCompile(YearMonth("").JSONSchema().Pattern)
+	require.True(t, re.MatchString("2023-07"))
+	require.False(t, re.MatchString("2023-13"))
+	re = regexp.MustCompile(YearQuarter("").JSONSchema().Pattern)
+	require.True(t, re.MatchString("2023-Q3"))
+	require.False(t, re.MatchString("2023-Q5"))
+
+	for name, schema := range map[string]interface {
+		JSONSchema() *jsonschema.Schema
+	}{
+		"NullableYearMonth":   NullableYearMonth(""),
+		"NullableYearQuarter": NullableYearQuarter(""),
+	} {
+		s := schema.JSONSchema()
+		require.Len(t, s.OneOf, 2, name)
+		require.Equal(t, "null", s.OneOf[1].Type, "%s: null must be allowed", name)
+		data, err := json.Marshal(s.Default)
+		require.NoError(t, err)
+		require.Equal(t, "null", string(data), "%s: the default is JSON null", name)
+		re := regexp.MustCompile(s.OneOf[0].Pattern)
+		require.True(t, re.MatchString(map[string]string{"NullableYearMonth": "2023-07", "NullableYearQuarter": "2023-Q3"}[name]), name)
+	}
 }

@@ -96,6 +96,9 @@ instead of failing validation as a broken `X`.
 dates `"0001-01-01"` (the zero `time.Time`) and `"0000-00-00"` in any
 spelling, like `"01.01.0001"`, so those write SQL NULL too. A zero date has
 no practical use as a date, so it isn't a valid `date.Date` either.
+`date.NullableYearMonth` and `date.NullableYearQuarter` widen the rule the
+same way for their zero values `"0001-01"`, `"0000-00"`, `"0001-Q1"` and
+`"0000-Q0"`.
 
 The non-nullable `X` follows the same rule in SQL: it reads SQL NULL and a
 blank string as its zero value, and `Value` writes a blank `X` as SQL NULL.
@@ -316,6 +319,7 @@ difference:
 | `nullable.Time` (a struct)                         | never, writes `null` | the zero time                        |
 | `uu.IDSlice`, `nullable` arrays                    | nil and empty        | nil only                             |
 | `date.NullableDate`                                | `""`                 | `""`, `"0001-01-01"`, `"0000-00-00"` |
+| `date.NullableYearMonth`, `date.NullableYearQuarter` | `""`               | `""` and the zero values             |
 | `money.DecimalAmount`, `money.CentAmount`          | `CentAmount(0)` only | a zero amount                        |
 
 Tag optional fields with `omitzero`. It omits the null value of every

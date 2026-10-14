@@ -340,15 +340,16 @@ func (date *Date) ScanString(source string, validate bool) error {
 // ScanStringWithLang parses and assigns the source string as a Date using the given language hint.
 // Returns wasNormalized to indicate if the source was already in normalized form,
 // monthMustBeFirst to indicate if the date format requires month-first ordering,
-// and an error if parsing fails. A zero date is assigned as "".
+// and an error if parsing fails, also for a blank source. A zero date in
+// any spelling, see IsZero, is assigned as "" like by Scan.
 func (date *Date) ScanStringWithLang(source string, lang language.Code) (wasNormalized bool, monthMustBeFirst bool, err error) {
+	if strutil.TrimSpace(source) != "" && Date(source).IsZero() {
+		*date = ""
+		return false, false, nil
+	}
 	newDate, monthMustBeFirst, err := normalizeAndCheckDate(source, lang)
 	if err != nil {
 		return false, false, err
-	}
-	if newDate == zeroDate {
-		// A zero date is stored as "" like by Scan
-		newDate = ""
 	}
 	*date = newDate
 	return newDate == Date(source), monthMustBeFirst, nil
@@ -405,10 +406,11 @@ func (date Date) IsZero() bool {
 	if strutil.TrimSpace(date) == "" {
 		return true
 	}
-	// Every spelling of a zero date has the year 0000 or 0001, so other
-	// dates are told apart without parsing them, which the reading methods
-	// would do again to normalize the date.
-	if !strings.Contains(string(date), "0000") && !strings.Contains(string(date), "0001") {
+	// Every spelling of a zero date has the year 0000 or 0001 in its date
+	// part, so other dates are told apart without parsing them, which the
+	// reading methods would do again to normalize the date. The time part
+	// is left out, because its fractional seconds often contain "0000".
+	if part := datePart(string(date)); !strings.Contains(part, "0000") && !strings.Contains(part, "0001") {
 		return false
 	}
 	if isZerosDate(string(date)) {
@@ -456,7 +458,9 @@ func (date Date) Valid() bool {
 
 // ValidAndNormalized returns true if the date is both valid and already in normalized form (YYYY-MM-DD).
 func (date Date) ValidAndNormalized() bool {
-	if date == zeroDate {
+	// The shape check saves the failed time.Parse of every other format,
+	// which NormalizedLang calls first and which allocates its error
+	if len(date) != len(Layout) || date[4] != '-' || date[7] != '-' || date == zeroDate {
 		return false
 	}
 	t, err := time.Parse(Layout, string(date))
@@ -1201,6 +1205,11 @@ func getLangHint(lang []language.Code) language.Code {
 // It is normalized instead of cut to two bytes,
 // because language.Code.Validate accepts hints like " en" and "EN-us".
 func langHint(lang language.Code) language.Code {
+	if lang == "" {
+		// No hint, which every Normalized call passes, without building
+		// the error of an invalid language.Code
+		return ""
+	}
 	hint, err := lang.Normalized()
 	if err != nil {
 		return ""

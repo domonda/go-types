@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/domonda/go-errs"
 	"github.com/invopop/jsonschema"
 
 	types "github.com/domonda/go-types"
@@ -28,8 +29,8 @@ var _ types.NormalizableValidator[YearQuarter] = YearQuarter("")
 // year-quarter normalized, a zero one (see IsZero) as "" and an invalid
 // one unchanged. Value writes the normalized year-quarter, SQL NULL for a
 // zero one, and returns an error for an invalid one. MarshalJSON and
-// MarshalText write the normalized year-quarter or an invalid one unchanged,
-// and fmt prints the year-quarter as stored. See "Reading and writing values"
+// MarshalText write the normalized year-quarter, "" for a zero one, or an
+// invalid one unchanged, and fmt prints the year-quarter as stored. See "Reading and writing values"
 // in the README of the module.
 type YearQuarter string
 
@@ -58,7 +59,8 @@ func YearQuarterOfToday() YearQuarter {
 // Normalized returns the year-quarter with the surrounding whitespace
 // trimmed and an upper case "Q", or the YearQuarter unchanged together
 // with an error if that is not in valid YYYY-Q# format with a year from
-// 1 to 3000, because Date has no year 0, and a quarter from 1 to 4.
+// 1 to 3000, because Date has no year 0, and a quarter from 1 to 4, or
+// if it is the zero year-quarter "0001-Q1", see IsZero.
 func (yq YearQuarter) Normalized() (YearQuarter, error) {
 	norm := strutil.TrimSpace(yq)
 	if len(norm) == 7 && norm[5] == 'q' {
@@ -79,7 +81,7 @@ func (yq YearQuarter) Normalized() (YearQuarter, error) {
 	}
 	if norm == "0001-Q1" {
 		// The year-quarter of the zero time.Time has no practical use, like the zero Date
-		return yq, fmt.Errorf("zero year quarter: %q", yq)
+		return yq, errs.Errorf("zero year quarter: %q", yq)
 	}
 	return norm, nil
 }
@@ -112,7 +114,7 @@ func (yq *YearQuarter) ScanString(source string, validate bool) error {
 
 // Scan implements the database/sql.Scanner interface.
 // A valid year-quarter from a string or []byte is stored normalized, a time.Time
-// as its year-quarter, SQL NULL and a zero year-quarter (see IsZero) as "", and a
+// as its year-quarter in the location of the time like Date.Scan, SQL NULL and a zero year-quarter (see IsZero) as "", and a
 // year-quarter that can't be normalized unchanged without an error, so that one
 // invalid value doesn't fail a whole query; Validate reports it.
 func (yq *YearQuarter) Scan(value any) error {
@@ -323,10 +325,11 @@ func (yq YearQuarter) ContainsYearMonth(ym YearMonth) bool {
 }
 
 // Compare compares the normalized year-quarter with another normalized
-// YearQuarter, an invalid one as it is.
+// YearQuarter, a zero one (see IsZero) as "" like Date.Compare does,
+// and an invalid one as it is.
 // Returns -1 if yq is before other, +1 if after, 0 if equal.
 func (yq YearQuarter) Compare(other YearQuarter) int {
-	yq, _ = yq.Normalized()
-	other, _ = other.Normalized()
+	yq = internal.NormalizedOrRaw(yq, YearQuarter.Normalized, YearQuarter.IsZero)
+	other = internal.NormalizedOrRaw(other, YearQuarter.Normalized, YearQuarter.IsZero)
 	return strings.Compare(string(yq), string(other))
 }

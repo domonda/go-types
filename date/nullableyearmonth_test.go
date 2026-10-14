@@ -59,8 +59,8 @@ func TestNullableYearMonth_ValidAndNotNull(t *testing.T) {
 		{name: "valid", ym: "2023-03", want: true},
 		{name: "null", ym: YearMonthNull, want: false},
 		{name: "invalid", ym: "2023-13", want: false},
-		// Documented as "not Null or Zero": "0001-01" is the year-month of
-		// the zero time.Time, a placeholder and not a real reporting period.
+		// "0001-01" is the year-month of the zero time.Time, which IsNull
+		// reports as null like the zero dates of NullableDate.
 		{name: "zero 0001-01", ym: "0001-01", want: false},
 	}
 	for _, tt := range tests {

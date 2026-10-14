@@ -13,7 +13,8 @@
 //   - [Date] and [NullableDate] with SQL Scan and Value methods;
 //     only [NullableDate] encodes null as JSON null
 //   - [YearMonth], [YearQuarter], [NullableYearMonth] and
-//     [NullableYearQuarter] for reporting periods
+//     [NullableYearQuarter] for reporting periods, which read and write
+//     like [Date] and [NullableDate]
 //   - [PeriodRange] for years, half years, quarters, months and ISO weeks
 //   - date arithmetic, comparison and conversion to [time.Time]
 //   - [Finder] to find dates in text

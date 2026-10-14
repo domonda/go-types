@@ -465,8 +465,8 @@ func TestNullableYearQuarter_ValidAndNotNull(t *testing.T) {
 		{name: "valid", yq: "2023-Q2", want: true},
 		{name: "null", yq: YearQuarterNull, want: false},
 		{name: "invalid", yq: "2023-Q5", want: false},
-		// Documented as "not Null or Zero": "0001-Q1" is the year-quarter of
-		// the zero time.Time, a placeholder and not a real reporting period.
+		// "0001-Q1" is the year-quarter of the zero time.Time, which IsNull
+		// reports as null like the zero dates of NullableDate.
 		{name: "zero 0001-Q1", yq: "0001-Q1", want: false},
 	}
 	for _, tt := range tests {

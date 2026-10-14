@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/domonda/go-errs"
 	"github.com/invopop/jsonschema"
 
 	types "github.com/domonda/go-types"
@@ -31,8 +32,8 @@ var _ types.NormalizableValidator[YearMonth] = YearMonth("")
 // year-month normalized, a zero one (see IsZero) as "" and an invalid
 // one unchanged. Value writes the normalized year-month, SQL NULL for a
 // zero one, and returns an error for an invalid one. MarshalJSON and
-// MarshalText write the normalized year-month or an invalid one unchanged,
-// and fmt prints the year-month as stored. See "Reading and writing values"
+// MarshalText write the normalized year-month, "" for a zero one, or an
+// invalid one unchanged, and fmt prints the year-month as stored. See "Reading and writing values"
 // in the README of the module.
 type YearMonth string
 
@@ -59,7 +60,8 @@ func YearMonthOfToday() YearMonth {
 // Normalized returns the year-month with the surrounding whitespace trimmed,
 // or the YearMonth unchanged together with an error if that is not in
 // valid YYYY-MM format with a year from 1 to 3000, because Date has no
-// year 0, and a month from 1 to 12.
+// year 0, and a month from 1 to 12, or if it is the zero year-month
+// "0001-01", see IsZero.
 func (ym YearMonth) Normalized() (YearMonth, error) {
 	norm := strutil.TrimSpace(ym)
 	if len(norm) != 7 || norm[4] != '-' {
@@ -77,7 +79,7 @@ func (ym YearMonth) Normalized() (YearMonth, error) {
 	}
 	if norm == "0001-01" {
 		// The year-month of the zero time.Time has no practical use, like the zero Date
-		return ym, fmt.Errorf("zero year month: %q", ym)
+		return ym, errs.Errorf("zero year month: %q", ym)
 	}
 	return norm, nil
 }
@@ -110,7 +112,7 @@ func (ym *YearMonth) ScanString(source string, validate bool) error {
 
 // Scan implements the database/sql.Scanner interface.
 // A valid year-month from a string or []byte is stored normalized, a time.Time
-// as its year-month, SQL NULL and a zero year-month (see IsZero) as "", and a
+// as its year-month in the location of the time like Date.Scan, SQL NULL and a zero year-month (see IsZero) as "", and a
 // year-month that can't be normalized unchanged without an error, so that one
 // invalid value doesn't fail a whole query; Validate reports it.
 func (ym *YearMonth) Scan(value any) error {
@@ -253,12 +255,13 @@ func (ym YearMonth) DateRange() (fromDate, untilDate Date) {
 }
 
 // Format formats the year-month using the given layout string (see time.Time.Format).
-// Returns an empty string if ym or layout are empty.
+// Returns an empty string if ym is zero (see IsZero) or layout is empty,
+// like Date.Format.
 // If layout equals YearMonthLayout constant, returns the normalized year-month,
 // or an invalid one unchanged. For other layouts, converts to Date using
 // the 1st day of the month and delegates to Date.Format.
 func (ym YearMonth) Format(layout string) string {
-	if ym == "" || layout == "" {
+	if ym.IsZero() || layout == "" {
 		return ""
 	}
 	if layout == YearMonthLayout {
@@ -305,10 +308,11 @@ func (ym YearMonth) ContainsDate(date Date) bool {
 }
 
 // Compare compares the normalized year-month with another normalized
-// YearMonth, an invalid one as it is.
+// YearMonth, a zero one (see IsZero) as "" like Date.Compare does,
+// and an invalid one as it is.
 // Returns -1 if ym is before other, +1 if after, 0 if equal.
 func (ym YearMonth) Compare(other YearMonth) int {
-	ym, _ = ym.Normalized()
-	other, _ = other.Normalized()
+	ym = internal.NormalizedOrRaw(ym, YearMonth.Normalized, YearMonth.IsZero)
+	other = internal.NormalizedOrRaw(other, YearMonth.Normalized, YearMonth.IsZero)
 	return strings.Compare(string(ym), string(other))
 }
