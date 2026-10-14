@@ -29,8 +29,8 @@ var _ types.NormalizableValidator[YearQuarter] = YearQuarter("")
 // one unchanged. Value writes the normalized year-quarter, SQL NULL for a
 // zero one, and returns an error for an invalid one. MarshalJSON and
 // MarshalText write the normalized year-quarter, "" for a zero one, or an
-// invalid one unchanged, and fmt prints the year-quarter as stored. See "Reading and writing values"
-// in the README of the module.
+// invalid one unchanged, and fmt prints the year-quarter as stored.
+// See "Reading and writing values" in the README of the module.
 type YearQuarter string
 
 // YearQuarterFrom creates a YearQuarter from the given year and quarter values.
@@ -112,10 +112,12 @@ func (yq *YearQuarter) ScanString(source string, validate bool) error {
 }
 
 // Scan implements the database/sql.Scanner interface.
-// A valid year-quarter from a string or []byte is stored normalized, a time.Time
-// as its year-quarter in the location of the time like Date.Scan, SQL NULL and a zero year-quarter (see IsZero) as "", and a
-// year-quarter that can't be normalized unchanged without an error, so that one
-// invalid value doesn't fail a whole query; Validate reports it.
+// A valid year-quarter from a string or []byte is stored normalized,
+// a time.Time as its year-quarter in the location of the time like
+// Date.Scan, SQL NULL and a zero year-quarter (see IsZero) as "", and
+// a year-quarter that can't be normalized unchanged without an error,
+// so that one invalid value doesn't fail a whole query; Validate
+// reports it.
 func (yq *YearQuarter) Scan(value any) error {
 	if t, ok := value.(time.Time); ok {
 		value = string(YearQuarterOfTime(t))

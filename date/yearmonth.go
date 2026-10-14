@@ -32,8 +32,8 @@ var _ types.NormalizableValidator[YearMonth] = YearMonth("")
 // one unchanged. Value writes the normalized year-month, SQL NULL for a
 // zero one, and returns an error for an invalid one. MarshalJSON and
 // MarshalText write the normalized year-month, "" for a zero one, or an
-// invalid one unchanged, and fmt prints the year-month as stored. See "Reading and writing values"
-// in the README of the module.
+// invalid one unchanged, and fmt prints the year-month as stored.
+// See "Reading and writing values" in the README of the module.
 type YearMonth string
 
 // YearMonthFrom creates a YearMonth from the given year and month values.
@@ -110,10 +110,12 @@ func (ym *YearMonth) ScanString(source string, validate bool) error {
 }
 
 // Scan implements the database/sql.Scanner interface.
-// A valid year-month from a string or []byte is stored normalized, a time.Time
-// as its year-month in the location of the time like Date.Scan, SQL NULL and a zero year-month (see IsZero) as "", and a
-// year-month that can't be normalized unchanged without an error, so that one
-// invalid value doesn't fail a whole query; Validate reports it.
+// A valid year-month from a string or []byte is stored normalized,
+// a time.Time as its year-month in the location of the time like
+// Date.Scan, SQL NULL and a zero year-month (see IsZero) as "", and
+// a year-month that can't be normalized unchanged without an error,
+// so that one invalid value doesn't fail a whole query; Validate
+// reports it.
 func (ym *YearMonth) Scan(value any) error {
 	if t, ok := value.(time.Time); ok {
 		value = string(YearMonthOfTime(t))
