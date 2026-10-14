@@ -7,6 +7,7 @@ import (
 
 	"github.com/invopop/jsonschema"
 
+	types "github.com/domonda/go-types"
 	"github.com/domonda/go-types/country"
 	"github.com/domonda/go-types/internal"
 	"github.com/domonda/go-types/nullable"
@@ -26,6 +27,9 @@ type NullableID string
 
 // Compile-time check that NullableID implements nullable.NullSetable[ID]
 var _ nullable.NullSetable[ID] = (*NullableID)(nil)
+
+// Compile-time check that NullableID implements types.NormalizableValidator[NullableID]
+var _ types.NormalizableValidator[NullableID] = NullableID("")
 
 // Normalized returns the id in normalized form,
 // or an error if the VAT ID is not null and not valid.

@@ -7,6 +7,7 @@ import (
 
 	"github.com/invopop/jsonschema"
 
+	types "github.com/domonda/go-types"
 	"github.com/domonda/go-types/internal"
 	"github.com/domonda/go-types/nullable"
 	"github.com/domonda/go-types/strutil"
@@ -24,6 +25,9 @@ type NullableBIC string
 
 // Compile-time check that NullableBIC implements nullable.NullSetable[BIC]
 var _ nullable.NullSetable[BIC] = (*NullableBIC)(nil)
+
+// Compile-time check that NullableBIC implements types.NormalizableValidator[NullableBIC]
+var _ types.NormalizableValidator[NullableBIC] = NullableBIC("")
 
 // ScanString implements the strfmt.Scannable interface.
 // The strings "NULL", "null" and "nil" set the NullableBIC to null.

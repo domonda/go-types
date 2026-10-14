@@ -5,6 +5,7 @@ import (
 	"encoding/xml"
 	"fmt"
 
+	types "github.com/domonda/go-types"
 	"github.com/domonda/go-types/internal"
 	"github.com/domonda/go-types/nullable"
 	"github.com/domonda/go-types/strutil"
@@ -23,6 +24,9 @@ type NullableCurrency string
 
 // Compile-time check that NullableCurrency implements nullable.NullSetable[Currency]
 var _ nullable.NullSetable[Currency] = (*NullableCurrency)(nil)
+
+// Compile-time check that NullableCurrency implements types.NormalizableValidator[NullableCurrency]
+var _ types.NormalizableValidator[NullableCurrency] = NullableCurrency("")
 
 // IsNull returns true if the NullableCurrency is null,
 // which includes a string of only the runes strutil.TrimSpace removes:

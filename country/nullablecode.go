@@ -8,6 +8,7 @@ import (
 
 	"github.com/invopop/jsonschema"
 
+	types "github.com/domonda/go-types"
 	"github.com/domonda/go-types/internal"
 	"github.com/domonda/go-types/nullable"
 	"github.com/domonda/go-types/strutil"
@@ -18,6 +19,9 @@ const Null NullableCode = ""
 
 // Compile-time check that NullableCode implements nullable.NullSetable[Code]
 var _ nullable.NullSetable[Code] = (*NullableCode)(nil)
+
+// Compile-time check that NullableCode implements types.NormalizableValidator[NullableCode]
+var _ types.NormalizableValidator[NullableCode] = NullableCode("")
 
 // NullableCode represents a country code according to ISO 3166-1 alpha-2 standard
 // where an empty or whitespace only string represents NULL.
