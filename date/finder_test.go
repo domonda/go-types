@@ -80,3 +80,27 @@ func TestFinder_NoDateInWordsAndSingleDigits(t *testing.T) {
 		assert.Empty(t, NewFinder().FindAllIndex([]byte(text), -1), text)
 	}
 }
+
+// TestFinder_CommonWordMonthNames protects text extraction from false dates:
+// the Italian and Spanish month abbreviations "set", "ago", "mag", "lug",
+// "ott" and "dic" are common words in other languages, so the finder only
+// reads them as month with Italian or Spanish as language hint.
+// Normalize still reads them, because its input is meant to be a date.
+func TestFinder_CommonWordMonthNames(t *testing.T) {
+	for _, text := range []string{"Game set 10 2020", "the mag 12 2021", "lug 10 22", "2023 12 ago", "ott 3 2020", "dic 24 2020"} {
+		assert.Nil(t, NewFinder().FindAllIndex([]byte(text), -1), "no hint: %q", text)
+		assert.Nil(t, NewFinder(language.EN).FindAllIndex([]byte(text), -1), "EN: %q", text)
+	}
+
+	assert.Equal(t, [][]int{{0, 11}}, NewFinder(language.IT).FindAllIndex([]byte("10 set 2020"), -1))
+	assert.Equal(t, [][]int{{0, 11}}, NewFinder("IT").FindAllIndex([]byte("10 set 2020"), -1), "hint not normalized")
+	assert.Equal(t, [][]int{{3, 14}}, NewFinder(language.ES).FindAllIndex([]byte("el 10 ago 2020"), -1))
+	assert.Nil(t, NewFinder(language.ES).FindAllIndex([]byte("10 set 2020"), -1), "set is no Spanish month")
+	// The full names and the other abbreviations need no hint
+	assert.Equal(t, [][]int{{0, 17}}, NewFinder().FindAllIndex([]byte("10 settembre 2020"), -1))
+	assert.Equal(t, [][]int{{0, 11}}, NewFinder().FindAllIndex([]byte("10 sep 2020"), -1))
+
+	norm, err := Normalize("10 set 2020")
+	require.NoError(t, err)
+	assert.Equal(t, Date("2020-09-10"), norm)
+}

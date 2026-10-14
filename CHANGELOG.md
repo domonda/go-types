@@ -930,7 +930,10 @@ See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut.
   cased the candidates before checking them for the `T`.
 - `date` parsing only knew the French, Italian and Spanish names of January,
   so `"2 févr. 2019"` or `"5 luglio 2021"` did not parse. Every month name
-  and its usual abbreviation is now known.
+  and its usual abbreviation is now known. `date.Finder` reads the
+  abbreviations that are common words in other languages, `set`, `ago`,
+  `mag`, `lug`, `ott` and `dic`, only with `language.IT` or `language.ES`
+  as hint, so text like `"Game set 10 2020"` has no date.
 - `money.Amount.UnmarshalJSON` and `money.Rate.UnmarshalJSON` stripped the
   quotes of a JSON string without decoding its escapes, so `"1\u002c5"`
   failed while `float.Tolerant` and `DecimalAmount` decode it as 1.5.

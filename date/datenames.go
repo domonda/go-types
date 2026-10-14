@@ -1,5 +1,7 @@
 package date
 
+import "github.com/domonda/go-types/language"
+
 // weekdayNameSet holds lowercase weekday names that may appear as a
 // leading word in human-written dates ("Mon Jan 02 2006",
 // "Wednesday, 28 Feb 2018"). The parser drops them before format
@@ -12,6 +14,20 @@ var weekdayNameSet = map[string]struct{}{
 	"fri": {}, "friday": {},
 	"sat": {}, "saturday": {},
 	"sun": {}, "sunday": {},
+}
+
+// commonWordMonthNames are Italian and Spanish month abbreviations
+// that are common words in other languages, like "set" (settembre)
+// or "ago" (agosto), with the languages they are a month of.
+// Finder reads them as month only with one of these languages
+// as hint, so that text like "Game set 10 2020" is no date.
+var commonWordMonthNames = map[string][]language.Code{
+	"set": {language.IT},
+	"ago": {language.IT, language.ES},
+	"mag": {language.IT},
+	"lug": {language.IT},
+	"ott": {language.IT},
+	"dic": {language.IT, language.ES},
 }
 
 var monthNameMap = map[string]int{

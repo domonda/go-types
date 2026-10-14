@@ -288,7 +288,7 @@ These plug dates into the [`strfmt`](../strfmt/README.md) package, which calls `
 | `Finder.LangHint`                | The language hint field.                           |
 | `(*Finder).FindAllIndex(str, n)` | `[start, end)` byte offsets of dates in `str`. At most `n` results; `n < 0` returns all, `n == 0` none. |
 
-`*Finder` implements `types.Finder`. It tries spans of one to three whitespace-separated words and trims surrounding punctuation, so `"25.12.2023,"` is found as `"25.12.2023"`. It reports the shortest span that parses at each start word. A span is found exactly if `Normalize` accepts it, so an ISO 8601 date-time like `"2023-12-25T10:00:00Z"` is found as a whole.
+`*Finder` implements `types.Finder`. It tries spans of one to three whitespace-separated words and trims surrounding punctuation, so `"25.12.2023,"` is found as `"25.12.2023"`. It reports the shortest span that parses at each start word. A span is found exactly if `Normalize` accepts it, so an ISO 8601 date-time like `"2023-12-25T10:00:00Z"` is found as a whole. The exception are the Italian and Spanish month abbreviations that are common words in other languages, `set`, `ago`, `mag`, `lug`, `ott` and `dic`: they need `language.IT` or `language.ES` as hint, so that `"Game set 10 2020"` has no date.
 
 ## time.Time helpers
 
