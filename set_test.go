@@ -438,3 +438,19 @@ func TestSet_JSONUsesMethodsOfOtherStrings(t *testing.T) {
 	err = json.Unmarshal([]byte(`["open","bogus"]`), &back)
 	assert.ErrorContains(t, err, "invalid status bogus")
 }
+
+// tens normalizes but is no string, so a Set of it keeps the JSON
+// encoding of its kind instead of being written as stored strings.
+type tens int
+
+func (t tens) Normalized() (tens, error) { return t / 10 * 10, nil }
+
+func TestSet_JSONOfNormalizingNonString(t *testing.T) {
+	set := NewSet[tens](12, 25)
+	data, err := json.Marshal(set)
+	require.NoError(t, err)
+	assert.Equal(t, `[12,25]`, string(data))
+	var back Set[tens]
+	require.NoError(t, json.Unmarshal(data, &back))
+	assert.Equal(t, set, back)
+}

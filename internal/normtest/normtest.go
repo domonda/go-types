@@ -88,6 +88,11 @@ type xmlCharData[T any] struct {
 	Text    T        `xml:",chardata"`
 }
 
+type xmlPtrCharData[T any] struct {
+	XMLName xml.Name `xml:"doc"`
+	Text    *T       `xml:",chardata"`
+}
+
 type xmlPtrAttr[T any] struct {
 	XMLName   xml.Name `xml:"doc"`
 	Attr      *T       `xml:"attr,attr"`
@@ -236,6 +241,15 @@ func Run[T Type[T], P Ptr[T]](t *testing.T, spec Spec[T]) {
 		}
 		if !spec.Nullable && err == nil {
 			t.Errorf("ScanString(\"\", true) error = nil, want an error for a missing required value")
+		}
+		// strfmt writes null as one of these words,
+		// which a nullable type reads back as null
+		if spec.Nullable {
+			for _, null := range []T{"NULL", "null", "nil"} {
+				if v, err := scanString(null); err != nil || v != "" {
+					t.Errorf("ScanString(%q, true) = %q, %v; want null", null, v, err)
+				}
+			}
 		}
 	})
 
@@ -444,6 +458,22 @@ func Run[T Type[T], P Ptr[T]](t *testing.T, spec Spec[T]) {
 			if err := xml.Unmarshal([]byte(data), &doc); err != nil || doc.Text != input {
 				t.Errorf("xml.Unmarshal(%s) into ,chardata = %q, %v; want %q", data, doc.Text, err, input)
 			}
+		}
+	})
+
+	t.Run("nil pointer chardata panics", func(t *testing.T) {
+		// encoding/xml calls the value receiver MarshalText through a nil
+		// pointer ,chardata field and has no hook like MarshalXMLAttr to
+		// skip it, so the README says to use a non-pointer field. This pins
+		// that limitation: it fails once encoding/xml skips a nil pointer,
+		// and the README note can go.
+		panicked := func() (panicked bool) {
+			defer func() { panicked = recover() != nil }()
+			_, _ = xml.Marshal(xmlPtrCharData[T]{})
+			return false
+		}()
+		if !panicked {
+			t.Errorf("xml.Marshal of a nil *%s ,chardata field doesn't panic anymore, remove the README note about it", typeName)
 		}
 	})
 }

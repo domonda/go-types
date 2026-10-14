@@ -1534,3 +1534,43 @@ func TestValidatorAsValidatErr_SkipsNil(t *testing.T) {
 		}
 	}
 }
+
+// promotedTarget holds a value whose Validate is promoted from a nil
+// embedded pointer. A package variable keeps the compiler from
+// devirtualizing and inlining the call.
+var promotedTarget ValidatErr = embedsNilPointer{}
+
+type callsPromotedValidate struct {
+	*validatedByValue
+}
+
+func (callsPromotedValidate) Validate() error { return promotedTarget.Validate() }
+
+// Only the wrapper that Validate calls directly is recovered: a generated
+// wrapper that panics deeper inside a declared method is a bug of that
+// method and must still panic instead of passing as valid.
+func TestValidate_NilEmbeddedPointerKeepsNestedWrapperPanics(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Error("the panic of a wrapper called by the declared method was recovered")
+		}
+	}()
+	_ = Validate(callsPromotedValidate{})
+}
+
+type selfEmbedding struct {
+	*selfEmbedding
+	Name string
+}
+
+func (s selfEmbedding) Valid() bool { return s.Name != "" }
+
+// A cycle of embedded pointers must not make the check for nil embedded
+// pointers recurse until the stack overflows, which no recover can catch.
+func TestValidate_EmbeddedPointerCycle(t *testing.T) {
+	v := &selfEmbedding{Name: "x"}
+	v.selfEmbedding = v
+	if err := Validate(v); err != nil {
+		t.Errorf("Validate of an embedded pointer cycle = %v, want nil", err)
+	}
+}
