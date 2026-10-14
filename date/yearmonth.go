@@ -58,8 +58,8 @@ func YearMonthOfToday() YearMonth {
 
 // Normalized returns the year-month with the surrounding whitespace trimmed,
 // or the YearMonth unchanged together with an error if that is not in
-// valid YYYY-MM format with a year from 1 to 3000, because Date has no
-// year 0, and a month from 1 to 12, or if it is the zero year-month
+// valid YYYY-MM format with a year from 1 to 9999 like Date, which has
+// no year 0, and a month from 1 to 12, or if it is the zero year-month
 // "0001-01", see IsZero.
 func (ym YearMonth) Normalized() (YearMonth, error) {
 	norm := strutil.TrimSpace(ym)
@@ -68,7 +68,7 @@ func (ym YearMonth) Normalized() (YearMonth, error) {
 	}
 	yearStr := string(norm)[:4]
 	year, err := strconv.ParseUint(yearStr, 10, 16)
-	if err != nil || year < 1 || year > 3000 {
+	if err != nil || year < 1 {
 		return ym, fmt.Errorf("invalid year: %q", yearStr)
 	}
 	monthStr := string(norm)[5:7]
@@ -272,6 +272,8 @@ func (ym YearMonth) Format(layout string) string {
 
 // AddYears returns a new year-month with the specified number of years added.
 // Returns the year-month unchanged if it is not valid.
+// A result outside the years 1 to 9999, like "10000-12", is not valid,
+// so that Value returns an error for it.
 func (ym YearMonth) AddYears(years int) YearMonth {
 	if !ym.Valid() {
 		return ym
@@ -282,11 +284,24 @@ func (ym YearMonth) AddYears(years int) YearMonth {
 // AddMonths returns a new year-month with the specified number of months added.
 // Handles month overflow by adjusting the year accordingly.
 // Returns the year-month unchanged if it is not valid.
+// A result outside the years 1 to 9999, like "10000-01" for
+// "9999-12" plus one month, is not valid, so that Value returns
+// an error for it like AddYears.
 func (ym YearMonth) AddMonths(months int) YearMonth {
 	if !ym.Valid() {
 		return ym
 	}
-	return YearMonthOfTime(ym.Date(1).AddMonths(months).Midnight())
+	// Months since January of the year 0, counted without time.Time,
+	// whose dates after the year 9999 make no valid Date
+	total := ym.Year()*12 + int(ym.Month()) - 1 + months
+	year, month := total/12, total%12
+	if month < 0 {
+		// The division rounds towards zero, but a negative total
+		// is a month of the year before
+		year--
+		month += 12
+	}
+	return YearMonthFrom(year, time.Month(month+1))
 }
 
 // ContainsTime returns true if the given time falls within this year-month.

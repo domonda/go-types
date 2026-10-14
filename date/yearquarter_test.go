@@ -84,7 +84,12 @@ func TestYearQuarter_Validate(t *testing.T) {
 		{name: "invalid quarter 0", yq: "2023-Q0", wantErr: true},
 		{name: "invalid quarter 5", yq: "2023-Q5", wantErr: true},
 		{name: "invalid year", yq: "abcd-Q1", wantErr: true},
-		{name: "year too large", yq: "3001-Q1", wantErr: true},
+		// Every year of a Date is valid, so that the year-quarter of every
+		// valid Date can be written, up to "9999-12-31"
+		{name: "year after 3000", yq: "3001-Q1", wantErr: false},
+		{name: "last year of Date", yq: "9999-Q4", wantErr: false},
+		{name: "5 digit year", yq: "10000-Q1", wantErr: true},
+		{name: "year 0", yq: "0000-Q2", wantErr: true},
 		{name: "invalid format", yq: "2023/Q1", wantErr: true},
 	}
 	for _, tt := range tests {
@@ -250,6 +255,10 @@ func TestYearQuarter_DateRange(t *testing.T) {
 		{name: "Q3 2023", yq: "2023-Q3", wantFrom: "2023-07-01", wantUntil: "2023-09-30"},
 		{name: "Q4 2023", yq: "2023-Q4", wantFrom: "2023-10-01", wantUntil: "2023-12-31"},
 		{name: "Q1 2020 (leap)", yq: "2020-Q1", wantFrom: "2020-01-01", wantUntil: "2020-03-31"},
+		// The last quarter of the years of Date: adding a month to
+		// 9999-12-01 to find the last day gave "0000-12-31"
+		{name: "Q4 9999", yq: "9999-Q4", wantFrom: "9999-10-01", wantUntil: "9999-12-31"},
+		{name: "Q2 0001", yq: "0001-Q2", wantFrom: "0001-04-01", wantUntil: "0001-06-30"},
 		// An invalid quarter must give an empty range,
 		// not a range computed from non-existent months
 		{name: "invalid quarter 5", yq: "2023-Q5", wantFrom: "", wantUntil: ""},
@@ -283,6 +292,9 @@ func TestYearQuarter_AddYears(t *testing.T) {
 		{name: "add 5 years", yq: "2020-Q3", years: 5, want: "2025-Q3"},
 		{name: "subtract 1 year", yq: "2023-Q2", years: -1, want: "2022-Q2"},
 		{name: "add 0 years", yq: "2023-Q2", years: 0, want: "2023-Q2"},
+		{name: "to the last year", yq: "2023-Q2", years: 9999 - 2023, want: "9999-Q2"},
+		// Past the years of Date the result is invalid, so that Value refuses it
+		{name: "after the last year", yq: "9999-Q2", years: 1, want: "10000-Q2"},
 		// An invalid year-quarter has no year to add to. It must stay
 		// unchanged, so it stays invalid and Validate reports the original
 		// value, instead of becoming a bogus year-quarter like "0001-Q0".
@@ -311,6 +323,10 @@ func TestYearQuarter_AddQuarters(t *testing.T) {
 		{name: "quarter underflow", yq: "2023-Q1", quarters: -1, want: "2022-Q4"},
 		{name: "add 0 quarters", yq: "2023-Q2", quarters: 0, want: "2023-Q2"},
 		{name: "add 2 years worth", yq: "2023-Q2", quarters: 8, want: "2025-Q2"},
+		{name: "last quarter", yq: "9999-Q3", quarters: 1, want: "9999-Q4"},
+		// Past the years of Date the result is invalid, so that Value refuses it
+		{name: "after the last quarter", yq: "9999-Q4", quarters: 1, want: "10000-Q1"},
+		{name: "before the year 1", yq: "0001-Q2", quarters: -2, want: "0000-Q4"},
 		// Invalid stays unchanged like in AddYears, not "0000-Q1"
 		{name: "invalid unchanged", yq: "bad", quarters: 1, want: "bad"},
 		{name: "invalid quarter unchanged", yq: "2023-Q5", quarters: 1, want: "2023-Q5"},
@@ -321,6 +337,32 @@ func TestYearQuarter_AddQuarters(t *testing.T) {
 			assert.Equal(t, tt.want, got)
 		})
 	}
+}
+
+// TestYearQuarter_ValueOfAValidDate protects writing the year-quarter of
+// every valid Date: YearQuarter accepted only the years up to 3000, so
+// Value failed for the year-quarter of a valid Date like "9999-12-31".
+func TestYearQuarter_ValueOfAValidDate(t *testing.T) {
+	for d, want := range map[Date]string{"0001-04-01": "0001-Q2", "3001-01-01": "3001-Q1", "9999-12-31": "9999-Q4"} {
+		yq := YearQuarterOfTime(d.Midnight())
+		v, err := yq.Value()
+		assert.NoError(t, err, "YearQuarter(%q).Value()", yq)
+		assert.Equal(t, want, v)
+		assert.True(t, yq.ContainsDate(d), "ContainsDate(%q)", d)
+	}
+
+	yq := YearQuarterFrom(9999, 4)
+	assert.Equal(t, YearQuarter("9999-Q4"), yq)
+	assert.Equal(t, 9999, yq.Year())
+	assert.Equal(t, 4, yq.Quarter())
+	assert.True(t, yq.ContainsYearMonth("9999-12"))
+	v, err := yq.Nullable().Value()
+	assert.NoError(t, err, "NullableYearQuarter.Value")
+	assert.Equal(t, "9999-Q4", v)
+
+	// A year-quarter after the years of Date is still refused
+	_, err = YearQuarterFrom(10000, 1).Value()
+	assert.Error(t, err)
 }
 
 // Contains tests

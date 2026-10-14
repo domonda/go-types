@@ -222,7 +222,7 @@ const YearMonthNull NullableYearMonth = ""
 | `YearMonth` method                   | Description                                        |
 |--------------------------------------|----------------------------------------------------|
 | `Normalized()`                       | Trims the surrounding whitespace; the value unchanged and an error if invalid or zero. |
-| `Validate()`, `Valid()`              | `Normalized` succeeds: `YYYY-MM`, year 1 to 3000, month 1 to 12, not zero. |
+| `Validate()`, `Valid()`              | `Normalized` succeeds: `YYYY-MM`, year 1 to 9999 like `Date`, month 1 to 12, not zero. |
 | `ValidAndNormalized()`               | Exactly `YYYY-MM` and valid.                       |
 | `IsZero()`                           | True for `""`, `"0000-00"` and `"0001-01"`, also with whitespace. |
 | `String()`                           | The raw string.                                    |
@@ -230,7 +230,7 @@ const YearMonthNull NullableYearMonth = ""
 | `Date(day)`                          | `"YYYY-MM-DD"` for `day`, without validation (`Date(30)` of February is invalid). |
 | `DateRange()`                        | First and last day of the month; `""`, `""` if invalid. |
 | `Format(layout)`                     | `""` if empty; `YearMonthLayout` returns the normalized value, an invalid one as is; other layouts format the 1st of the month. |
-| `AddYears(n)`, `AddMonths(n)`        | Arithmetic; months roll over into years. Invalid values are returned unchanged. |
+| `AddYears(n)`, `AddMonths(n)`        | Arithmetic; months roll over into years. Invalid values are returned unchanged. A result outside the years 1 to 9999, like `"10000-01"`, is invalid. |
 | `ContainsTime(t)`, `ContainsDate(d)` | True if `t` or `d` falls in the month (local time zone midnights). |
 | `Compare(other)`                     | Compares the normalized values, invalid ones as stored. |
 | `Nullable()`                         | Plain conversion to `NullableYearMonth`.           |
@@ -254,7 +254,7 @@ const YearQuarterNull NullableYearQuarter = ""
 | `YearQuarter` method                               | Description                                        |
 |----------------------------------------------------|----------------------------------------------------|
 | `Normalized()`                                     | Trims the surrounding whitespace and upper-cases `q`; the value unchanged and an error if invalid or zero. |
-| `Validate()`, `Valid()`                            | `Normalized` succeeds: `YYYY-Qn`, year 1 to 3000, quarter 1 to 4, not zero. |
+| `Validate()`, `Valid()`                            | `Normalized` succeeds: `YYYY-Qn`, year 1 to 9999 like `Date`, quarter 1 to 4, not zero. |
 | `ValidAndNormalized()`                             | Exactly `YYYY-Qn` with upper-case `Q` and valid.   |
 | `IsZero()`                                         | True for `""`, `"0000-Q0"` and `"0001-Q1"`, also with whitespace or `q`. |
 | `String()`                                         | The raw string.                                    |
@@ -262,7 +262,7 @@ const YearQuarterNull NullableYearQuarter = ""
 | `FirstMonth()`                                     | January, April, July or October; 0 if invalid.     |
 | `Date(monthInQuarter, day)`                        | Date in the quarter via `Of`, so values roll over; `""` if invalid. |
 | `DateRange()`                                      | First and last day of the quarter; `""`, `""` if invalid. |
-| `AddYears(n)`, `AddQuarters(n)`                    | Arithmetic; quarters roll over into years. Invalid values are returned unchanged. |
+| `AddYears(n)`, `AddQuarters(n)`                    | Arithmetic; quarters roll over into years. Invalid values are returned unchanged. A result outside the years 1 to 9999, like `"10000-Q1"`, is invalid. |
 | `ContainsTime(t)`, `ContainsDate(d)`, `ContainsYearMonth(ym)` | True if the value falls in the quarter.            |
 | `Compare(other)`                                   | Compares the normalized values, invalid ones as stored. |
 | `Nullable()`                                       | Plain conversion to `NullableYearQuarter`.         |

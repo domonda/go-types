@@ -85,7 +85,12 @@ func TestYearMonth_Validate(t *testing.T) {
 		{name: "invalid month 0", ym: "2023-00", wantErr: true},
 		{name: "invalid month 13", ym: "2023-13", wantErr: true},
 		{name: "invalid year", ym: "abcd-03", wantErr: true},
-		{name: "year too large", ym: "3001-03", wantErr: true},
+		// Every year of a Date is valid, so that the year-month of every
+		// valid Date can be written, up to "9999-12-31"
+		{name: "year after 3000", ym: "3001-03", wantErr: false},
+		{name: "last year of Date", ym: "9999-12", wantErr: false},
+		{name: "5 digit year", ym: "10000-01", wantErr: true},
+		{name: "year 0", ym: "0000-05", wantErr: true},
 		{name: "invalid format", ym: "2023/03", wantErr: true},
 	}
 	for _, tt := range tests {
@@ -235,6 +240,9 @@ func TestYearMonth_DateRange(t *testing.T) {
 		{name: "february 2021", ym: "2021-02", wantFrom: "2021-02-01", wantUntil: "2021-02-28"},
 		{name: "april", ym: "2023-04", wantFrom: "2023-04-01", wantUntil: "2023-04-30"},
 		{name: "december", ym: "2023-12", wantFrom: "2023-12-01", wantUntil: "2023-12-31"},
+		// The first and last month of the years of Date
+		{name: "first", ym: "0001-02", wantFrom: "0001-02-01", wantUntil: "0001-02-28"},
+		{name: "last", ym: "9999-12", wantFrom: "9999-12-01", wantUntil: "9999-12-31"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -295,6 +303,9 @@ func TestYearMonth_AddYears(t *testing.T) {
 		{name: "add 5 years", ym: "2020-06", years: 5, want: "2025-06"},
 		{name: "subtract 1 year", ym: "2023-03", years: -1, want: "2022-03"},
 		{name: "add 0 years", ym: "2023-03", years: 0, want: "2023-03"},
+		{name: "to the last year", ym: "2023-03", years: 9999 - 2023, want: "9999-03"},
+		// Past the years of Date the result is invalid, so that Value refuses it
+		{name: "after the last year", ym: "9999-03", years: 1, want: "10000-03"},
 		// An invalid year-month has no year to add to. It must stay
 		// unchanged, so it stays invalid and Validate reports the original
 		// value, instead of becoming a bogus year-month like "0001-00".
@@ -322,6 +333,16 @@ func TestYearMonth_AddMonths(t *testing.T) {
 		{name: "subtract 1 month", ym: "2023-03", months: -1, want: "2023-02"},
 		{name: "month underflow", ym: "2023-01", months: -1, want: "2022-12"},
 		{name: "add 0 months", ym: "2023-03", months: 0, want: "2023-03"},
+		{name: "add many months", ym: "2023-03", months: 12*100 + 10, want: "2124-01"},
+		{name: "subtract many months", ym: "2023-03", months: -(12*100 + 3), want: "1922-12"},
+		{name: "last month", ym: "9999-11", months: 1, want: "9999-12"},
+		{name: "first month after the zero", ym: "0001-03", months: -1, want: "0001-02"},
+		// Past the years of Date the result is invalid, so that Value
+		// refuses it, and never "" or the zero "0000-00", which Value
+		// writes as SQL NULL, or a wrapped around year
+		{name: "after the last month", ym: "9999-12", months: 1, want: "10000-01"},
+		{name: "before the year 1", ym: "0001-02", months: -2, want: "0000-12"},
+		{name: "before the year 0", ym: "0001-02", months: -14, want: "-001-12"},
 		// Invalid stays unchanged like in AddYears, not "0001-02"
 		{name: "invalid unchanged", ym: "bad", months: 1, want: "bad"},
 		{name: "invalid month unchanged", ym: "2023-13", months: 1, want: "2023-13"},
@@ -409,6 +430,33 @@ func TestYearMonth_ValidateRejectsYearZero(t *testing.T) {
 	require.Error(t, YearMonth("0000-05").Validate())
 	require.NoError(t, YearMonth("0001-05").Validate())
 	require.Equal(t, YearMonth("0000-05"), YearMonth("0000-05").AddMonths(1), "invalid stays unchanged")
+}
+
+// TestYearMonth_ValueOfAValidDate protects writing the year-month of a
+// valid Date: YearMonth accepted only the years up to 3000, so Value
+// failed for the year-month of a valid Date like "9999-12-31", which a
+// database column or report period can hold. Only the zero year-month
+// "0001-01" of the dates "0001-01-02" to "0001-01-31" is written as NULL.
+func TestYearMonth_ValueOfAValidDate(t *testing.T) {
+	for _, d := range []Date{"0001-02-01", "3001-01-01", "9999-12-31"} {
+		ym := YearMonthOfTime(d.Midnight())
+		v, err := ym.Value()
+		require.NoError(t, err, "YearMonth(%q).Value()", ym)
+		require.Equal(t, string(d[:7]), v)
+		require.True(t, ym.ContainsDate(d), "ContainsDate(%q)", d)
+	}
+
+	ym := YearMonthFrom(9999, time.December)
+	require.Equal(t, YearMonth("9999-12"), ym)
+	require.Equal(t, 9999, ym.Year())
+	require.Equal(t, time.December, ym.Month())
+	v, err := ym.Nullable().Value()
+	require.NoError(t, err, "NullableYearMonth.Value")
+	require.Equal(t, "9999-12", v)
+
+	// A year-month after the years of Date is still refused
+	_, err = YearMonthFrom(10000, time.January).Value()
+	require.Error(t, err)
 }
 
 // Normalized trims the surrounding whitespace, which a typed or OCR read

@@ -58,8 +58,8 @@ func YearQuarterOfToday() YearQuarter {
 // Normalized returns the year-quarter with the surrounding whitespace
 // trimmed and an upper case "Q", or the YearQuarter unchanged together
 // with an error if that is not in valid YYYY-Q# format with a year from
-// 1 to 3000, because Date has no year 0, and a quarter from 1 to 4, or
-// if it is the zero year-quarter "0001-Q1", see IsZero.
+// 1 to 9999 like Date, which has no year 0, and a quarter from 1 to 4,
+// or if it is the zero year-quarter "0001-Q1", see IsZero.
 func (yq YearQuarter) Normalized() (YearQuarter, error) {
 	norm := strutil.TrimSpace(yq)
 	if len(norm) == 7 && norm[5] == 'q' {
@@ -70,7 +70,7 @@ func (yq YearQuarter) Normalized() (YearQuarter, error) {
 	}
 	yearStr := string(norm)[:4]
 	year, err := strconv.ParseUint(yearStr, 10, 16)
-	if err != nil || year < 1 || year > 3000 {
+	if err != nil || year < 1 {
 		return yq, fmt.Errorf("invalid year: %q", yearStr)
 	}
 	quarterStr := string(norm)[6:7]
@@ -255,8 +255,10 @@ func (yq YearQuarter) DateRange() (fromDate, untilDate Date) {
 		return "", ""
 	}
 	fromDate = Of(yq.Year(), firstMonth, 1)
-	// Last day of quarter is last day of third month
-	untilDate = Of(yq.Year(), firstMonth+2, 1).AddMonths(1).AddDays(-1)
+	// Last day of quarter is last day of third month, the 0th day of the
+	// month after it, which Of computes also for the quarter 9999-Q4,
+	// while adding a month to 9999-12-01 makes no valid Date
+	untilDate = Of(yq.Year(), firstMonth+3, 0)
 	return fromDate, untilDate
 }
 
@@ -267,6 +269,8 @@ func (yq YearQuarter) Nullable() NullableYearQuarter {
 
 // AddYears returns a new year-quarter with the specified number of years added.
 // Returns the year-quarter unchanged if it is not valid.
+// A result outside the years 1 to 9999, like "10000-Q4", is not valid,
+// so that Value returns an error for it.
 func (yq YearQuarter) AddYears(years int) YearQuarter {
 	if !yq.Valid() {
 		return yq
@@ -277,6 +281,8 @@ func (yq YearQuarter) AddYears(years int) YearQuarter {
 // AddQuarters returns a new year-quarter with the specified number of quarters added.
 // Handles quarter overflow by adjusting the year accordingly.
 // Returns the year-quarter unchanged if it is not valid.
+// A result outside the years 1 to 9999, like "10000-Q1" for
+// "9999-Q4" plus one quarter, is not valid like for AddYears.
 func (yq YearQuarter) AddQuarters(quarters int) YearQuarter {
 	if !yq.Valid() {
 		return yq
