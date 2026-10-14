@@ -5,6 +5,7 @@ import (
 	"encoding/xml"
 	"testing"
 
+	"github.com/domonda/go-types/internal/xmlattrtest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -191,4 +192,11 @@ func Test_TrimmedString_Scan_Error(t *testing.T) {
 	var s TrimmedString
 	err := s.Scan(123)
 	assert.Error(t, err, "Scan with unsupported type")
+}
+
+// TestTrimmedString_MarshalXMLAttr protects against a panic: encoding/xml calls the value
+// receiver MarshalText through a nil *TrimmedString attribute field. MarshalXMLAttr
+// leaves the attribute out instead and writes a non-nil one like MarshalText.
+func TestTrimmedString_MarshalXMLAttr(t *testing.T) {
+	xmlattrtest.NilPointer(t, TrimmedString(""), TrimmedString(" a "))
 }

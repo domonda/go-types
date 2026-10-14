@@ -5,11 +5,13 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"strings"
 
 	"github.com/invopop/jsonschema"
 
+	"github.com/domonda/go-types/internal"
 	"github.com/domonda/go-types/nullable"
 )
 
@@ -439,6 +441,14 @@ func (n NullableID) MarshalText() ([]byte, error) {
 		return []byte{}, nil
 	}
 	return ID(n).MarshalText()
+}
+
+// MarshalXMLAttr implements encoding/xml.MarshalerAttr by writing the
+// text of MarshalText, and no attribute for a nil pointer, because
+// encoding/xml calls MarshalText through a nil pointer attribute field
+// and panics.
+func (n *NullableID) MarshalXMLAttr(name xml.Name) (xml.Attr, error) {
+	return internal.MarshalXMLAttrText(n, name)
 }
 
 // UnmarshalText implements encoding.TextUnmarshaler.

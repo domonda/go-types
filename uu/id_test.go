@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/domonda/go-pretty"
+	"github.com/domonda/go-types/internal/xmlattrtest"
 )
 
 // And returns result of binary AND of two UUIDs.
@@ -1300,4 +1301,11 @@ func TestIDFromString_InvalidEncodings(t *testing.T) {
 		_, err := IDFromString(s)
 		require.Error(t, err, s)
 	}
+}
+
+// TestID_MarshalXMLAttr protects against a panic: encoding/xml calls the value
+// receiver MarshalText through a nil *ID attribute field. MarshalXMLAttr
+// leaves the attribute out instead and writes a non-nil one like MarshalText.
+func TestID_MarshalXMLAttr(t *testing.T) {
+	xmlattrtest.NilPointer(t, IDNil, IDMustFromString("6ba7b810-9dad-11d1-80b4-00c04fd430c8"))
 }

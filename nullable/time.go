@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"database/sql/driver"
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"io"
 	"time"
@@ -11,6 +12,7 @@ import (
 	"github.com/invopop/jsonschema"
 
 	"github.com/domonda/go-pretty"
+	"github.com/domonda/go-types/internal"
 )
 
 // TimeNull is a null Time value.
@@ -274,6 +276,14 @@ func (n Time) MarshalText() ([]byte, error) {
 		return []byte("NULL"), nil
 	}
 	return n.Time.MarshalText()
+}
+
+// MarshalXMLAttr implements encoding/xml.MarshalerAttr by writing the
+// text of MarshalText, and no attribute for a nil pointer, because
+// encoding/xml calls MarshalText through a nil pointer attribute field
+// and panics.
+func (n *Time) MarshalXMLAttr(name xml.Name) (xml.Attr, error) {
+	return internal.MarshalXMLAttrText(n, name)
 }
 
 // UnmarshalText implements the encoding.TextUnmarshaler interface.

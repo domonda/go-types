@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/domonda/go-pretty"
+	"github.com/domonda/go-types/internal/xmlattrtest"
 	"github.com/invopop/jsonschema"
 )
 
@@ -801,4 +802,11 @@ func TestNullableIDCompare(t *testing.T) {
 	// NULL sorts before every non-NULL ID
 	require.Equal(t, -1, NullableIDCompare(IDNull, low))
 	require.Equal(t, 0, NullableIDCompare(IDNull, IDNull))
+}
+
+// TestNullableID_MarshalXMLAttr protects against a panic: encoding/xml calls the value
+// receiver MarshalText through a nil *NullableID attribute field. MarshalXMLAttr
+// leaves the attribute out instead and writes a non-nil one like MarshalText.
+func TestNullableID_MarshalXMLAttr(t *testing.T) {
+	xmlattrtest.NilPointer(t, IDNull, IDMustFromString("6ba7b810-9dad-11d1-80b4-00c04fd430c8").Nullable())
 }

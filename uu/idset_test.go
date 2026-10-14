@@ -11,6 +11,7 @@ import (
 
 	"github.com/domonda/go-types/internal/collections"
 	"github.com/domonda/go-types/internal/collections/settest"
+	"github.com/domonda/go-types/internal/xmlattrtest"
 )
 
 // IDSet must implement the abstract set interface of the Go 1.28
@@ -560,4 +561,11 @@ func TestIDSet_Sorted(t *testing.T) {
 	if got := IDSet(nil).Sorted(); got != nil {
 		t.Errorf("Sorted() of a nil set = %s, want nil", got)
 	}
+}
+
+// TestIDSet_MarshalXMLAttr protects against a panic: encoding/xml calls the value
+// receiver MarshalText through a nil *IDSet attribute field. MarshalXMLAttr
+// leaves the attribute out instead and writes a non-nil one like MarshalText.
+func TestIDSet_MarshalXMLAttr(t *testing.T) {
+	xmlattrtest.NilPointer(t, IDSet(nil), MakeIDSet(IDMustFromString("6ba7b810-9dad-11d1-80b4-00c04fd430c8")))
 }

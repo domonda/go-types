@@ -66,7 +66,7 @@ Every array implements `driver.Valuer`, `sql.Scanner`, `json.Marshaler` and `jso
 | `TrimPrefix(prefix)`, `TrimSuffix(suffix)`, `ReplaceAll(old, new)` | `strings` functions, the result trimmed again.     |
 | `Split(sep)`                                       | `strings.Split` of the trimmed string with every part trimmed. |
 
-Implements: `fmt.Stringer`, `driver.Valuer`, `sql.Scanner`, `encoding.TextMarshaler`, `encoding.TextUnmarshaler`, `json.Marshaler`, `json.Unmarshaler`, `xml.Marshaler`, `xml.Unmarshaler`. It has no `JSONSchema` method.
+Implements: `fmt.Stringer`, `driver.Valuer`, `sql.Scanner`, `encoding.TextMarshaler`, `encoding.TextUnmarshaler`, `json.Marshaler`, `json.Unmarshaler`, `xml.Marshaler`, `xml.Unmarshaler`, `xml.MarshalerAttr` (pointer). It has no `JSONSchema` method.
 
 ## JSON
 

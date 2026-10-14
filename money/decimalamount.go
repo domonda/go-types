@@ -6,6 +6,7 @@ import (
 	"encoding"
 	"encoding/binary"
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"io"
 	"math"
@@ -17,6 +18,7 @@ import (
 	"github.com/invopop/jsonschema"
 
 	"github.com/domonda/go-types/float"
+	"github.com/domonda/go-types/internal"
 	"github.com/domonda/go-types/nullable"
 	"github.com/domonda/go-types/strutil"
 )
@@ -1238,6 +1240,14 @@ func (a *DecimalAmount) UnmarshalJSON(data []byte) error {
 // string (like String).
 func (a DecimalAmount) MarshalText() ([]byte, error) {
 	return []byte(a.String()), nil
+}
+
+// MarshalXMLAttr implements encoding/xml.MarshalerAttr by writing the
+// text of MarshalText, and no attribute for a nil pointer, because
+// encoding/xml calls MarshalText through a nil pointer attribute field
+// and panics.
+func (a *DecimalAmount) MarshalXMLAttr(name xml.Name) (xml.Attr, error) {
+	return internal.MarshalXMLAttrText(a, name)
 }
 
 // UnmarshalText implements encoding.TextUnmarshaler. An empty text is decoded

@@ -968,6 +968,13 @@ See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut.
   character.
 - `float.ParseDetails` reported `'.'` as the decimal separator of a number
   with an exponent like `"1,5e3"` instead of the `','` of the input.
+- `encoding/xml` panicked for a nil pointer attribute field of `uu.ID`,
+  `uu.NullableID`, `uu.IDSet`, `uu.IDSlice`, `notnull.TrimmedString`,
+  `nullable.TrimmedString`, `nullable.Time` and `money.DecimalAmount`
+  without `omitempty`, like `ID *uu.ID` with the tag `xml:"id,attr"`,
+  because it called their value receiver `MarshalText` through the nil
+  pointer. A pointer receiver `MarshalXMLAttr` leaves such an attribute out
+  and writes a non-nil one like `MarshalText`, as for the normalizing types.
 
 ## 2026-09-02
 

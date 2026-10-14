@@ -92,7 +92,7 @@ Implements: `driver.Valuer`, `sql.Scanner`, `json.Marshaler`, `json.Unmarshaler`
 | `Split(sep)`                                       | `strings.Split` of the trimmed string with every part trimmed. |
 | `JSONSchema()`                                     | One of a string or `null`.                         |
 
-Implements: `fmt.Stringer`, `driver.Valuer`, `sql.Scanner`, `encoding.TextMarshaler`, `encoding.TextUnmarshaler`, `json.Marshaler`, `json.Unmarshaler`, `xml.Marshaler`, `xml.Unmarshaler`, `Nullable`.
+Implements: `fmt.Stringer`, `driver.Valuer`, `sql.Scanner`, `encoding.TextMarshaler`, `encoding.TextUnmarshaler`, `json.Marshaler`, `json.Unmarshaler`, `xml.Marshaler`, `xml.Unmarshaler`, `xml.MarshalerAttr` (pointer), `Nullable`.
 
 ## Time
 
@@ -122,7 +122,7 @@ Implements: `fmt.Stringer`, `driver.Valuer`, `sql.Scanner`, `encoding.TextMarsha
 
 All other `time.Time` methods are promoted from the embedded field. They don't know about null and return plain `time.Time` values: `nullable.Time{}.In(loc)` is a zero `time.Time`.
 
-Implements: `driver.Valuer`, `sql.Scanner`, `json.Marshaler`, `json.Unmarshaler`, `encoding.TextMarshaler`, `encoding.TextUnmarshaler`, `fmt.Stringer`, `Nullable`, `Zeroable`, and with a pointer receiver `NullSetable[time.Time]`.
+Implements: `driver.Valuer`, `sql.Scanner`, `json.Marshaler`, `json.Unmarshaler`, `encoding.TextMarshaler`, `encoding.TextUnmarshaler`, `xml.MarshalerAttr` (pointer), `fmt.Stringer`, `Nullable`, `Zeroable`, and with a pointer receiver `NullSetable[time.Time]`.
 
 ## JSON
 

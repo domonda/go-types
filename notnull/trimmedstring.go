@@ -10,6 +10,7 @@ import (
 	"strings"
 	"unsafe"
 
+	"github.com/domonda/go-types/internal"
 	"github.com/domonda/go-types/strutil"
 )
 
@@ -182,6 +183,14 @@ func (s *TrimmedString) Scan(value any) error {
 // MarshalText implements the encoding.TextMarshaler interface
 func (s TrimmedString) MarshalText() ([]byte, error) {
 	return []byte(s.String()), nil
+}
+
+// MarshalXMLAttr implements encoding/xml.MarshalerAttr by writing the
+// text of MarshalText, and no attribute for a nil pointer, because
+// encoding/xml calls MarshalText through a nil pointer attribute field
+// and panics.
+func (s *TrimmedString) MarshalXMLAttr(name xml.Name) (xml.Attr, error) {
+	return internal.MarshalXMLAttrText(s, name)
 }
 
 // UnmarshalText implements the encoding.TextUnmarshaler interface

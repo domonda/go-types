@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
+	"encoding/xml"
 	"fmt"
 	"hash"
 	"strings"
@@ -15,6 +16,8 @@ import (
 	"time"
 
 	"github.com/invopop/jsonschema"
+
+	"github.com/domonda/go-types/internal"
 )
 
 // The nil UUID is special form of UUID that is specified to have all
@@ -621,6 +624,14 @@ func (id *ID) SetVariant() {
 // The encoding is the same as returned by String.
 func (id ID) MarshalText() (text []byte, err error) {
 	return id.StringBytes(), nil
+}
+
+// MarshalXMLAttr implements encoding/xml.MarshalerAttr by writing the
+// text of MarshalText, and no attribute for a nil pointer, because
+// encoding/xml calls MarshalText through a nil pointer attribute field
+// and panics.
+func (id *ID) MarshalXMLAttr(name xml.Name) (xml.Attr, error) {
+	return internal.MarshalXMLAttrText(id, name)
 }
 
 // UnmarshalText implements the encoding.TextUnmarshaler interface.

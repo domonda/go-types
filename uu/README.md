@@ -95,7 +95,7 @@ Accepted text formats:
 | `SetVariant()`              | Sets the RFC 4122 variant bits in place.           |
 | `JSONSchema()`              | String schema with format `uuid` for `github.com/invopop/jsonschema`. |
 
-Implements: `fmt.Stringer`, `fmt.GoStringer`, `encoding.TextMarshaler`, `encoding.TextUnmarshaler`, `encoding.BinaryMarshaler`, `encoding.BinaryUnmarshaler`, `driver.Valuer`, `sql.Scanner`, `pretty.Stringer`. `ID` has no `MarshalJSON` method: `encoding/json` uses the text methods, so an `ID` is a JSON string and works as a map key.
+Implements: `fmt.Stringer`, `fmt.GoStringer`, `encoding.TextMarshaler`, `encoding.TextUnmarshaler`, `xml.MarshalerAttr` (pointer), `encoding.BinaryMarshaler`, `encoding.BinaryUnmarshaler`, `driver.Valuer`, `sql.Scanner`, `pretty.Stringer`. `ID` has no `MarshalJSON` method: `encoding/json` uses the text methods, so an `ID` is a JSON string and works as a map key.
 
 ### Constants and errors
 
@@ -140,7 +140,7 @@ Implements: `fmt.Stringer`, `fmt.GoStringer`, `encoding.TextMarshaler`, `encodin
 | `Valid()`, `Validate()`              | Like the `ID` methods, but `IDNull` is valid.      |
 | `JSONSchema()`                       | One of a `uuid` string or `null`.                  |
 
-Implements: `fmt.Stringer`, `fmt.GoStringer`, `json.Marshaler`, `json.Unmarshaler`, `encoding.TextMarshaler`, `encoding.TextUnmarshaler`, `encoding.BinaryMarshaler`, `encoding.BinaryUnmarshaler`, `driver.Valuer`, `sql.Scanner`, `pretty.Stringer`, `nullable.Nullable`, and with a pointer receiver `nullable.NullSetable[ID]`.
+Implements: `fmt.Stringer`, `fmt.GoStringer`, `json.Marshaler`, `json.Unmarshaler`, `encoding.TextMarshaler`, `encoding.TextUnmarshaler`, `xml.MarshalerAttr` (pointer), `encoding.BinaryMarshaler`, `encoding.BinaryUnmarshaler`, `driver.Valuer`, `sql.Scanner`, `pretty.Stringer`, `nullable.Nullable`, and with a pointer receiver `nullable.NullSetable[ID]`.
 
 ## IDSlice
 
@@ -174,7 +174,7 @@ Implements: `fmt.Stringer`, `fmt.GoStringer`, `json.Marshaler`, `json.Unmarshale
 | `Strings()`                         | Canonical strings. Returns nil for an empty slice. |
 | `String()`, `PrettyString()`        | `[id1,id2]`. nil and empty both return `[]`.       |
 
-Implements: `driver.Valuer`, `sql.Scanner`, `json.Marshaler`, `json.Unmarshaler`, `encoding.TextMarshaler`, `encoding.TextUnmarshaler`, `fmt.Stringer`, `pretty.Stringer`, `sort.Interface`, `IDs`. It has no `IsNull` method.
+Implements: `driver.Valuer`, `sql.Scanner`, `json.Marshaler`, `json.Unmarshaler`, `encoding.TextMarshaler`, `encoding.TextUnmarshaler`, `xml.MarshalerAttr` (pointer), `fmt.Stringer`, `pretty.Stringer`, `sort.Interface`, `IDs`. It has no `IsNull` method.
 
 ## IDSet
 
@@ -224,7 +224,7 @@ Implements: `driver.Valuer`, `sql.Scanner`, `json.Marshaler`, `json.Unmarshaler`
 
 All reading methods, `Delete`, `DeleteAll`, `DeleteFunc`, `Clear`, `IntersectionWith` and `DifferenceWith` accept a nil set.
 
-Implements: `driver.Valuer`, `sql.Scanner`, `json.Marshaler`, `json.Unmarshaler`, `encoding.TextMarshaler`, `encoding.TextUnmarshaler`, `fmt.Stringer`, `pretty.Stringer`, `nullable.Nullable`, `IDs`.
+Implements: `driver.Valuer`, `sql.Scanner`, `json.Marshaler`, `json.Unmarshaler`, `encoding.TextMarshaler`, `encoding.TextUnmarshaler`, `xml.MarshalerAttr` (pointer), `fmt.Stringer`, `pretty.Stringer`, `nullable.Nullable`, `IDs`.
 
 ## IDs
 

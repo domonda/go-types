@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/domonda/go-types/internal/xmlattrtest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -1891,4 +1892,11 @@ func BenchmarkDecimalAmount_Percentage(b *testing.B) {
 		benchCents[i%len(benchCents)].DecimalAmount().Percentage(benchPercents[i%len(benchPercents)])
 		i++
 	}
+}
+
+// TestDecimalAmount_MarshalXMLAttr protects against a panic: encoding/xml calls the value
+// receiver MarshalText through a nil *DecimalAmount attribute field. MarshalXMLAttr
+// leaves the attribute out instead and writes a non-nil one like MarshalText.
+func TestDecimalAmount_MarshalXMLAttr(t *testing.T) {
+	xmlattrtest.NilPointer(t, DecimalAmount{}, NewDecimalAmount(-123456, 2))
 }

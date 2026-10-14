@@ -8,6 +8,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/domonda/go-types/internal/xmlattrtest"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -587,4 +588,11 @@ func TestIDSlice_JSONNullVsEmpty(t *testing.T) {
 			t.Errorf("IDSet.UnmarshalJSON([]) = %v, want an allocated empty set", set)
 		}
 	})
+}
+
+// TestIDSlice_MarshalXMLAttr protects against a panic: encoding/xml calls the value
+// receiver MarshalText through a nil *IDSlice attribute field. MarshalXMLAttr
+// leaves the attribute out instead and writes a non-nil one like MarshalText.
+func TestIDSlice_MarshalXMLAttr(t *testing.T) {
+	xmlattrtest.NilPointer(t, IDSlice(nil), IDSlice{IDMustFromString("6ba7b810-9dad-11d1-80b4-00c04fd430c8")})
 }

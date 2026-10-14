@@ -109,7 +109,7 @@ The value is `Coefficient × 10^-Scale`, packed into one `int64`: the low 5 bits
 | `(*DecimalAmount).ScanString(source string, validate bool) error` | `ParseDecimalAmount`, with `validate` non-finite values are errors. |
 | `DecimalAmount.JSONSchema() *jsonschema.Schema`    | A JSON number schema.                              |
 
-Implements: `fmt.Stringer`, `fmt.GoStringer`, `fmt.Formatter`, `json.Marshaler`, `json.Unmarshaler`, `encoding.TextMarshaler`, `encoding.TextUnmarshaler`, `encoding.BinaryMarshaler`, `encoding.BinaryUnmarshaler`, `sql.Scanner`, `driver.Valuer`, `strfmt.Scannable`. The unmarshalers, `Scan`, and `ScanString` have pointer receivers.
+Implements: `fmt.Stringer`, `fmt.GoStringer`, `fmt.Formatter`, `json.Marshaler`, `json.Unmarshaler`, `encoding.TextMarshaler`, `encoding.TextUnmarshaler`, `encoding/xml.MarshalerAttr`, `encoding.BinaryMarshaler`, `encoding.BinaryUnmarshaler`, `sql.Scanner`, `driver.Valuer`, `strfmt.Scannable`. The unmarshalers, `MarshalXMLAttr`, `Scan`, and `ScanString` have pointer receivers.
 
 Calculate at full precision and round once at the end. `Add` and `Sub` keep the larger scale, `Mul` adds the scales, and `Div` extends the scale as needed:
 

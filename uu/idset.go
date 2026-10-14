@@ -3,12 +3,14 @@ package uu
 import (
 	"bytes"
 	"database/sql/driver"
+	"encoding/xml"
 	"iter"
 	"maps"
 	"slices"
 	"sort"
 	"strings"
 
+	"github.com/domonda/go-types/internal"
 	"github.com/domonda/go-types/mapset"
 	"github.com/domonda/go-types/strutil"
 )
@@ -320,6 +322,14 @@ func (s IDSet) IsNull() bool {
 // MarshalText implements the encoding.TextMarshaler interface
 func (s IDSet) MarshalText() (text []byte, err error) {
 	return []byte(s.String()), nil
+}
+
+// MarshalXMLAttr implements encoding/xml.MarshalerAttr by writing the
+// text of MarshalText, and no attribute for a nil pointer, because
+// encoding/xml calls MarshalText through a nil pointer attribute field
+// and panics.
+func (s *IDSet) MarshalXMLAttr(name xml.Name) (xml.Attr, error) {
+	return internal.MarshalXMLAttrText(s, name)
 }
 
 // UnmarshalText implements the encoding.TextUnmarshaler interface
