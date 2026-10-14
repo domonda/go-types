@@ -779,13 +779,15 @@ See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut.
   did `strfmt`. An invalid date is returned unchanged.
 - `types.Validate`, `TryValidate`, `DeepValidate`, `Validators.Valid` and
   `ValidatorAsValidatErr.Validate` panicked for a struct that embeds a nil
-  `*T` whose `T` implements the method with a value receiver. Such a value
-  is not validated, like a nil pointer. A nil pointer dereference in a method
+  `*T` whose `T` implements the method with a value receiver, or a nil
+  interface like `types.ValidatErr` or `types.Validator`. Such a value is
+  not validated, like a nil pointer. A nil pointer dereference in a method
   that the struct declares itself still panics instead of reporting the
   value as valid.
-- `float.FormatDef.UnmarshalJSON` accepted separators that `Format` panics
-  on, like `{"decimalSep":"."}` into a `FormatDef` with `.` as thousands
-  separator, which gave the same rune for both.
+- `float.FormatDef.UnmarshalJSON` accepted separators and precisions that
+  `Format` panics on, like `{"decimalSep":"."}` into a `FormatDef` with `.`
+  as thousands separator, which gave the same rune for both, or a precision
+  below -1.
 - `float.Parse` read the price notation `"12,-"`, 12 without cents, as -12.
   A `-` right after the decimal separator is no sign.
 - `bank.BIC` accepted the false BICs of 8 characters with the `XXX` branch
