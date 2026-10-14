@@ -7,6 +7,7 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+	"sync"
 )
 
 // Validator can be implemented by types that can validate their data.
@@ -49,8 +50,9 @@ type Validators []Validator
 // Valid returns if the data of the implementation is valid.
 // Returns false if any validator in the slice returns false.
 // Elements that [Validate] does not validate are skipped:
-// nil, a nil func, and a nil pointer to a type implementing
-// Validator with a value receiver.
+// nil, a nil func, a nil pointer to a type implementing
+// Validator with a value receiver, and a value whose Valid method
+// is promoted from a nil embedded pointer or interface.
 func (v Validators) Valid() bool {
 	for _, validator := range v {
 		if !validOrSkipped(validator) {
@@ -109,8 +111,9 @@ type ValidatErrs []ValidatErr
 // or nil if no element returned an error.
 // errors.Is and errors.As find each of the joined errors.
 // Elements that [Validate] does not validate are skipped:
-// nil, a nil func, and a nil pointer to a type implementing
-// ValidatErr with a value receiver.
+// nil, a nil func, a nil pointer to a type implementing
+// ValidatErr with a value receiver, and a value whose Validate method
+// is promoted from a nil embedded pointer or interface.
 //
 // Because an element is called also after an earlier one failed,
 // no element may rely on an earlier one, like a check of a field
@@ -143,8 +146,9 @@ type ValidatorAsValidatErr struct {
 
 // Validate returns an error if the wrapped validator is not valid.
 // A Validator that [Validate] does not validate returns nil:
-// nil, a nil func, and a nil pointer to a type implementing
-// Validator with a value receiver.
+// nil, a nil func, a nil pointer to a type implementing
+// Validator with a value receiver, and a value whose Valid method
+// is promoted from a nil embedded pointer or interface.
 func (v ValidatorAsValidatErr) Validate() error {
 	if validOrSkipped(v.Validator) {
 		return nil
@@ -168,9 +172,12 @@ func (v ValidatorAsValidatErr) Validate() error {
 // is called with the nil pointer, so it can handle nil itself.
 // If v is a nil func like ValidatorFunc(nil), whose method would call
 // the nil func, then nil is returned, like [DeepValidate] skips nil funcs.
-// If v embeds a nil pointer that its method is promoted from, like
-// struct{ *T } with a nil *T and a value receiver on T, then nil is
-// returned too, because the method can't be called without the value.
+// If v embeds a nil pointer or interface that its method is promoted from,
+// like struct{ *T } with a nil *T and a value receiver on T, or
+// struct{ ValidatErr } with a nil ValidatErr, then nil is returned too,
+// because the method can't be called without the embedded value.
+// A panic in a method that v declares itself is passed on,
+// also if v embeds a nil pointer or interface.
 func Validate(v any) error {
 	err, _ := TryValidate(v)
 	return err
@@ -194,7 +201,7 @@ func Validate(v any) error {
 // If v is a nil func like ValidatorFunc(nil), whose method would call
 // the nil func, then nil and true are returned, like [DeepValidate]
 // skips nil funcs. The same is returned if v embeds a nil pointer
-// that its method is promoted from, see [Validate].
+// or interface that its method is promoted from, see [Validate].
 // The boolean return value indicates whether the value was validatable.
 func TryValidate(v any) (err error, isValidatable bool) {
 	switch x := v.(type) {
@@ -202,10 +209,10 @@ func TryValidate(v any) (err error, isValidatable bool) {
 		if isNilFunc(v) || isNilPointerWithValueMethod(v, validatErrType) {
 			return nil, true
 		}
-		if callSkippingNilEmbedded(v, func() { err = x.Validate() }) {
-			return nil, true
+		if embedsPointerOrInterface(v) {
+			return validateSkippingNilEmbedded(x), true
 		}
-		return err, true
+		return x.Validate(), true
 	case Validator:
 		if !validOrSkipped(x) {
 			return fmt.Errorf("invalid %T value: %#v", v, v), true
@@ -219,14 +226,16 @@ func TryValidate(v any) (err error, isValidatable bool) {
 // validOrSkipped returns the result of the Valid method of v,
 // or true if [Validate] does not validate v: if v is nil, a nil func,
 // a nil pointer to a type implementing Validator with a value receiver,
-// or a value whose Valid method is promoted from a nil embedded pointer.
+// or a value whose Valid method is promoted from a nil embedded pointer
+// or interface.
 func validOrSkipped(v Validator) bool {
 	if v == nil || isNilFunc(v) || isNilPointerWithValueMethod(v, validatorType) {
 		return true
 	}
-	valid := true
-	callSkippingNilEmbedded(v, func() { valid = v.Valid() })
-	return valid
+	if embedsPointerOrInterface(v) {
+		return validSkippingNilEmbedded(v)
+	}
+	return v.Valid()
 }
 
 // isNilPointerWithValueMethod reports if v is a nil pointer that has the
@@ -238,43 +247,112 @@ func isNilPointerWithValueMethod(v any, iface reflect.Type) bool {
 	return val.Kind() == reflect.Pointer && val.IsNil() && val.Type().Elem().Implements(iface)
 }
 
-// callSkippingNilEmbedded calls call, which must call the Valid or Validate
-// method of v directly, and reports if it panicked because the method
-// is promoted from a nil pointer that v embeds, like Validate of
-// struct{ *T } with a nil *T and a value receiver on T. The method wrapper
-// that the compiler generates for the promotion dereferences the nil
-// pointer before T's method is called. Such a value is not validated,
-// like a nil pointer, because the method can't be called without the
-// embedded value. A struct can declare the method itself instead, which
-// reflection can't tell apart, so the call is made and only a nil pointer
-// dereference in the generated wrapper called by call is recovered.
-// Every other panic is passed on, like a nil pointer dereference
-// in the method itself, which is a bug of the method.
-func callSkippingNilEmbedded(v any, call func()) (skipped bool) {
-	if !hasNilEmbeddedPointer(reflect.ValueOf(v), 0) {
-		call()
+// embedsPointerOrInterfaceCache maps a struct reflect.Type
+// to the bool result of typeEmbedsPointerOrInterface for it.
+var embedsPointerOrInterfaceCache sync.Map
+
+// embedsPointerOrInterface reports if v is a struct, or a non-nil pointer
+// to a struct, that embeds a pointer or interface, also within its embedded
+// structs. Only the method of such a value can be promoted from a nil
+// embedded pointer or interface, so only such a value is validated with
+// validateSkippingNilEmbedded or validSkippingNilEmbedded. All other values
+// have their method called directly, without the cost of recovering.
+// The result is cached per struct type, so only the first call for a type
+// inspects its fields.
+func embedsPointerOrInterface(v any) bool {
+	val := reflect.ValueOf(v)
+	if val.Kind() == reflect.Pointer {
+		// A nil pointer embeds nothing, see isNilPointerWithValueMethod
+		if val.IsNil() {
+			return false
+		}
+		val = val.Elem()
+	}
+	if val.Kind() != reflect.Struct {
 		return false
 	}
-	defer func() {
-		if r := recover(); r != nil {
-			if rErr, ok := r.(runtime.Error); ok && strings.Contains(rErr.Error(), "nil pointer dereference") && panickedInWrapperCalledBy(call) {
-				skipped = true
-				return
-			}
-			panic(r)
+	t := val.Type()
+	if embeds, ok := embedsPointerOrInterfaceCache.Load(t); ok {
+		return embeds.(bool)
+	}
+	embeds := typeEmbedsPointerOrInterface(t)
+	embedsPointerOrInterfaceCache.Store(t, embeds)
+	return embeds
+}
+
+// typeEmbedsPointerOrInterface reports if the struct type t embeds
+// a pointer or interface, also within its embedded structs.
+// The recursion ends also for a struct that embeds a pointer to itself,
+// because it stops at the first embedded pointer, and a struct
+// can't contain itself by value.
+func typeEmbedsPointerOrInterface(t reflect.Type) bool {
+	for i := range t.NumField() {
+		field := t.Field(i)
+		if !field.Anonymous {
+			continue
 		}
-	}()
-	call()
+		switch field.Type.Kind() {
+		case reflect.Pointer, reflect.Interface:
+			return true
+		case reflect.Struct:
+			if typeEmbedsPointerOrInterface(field.Type) {
+				return true
+			}
+		}
+	}
 	return false
 }
 
-// panickedInWrapperCalledBy reports if the panic being recovered by the
-// deferred function that calls it is a memory fault in a method wrapper
-// generated by the compiler, called directly by call. The runtime reports
+// validateSkippingNilEmbedded returns x.Validate(), or nil if the method
+// is promoted from a nil pointer or interface that x embeds,
+// see recoverNilEmbedded.
+func validateSkippingNilEmbedded(x ValidatErr) error {
+	defer recoverNilEmbedded(validateSkippingNilEmbedded)
+	return x.Validate()
+}
+
+// validSkippingNilEmbedded returns x.Valid(), or true if the method
+// is promoted from a nil pointer or interface that x embeds,
+// see recoverNilEmbedded.
+func validSkippingNilEmbedded(x Validator) (valid bool) {
+	// Stays the result if x.Valid() panics and the panic is recovered
+	valid = true
+	defer recoverNilEmbedded(validSkippingNilEmbedded)
+	return x.Valid()
+}
+
+// recoverNilEmbedded must be deferred by the function caller, which must
+// call the Valid or Validate method of a value directly. It recovers the
+// panic of that call if the method is promoted from a nil pointer or
+// interface that the value embeds, like Validate of struct{ *T } with
+// a nil *T and a value receiver on T, or of struct{ ValidatErr } with
+// a nil ValidatErr. The method wrapper that the compiler generates for the
+// promotion dereferences the nil pointer, or calls the method of the nil
+// interface, which faults before the method of the embedded value is called.
+// Such a value is not validated, like a nil pointer, because the method
+// can't be called without the embedded value. A struct can declare the
+// method itself instead, which reflection can't tell apart, so only a nil
+// pointer dereference in a generated wrapper called directly by caller is
+// recovered. Every other panic is passed on, like a nil pointer dereference
+// in the method itself, which is a bug of the method.
+func recoverNilEmbedded(caller any) {
+	r := recover()
+	if r == nil {
+		return
+	}
+	if rErr, ok := r.(runtime.Error); ok && strings.Contains(rErr.Error(), "nil pointer dereference") && panickedInWrapperCalledBy(caller) {
+		return
+	}
+	panic(r)
+}
+
+// panickedInWrapperCalledBy reports if the panic being recovered by
+// recoverNilEmbedded is a memory fault in a method wrapper generated by
+// the compiler, called directly by the function caller. The runtime reports
 // the file of generated functions as "<autogenerated>", and a method
 // promoted through several embedded fields can have a chain of wrappers.
-func panickedInWrapperCalledBy(call func()) bool {
-	callName := runtime.FuncForPC(reflect.ValueOf(call).Pointer()).Name()
+func panickedInWrapperCalledBy(caller any) bool {
+	callerName := runtime.FuncForPC(reflect.ValueOf(caller).Pointer()).Name()
 	pcs := make([]uintptr, 64)
 	frames := runtime.CallersFrames(pcs[:runtime.Callers(1, pcs)])
 	// The frame of the faulting function follows runtime.sigpanic
@@ -291,44 +369,13 @@ func panickedInWrapperCalledBy(call func()) bool {
 	for {
 		frame, more := frames.Next()
 		if frame.File != "<autogenerated>" {
-			return wrappers > 0 && frame.Function == callName
+			return wrappers > 0 && frame.Function == callerName
 		}
 		wrappers++
 		if !more {
 			return false
 		}
 	}
-}
-
-// hasNilEmbeddedPointer reports if the struct v, or the struct v points to,
-// embeds a nil pointer, also within its embedded fields.
-// The depth is limited because embedded pointers can form cycles.
-func hasNilEmbeddedPointer(v reflect.Value, depth int) bool {
-	if depth > 8 {
-		return false
-	}
-	if v.Kind() == reflect.Pointer {
-		if v.IsNil() {
-			return false
-		}
-		v = v.Elem()
-	}
-	if v.Kind() != reflect.Struct {
-		return false
-	}
-	for i := range v.NumField() {
-		if !v.Type().Field(i).Anonymous {
-			continue
-		}
-		field := v.Field(i)
-		if field.Kind() == reflect.Pointer && field.IsNil() {
-			return true
-		}
-		if hasNilEmbeddedPointer(field, depth+1) {
-			return true
-		}
-	}
-	return false
 }
 
 // isNilFunc reports if v is a nil func, like ValidatorFunc(nil).

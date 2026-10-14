@@ -1574,3 +1574,199 @@ func TestValidate_EmbeddedPointerCycle(t *testing.T) {
 		t.Errorf("Validate of an embedded pointer cycle = %v, want nil", err)
 	}
 }
+
+type embedsValidatErr struct {
+	ValidatErr
+}
+
+type embedsValidator struct {
+	Validator
+}
+
+type embedsEmbedsValidator struct {
+	embedsValidator
+}
+
+// TestValidate_NilEmbeddedInterface protects against a panic: a struct that
+// embeds a nil ValidatErr or Validator interface promotes a method whose
+// generated wrapper calls the method of the nil interface. Like for a nil
+// embedded pointer, there is no value to validate, so every validation
+// function skips such a value instead of panicking, while a non-nil
+// embedded interface is still validated through the promoted method.
+func TestValidate_NilEmbeddedInterface(t *testing.T) {
+	skipped := []any{
+		embedsValidatErr{},
+		&embedsValidatErr{},
+		embedsValidator{},
+		// Promoted through two embedded fields, by a chain of generated wrappers
+		embedsEmbedsValidator{},
+	}
+	for _, v := range skipped {
+		if err := Validate(v); err != nil {
+			t.Errorf("Validate(%#v) = %v, want nil", v, err)
+		}
+		if err, isValidatable := TryValidate(v); err != nil || !isValidatable {
+			t.Errorf("TryValidate(%#v) = %v, %v, want nil, true", v, err, isValidatable)
+		}
+		if errs := DeepValidate(v); len(errs) != 0 {
+			t.Errorf("DeepValidate(%#v) = %v, want none", v, errs)
+		}
+		if validator, ok := v.(Validator); ok {
+			if !(Validators{validator}).Valid() {
+				t.Errorf("Validators{%#v}.Valid() = false, want true", v)
+			}
+			if err := (ValidatorAsValidatErr{validator}).Validate(); err != nil {
+				t.Errorf("ValidatorAsValidatErr{%#v}.Validate() = %v, want nil", v, err)
+			}
+		}
+	}
+	nested := struct {
+		Field    embedsValidatErr
+		Pointer  *embedsValidator
+		Elements []embedsEmbedsValidator
+	}{
+		Pointer:  &embedsValidator{},
+		Elements: []embedsEmbedsValidator{{}},
+	}
+	if errs := DeepValidate(nested); len(errs) != 0 {
+		t.Errorf("DeepValidate(%#v) = %v, want none", nested, errs)
+	}
+
+	errInvalid := errors.New("invalid")
+	if err := Validate(embedsValidatErr{StaticValidatErr{errInvalid}}); !errors.Is(err, errInvalid) {
+		t.Errorf("a non-nil embedded ValidatErr must be validated, got %v", err)
+	}
+	invalid := embedsEmbedsValidator{embedsValidator{StaticValidator(false)}}
+	if err := Validate(invalid); err == nil {
+		t.Error("a non-nil embedded Validator must be validated")
+	}
+	if (Validators{invalid}).Valid() {
+		t.Error("Validators with a non-nil embedded invalid Validator must not be valid")
+	}
+}
+
+type callsNilEmbeddedValidator struct {
+	Validator
+}
+
+func (c callsNilEmbeddedValidator) Valid() bool { return c.Validator.Valid() }
+
+// TestValidate_NilEmbeddedInterfaceKeepsMethodPanics protects against hiding
+// a bug as a valid value: calling the method of a nil interface in a method
+// that a struct declares itself is a bug of that method and must still
+// panic, like a nil pointer dereference does, also if the interface is the
+// nil embedded field that a promoted method would be skipped for.
+func TestValidate_NilEmbeddedInterfaceKeepsMethodPanics(t *testing.T) {
+	v := callsNilEmbeddedValidator{}
+	calls := map[string]func(){
+		"Validate":              func() { _ = Validate(v) },
+		"TryValidate":           func() { _, _ = TryValidate(v) },
+		"DeepValidate":          func() { _ = DeepValidate(v) },
+		"Validators":            func() { _ = Validators{v}.Valid() },
+		"ValidatorAsValidatErr": func() { _ = ValidatorAsValidatErr{v}.Validate() },
+	}
+	for name, call := range calls {
+		t.Run(name, func(t *testing.T) {
+			defer func() {
+				if recover() == nil {
+					t.Error("the nil interface call of the declared method was recovered")
+				}
+			}()
+			call()
+		})
+	}
+}
+
+// TestEmbedsPointerOrInterface checks which values take the recovering path
+// for a method promoted from a nil embedded pointer or interface. A value
+// that can't have such a method, because it is no struct or embeds no
+// pointer or interface, must have its method called directly, so it does
+// not pay for what it can't need. A value that can must take the
+// recovering path, or validating it panics.
+func TestEmbedsPointerOrInterface(t *testing.T) {
+	tests := []struct {
+		name string
+		v    any
+		want bool
+	}{
+		{"string", validString("x"), false},
+		{"func", ValidatorFunc(func() bool { return true }), false},
+		{"slice", Validators{}, false},
+		{"struct without embedded fields", rangeValue{}, false},
+		{"struct with a pointer field that is not embedded", struct{ Field *validatedByValue }{}, false},
+		{"struct embedding a struct without pointers", struct{ rangeValue }{}, false},
+		{"pointer to struct without embedded pointer", &rangeValue{}, false},
+		{"struct embedding a nil pointer", embedsNilPointer{}, true},
+		{"struct embedding a non-nil pointer", embedsNilPointer{validatedByValue: new(validatedByValue)}, true},
+		{"struct embedding an interface", embedsValidator{}, true},
+		{"struct embedding a struct embedding an interface", embedsEmbedsValidator{}, true},
+		{"pointer to struct embedding an interface", &embedsValidator{}, true},
+		// Embeds nothing, see isNilPointerWithValueMethod
+		{"nil pointer to struct embedding an interface", (*embedsValidator)(nil), false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// The second call reads the result cached for the type
+			for range 2 {
+				if got := embedsPointerOrInterface(tt.v); got != tt.want {
+					t.Errorf("embedsPointerOrInterface(%#v) = %v, want %v", tt.v, got, tt.want)
+				}
+			}
+		})
+	}
+}
+
+// TestValidate_DoesNotAllocate protects the cost of Validate for values
+// that can't have a method promoted from a nil embedded pointer or
+// interface: their method is called directly, without allocating.
+// When every call went through the recovering path and its closure,
+// Validate of a string type allocated three times and took five times
+// as long, and Validate of a struct with ten fields thirty times as long.
+func TestValidate_DoesNotAllocate(t *testing.T) {
+	values := map[string]any{
+		"string Validator":                     validString("x"),
+		"string ValidatErr":                    nonEmptyString("x"),
+		"struct Validator":                     rangeValue{Value: 1, Max: 2},
+		"struct ValidatErr":                    StaticValidatErr{},
+		"struct ValidatErr returning an error": StaticValidatErr{Err: errNegative},
+		"pointer to struct Validator":          &rangeValue{Value: 1, Max: 2},
+	}
+	for name, v := range values {
+		t.Run(name, func(t *testing.T) {
+			if allocs := testing.AllocsPerRun(100, func() { _ = Validate(v) }); allocs != 0 {
+				t.Errorf("Validate(%#v) allocates %v times per call, want 0", v, allocs)
+			}
+		})
+	}
+}
+
+// tenFields declares Valid and embeds nothing,
+// so Validate calls its method directly
+type tenFields struct {
+	A, B, C, D, E, F, G, H, I, J string
+}
+
+func (s tenFields) Valid() bool { return s.A != "" }
+
+var benchmarkErr error
+
+func BenchmarkValidate(b *testing.B) {
+	nonEmpty := validatedByValue("x")
+	benchmarks := []struct {
+		name string
+		v    any
+	}{
+		{"StringValidator", validString("x")},
+		{"StructWithoutEmbeddedPointer", tenFields{A: "a"}},
+		{"StructEmbeddingPointer", embedsNilPointer{validatedByValue: &nonEmpty}},
+		{"StructEmbeddingNilPointer", embedsNilPointer{}},
+	}
+	for _, bm := range benchmarks {
+		b.Run(bm.name, func(b *testing.B) {
+			b.ReportAllocs()
+			for b.Loop() {
+				benchmarkErr = Validate(bm.v)
+			}
+		})
+	}
+}
