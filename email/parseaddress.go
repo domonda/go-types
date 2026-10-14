@@ -141,6 +141,27 @@ func ParseAddress(addr string) (mailAddress *mail.Address, err error) {
 	return mailAddress, nil
 }
 
+// errInvalidAddress is the error of normalizeAddressForRead.
+// It has no call stack like the error of ParseAddress,
+// because the callers of normalizeAddressForRead drop it.
+var errInvalidAddress = errors.New("invalid email address")
+
+// normalizeAddressForRead is the Normalized method of Address and
+// NullableAddress for their methods that keep an address that can't be
+// normalized unchanged and drop the error: Scan, UnmarshalJSON,
+// UnmarshalXML, UnmarshalXMLAttr, MarshalJSON and MarshalText.
+// It returns errInvalidAddress instead of the error of ParseAddress,
+// whose call stack costs more than the parsing. Unlike Normalized of
+// NullableAddress it returns errInvalidAddress for a blank address,
+// which the callers handle before.
+func normalizeAddressForRead[S Address | NullableAddress](s S) (S, error) {
+	mailAddress, unparsed, ok := parseAddress(sanitizeAddr(string(s)))
+	if !ok || strutil.TrimSpace(unparsed) != "" {
+		return s, errInvalidAddress
+	}
+	return S(AddressFrom(mailAddress)), nil
+}
+
 // parseAddress parses the address at the start of the sanitized addr
 // and returns it with the rest of addr after it, or ok false if addr
 // doesn't start with an address. It builds no error, so that a caller

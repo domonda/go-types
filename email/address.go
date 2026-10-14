@@ -167,7 +167,7 @@ func (a Address) ASCII() string {
 // and an address that can't be normalized unchanged without an error,
 // so that one invalid value doesn't fail a whole query; Validate reports it.
 func (a *Address) Scan(value any) error {
-	return internal.ScanNormalized(a, value, Address.Normalized, nil)
+	return internal.ScanNormalized(a, value, normalizeAddressForRead, nil)
 }
 
 // Value implements the driver database/sql/driver.Valuer interface.
@@ -181,7 +181,7 @@ func (a Address) Value() (driver.Value, error) {
 // normalized address, "" for a blank Address, or the address unchanged
 // if it can't be normalized.
 func (a Address) MarshalJSON() ([]byte, error) {
-	return internal.MarshalJSONNormalized(a, false, Address.Normalized, nil)
+	return internal.MarshalJSONNormalized(a, false, normalizeAddressForRead, nil)
 }
 
 // UnmarshalJSON implements encoding/json.Unmarshaler.
@@ -189,7 +189,7 @@ func (a Address) MarshalJSON() ([]byte, error) {
 // Address unchanged like encoding/json does for a string type,
 // and any other JSON value is an error.
 func (a *Address) UnmarshalJSON(data []byte) error {
-	return internal.UnmarshalJSONNormalized(a, data, false, Address.Normalized, nil)
+	return internal.UnmarshalJSONNormalized(a, data, false, normalizeAddressForRead, nil)
 }
 
 // MarshalText implements encoding.TextMarshaler like MarshalJSON,
@@ -197,7 +197,7 @@ func (a *Address) UnmarshalJSON(data []byte) error {
 // encoding/json writes map keys of string types as they are
 // and doesn't call MarshalText for them.
 func (a Address) MarshalText() ([]byte, error) {
-	return internal.MarshalTextNormalized(a, Address.Normalized, nil)
+	return internal.MarshalTextNormalized(a, normalizeAddressForRead, nil)
 }
 
 // MarshalXMLAttr implements encoding/xml.MarshalerAttr by writing the
@@ -211,13 +211,13 @@ func (a *Address) MarshalXMLAttr(name xml.Name) (xml.Attr, error) {
 // UnmarshalXML implements encoding/xml.Unmarshaler
 // by storing the text of the element like Scan stores it.
 func (a *Address) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
-	return internal.UnmarshalXMLNormalized(a, d, start, Address.Normalized, nil)
+	return internal.UnmarshalXMLNormalized(a, d, start, normalizeAddressForRead, nil)
 }
 
 // UnmarshalXMLAttr implements encoding/xml.UnmarshalerAttr
 // by storing the attribute value like Scan stores it.
 func (a *Address) UnmarshalXMLAttr(attr xml.Attr) error {
-	return internal.UnmarshalXMLAttrNormalized(a, attr, Address.Normalized, nil)
+	return internal.UnmarshalXMLAttrNormalized(a, attr, normalizeAddressForRead, nil)
 }
 
 // ScanString implements the strfmt.Scannable interface.

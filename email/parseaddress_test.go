@@ -189,6 +189,48 @@ func TestParseAddress_CommentNameCleaned(t *testing.T) {
 	}
 }
 
+// TestNormalizeAddressForRead protects that Scan, UnmarshalJSON and the
+// other methods that use normalizeAddressForRead to skip building an
+// error they drop store and write exactly what Normalized returns:
+// the normalized address, or an address that can't be normalized
+// unchanged. Only the error differs, it has no call stack.
+func TestNormalizeAddressForRead(t *testing.T) {
+	addrs := []string{
+		"not an address",
+		"a@example.com junk",
+		`a@example.com (Mike (Sales))`,
+		`a@example.com (x (y)`,
+		`Doe (Sales <doe@example.com>`,
+		"\x00a@example.com\x00",
+	}
+	for addr := range validEmailAddresses {
+		addrs = append(addrs, addr)
+	}
+	for addr := range invalidEmailAddresses {
+		addrs = append(addrs, addr)
+	}
+	for _, addr := range addrs {
+		want, wantErr := Address(addr).Normalized()
+		got, err := normalizeAddressForRead(Address(addr))
+		assert.Equal(t, want, got, "Address %q", addr)
+		if wantErr != nil {
+			assert.ErrorIs(t, err, errInvalidAddress, "Address %q", addr)
+		} else {
+			assert.NoError(t, err, "Address %q", addr)
+		}
+
+		if NullableAddress(addr).IsNull() {
+			// Normalized returns null without error for a blank address,
+			// which the read methods store before normalizing
+			continue
+		}
+		wantNullable, wantErr := NullableAddress(addr).Normalized()
+		gotNullable, err := normalizeAddressForRead(NullableAddress(addr))
+		assert.Equal(t, wantNullable, gotNullable, "NullableAddress %q", addr)
+		assert.Equal(t, wantErr != nil, err != nil, "NullableAddress %q", addr)
+	}
+}
+
 // TestParseAddress_NestedComment protects that the comment after an
 // address is read with RFC 5322 nesting and quoted-pairs, like
 // SplitAddressList reads it: a comment that ended at its first ')'
