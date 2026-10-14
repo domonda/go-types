@@ -32,10 +32,10 @@ import (
 // the shortest representation of the value rounded to precision.
 // See: https://en.wikipedia.org/wiki/Decimal_separator
 func Format[T ~float32 | ~float64](f T, thousandsSep, decimalSep rune, precision int, padPrecision bool) string {
-	if thousandsSep != 0 && thousandsSep != '.' && thousandsSep != ',' && thousandsSep != ' ' && thousandsSep != '\'' {
+	if !validThousandsSep(thousandsSep) {
 		panic(fmt.Errorf("invalid thousandsSep: '%s'", string(thousandsSep)))
 	}
-	if decimalSep != '.' && decimalSep != ',' {
+	if !validDecimalSep(decimalSep) {
 		panic(fmt.Errorf("invalid decimalSep: '%s'", string(decimalSep)))
 	}
 	if thousandsSep == decimalSep {
@@ -205,4 +205,19 @@ func roundFormatted(str string, precision int) string {
 	}
 	intLen := len(digits) - precision
 	return sign + digits[:intLen] + "." + digits[intLen:]
+}
+
+// validThousandsSep reports if r is a thousands separator that Format
+// accepts, where 0 means no thousands separator.
+func validThousandsSep(r rune) bool {
+	switch r {
+	case 0, '.', ',', ' ', '\'':
+		return true
+	}
+	return false
+}
+
+// validDecimalSep reports if r is a decimal separator that Format accepts.
+func validDecimalSep(r rune) bool {
+	return r == '.' || r == ','
 }

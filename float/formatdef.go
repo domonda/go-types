@@ -82,10 +82,10 @@ func (ff FormatDef) MarshalJSON() ([]byte, error) {
 // of the separator, which is how FormatDef was written before it
 // implemented encoding/json.Marshaler.
 // Fields missing in the JSON object keep their value.
-// Separators that Format panics on are an error, like an invalid rune
-// or the same rune for both separators, which a missing field that keeps
-// its value can give, but a zero DecimalSep is accepted like for the zero
-// FormatDef.
+// Separators and a precision that Format panics on are an error, like an
+// invalid rune, the same rune for both separators, which a missing field
+// that keeps its value can give, or a precision below -1, but a zero
+// DecimalSep is accepted like for the zero FormatDef.
 func (ff *FormatDef) UnmarshalJSON(j []byte) error {
 	v := formatDefJSON{
 		ThousandsSep: separatorString(ff.ThousandsSep),
@@ -106,12 +106,14 @@ func (ff *FormatDef) UnmarshalJSON(j []byte) error {
 		return fmt.Errorf("can't unmarshal float.FormatDef decimalSep: %w", err)
 	}
 	switch {
-	case thousandsSep != 0 && !strings.ContainsRune(".,' ", thousandsSep):
+	case !validThousandsSep(thousandsSep):
 		return errs.Errorf("can't unmarshal float.FormatDef with invalid thousandsSep: %q", thousandsSep)
-	case decimalSep != 0 && decimalSep != '.' && decimalSep != ',':
+	case decimalSep != 0 && !validDecimalSep(decimalSep):
 		return errs.Errorf("can't unmarshal float.FormatDef with invalid decimalSep: %q", decimalSep)
 	case decimalSep != 0 && thousandsSep == decimalSep:
 		return errs.Errorf("can't unmarshal float.FormatDef with the same thousandsSep and decimalSep: %q", decimalSep)
+	case v.Precision < -1:
+		return errs.Errorf("can't unmarshal float.FormatDef with precision below -1: %d", v.Precision)
 	}
 	*ff = FormatDef{
 		ThousandsSep: thousandsSep,
