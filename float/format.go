@@ -46,15 +46,12 @@ func Format[T ~float32 | ~float64](f T, thousandsSep, decimalSep rune, precision
 	}
 
 	bitSize := reflect.TypeFor[T]().Bits()
-	str := strconv.FormatFloat(float64(f), 'f', -1, bitSize)
 	// NaN and ±Inf have no integer part to group or fractional part
 	// to trim, so return strconv's representation unchanged.
 	if math.IsNaN(float64(f)) || math.IsInf(float64(f), 0) {
-		return str
+		return strconv.FormatFloat(float64(f), 'f', -1, bitSize)
 	}
-	if precision >= 0 {
-		str = roundFormatted(str, precision)
-	}
+	str := formatRounded(float64(f), bitSize, precision)
 	// Negative zero and negative values rounded to zero are formatted
 	// without a sign, because "-0.00" is not a different number than "0.00"
 	if str[0] == '-' && strings.Trim(str[1:], "0.") == "" {
@@ -121,6 +118,57 @@ func Format[T ~float32 | ~float64](f T, thousandsSep, decimalSep rune, precision
 	}
 
 	return str
+}
+
+// formatRounded formats the finite f of the passed bitSize like
+// strconv.FormatFloat with the 'f' format and the shortest precision,
+// rounded half away from zero to exactly precision fractional digits
+// unless precision is -1.
+func formatRounded(f float64, bitSize, precision int) string {
+	if bitSize == 64 && precision >= 0 {
+		// The integer rounded is the digits that roundFormatted would return,
+		// see roundScaledFast, so only the formatting is left to do.
+		if rounded, ok := roundScaledFast(f, precision); ok {
+			return formatScaled(rounded, precision, math.Signbit(f))
+		}
+	}
+	return formatRoundedExact(f, bitSize, precision)
+}
+
+// formatRoundedExact is formatRounded rounding the formatted digits.
+func formatRoundedExact(f float64, bitSize, precision int) string {
+	str := strconv.FormatFloat(f, 'f', -1, bitSize)
+	if precision < 0 {
+		return str
+	}
+	return roundFormatted(str, precision)
+}
+
+// formatScaled formats the integer rounded from roundScaledFast divided by
+// 10^precision the way roundFormatted does: with a minus sign if negative,
+// at least one integer digit and exactly precision fractional digits.
+func formatScaled(rounded float64, precision int, negative bool) string {
+	// A sign, a point, and at most 15 digits below 2^48
+	// or a zero and the 22 fractional digits roundScaledFast supports
+	var buf [25]byte
+	i := len(buf)
+	u := uint64(math.Abs(rounded))
+	// Write the digits from the end until both the fractional digits
+	// and the integer digits including at least one zero are complete
+	for n := 0; n <= precision || u > 0; n++ {
+		if n == precision && n > 0 {
+			i--
+			buf[i] = '.'
+		}
+		i--
+		buf[i] = byte('0' + u%10)
+		u /= 10
+	}
+	if negative {
+		i--
+		buf[i] = '-'
+	}
+	return string(buf[i:])
 }
 
 // roundFormatted rounds the decimal number str, as formatted by

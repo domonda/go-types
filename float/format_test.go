@@ -2,6 +2,7 @@ package float
 
 import (
 	"math"
+	"math/rand/v2"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -237,6 +238,37 @@ func Test_FormatFloat_padPrecision(t *testing.T) {
 	assert.Equal(t, "1.5", Format(1.5, 0, '.', -1, true))
 }
 
+// TestFormat_fastPathMatchesExact protects that the float64 fast path of
+// Format never changes a formatted string. It is only allowed to skip
+// formatting and rounding the shortest decimal digits where it provably
+// writes the identical digits, sign and point, so every input must format
+// exactly like rounding the digits does, most of all the decimal ties and
+// their float64 neighbors where float64 arithmetic alone gets it wrong.
+func TestFormat_fastPathMatchesExact(t *testing.T) {
+	check := func(f float64, precision int) {
+		t.Helper()
+		got := formatRounded(f, 64, precision)
+		want := formatRoundedExact(f, 64, precision)
+		if got != want {
+			t.Fatalf("formatRounded(%v, 64, %d) = %q, exact digit rounding = %q", f, precision, got, want)
+		}
+	}
+	for _, f := range fastPathTargetedFloats() {
+		for precision := -1; precision <= 24; precision++ {
+			check(f, precision)
+		}
+	}
+	for _, tie := range fastPathTies() {
+		for precision := max(tie.decimals-1, 0); precision <= tie.decimals+1; precision++ {
+			check(tie.f, precision)
+		}
+	}
+	rng := rand.New(rand.NewPCG(7, 8))
+	for range fastPathSweepSize() {
+		check(randomFastPathFloat(rng), rng.IntN(13))
+	}
+}
+
 func Benchmark_FormatFloat_commaDecimalSep(b *testing.B) {
 	// Hot path for DE/AT-style formatting: no thousands grouping,
 	// comma decimal separator, common precision values.
@@ -288,4 +320,13 @@ func Test_FormatFloat_float32AndSpecials(t *testing.T) {
 	assert.Equal(t, "+Inf", Format(math.Inf(1), ',', '.', -1, false))
 	assert.Equal(t, "-Inf", Format(math.Inf(-1), ',', '.', -1, false))
 	assert.Equal(t, "+Inf", Format(math.Inf(1), ',', '.', 2, true))
+}
+
+func BenchmarkFormat(b *testing.B) {
+	b.ReportAllocs()
+	i := 0
+	for b.Loop() {
+		_ = Format(benchFloats[i%len(benchFloats)], 0, '.', 2, true)
+		i++
+	}
 }

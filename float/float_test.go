@@ -3,6 +3,8 @@ package float
 import (
 	"fmt"
 	"math"
+	"math/rand/v2"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -156,6 +158,149 @@ func TestRoundToDecimals_overflow(t *testing.T) {
 	assert.True(t, math.IsInf(RoundToDecimals(-math.MaxFloat64, -307), -1))
 }
 
+// TestRoundToDecimals_fastPathMatchesExact protects that the float64 fast
+// path of RoundToDecimals never changes a result. It is only allowed to skip
+// formatting and parsing the digits where it provably returns the identical
+// float64, so every input must round exactly like rounding the digits of the
+// shortest decimal representation does, most of all the decimal ties and
+// their float64 neighbors where float64 arithmetic alone gets it wrong.
+func TestRoundToDecimals_fastPathMatchesExact(t *testing.T) {
+	check := func(f float64, decimals int) {
+		t.Helper()
+		got := RoundToDecimals(f, decimals)
+		want := roundToDecimalsExact(f, 64, decimals)
+		if math.Float64bits(got) != math.Float64bits(want) {
+			t.Fatalf("RoundToDecimals(%v, %d) = %v, exact digit rounding = %v", f, decimals, got, want)
+		}
+	}
+	for _, f := range fastPathTargetedFloats() {
+		for decimals := -24; decimals <= 24; decimals++ {
+			check(f, decimals)
+		}
+	}
+	for _, tie := range fastPathTies() {
+		for decimals := tie.decimals - 1; decimals <= tie.decimals+1; decimals++ {
+			check(tie.f, decimals)
+		}
+	}
+	rng := rand.New(rand.NewPCG(3, 4))
+	for range fastPathSweepSize() {
+		check(randomFastPathFloat(rng), rng.IntN(20)-5)
+	}
+}
+
+// TestRoundToDecimals_fastPathTaken protects the reason for the fast path:
+// rounding computed amounts to cents must not format and parse their digits,
+// which is an order of magnitude slower. Only values within a tiny relative
+// distance of a tie may take the exact path.
+func TestRoundToDecimals_fastPathTaken(t *testing.T) {
+	rng := rand.New(rand.NewPCG(5, 6))
+	exact := 0
+	for range 100_000 {
+		amount := float64(rng.Int64N(2e10)-1e10) / 100 * (rng.Float64() * 2)
+		if _, ok := roundScaledFast(amount, 2); !ok {
+			exact++
+		}
+	}
+	assert.Less(t, exact, 10, "amounts that took the exact path")
+}
+
+// fastPathTie is a float64 whose shortest decimal representation ends
+// in a 5 right after the passed number of decimals.
+type fastPathTie struct {
+	f        float64
+	decimals int
+}
+
+// fastPathTies returns ties of the shortest decimal representation for every
+// number of decimals from -6 to 16 with both signs, plus their float64
+// neighbors two ulps up and down, for the tests of the fast paths.
+// The digits are at most 15, so they are the shortest decimal of the parsed
+// float64.
+func fastPathTies() []fastPathTie {
+	rng := rand.New(rand.NewPCG(1, 2))
+	var ties []fastPathTie
+	for decimals := -6; decimals <= 16; decimals++ {
+		for range 300 {
+			// The digits before the 5, from none to 14 of them
+			digits := rng.Int64N(int64(math.Pow10(rng.IntN(15))))
+			tie, err := strconv.ParseFloat(fmt.Sprintf("%d5e%d", digits, -decimals-1), 64)
+			if err != nil {
+				panic(err)
+			}
+			for _, f := range withNeighbors(tie) {
+				ties = append(ties, fastPathTie{f, decimals}, fastPathTie{-f, decimals})
+			}
+		}
+	}
+	return ties
+}
+
+// fastPathTargetedFloats returns ties, boundaries of the fast paths, and
+// special values with both signs and their float64 neighbors.
+func fastPathTargetedFloats() []float64 {
+	var floats []float64
+	for _, f := range []float64{
+		0, 0.5, 1.5, 2.5, 0.125, 0.145, 1.005, 2.675, 8.345, 1234.565,
+		1.45, 9.995, 1.0005, 0.005, 15, 25, 1250, 0.1 + 0.2, 0.3, 1.0845,
+		5e-324, 2.2250738585072014e-308, 1e-300, 1e-20, 0.4999999999999999,
+		0x1p47, 0x1p47 + 0.5, 0x1p48, 0x1p48 + 0.5, 0x1p52, 0x1p52 + 0.5,
+		0x1p53, 0x1p53 + 2, 1e15, 1e15 + 0.5, 1e16, 1e22, 1e23, 1e300,
+		math.MaxFloat64,
+	} {
+		for _, g := range withNeighbors(f) {
+			floats = append(floats, g, -g)
+		}
+	}
+	return floats
+}
+
+// withNeighbors returns f and its finite float64 neighbors
+// up to two ulps away.
+func withNeighbors(f float64) []float64 {
+	up1 := math.Nextafter(f, math.Inf(1))
+	down1 := math.Nextafter(f, math.Inf(-1))
+	floats := []float64{f}
+	for _, g := range []float64{up1, math.Nextafter(up1, math.Inf(1)), down1, math.Nextafter(down1, math.Inf(-1))} {
+		if !math.IsInf(g, 0) {
+			floats = append(floats, g)
+		}
+	}
+	return floats
+}
+
+// randomFastPathFloat returns a random finite float64 for the fast path
+// sweeps: a short decimal like a stored amount, the product of one with a
+// rate, which has a long binary fraction, or any bit pattern.
+func randomFastPathFloat(rng *rand.Rand) float64 {
+	decimal := float64(rng.Int64N(int64(math.Pow10(1+rng.IntN(15))))) / math.Pow10(rng.IntN(13))
+	if rng.IntN(2) == 0 {
+		decimal = -decimal
+	}
+	switch rng.IntN(4) {
+	case 0:
+		return decimal
+	case 1, 2:
+		return decimal * (rng.Float64() * 2)
+	default:
+		for {
+			f := math.Float64frombits(rng.Uint64())
+			if !math.IsNaN(f) && !math.IsInf(f, 0) {
+				return f
+			}
+		}
+	}
+}
+
+// fastPathSweepSize returns the number of random inputs
+// for the fast path sweeps, fewer with -short.
+func fastPathSweepSize() int {
+	if testing.Short() {
+		return 100_000
+	}
+	return 1_000_000
+}
+
 // TestDerefOr protects the nil-safety contract: a nil pointer yields the
 // default, while a non-nil pointer to zero must yield zero (not the default),
 // because zero is a legitimate value distinct from "not set".
@@ -182,4 +327,27 @@ func TestValid(t *testing.T) {
 	assert.False(t, Valid(math.Inf(1)))
 	assert.False(t, Valid(math.Inf(-1)))
 	assert.False(t, Valid(float32(math.Inf(1))))
+}
+
+// benchFloats are realistic money values for the rounding benchmark:
+// every other one has two decimals as stored, the rest are rate products
+// with a long binary fraction.
+var benchFloats = func() []float64 {
+	rng := rand.New(rand.NewPCG(1, 2))
+	floats := make([]float64, 1024)
+	for i := range floats {
+		floats[i] = float64(rng.Int64N(2e8)-1e8) / 100
+		if i%2 == 1 {
+			floats[i] *= 1.0845
+		}
+	}
+	return floats
+}()
+
+func BenchmarkRoundToDecimals(b *testing.B) {
+	i := 0
+	for b.Loop() {
+		RoundToDecimals(benchFloats[i%len(benchFloats)], 2)
+		i++
+	}
 }

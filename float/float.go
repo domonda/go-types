@@ -24,7 +24,20 @@ func RoundToDecimals[T ~float32 | ~float64](f T, decimals int) T {
 		return f
 	}
 	bitSize := reflect.TypeFor[T]().Bits()
-	intDigits, fracDigits, _ := strings.Cut(strconv.FormatFloat(math.Abs(float64(f)), 'f', -1, bitSize), ".")
+	if bitSize == 64 {
+		if scaled, ok := roundScaledFast(float64(f), decimals); ok {
+			// A value with no more decimals than requested scales to an
+			// integer, so this is f unchanged like in roundToDecimalsExact
+			return T(unscale(scaled, decimals))
+		}
+	}
+	return T(roundToDecimalsExact(float64(f), bitSize, decimals))
+}
+
+// roundToDecimalsExact is RoundToDecimals for a finite f of the passed
+// bitSize, rounding the digits of its shortest decimal representation.
+func roundToDecimalsExact(f float64, bitSize, decimals int) float64 {
+	intDigits, fracDigits, _ := strings.Cut(strconv.FormatFloat(math.Abs(f), 'f', -1, bitSize), ".")
 	if len(fracDigits) <= decimals {
 		return f // nothing to round
 	}
@@ -33,13 +46,58 @@ func RoundToDecimals[T ~float32 | ~float64](f T, decimals int) T {
 		digits = "0"
 	}
 	str := digits + "e" + strconv.Itoa(-decimals)
-	if math.Signbit(float64(f)) {
+	if math.Signbit(f) {
 		str = "-" + str
 	}
 	// A result beyond the range of T parses as ±Inf with a range error,
 	// which is the infinity that an overflowing float operation yields
 	rounded, _ := strconv.ParseFloat(str, bitSize)
-	return T(rounded)
+	return rounded
+}
+
+// roundScaledFast returns f·10^decimals rounded half away from zero in
+// float64 arithmetic and whether that provably equals rounding the shortest
+// decimal representation of f, which is what the digit rounding of
+// roundToDecimalsExact and roundFormatted does. The float64 operations are an
+// order of magnitude faster than formatting and parsing the digits.
+//
+// The shortest decimal of f lies within half an ulp of f, so within a factor
+// of 1±2^-53, and scaling by the exactly representable 10^|decimals| ≤ 10^22
+// rounds by at most another such factor. The scaled float64 therefore differs
+// from the scaled shortest decimal by less than |scaled|·2^-51, and if its
+// distance to the nearest half-integer exceeds the four times larger
+// |scaled|·2^-49, both lie strictly between the same two half-integers and
+// round to the same integer. The relative bounds don't hold for subnormal
+// floats, but those scale to far below 1/2 and round to zero either way.
+// The distance scaled-rounded is exact (Sterbenz lemma), and 0.5 minus it is
+// either exact or above 1/4, which exceeds the error below 2^48, the only
+// range where the condition can hold. It never holds for NaN and ±Inf.
+// If Go fuses the scaling into the distance, the distance is computed from
+// the exact product and rounded once by at most 2^-54 instead, which is far
+// below the bound for a nonzero rounded and changes nothing for a zero one.
+func roundScaledFast(f float64, decimals int) (rounded float64, ok bool) {
+	var scaled float64
+	switch {
+	case decimals >= 0 && decimals <= 22:
+		scaled = f * math.Pow10(decimals)
+	case decimals < 0 && decimals >= -22:
+		scaled = f / math.Pow10(-decimals)
+	default:
+		return 0, false
+	}
+	rounded = math.Round(scaled)
+	return rounded, 0.5-math.Abs(scaled-rounded) > math.Abs(scaled)*0x1p-49
+}
+
+// unscale returns the integer rounded from roundScaledFast divided by
+// 10^decimals. Both operands are exact float64 values, so the IEEE 754
+// division or multiplication is correctly rounded and yields the same
+// float64 as parsing the decimal digits of rounded with exponent -decimals.
+func unscale(rounded float64, decimals int) float64 {
+	if decimals >= 0 {
+		return rounded / math.Pow10(decimals)
+	}
+	return rounded * math.Pow10(-decimals)
 }
 
 // roundDigitsHalfAwayFromZero rounds the non-negative decimal number with the
