@@ -1466,6 +1466,10 @@ func TestValidate_NilEmbeddedPointer(t *testing.T) {
 	if errs := DeepValidate(v); len(errs) != 0 {
 		t.Errorf("DeepValidate(%#v) = %v, want none", v, errs)
 	}
+	// Promoted through two embedded fields, by a chain of generated wrappers
+	if err := Validate(struct{ embedsNilPointer }{v}); err != nil {
+		t.Errorf("Validate of a struct embedding %#v = %v, want nil", v, err)
+	}
 
 	empty := validatedByValue("")
 	if err := Validate(embedsNilPointer{validatedByValue: &empty}); err == nil {
@@ -1473,5 +1477,60 @@ func TestValidate_NilEmbeddedPointer(t *testing.T) {
 	}
 	if err := Validate(declaresOwnValidate{}); err == nil || err.Error() != "own" {
 		t.Errorf("a declared Validate must run, got %v", err)
+	}
+}
+
+type derefsNilField struct {
+	*validatedByValue
+	Field *validatedByValue
+}
+
+func (d derefsNilField) Validate() error { return d.Field.Validate() }
+
+func (d derefsNilField) Valid() bool { return *d.Field != "" }
+
+// TestValidate_NilEmbeddedPointerKeepsMethodPanics protects against hiding
+// a bug as a valid value: only the panic of the method wrapper that the
+// compiler generates to promote a method from a nil embedded pointer is
+// recovered. A nil pointer dereference in a method that a struct declares
+// itself is a bug of that method and must still panic, also if the struct
+// happens to embed a nil pointer, instead of reporting the value as valid.
+func TestValidate_NilEmbeddedPointerKeepsMethodPanics(t *testing.T) {
+	v := derefsNilField{}
+	calls := map[string]func(){
+		"Validate":              func() { _ = Validate(v) },
+		"TryValidate":           func() { _, _ = TryValidate(v) },
+		"DeepValidate":          func() { _ = DeepValidate(v) },
+		"Validators":            func() { _ = Validators{v}.Valid() },
+		"ValidatorAsValidatErr": func() { _ = ValidatorAsValidatErr{v}.Validate() },
+	}
+	for name, call := range calls {
+		t.Run(name, func(t *testing.T) {
+			defer func() {
+				if recover() == nil {
+					t.Error("the nil pointer dereference of the declared method was recovered")
+				}
+			}()
+			call()
+		})
+	}
+}
+
+// TestValidatorAsValidatErr_SkipsNil checks that wrapping a Validator
+// that Validate skips, because its Valid method can't be called,
+// returns nil like Validate and Validators.Valid instead of panicking.
+func TestValidatorAsValidatErr_SkipsNil(t *testing.T) {
+	for _, validator := range []Validator{
+		nil,
+		ValidatorFunc(nil),
+		(*invalidString)(nil),
+		struct{ *invalidString }{},
+	} {
+		if err := (ValidatorAsValidatErr{validator}).Validate(); err != nil {
+			t.Errorf("ValidatorAsValidatErr{%#v}.Validate() = %v, want nil", validator, err)
+		}
+		if err := CombinedValidatErr(ValidatorAsValidatErr{validator}).Validate(); err != nil {
+			t.Errorf("CombinedValidatErr(ValidatorAsValidatErr{%#v}).Validate() = %v, want nil", validator, err)
+		}
 	}
 }

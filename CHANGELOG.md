@@ -236,10 +236,13 @@ See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut.
   normalized BIC like the other `ScanString` methods. `CountryCode`, `IsTestBIC`,
   `IsPassiveSWIFT` and `ReceiverPaysFees` read the normalized BIC.
   `BIC.Parse` and `BICParser` still reject whitespace.
-- `types.ValidatErrs.Validate` and so `types.CombinedValidatErr` validate
-  every element and return all their errors joined with `errors.Join`,
+- **Breaking:** `types.ValidatErrs.Validate` and so `types.CombinedValidatErr`
+  validate every element and return all their errors joined with `errors.Join`,
   instead of stopping at the first error and returning it. A single error is
   now wrapped by the join as well, so compare with `errors.Is` instead of `==`.
+  An element after a failed one is called too, so an element that relies on
+  an earlier one, like a field check after a check that the pointer to the
+  struct is not nil, has to become one `ValidatErr` with that check.
 - **Breaking:** the `money` currency constants (`EUR`, `USD`, …) are typed
   `Currency` instead of untyped strings, so go-enum can collect them.
   Assigning one to a `string` or `NullableCurrency` now needs a conversion:
@@ -722,7 +725,9 @@ See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut.
 - `types.Validate`, `TryValidate`, `DeepValidate`, `Validators.Valid` and
   `ValidatorAsValidatErr.Validate` panicked for a struct that embeds a nil
   `*T` whose `T` implements the method with a value receiver. Such a value
-  is not validated, like a nil pointer.
+  is not validated, like a nil pointer. A nil pointer dereference in a method
+  that the struct declares itself still panics instead of reporting the
+  value as valid.
 - `float.FormatDef.UnmarshalJSON` accepted separators that `Format` panics
   on, like `{"decimalSep":"."}` into a `FormatDef` with `.` as thousands
   separator, which gave the same rune for both.
@@ -895,8 +900,9 @@ See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut.
   with `NewScanConfig`.
 - `types.Validate` and `types.TryValidate` panicked for a nil
   `types.ValidatorFunc` or `ValidatErrFunc`, and `types.ValidatErrs` and
-  `types.Validators` for a nil element. Nil funcs and elements are now
-  skipped like in `DeepValidate`.
+  `types.Validators` for a nil element, and `types.ValidatorAsValidatErr`
+  for a nil `Validator`. Nil funcs and elements are now skipped like in
+  `DeepValidate`.
 - `types.CanMarshalJSON` reported true for a map whose key type only
   implements `encoding.TextMarshaler` through its pointer type, which
   `json.Marshal` rejects.
