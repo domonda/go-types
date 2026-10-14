@@ -77,6 +77,12 @@ func TestAddressList_SplitRawMatchesSplitNormalized(t *testing.T) {
 		"A@Example.com, b@example.com",
 		`"Doe, John" <John@Example.com>, Jürgen <J@Example.com>`,
 		`a@example.com (comment, with comma), "x" <b@example.com>`,
+		// Nested comments and escaped parentheses, which ParseAddressList
+		// read up to the first ')' while SplitAddressList nests them
+		`a@example.com (outer (inner, x)), b@example.com`,
+		`a@example.com (x \), y), <b@example.com> (B (C, D)), c@example.com`,
+		`John (Sales, EU) <a@example.com>, b@example.com`,
+		`b@example.com, Doe (Sales <doe@example.com>`,
 	} {
 		t.Run(string(list), func(t *testing.T) {
 			require.True(t, list.Valid())
@@ -89,6 +95,44 @@ func TestAddressList_SplitRawMatchesSplitNormalized(t *testing.T) {
 				require.NoError(t, err)
 				assert.Equal(t, normalized[i], norm, "entry %d", i)
 			}
+		})
+	}
+}
+
+// A comment that isn't closed holds the rest of the list for SplitRaw.
+// SplitNormalized must report an error for such a list instead of
+// returning the addresses in the comment as if they were entries,
+// which it did after reading the comment only up to its first ')',
+// so that the two don't disagree about a list without an error.
+func TestAddressList_UnclosedCommentHoldsRestOfList(t *testing.T) {
+	tests := []struct {
+		list     AddressList
+		wantRaw  []Address
+		wantNorm []Address
+	}{
+		{
+			list:     `a@example.com (x, (y), b@example.com`,
+			wantRaw:  []Address{`a@example.com (x, (y), b@example.com`},
+			wantNorm: []Address{`a@example.com`},
+		},
+		{
+			list:     `a@example.com, b@example.com (x, c@example.com`,
+			wantRaw:  []Address{`a@example.com`, `b@example.com (x, c@example.com`},
+			wantNorm: []Address{`a@example.com`, `b@example.com`},
+		},
+		{
+			list:     `Doe (Sales <doe@example.com>, b@example.com`,
+			wantRaw:  []Address{`Doe (Sales <doe@example.com>, b@example.com`},
+			wantNorm: []Address{`"Doe (Sales" <doe@example.com>`},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(string(tt.list), func(t *testing.T) {
+			assert.Equal(t, tt.wantRaw, tt.list.SplitRaw())
+			norm, err := tt.list.SplitNormalized()
+			assert.Error(t, err)
+			assert.Equal(t, tt.wantNorm, norm)
+			assert.False(t, tt.list.Valid())
 		})
 	}
 }

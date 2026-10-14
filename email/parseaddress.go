@@ -114,6 +114,14 @@ func UniqueNormalizedAddressSlice(addrs []Address) []Address {
 // like mail.ParseAddress, so use AddressFrom or Address.AddressPart
 // to get the quoted form. Quotes, backslashes and runes that are not
 // graphic are removed from the name.
+//
+// An address without name can be followed by an RFC 5322 comment,
+// which becomes the name, like in "mike@doe.com (Mike Doe)".
+// The comment can contain nested comments, which stay in the name
+// with their parentheses: "mike@doe.com (Mike (Sales))" has the name
+// "Mike (Sales)". A backslash escapes a parenthesis, so `\)` doesn't
+// end the comment. A comment after the address that isn't closed
+// is an error. Parentheses in an unquoted name stay in the name.
 func ParseAddress(addr string) (mailAddress *mail.Address, err error) {
 	addr = sanitizeAddr(addr)
 
@@ -170,10 +178,11 @@ func parseAddress(addr string) (mailAddress *mail.Address, unparsed string, ok b
 
 	// Handle RFC 2822 comment syntax: address (Name)
 	// Example: mike@doe.com (Mike Doe)
-	if name == "" && strings.HasPrefix(unparsed, "(") {
-		if end := strings.Index(unparsed, ")"); end != -1 {
-			name = decodeName(unparsed[1:end])
-			unparsed = strings.TrimLeft(unparsed[end+1:], " ")
+	// A comment that isn't closed stays unparsed.
+	if name == "" {
+		if comment, rest, ok := readComment(unparsed); ok {
+			name = decodeName(comment)
+			unparsed = strings.TrimLeft(rest, " ")
 		}
 	}
 
@@ -201,6 +210,60 @@ func parseAddress(addr string) (mailAddress *mail.Address, unparsed string, ok b
 	}
 
 	return mailAddress, unparsed, true
+}
+
+// readComment returns the content of the RFC 5322 comment at the start
+// of s without its outer parentheses, and the rest of s after it.
+// ok is false if s doesn't start with a comment or the comment isn't
+// closed. Like for SplitAddressList, a comment can contain nested
+// comments, and a backslash escapes the next character (quoted-pair),
+// so `\)` doesn't close the comment. The content is returned as written,
+// cleanName removes the backslashes from a name.
+func readComment(s string) (comment, rest string, ok bool) {
+	if !strings.HasPrefix(s, "(") {
+		return "", s, false
+	}
+	depth := 0
+	for i := 0; i < len(s); i++ {
+		// All delimiters are ASCII, so iterating bytes is safe for UTF-8
+		switch s[i] {
+		case '\\':
+			i++
+		case '(':
+			depth++
+		case ')':
+			depth--
+			if depth == 0 {
+				return s[1:i], s[i+1:], true
+			}
+		}
+	}
+	return "", s, false
+}
+
+// endsInComment reports if a comment opened in s is still open at the
+// end of s, reading s like SplitAddressList: a parenthesis within double
+// quotes opens no comment, a double quote within a comment opens no
+// quoted string, and within both a backslash escapes the next character.
+func endsInComment(s string) bool {
+	quoted, depth := false, 0
+	for i := 0; i < len(s); i++ {
+		// All delimiters are ASCII, so iterating bytes is safe for UTF-8
+		c := s[i]
+		switch {
+		case (quoted || depth > 0) && c == '\\':
+			i++
+		case quoted:
+			quoted = c != '"'
+		case c == '(':
+			depth++
+		case c == ')' && depth > 0:
+			depth--
+		case c == '"' && depth == 0:
+			quoted = true
+		}
+	}
+	return depth > 0
 }
 
 // decodeName returns the display name with its RFC 2047 encoded-words
@@ -318,11 +381,23 @@ func truncateForError(s string) string {
 // "undisclosed-recipients:;", are parsed as an empty list without an
 // error. Text after a placeholder is parsed like any other list.
 // Group syntax like "Team: a@example.com;" is not supported.
+//
+// Comments are read with nesting like by ParseAddress and
+// SplitAddressList: a comma in a comment doesn't separate addresses,
+// so a comment that the unquoted name of an address opens and doesn't
+// close before the next comma is an error. A comment that isn't closed
+// at all holds the rest of the list, like for SplitAddressList, so
+// parsing stops at it with an error instead of continuing after the
+// next comma like after other errors.
 func ParseAddressList(list string) (addrs []*mail.Address, err error) {
-	list = strings.TrimRight(sanitizeAddr(list), ", ")
+	sanitized := sanitizeAddr(list)
+	list = strings.TrimRight(sanitized, ", ")
 	if list == "" || placeholderListRegexp.MatchString(strings.ToLower(list)) {
 		return nil, nil
 	}
+	// A comma trimmed from the end of the list still follows the last
+	// entry, which SplitAddressList reads as part of an unclosed comment
+	trailingComma := strings.Contains(sanitized[len(list):], ",")
 
 	var errList []error
 	for remaining := list; remaining != ""; {
@@ -333,31 +408,33 @@ func ParseAddressList(list string) (addrs []*mail.Address, err error) {
 		mailAddress, unparsed, ok := parseAddress(remaining)
 		if !ok {
 			errList = append(errList, errs.Errorf("could not parse email address list, because of: could not parse email address: %s", truncateForError(remaining)))
-			// Recover by skipping past the next separator so the
-			// remaining addresses can still be parsed and returned.
-			_, after, found := strings.Cut(remaining, ",")
-			if !found {
+			unparsed = remaining
+		} else {
+			addrs = append(addrs, mailAddress)
+			unparsed = strings.TrimLeft(unparsed, " ")
+			if unparsed != "" && unparsed[0] != ',' {
+				errList = append(errList, errs.Errorf("expected ',' after email address %s in email address list: %s", mailAddress.Address, truncateForError(unparsed)))
+			} else if (unparsed != "" || trailingComma) && endsInComment(remaining[:len(remaining)-len(unparsed)]) {
+				// Like `Doe (Sales <doe@example.com>, b@example.com`
+				errList = append(errList, errs.Errorf("comment not closed before ',' after email address %s in email address list: %s", mailAddress.Address, truncateForError(remaining)))
+			} else if unparsed == "" {
 				break
+			} else {
+				remaining = strings.TrimLeft(unparsed[1:], " ")
+				continue
 			}
-			remaining = strings.TrimLeft(after, " ")
-			continue
 		}
-		addrs = append(addrs, mailAddress)
-
-		unparsed = strings.TrimLeft(unparsed, " ")
-		if unparsed == "" {
+		// Recover by skipping past the next separator so the
+		// remaining addresses can still be parsed and returned,
+		// unless the rest of the list is in a comment that isn't closed.
+		if endsInComment(remaining) {
 			break
 		}
-		if unparsed[0] != ',' {
-			errList = append(errList, errs.Errorf("expected ',' after email address %s in email address list: %s", mailAddress.Address, truncateForError(unparsed)))
-			_, after, found := strings.Cut(unparsed, ",")
-			if !found {
-				break
-			}
-			remaining = strings.TrimLeft(after, " ")
-			continue
+		_, after, found := strings.Cut(unparsed, ",")
+		if !found {
+			break
 		}
-		remaining = strings.TrimLeft(unparsed[1:], " ")
+		remaining = strings.TrimLeft(after, " ")
 	}
 
 	return addrs, errors.Join(errList...)

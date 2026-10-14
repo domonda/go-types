@@ -189,6 +189,105 @@ func TestParseAddress_CommentNameCleaned(t *testing.T) {
 	}
 }
 
+// TestParseAddress_NestedComment protects that the comment after an
+// address is read with RFC 5322 nesting and quoted-pairs, like
+// SplitAddressList reads it: a comment that ended at its first ')'
+// left the rest as unparsed text or, in a list, as another address.
+// A nested comment stays in the name with its parentheses, so that the
+// name reads like the comment; the normalized address quotes the name.
+func TestParseAddress_NestedComment(t *testing.T) {
+	tests := []struct {
+		addr     string
+		wantName string
+		wantNorm Address
+	}{
+		{addr: `mike@doe.com (Mike Doe)`, wantName: "Mike Doe", wantNorm: `"Mike Doe" <mike@doe.com>`},
+		{addr: `mike@doe.com (Mike (Sales))`, wantName: "Mike (Sales)", wantNorm: `"Mike (Sales)" <mike@doe.com>`},
+		{addr: `a@example.com (outer (inner, x))`, wantName: "outer (inner, x)", wantNorm: `"outer (inner, x)" <a@example.com>`},
+		{addr: `<a@example.com> ((a) b (c (d)))`, wantName: "(a) b (c (d))", wantNorm: `"(a) b (c (d))" <a@example.com>`},
+		// An escaped parenthesis doesn't open or close a comment,
+		// cleanName removes the backslash like from any name
+		{addr: `a@example.com (x \) y)`, wantName: "x ) y", wantNorm: `"x ) y" <a@example.com>`},
+		{addr: `a@example.com (x \( y)`, wantName: "x ( y", wantNorm: `"x ( y" <a@example.com>`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.addr, func(t *testing.T) {
+			parsed, err := ParseAddress(tt.addr)
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantName, parsed.Name)
+			norm, err := Address(tt.addr).Normalized()
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantNorm, norm)
+			// The quoted name reads back unchanged
+			again, err := norm.Normalized()
+			require.NoError(t, err)
+			assert.Equal(t, norm, again)
+		})
+	}
+
+	// A comment that isn't closed is not read as name. It was read up
+	// to its first ')', so `a@example.com (x (y)` was valid.
+	for _, addr := range []string{
+		`a@example.com (unclosed`,
+		`a@example.com (x (y)`,
+		`a@example.com (x \)`,
+	} {
+		_, err := ParseAddress(addr)
+		assert.Error(t, err, addr)
+	}
+}
+
+// TestParseAddressList_Comments protects that ParseAddressList reads the
+// commas in a comment like SplitAddressList: they don't separate
+// addresses, and a comment that isn't closed holds the rest of the list.
+// Otherwise a list was valid for ParseAddressList with other entries
+// than SplitAddressList finds, and AddressList.SplitNormalized and
+// SplitRaw disagreed about the same stored list without an error.
+func TestParseAddressList_Comments(t *testing.T) {
+	tests := []struct {
+		list    string
+		want    []string // the addresses parts of the parsed addresses
+		wantErr bool
+	}{
+		{list: `a@example.com (outer (inner, x)), b@example.com`, want: []string{"a@example.com", "b@example.com"}},
+		{list: `a@example.com (x \), y), b@example.com`, want: []string{"a@example.com", "b@example.com"}},
+		{list: `John (Sales, EU) <a@example.com>, b@example.com`, want: []string{"a@example.com", "b@example.com"}},
+		// An address with an unclosed comment in its name is valid
+		// if no comma follows, like for ParseAddress
+		{list: `b@example.com, Doe (Sales <doe@example.com>`, want: []string{"b@example.com", "doe@example.com"}},
+		// The comment holds the rest of the list, so b@example.com is no
+		// address: it was returned after the comment ended at "(y)"
+		{list: `a@example.com (x, (y), b@example.com`, want: []string{"a@example.com"}, wantErr: true},
+		{list: `a@example.com, b@example.com (x, c@example.com`, want: []string{"a@example.com", "b@example.com"}, wantErr: true},
+		// The comma after doe@example.com is in the comment of its name
+		{list: `Doe (Sales <doe@example.com>, b@example.com`, want: []string{"doe@example.com"}, wantErr: true},
+		{list: `Doe (Sales <doe@example.com>,`, want: []string{"doe@example.com"}, wantErr: true},
+		// A comment that is closed later doesn't hold the rest of the list,
+		// parsing continues after the next comma like after other errors
+		{list: `Doe (Sales <doe@example.com>, b), c@example.com`, want: []string{"doe@example.com", "c@example.com"}, wantErr: true},
+		// An entry that can't be parsed is skipped up to the next comma,
+		// but not into a comment that it opened and didn't close
+		{list: `bad (x, b@example.com`, want: nil, wantErr: true},
+		{list: `bad, b@example.com`, want: []string{"b@example.com"}, wantErr: true},
+		{list: `"bad (x", b@example.com`, want: []string{"b@example.com"}, wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.list, func(t *testing.T) {
+			addrs, err := ParseAddressList(tt.list)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+			var got []string
+			for _, addr := range addrs {
+				got = append(got, addr.Address)
+			}
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
 func TestFindAllAddresses(t *testing.T) {
 	tests := []struct {
 		text string
