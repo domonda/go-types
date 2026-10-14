@@ -236,12 +236,18 @@ func headerAddresses(addrs ...*mail.Address) string {
 // Value implements the driver database/sql/driver.Valuer interface.
 // It returns the list as stored with the surrounding whitespace trimmed,
 // SQL NULL for a blank list, or the error of Validate for an invalid list.
+// A list with whitespace other than spaces, like a line break, a control
+// or format character, like a NUL, or invalid UTF-8 is an error too,
+// because Validate ignores these runes and Value would write them.
 func (l AddressList) Value() (driver.Value, error) {
 	list := strutil.TrimSpace(l)
 	if list == "" {
 		return nil, nil
 	}
 	if err := list.Validate(); err != nil {
+		return nil, err
+	}
+	if err := checkSanitized(string(list), "email address list"); err != nil {
 		return nil, err
 	}
 	return string(list), nil

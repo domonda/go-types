@@ -476,7 +476,8 @@ func (set *AddressSet) UnmarshalText(text []byte) error {
 // Value implements the driver database/sql/driver.Valuer interface
 // by writing the addresses as stored in sorted order as PostgreSQL array,
 // with the surrounding whitespace of valid addresses trimmed and duplicates
-// that this creates removed, or an error if an address is invalid.
+// that this creates removed, or an error if an address is invalid or has
+// runes that Validate ignores, like a line break or a NUL.
 // A nil set is written as SQL NULL, an empty set as "{}".
 func (set AddressSet) Value() (driver.Value, error) {
 	if set == nil {
@@ -492,14 +493,18 @@ func (set AddressSet) Value() (driver.Value, error) {
 // writableAddresses returns the addresses of the set for Value and
 // MarshalText: sorted, with the surrounding whitespace trimmed and the
 // duplicates that this creates removed, or an error for an address that is
-// invalid, or if asListEntry is true, would not read back as one entry of
-// an address list with SplitAddressList.
+// invalid, has runes that Validate ignores, see checkSanitized, or if
+// asListEntry is true, would not read back as one entry of an address list
+// with SplitAddressList.
 func (set AddressSet) writableAddresses(asListEntry bool) ([]string, error) {
 	addrs := make([]string, 0, len(set))
 	for _, addr := range set.Sorted() {
 		trimmed := strutil.TrimSpace(addr)
 		if err := trimmed.Validate(); err != nil {
 			return nil, errs.Errorf("invalid address %q in email.AddressSet: %w", string(addr), err)
+		}
+		if err := checkSanitized(string(trimmed), "email.AddressSet address"); err != nil {
+			return nil, err
 		}
 		if asListEntry {
 			if entries := SplitAddressList(string(trimmed)); len(entries) != 1 || entries[0] != trimmed {
@@ -526,7 +531,8 @@ func (set AddressSet) MarshalJSON() ([]byte, error) {
 // MarshalText implements encoding.TextMarshaler, used by encoding/xml, by
 // writing the addresses as stored in sorted order as address list, with
 // the surrounding whitespace of valid addresses trimmed, or an error if an
-// address is invalid or would not read back as one entry of the list.
+// address is invalid, has runes that Validate ignores, like a line break
+// or a NUL, or would not read back as one entry of the list.
 // A nil or empty set is written as "".
 func (set AddressSet) MarshalText() ([]byte, error) {
 	addrs, err := set.writableAddresses(true)

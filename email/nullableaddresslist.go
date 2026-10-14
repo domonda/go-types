@@ -185,7 +185,8 @@ func (n *NullableAddressList) Scan(value any) error {
 // Value implements the driver database/sql/driver.Valuer interface.
 // It returns SQL NULL if the NullableAddressList is null, else the list as
 // stored with the surrounding whitespace trimmed, or the error of Validate
-// for an invalid list.
+// for an invalid list. Like for AddressList.Value, a list with runes that
+// Validate ignores, like a line break or a NUL, is an error too.
 func (n NullableAddressList) Value() (driver.Value, error) {
 	return AddressList(n).Value()
 }

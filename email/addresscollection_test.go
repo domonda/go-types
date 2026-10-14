@@ -155,6 +155,88 @@ func TestReadAddressCollection(t *testing.T) {
 	}
 }
 
+// writeCollections returns the errors of the methods that write an address
+// collection after validating it: the Value methods of AddressList,
+// NullableAddressList and AddressSet, and AddressSet.MarshalText.
+func writeCollections(addr Address) map[string]error {
+	errOf := make(map[string]error)
+	_, errOf["AddressList.Value"] = AddressList(addr).Value()
+	_, errOf["NullableAddressList.Value"] = NullableAddressList(addr).Value()
+	_, errOf["AddressSet.Value"] = MakeAddressSet(addr).Value()
+	_, errOf["AddressSet.MarshalText"] = MakeAddressSet(addr).MarshalText()
+	return errOf
+}
+
+// Validate parses an address sanitized, without the line breaks, control
+// characters and invalid UTF-8 that the parser ignores, while the
+// collections write their text as stored. A display name with a line
+// break passed Validate and was written with it, so that a message header
+// built from the stored list got another header injected, and a NUL
+// passed and failed the write to PostgreSQL. So writing refuses them.
+func TestCollectionsRefuseRunesTheParserIgnores(t *testing.T) {
+	for _, addr := range []Address{
+		"\"x\r\nBcc: evil@evil.com\" <a@example.com>",
+		"a\x00b@example.com",
+		// A bidi override that makes the name read differently
+		"\"\u202eexample.com\" <a@example.com>",
+		"\"x\xff\" <a@example.com>",
+	} {
+		require.NoError(t, addr.Validate(), "the parser ignores the runes of %q", addr)
+		for method, err := range writeCollections(addr) {
+			assert.Error(t, err, "%s of %q", method, addr)
+		}
+		// The normalized address is what the parser read,
+		// so it can be stored instead
+		norm, err := addr.Normalized()
+		require.NoError(t, err)
+		for method, err := range writeCollections(norm) {
+			assert.NoError(t, err, "%s of %q", method, norm)
+		}
+	}
+
+	// Non-ASCII names are UTF-8 that the parser reads as written,
+	// and the surrounding whitespace is trimmed and not written
+	for _, addr := range []Address{
+		"Jürgen Müller <j@example.com>",
+		`"Zoë 李" <z@example.com>`,
+		"\r\n\ta@example.com\r\n",
+	} {
+		for method, err := range writeCollections(addr) {
+			assert.NoError(t, err, "%s of %q", method, addr)
+		}
+	}
+}
+
+// The collections refuse exactly the runes that sanitizeAddr changes or
+// drops, so that they write every text that Validate saw as written,
+// and nothing that it didn't.
+func TestCollectionsRefuseWhatSanitizeAddrChanges(t *testing.T) {
+	var runes []rune
+	for r := rune(0); r < 0x300; r++ {
+		runes = append(runes, r)
+	}
+	runes = append(runes,
+		'\u061c', '\u1680', '\u180e', '\u2000', '\u200b', '\u200c', '\u200d', '\u200e',
+		'\u2028', '\u2029', '\u202a', '\u202e', '\u205f', '\u2060', '\u2066', '\u2069',
+		'\u3000', '\ue000', '\ufeff', '\ufffd', '\U0001f600', '\U000e0001', '\U0010ffff',
+	)
+	for _, r := range runes {
+		if r == '"' || r == '\\' {
+			// Not part of a valid quoted name
+			continue
+		}
+		addr := Address(`"a` + string(r) + `b" <a@example.com>`)
+		changed := sanitizeAddr(string(addr)) != string(addr)
+		for method, err := range writeCollections(addr) {
+			if changed {
+				assert.Error(t, err, "%s of %q", method, addr)
+			} else {
+				assert.NoError(t, err, "%s of %q", method, addr)
+			}
+		}
+	}
+}
+
 // BenchmarkReadAddressCollection measures reading 1000 addresses in every
 // shape that Scan and UnmarshalJSON accept, next to decoding the JSON array
 // into a []string, because a JSON document or a column with a long list

@@ -91,6 +91,23 @@ func SplitAddressList(list string) []Address {
 	return joinDisplayNameParts(trimmed, parts)
 }
 
+// checkSanitized returns an error naming text as name if sanitizeAddr
+// changes text, which is trimmed like by strutil.TrimSpace, because text
+// has whitespace other than the space, like a line break, a control or
+// format character, like a NUL or a bidi override, or invalid UTF-8.
+// Validate parses the sanitized text, which doesn't have these runes,
+// while the Value methods of the address collections and
+// AddressSet.MarshalText write the text as stored. They call
+// checkSanitized so that they only write text that was validated as it
+// is written, else a valid display name could carry a line break that
+// injects a header into a message, or a NUL that PostgreSQL rejects.
+func checkSanitized(text, name string) error {
+	if sanitizeAddr(text) == text {
+		return nil
+	}
+	return errs.Errorf("%s %q has whitespace other than spaces, a control or format character or invalid UTF-8, which the address parser ignores", name, truncateForError(text))
+}
+
 // listPart is the byte range of an entry of an address list,
 // without its surrounding whitespace.
 type listPart struct{ begin, end int }
