@@ -175,6 +175,10 @@ See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut.
   `Normalized` accepts, like `Validate` and the `Valid` of the other
   normalizing types, so `Code("EN").Valid()` is true. Use
   `ValidAndNormalized` to require the canonical code.
+- `email.ParseMIMEMessage` returns an error for a message with more than
+  10,000 MIME parts, the default limit of `github.com/jhillyerd/enmime/v2`
+  v2.5.0, which protects against messages that would take very long to
+  parse. Such messages were parsed before.
 - **Breaking:** without a language hint, an ambiguous numeric date with
   slashes and the year last is read month first like in the US:
   `"03/04/2024"` and `"03/04/24"` are 2024-03-04, which were 2024-04-03.
