@@ -208,6 +208,7 @@ Reading:
 - A failed `Type[T].Scan` keeps the previous state: a null value stays null, a valid value keeps its old value.
 - `NonEmptyString` does not trim, so `" "` is written as `' '`. `NonEmptyString.Scan("")` returns an error, while `TrimmedString.Scan("")` sets null.
 - `TrimmedString` created by a plain conversion like `TrimmedString(" x ")` is trimmed by every method except `Ptr`, which points to a copy of the untrimmed underlying string. Use `TrimmedStringFrom` or `Set`.
+- `encoding/json` reads the keys of a `map[TrimmedString]V` trimmed, through `UnmarshalText` or `UnmarshalJSON` depending on the Go version, so `" a"` and `"a"` merge into one key. Use `map[string]V` to keep both.
 - `Time.Scan` accepts only `time.Time` and nil. A driver that returns timestamps as text gives `can't scan string as nullable.Time`.
 - `Time` writes null as `NULL` in text form, `TrimmedString` writes it as empty text.
 - `Time.UnmarshalJSON` returns an error for `""`. `Time.UnmarshalText` treats `null` in any letter case as null, `TimeParse` only `null` and `NULL`.

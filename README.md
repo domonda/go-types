@@ -219,11 +219,17 @@ non-pointer `,chardata` field.
 | Scan and `UnmarshalJSON` of the email collections  | read a PostgreSQL array, a JSON array, a JSON object with the addresses as keys, a JSON string and a plain address list |
 | `money.CurrencyAmount`, `money.CurrencyDecimalAmount` | currency normalized in `Value`, JSON and `strfmt`, as stored in `String` |
 | `notnull.TrimmedString`, `nullable.TrimmedString`  | trimmed when read and in `String`                  |
+| `notnull.TrimmedString`, `nullable.TrimmedString`, `account.Number`, `account.NullableNumber` | `encoding/json` reads the keys of a map of them trimmed, so `" a"` and `"a"` merge into one key |
 
 A set writes its elements as given because normalizing could merge two of
 them, and the set would come back with fewer elements than it was written
 with. For the same reason the keys of a `map[country.Code]V` are read and
-written as given in JSON.
+written as given in JSON. The normalizing types have no `UnmarshalText` for
+that reason: `encoding/json` decodes a map key of a type with `UnmarshalText`
+through it, and in Go 1.26 through its `UnmarshalJSON`. The trimming string
+types and `account.Number` keep `UnmarshalText`, because trimming is what
+they are for and `flag.TextVar` and other text decoders need it, so their
+map keys are trimmed.
 
 ## Design decisions
 

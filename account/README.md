@@ -113,6 +113,7 @@ Neither type has a `MarshalText` method. `JSONSchema` describes `Number` as a st
 - **`Valid` does not trim, writing does.** `Number(" 123").Valid()` is false, but `Value()`, `MarshalJSON`, and `MarshalXML` write `"123"`. Construct values with `NumberFrom` or `NullableNumberFrom` to get trimmed, validated values.
 - **`Int` never returns a negative number.** The digit check rejects `-1` and `+1` with `ErrAlphanumericNumber`.
 - **`TrimLeadingZeros` can produce an invalid `Number`.** `Number("000").TrimLeadingZeros()` is `""`, which `Validate` rejects.
+- **JSON map keys are trimmed.** `encoding/json` reads the keys of a `map[Number]V` through `UnmarshalText` or `UnmarshalJSON` depending on the Go version, and both trim, so `" 123"` and `"123"` merge into one key. Use `map[string]V` to keep both.
 - **`NumberRegexp` is a package variable.** Reassigning it changes `Valid`, `Validate`, the decoding of strings, and `JSONSchema` for the whole program.
 
 ## Examples

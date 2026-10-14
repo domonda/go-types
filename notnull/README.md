@@ -118,6 +118,7 @@ Implements: `driver.Valuer`, `sql.Scanner`, `json.Marshaler`, `json.Unmarshaler`
 - `notnull.NullBoolArray` holds `sql.NullBool` elements, `nullable.NullBoolArray` holds `nullable.Type[bool]`. There is no `notnull.BoolArray`, `NullIntArray` or `NullFloatArray`.
 - `notnull.TrimmedStringJoin` keeps empty elements, `nullable.TrimmedStringJoin` skips them: `TrimmedStringJoin(",", "a", " ", "b")` returns `a,,b` here and `a,b` there.
 - Switching a field between `notnull` and `nullable` changes what a nil slice writes: `'{}'` here, `NULL` there.
+- `encoding/json` reads the keys of a `map[TrimmedString]V` trimmed, through `UnmarshalText` or `UnmarshalJSON` depending on the Go version, so `" a"` and `"a"` merge into one key. Use `map[string]V` to keep both.
 
 ## Examples
 
