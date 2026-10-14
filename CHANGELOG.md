@@ -164,8 +164,9 @@ See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut.
   normalizing types, so `Code("EN").Valid()` is true. Use
   `ValidAndNormalized` to require the canonical code.
 - **Breaking:** the zero dates are empty in every spelling: `"0001-01-01"`,
-  `"0000-00-00"`, `"01.01.0001"` and Go's zero time
-  `"0001-01-01T00:00:00Z"` are `date.Date.IsZero`, read as `""`, written as
+  `"0000-00-00"`, `"01.01.0001"`, Go's zero time `"0001-01-01T00:00:00Z"`
+  and the MySQL zero date-time `"0000-00-00 00:00:00"` are
+  `date.Date.IsZero`, read as `""`, written as
   SQL NULL and as JSON `""` by `Date` and `null` by `NullableDate`, and are
   no valid `Date`. `Date("0001-01-01")` was valid and written as SQL NULL,
   while `Date("01.01.0001")` was written as `'0001-01-01'`. The comparison

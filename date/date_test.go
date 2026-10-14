@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -644,11 +645,61 @@ func TestDate_IsZero(t *testing.T) {
 		{name: "0000-00-00", date: "0000-00-00", want: true},
 		{name: "0001-01-01", date: "0001-01-01", want: true},
 		{name: "valid date", date: "2023-12-25", want: false},
+		{name: "zero date-time", date: "0000-00-00 00:00:00", want: true},
+		{name: "zero ISO date-time", date: "0000-00-00T00:00:00Z", want: true},
+		{name: "zero German", date: "00.00.0000", want: true},
+		{name: "zero US", date: "00/00/0000", want: true},
+		{name: "year 0 with month and day", date: "0000-01-00", want: false},
+		{name: "unpadded day", date: "0001-01-1 ", want: true},
+		{name: "month name", date: "Jan 1, 0001", want: true},
+		{name: "year 2000", date: "01.01.2000", want: false},
+		{name: "year 1000", date: "1000-01-01", want: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			require.Equal(t, tt.want, tt.date.IsZero())
 		})
+	}
+}
+
+// TestDate_IsZeroYearShortcut protects the shortcut of IsZero that tells
+// a date without "0000" or "0001" apart from the zero dates without parsing
+// it: a spelling of the zero date 0001-01-01 that Normalize accepts without
+// one of them would not be zero anymore, so reading would store it unchanged
+// and Value would fail on it.
+func TestDate_IsZeroYearShortcut(t *testing.T) {
+	var spellings []string
+	for _, year := range []string{"1", "01", "001", "0001", "'01"} {
+		for _, month := range []string{"1", "01", "jan", "Jan.", "January", "I"} {
+			for _, day := range []string{"1", "01", "1st"} {
+				for _, sep := range []string{"-", ".", "/", " ", ", "} {
+					spellings = append(spellings,
+						year+sep+month+sep+day,
+						day+sep+month+sep+year,
+						month+sep+day+sep+year,
+						year+sep+day+sep+month,
+					)
+				}
+			}
+		}
+	}
+	spellings = append(spellings, "00010101", "0001-01-01T00:00:00Z", "0001-01-01 00:00:00")
+	zeros := 0
+	for _, spelling := range spellings {
+		norm, _, err := normalizeAndCheckDate(spelling, "")
+		if err != nil || norm != zeroDate {
+			continue
+		}
+		zeros++
+		if !strings.Contains(spelling, "0000") && !strings.Contains(spelling, "0001") {
+			t.Errorf("%q normalizes to the zero date without the year 0000 or 0001", spelling)
+		}
+		if !Date(spelling).IsZero() {
+			t.Errorf("Date(%q).IsZero() = false, want true", spelling)
+		}
+	}
+	if zeros < 100 {
+		t.Errorf("only %d of the spellings normalize to the zero date", zeros)
 	}
 }
 
@@ -1690,8 +1741,12 @@ func TestDate_ValidAndNormalizedYearZero(t *testing.T) {
 func TestDate_ReadingAndWriting(t *testing.T) {
 	normtest.Run(t, normtest.Spec[Date]{
 		Canonical: "2023-12-25",
-		Variants:  []Date{"25.12.2023", "December 25, 2023", " 2023-12-25 ", "2023-12-25T10:00:00"},
+		Variants:  []Date{"25.12.2023", "December 25, 2023", " 2023-12-25 ", "2023-12-25T10:00:00", "2023-12-25T00:00:00", "2023-12-25 00:00:00"},
 		Invalid:   []Date{"invalid", "2023-02-30"},
-		Blank:     []Date{"0001-01-01", "0000-00-00", "01.01.0001", "0001-01-01T00:00:00Z"},
+		Blank: []Date{
+			"0001-01-01", "0000-00-00", "01.01.0001", "0001-01-01T00:00:00Z", "0001-01-1 ", "0001-01-1.",
+			// The zero date of MySQL and other implementations in other spellings
+			"0000-00-00 00:00:00", "0000-00-00T00:00:00Z", "00.00.0000",
+		},
 	})
 }

@@ -956,9 +956,13 @@ func TestNullableDate_ZeroDateInOtherFormatIsNull(t *testing.T) {
 func TestNullableDate_ReadingAndWriting(t *testing.T) {
 	normtest.Run(t, normtest.Spec[NullableDate]{
 		Canonical: "2023-12-25",
-		Variants:  []NullableDate{"25.12.2023", "December 25, 2023", " 2023-12-25 ", "2023-12-25T10:00:00"},
+		Variants:  []NullableDate{"25.12.2023", "December 25, 2023", " 2023-12-25 ", "2023-12-25T10:00:00", "2023-12-25T00:00:00", "2023-12-25 00:00:00"},
 		Invalid:   []NullableDate{"invalid", "2023-02-30"},
-		Blank:     []NullableDate{"0001-01-01", "0000-00-00", "01.01.0001", "0001-01-01T00:00:00Z"},
-		Nullable:  true,
+		Blank: []NullableDate{
+			"0001-01-01", "0000-00-00", "01.01.0001", "0001-01-01T00:00:00Z", "0001-01-1 ", "0001-01-1.",
+			// The zero date of MySQL and other implementations in other spellings
+			"0000-00-00 00:00:00", "0000-00-00T00:00:00Z", "00.00.0000",
+		},
+		Nullable: true,
 	})
 }

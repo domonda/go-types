@@ -391,9 +391,10 @@ func (date Date) Nullable() NullableDate {
 const zeroDate Date = "0001-01-01"
 
 // IsZero returns true if the date is empty or whitespace only, or one of the
-// zero dates "0000-00-00" and "0001-01-01" in any spelling, like "01.01.0001"
-// or "0001-01-01T00:00:00Z". "0001-01-01" is the zero value of time.Time,
-// "0000-00-00" may be the zero value of other date implementations.
+// zero dates "0000-00-00" and "0001-01-01" in any spelling, like "01.01.0001",
+// "0001-01-01T00:00:00Z", "00.00.0000" or "0000-00-00 00:00:00".
+// "0001-01-01" is the zero value of time.Time, "0000-00-00" may be the zero
+// value of other date implementations, like MySQL.
 // A zero date has no practical use as a date: reading stores it as "",
 // Value writes it as SQL NULL, and it is not a valid Date.
 func (date Date) IsZero() bool {
@@ -401,16 +402,45 @@ func (date Date) IsZero() bool {
 	case "", zeroDate, "0000-00-00":
 		return true
 	}
-	if len(date) == 10 && date[4] == '-' && date[7] == '-' {
-		// Already in the normalized form, but not one of the zero dates
+	if strutil.TrimSpace(date) == "" {
+		return true
+	}
+	// Every spelling of a zero date has the year 0000 or 0001, so other
+	// dates are told apart without parsing them, which the reading methods
+	// would do again to normalize the date.
+	if !strings.Contains(string(date), "0000") && !strings.Contains(string(date), "0001") {
 		return false
 	}
-	switch strutil.TrimSpace(date) {
-	case "", zeroDate, "0000-00-00":
+	if isZerosDate(string(date)) {
 		return true
 	}
 	norm, _, err := normalizeAndCheckDate(string(date), "")
 	return err == nil && norm == zeroDate
+}
+
+// isZerosDate reports if the date part of str, see datePart, is the zero
+// date "0000-00-00" in any order of its parts and with any separators,
+// like "00.00.0000", which normalizeDate rejects because it has no valid
+// month and day.
+func isZerosDate(str string) bool {
+	parts := strings.FieldsFunc(datePart(str), isDateSeparatorRune)
+	if len(parts) != 3 {
+		return false
+	}
+	years := 0
+	for _, part := range parts {
+		if strings.Trim(part, "0") != "" {
+			return false
+		}
+		switch len(part) {
+		case 4:
+			years++
+		case 1, 2:
+		default:
+			return false
+		}
+	}
+	return years == 1
 }
 
 // Validate returns an error if the date is not in a valid, normalizable format.
@@ -934,17 +964,25 @@ func normalizeAndCheckDate(str string, langHint language.Code) (Date, bool, erro
 	return Date(normalized), monthMustBeFirst, nil
 }
 
-func normalizeDate(str string, langHint language.Code) (string, bool, error) {
-	trimmed := strings.TrimSuffix(str, "00:00:00") // Trim zero time part
-	trimmed = strings.TrimFunc(trimmed, isDateTrimRune)
-	if len(trimmed) < MinLength {
-		return "", false, fmt.Errorf("too short for a date: %q", str)
-	}
-
+// datePart returns str without the surrounding characters that are
+// no letters or digits, and without its time part: the time of an
+// ISO 8601 date-time like "2006-01-02T15:04:05Z", or "00:00:00".
+func datePart(str string) string {
+	trimmed := strings.TrimFunc(str, isDateTrimRune)
 	if len(trimmed) > 11 && trimmed[10] == 'T' && trimmed[11] >= '0' && trimmed[11] <= '9' {
 		// Use date part of this date-time format: "2006-01-02T15:04:05",
-		// but not of a word like "2023-12-25TOTAL"
-		trimmed = trimmed[:10]
+		// but not of a word like "2023-12-25TOTAL". Cut before trimming
+		// "00:00:00", which would leave "2023-12-25T" of "2023-12-25T00:00:00".
+		return trimmed[:10]
+	}
+	trimmed = strings.TrimSuffix(trimmed, "00:00:00") // Trim zero time part
+	return strings.TrimFunc(trimmed, isDateTrimRune)
+}
+
+func normalizeDate(str string, langHint language.Code) (string, bool, error) {
+	trimmed := datePart(str)
+	if len(trimmed) < MinLength {
+		return "", false, fmt.Errorf("too short for a date: %q", str)
 	}
 
 	trimmed = strings.ToLower(trimmed)
