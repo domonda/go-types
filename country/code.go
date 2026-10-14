@@ -2,7 +2,7 @@ package country
 
 import (
 	"database/sql/driver"
-	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"iter"
 	"maps"
@@ -12,6 +12,7 @@ import (
 	"github.com/invopop/jsonschema"
 
 	"github.com/domonda/go-types"
+	"github.com/domonda/go-types/internal"
 	"github.com/domonda/go-types/strutil"
 )
 
@@ -26,9 +27,16 @@ const Invalid Code = "" //#exclude
 var _ types.NormalizableValidator[Code] = Code("")
 
 // Code represents a country code according to ISO 3166-1 alpha-2 standard.
-// Code implements the database/sql.Scanner and database/sql/driver.Valuer interfaces,
-// and treats an empty Code string as SQL NULL.
 // See NullableCode for a nullable version of this type.
+//
+// Scan, UnmarshalJSON, UnmarshalXML and ScanString store a valid code
+// normalized, a blank one as Invalid and an invalid one unchanged.
+// Value writes the normalized code, SQL NULL for a blank one, and returns
+// an error for an invalid one. MarshalJSON and MarshalText write the
+// normalized code or an invalid one unchanged, and fmt prints the code
+// as stored. Code has no UnmarshalText, so encoding/json reads and writes
+// the keys of a map[Code]V as given. See "Reading and writing values"
+// in the README of the module.
 type Code string //#enum
 
 // Valid returns true if the normalized Code is valid.
@@ -175,44 +183,53 @@ func (c Code) EnglishName() string {
 }
 
 // Scan implements the database/sql.Scanner interface.
+// A valid code is stored normalized, SQL NULL and a blank string as
+// Invalid, and a code that can't be normalized unchanged without an error,
+// so that one invalid value doesn't fail a whole query; Validate reports it.
 func (c *Code) Scan(value any) error {
-	switch x := value.(type) {
-	case string:
-		*c = Code(x)
-	case []byte:
-		*c = Code(x)
-	case nil:
-		*c = Invalid
-	default:
-		return fmt.Errorf("can't scan SQL value of type %T as country.Code", value)
-	}
-	return nil
+	return internal.ScanNormalized(c, value, Code.Normalized, nil)
 }
 
 // Value implements the driver database/sql/driver.Valuer interface.
-// Returns nil for SQL NULL if the Code is Invalid.
+// It returns the normalized code, SQL NULL for a blank Code,
+// or the error of Normalized for a code that can't be normalized.
 func (c Code) Value() (driver.Value, error) {
-	if c == Invalid {
-		return nil, nil
-	}
-	norm, _ := c.Normalized()
-	return string(norm), nil
+	return internal.ValueNormalized(c, Code.Normalized, nil)
 }
 
-// MarshalJSON implements encoding/json.Marshaler.
-// Returns the normalized code as a JSON string.
+// MarshalJSON implements encoding/json.Marshaler by writing the
+// normalized code, "" for a blank Code, or the code unchanged
+// if it can't be normalized.
 func (c Code) MarshalJSON() ([]byte, error) {
-	norm, _ := c.Normalized()
-	return json.Marshal(string(norm))
+	return internal.MarshalJSONNormalized(c, Code.Normalized, nil)
 }
 
-// MarshalText implements encoding.TextMarshaler by returning String,
-// the normalized value or the unchanged string if it can't be
-// normalized, so that strfmt and encoding/xml write the canonical form
-// like Value and MarshalJSON. encoding/json writes map keys of string
-// types as they are and doesn't call MarshalText for them.
+// UnmarshalJSON implements encoding/json.Unmarshaler.
+// A JSON string is stored like Scan stores it, JSON null leaves the Code
+// unchanged like encoding/json does for a string type, and any other
+// JSON value is an error.
+func (c *Code) UnmarshalJSON(data []byte) error {
+	return internal.UnmarshalJSONNormalized(c, data, false, Code.Normalized, nil)
+}
+
+// MarshalText implements encoding.TextMarshaler like MarshalJSON,
+// so that encoding/xml and strfmt write the normalized code.
+// encoding/json writes map keys of string types as they are
+// and doesn't call MarshalText for them.
 func (c Code) MarshalText() ([]byte, error) {
-	return []byte(c.String()), nil
+	return internal.MarshalTextNormalized(c, Code.Normalized, nil)
+}
+
+// UnmarshalXML implements encoding/xml.Unmarshaler
+// by storing the text of the element like Scan stores it.
+func (c *Code) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	return internal.UnmarshalXMLNormalized(c, d, start, Code.Normalized, nil)
+}
+
+// UnmarshalXMLAttr implements encoding/xml.UnmarshalerAttr
+// by storing the attribute value like Scan stores it.
+func (c *Code) UnmarshalXMLAttr(attr xml.Attr) error {
+	return internal.UnmarshalXMLAttrNormalized(c, attr, Code.Normalized, nil)
 }
 
 // JSONSchema returns the JSON schema definition for the Code type.
@@ -224,34 +241,12 @@ func (Code) JSONSchema() *jsonschema.Schema {
 	}
 }
 
-// ScanString tries to parse and assign the passed source string as value of the implementing type.
-// If validate is true, the source string is checked for validity before assignment.
-// If validate is false and the source string can still be assigned in some non-normalized way,
-// it will be assigned without returning an error.
+// ScanString implements the strfmt.Scannable interface.
+// Without validate it stores source like Scan, with validate it stores
+// the normalized code or returns the error of Normalized,
+// also for a blank source.
 func (c *Code) ScanString(source string, validate bool) error {
-	code, err := Code(source).Normalized()
-	if err != nil {
-		if validate {
-			return err
-		}
-		code = Code(source)
-	}
-	*c = code
-	return nil
-}
-
-// String returns the normalized code if possible,
-// else it will be returned unchanged as string.
-//
-// String implements the fmt.Stringer interface.
-//
-// Hand-written: normalizes before returning, unlike the plain string
-// conversion that go-enum would generate.
-//
-// #custom
-func (c Code) String() string {
-	norm, _ := c.Normalized()
-	return string(norm)
+	return internal.ScanStringNormalized(c, source, validate, Code.Normalized, nil)
 }
 
 // Nullable returns the Code as NullableCode.
@@ -1031,4 +1026,9 @@ func (Code) EnumStrings() []string {
 		"ZW",
 		"XK",
 	}
+}
+
+// String implements the fmt.Stringer interface for Code
+func (c Code) String() string {
+	return string(c)
 }

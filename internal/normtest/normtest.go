@@ -1,0 +1,440 @@
+// Package normtest provides a reusable conformance test for the reading and
+// writing contract of the normalizing string types of this module, like
+// country.Code, vat.ID or date.Date:
+//
+//   - Reading (Scan, ScanString without validation, JSON, XML elements and
+//     attributes) stores a valid value normalized, a blank value as "" and
+//     an invalid value unchanged, without an error. One bad value must not
+//     fail a whole query or document; Validate reports it instead.
+//   - Value writes the normalized value, SQL NULL for a blank value, and
+//     returns an error for an invalid value, because the database is where
+//     an invalid value would stay.
+//   - MarshalJSON, MarshalText and so XML write the normalized value and an
+//     invalid value unchanged, so a response or log that holds one still
+//     renders.
+//   - fmt prints the stored value: the types have no normalizing String.
+//
+// Running the same specification against every type keeps the types from
+// drifting apart again, which is how the contract got inconsistent before.
+//
+// It is only imported from _test.go files.
+package normtest
+
+import (
+	"bytes"
+	"database/sql"
+	"database/sql/driver"
+	"encoding"
+	"encoding/json"
+	"encoding/xml"
+	"errors"
+	"fmt"
+	"reflect"
+	"strings"
+	"testing"
+)
+
+// Type is a normalizing string type with its writing methods.
+type Type[T any] interface {
+	~string
+	Normalized() (T, error)
+	Valid() bool
+	Validate() error
+	ValidAndNormalized() bool
+	driver.Valuer
+	json.Marshaler
+	encoding.TextMarshaler
+}
+
+// Ptr is the pointer type of a Type with its reading methods.
+type Ptr[T any] interface {
+	*T
+	sql.Scanner
+	json.Unmarshaler
+	xml.Unmarshaler
+	xml.UnmarshalerAttr
+}
+
+// Spec lists the spellings of one type that Run checks.
+type Spec[T any] struct {
+	// Canonical is a valid value in normalized form.
+	Canonical T
+	// Variants are other spellings that normalize to Canonical.
+	Variants []T
+	// Invalid values can't be normalized and are not blank.
+	Invalid []T
+	// Blank are spellings of "no value" in addition to "", "   " and "\t".
+	Blank []T
+	// Nullable is true for a type whose blank value is its valid null value.
+	Nullable bool
+	// InvalidErr, if not nil, must be wrapped by the error that Value
+	// returns for an invalid value, so errors.Is keeps working.
+	InvalidErr error
+	// GoEnumString is true for the go-enum types: go-enum generates a String
+	// method that returns the stored value. All other types have no String.
+	GoEnumString bool
+}
+
+type xmlDoc[T any] struct {
+	XMLName xml.Name `xml:"doc"`
+	Attr    T        `xml:"attr,attr"`
+	Elem    T        `xml:"elem"`
+}
+
+type xmlCharData[T any] struct {
+	XMLName xml.Name `xml:"doc"`
+	Text    T        `xml:",chardata"`
+}
+
+type xmlPtrAttr[T any] struct {
+	XMLName xml.Name `xml:"doc"`
+	Attr    *T       `xml:"attr,attr,omitempty"`
+}
+
+type stringScanner interface {
+	ScanString(source string, validate bool) error
+}
+
+// Run checks the reading and writing contract of T against spec.
+func Run[T Type[T], P Ptr[T]](t *testing.T, spec Spec[T]) {
+	t.Helper()
+
+	valid := append([]T{spec.Canonical}, spec.Variants...)
+	blank := append([]T{"", "   ", "\t"}, spec.Blank...)
+	typeName := reflect.TypeFor[T]().String()
+
+	// read stores input through every reading path and returns
+	// what each path stored, keyed by the path name.
+	read := func(t *testing.T, input T) map[string]T {
+		t.Helper()
+		got := make(map[string]T)
+
+		var scanned T
+		if err := P(&scanned).Scan(string(input)); err != nil {
+			t.Errorf("Scan(%q) error: %v", input, err)
+		}
+		got["Scan(string)"] = scanned
+
+		var scannedBytes T
+		if err := P(&scannedBytes).Scan([]byte(input)); err != nil {
+			t.Errorf("Scan([]byte(%q)) error: %v", input, err)
+		}
+		got["Scan([]byte)"] = scannedBytes
+
+		var unmarshalled T
+		if err := json.Unmarshal(jsonString(string(input)), P(&unmarshalled)); err != nil {
+			t.Errorf("json.Unmarshal(%q) error: %v", input, err)
+		}
+		got["UnmarshalJSON"] = unmarshalled
+
+		var doc xmlDoc[T]
+		data := fmt.Sprintf(`<doc attr="%s"><elem>%s</elem></doc>`, xmlEscape(string(input)), xmlEscape(string(input)))
+		if err := xml.Unmarshal([]byte(data), &doc); err != nil {
+			t.Errorf("xml.Unmarshal(%s) error: %v", data, err)
+		}
+		got["XML attribute"] = doc.Attr
+		got["XML element"] = doc.Elem
+
+		if s, ok := any(P(new(T))).(stringScanner); ok {
+			if err := s.ScanString(string(input), false); err != nil {
+				t.Errorf("ScanString(%q, false) error: %v", input, err)
+			}
+			got["ScanString(validate=false)"] = *any(s).(P)
+		}
+		return got
+	}
+
+	t.Run("reading normalizes a valid value", func(t *testing.T) {
+		for _, input := range valid {
+			for path, got := range read(t, input) {
+				if got != spec.Canonical {
+					t.Errorf("%s of %q stored %q, want %q", path, input, got, spec.Canonical)
+				}
+			}
+		}
+	})
+
+	t.Run("reading keeps an invalid value without error", func(t *testing.T) {
+		for _, input := range spec.Invalid {
+			for path, got := range read(t, input) {
+				if got != input {
+					t.Errorf("%s of invalid %q stored %q, want it unchanged", path, input, got)
+				}
+			}
+		}
+	})
+
+	t.Run("reading stores a blank value as empty", func(t *testing.T) {
+		for _, input := range blank {
+			for path, got := range read(t, input) {
+				if got != "" {
+					t.Errorf("%s of blank %q stored %q, want \"\"", path, input, got)
+				}
+			}
+		}
+	})
+
+	t.Run("reading null and wrong types", func(t *testing.T) {
+		v := spec.Canonical
+		if err := P(&v).Scan(nil); err != nil || v != "" {
+			t.Errorf("Scan(nil) = %q, %v; want \"\", nil", v, err)
+		}
+
+		v = spec.Canonical
+		if err := P(&v).Scan(int64(1)); err == nil {
+			t.Errorf("Scan(int64) error = nil, want an error for a wrong SQL type")
+		}
+
+		// encoding/json leaves a non-pointer value unchanged for null;
+		// a nullable type must reset it, or a field that held a value
+		// would keep it when the JSON says there is none.
+		v = spec.Canonical
+		if err := json.Unmarshal([]byte(`null`), P(&v)); err != nil {
+			t.Errorf("json.Unmarshal(null) error: %v", err)
+		}
+		want := spec.Canonical
+		if spec.Nullable {
+			want = ""
+		}
+		if v != want {
+			t.Errorf("json.Unmarshal(null) into %q stored %q, want %q", spec.Canonical, v, want)
+		}
+
+		v = spec.Canonical
+		if err := json.Unmarshal([]byte(`123`), P(&v)); err == nil {
+			t.Errorf("json.Unmarshal(123) error = nil, want an error for a JSON number")
+		} else if !strings.Contains(err.Error(), typeName) {
+			t.Errorf("json.Unmarshal(123) error %q doesn't name %s", err, typeName)
+		}
+	})
+
+	t.Run("ScanString with validate", func(t *testing.T) {
+		if _, ok := any(P(new(T))).(stringScanner); !ok {
+			t.Skipf("%s has no ScanString method", typeName)
+		}
+		for _, input := range valid {
+			var v T
+			if err := any(P(&v)).(stringScanner).ScanString(string(input), true); err != nil || v != spec.Canonical {
+				t.Errorf("ScanString(%q, true) = %q, %v; want %q, nil", input, v, err, spec.Canonical)
+			}
+		}
+		for _, input := range spec.Invalid {
+			var v T
+			if err := any(P(&v)).(stringScanner).ScanString(string(input), true); err == nil {
+				t.Errorf("ScanString(%q, true) error = nil, want an error for an invalid value", input)
+			}
+		}
+		// A required value can't be missing, a nullable one can
+		var v T
+		err := any(P(&v)).(stringScanner).ScanString("", true)
+		if spec.Nullable && (err != nil || v != "") {
+			t.Errorf("ScanString(\"\", true) = %q, %v; want null", v, err)
+		}
+		if !spec.Nullable && err == nil {
+			t.Errorf("ScanString(\"\", true) error = nil, want an error for a missing required value")
+		}
+	})
+
+	t.Run("Value", func(t *testing.T) {
+		for _, input := range valid {
+			got, err := input.Value()
+			if err != nil || got != string(spec.Canonical) {
+				t.Errorf("Value() of %q = %#v, %v; want %q, nil", input, got, err, spec.Canonical)
+			}
+		}
+		for _, input := range spec.Invalid {
+			got, err := input.Value()
+			if err == nil {
+				t.Errorf("Value() of invalid %q = %#v, nil; want an error", input, got)
+			}
+			if spec.InvalidErr != nil && !errors.Is(err, spec.InvalidErr) {
+				t.Errorf("Value() error of %q = %v, want it to wrap %v", input, err, spec.InvalidErr)
+			}
+		}
+		for _, input := range blank {
+			got, err := input.Value()
+			if err != nil || got != nil {
+				t.Errorf("Value() of blank %q = %#v, %v; want SQL NULL", input, got, err)
+			}
+		}
+	})
+
+	t.Run("MarshalJSON, MarshalText and XML", func(t *testing.T) {
+		check := func(input T, want string, wantJSON string) {
+			t.Helper()
+			gotJSON, err := json.Marshal(input)
+			if err != nil || string(gotJSON) != wantJSON {
+				t.Errorf("json.Marshal(%q) = %s, %v; want %s", input, gotJSON, err, wantJSON)
+			}
+			gotText, err := input.MarshalText()
+			if err != nil || string(gotText) != want {
+				t.Errorf("MarshalText() of %q = %q, %v; want %q", input, gotText, err, want)
+			}
+			gotXML, err := xml.Marshal(xmlDoc[T]{Attr: input, Elem: input})
+			wantXML := fmt.Sprintf(`<doc attr="%s"><elem>%s</elem></doc>`, xmlEscape(want), xmlEscape(want))
+			if err != nil || string(gotXML) != wantXML {
+				t.Errorf("xml.Marshal of %q = %s, %v; want %s", input, gotXML, err, wantXML)
+			}
+		}
+		for _, input := range valid {
+			check(input, string(spec.Canonical), string(jsonString(string(spec.Canonical))))
+		}
+		for _, input := range spec.Invalid {
+			check(input, string(input), string(jsonString(string(input))))
+		}
+		for _, input := range blank {
+			wantJSON := `""`
+			if spec.Nullable {
+				wantJSON = `null`
+			}
+			check(input, "", wantJSON)
+		}
+
+		// encoding/xml calls MarshalText through a nil pointer and panics
+		// for an attribute without omitempty, like for a *time.Time.
+		// With omitempty the attribute is left out.
+		gotXML, err := xml.Marshal(xmlPtrAttr[T]{})
+		if err != nil || string(gotXML) != `<doc></doc>` {
+			t.Errorf("xml.Marshal of nil *%s omitempty attribute = %s, %v", typeName, gotXML, err)
+		}
+	})
+
+	t.Run("round trips", func(t *testing.T) {
+		for _, input := range valid {
+			sqlValue, err := input.Value()
+			if err != nil {
+				t.Fatalf("Value() of %q error: %v", input, err)
+			}
+			var scanned T
+			if err := P(&scanned).Scan(sqlValue); err != nil || scanned != spec.Canonical {
+				t.Errorf("Scan(Value()) of %q = %q, %v; want %q", input, scanned, err, spec.Canonical)
+			}
+		}
+		// JSON and XML write an invalid value unchanged and read it back
+		// unchanged, so they round-trip every value
+		for _, input := range append(append([]T{}, valid...), spec.Invalid...) {
+			want := normalizedOrInput(input)
+			data, err := json.Marshal(input)
+			if err != nil {
+				t.Fatalf("json.Marshal(%q) error: %v", input, err)
+			}
+			var unmarshalled T
+			if err := json.Unmarshal(data, P(&unmarshalled)); err != nil || unmarshalled != want {
+				t.Errorf("JSON round trip of %q = %q, %v; want %q", input, unmarshalled, err, want)
+			}
+			data, err = xml.Marshal(xmlDoc[T]{Attr: input, Elem: input})
+			if err != nil {
+				t.Fatalf("xml.Marshal(%q) error: %v", input, err)
+			}
+			var doc xmlDoc[T]
+			if err := xml.Unmarshal(data, &doc); err != nil || doc.Attr != want || doc.Elem != want {
+				t.Errorf("XML round trip of %q = %q, %q, %v; want %q", input, doc.Attr, doc.Elem, err, want)
+			}
+		}
+	})
+
+	t.Run("validation", func(t *testing.T) {
+		for _, input := range valid {
+			if !input.Valid() || input.Validate() != nil {
+				t.Errorf("%q: Valid() = %v, Validate() = %v; want valid", input, input.Valid(), input.Validate())
+			}
+			if got := input.ValidAndNormalized(); got != (input == spec.Canonical) {
+				t.Errorf("%q: ValidAndNormalized() = %v, want %v", input, got, input == spec.Canonical)
+			}
+		}
+		for _, input := range spec.Invalid {
+			if input.Valid() || input.Validate() == nil || input.ValidAndNormalized() {
+				t.Errorf("%q: Valid() = %v, Validate() = %v, ValidAndNormalized() = %v; want invalid",
+					input, input.Valid(), input.Validate(), input.ValidAndNormalized())
+			}
+			// The writing methods rely on Normalized returning
+			// its receiver for a value it can't normalize
+			if norm, err := input.Normalized(); err == nil || norm != input {
+				t.Errorf("%q: Normalized() = %q, %v; want the receiver and an error", input, norm, err)
+			}
+		}
+		for _, input := range blank {
+			if input.Valid() != spec.Nullable {
+				t.Errorf("blank %q: Valid() = %v, want %v", input, input.Valid(), spec.Nullable)
+			}
+		}
+	})
+
+	t.Run("fmt prints the stored value", func(t *testing.T) {
+		for _, input := range append(append([]T{}, valid...), spec.Invalid...) {
+			if got := fmt.Sprint(input); got != string(input) {
+				t.Errorf("fmt.Sprint(%q) = %q, want the stored value", string(input), got)
+			}
+			if got := fmt.Sprintf("%q", input); got != fmt.Sprintf("%q", string(input)) {
+				t.Errorf("fmt %%q of %q = %s, want the stored value", string(input), got)
+			}
+		}
+		_, isStringer := any(spec.Canonical).(fmt.Stringer)
+		if isStringer != spec.GoEnumString {
+			t.Errorf("%s implements fmt.Stringer: %v, want %v", typeName, isStringer, spec.GoEnumString)
+		}
+	})
+
+	t.Run("JSON map keys stay as given", func(t *testing.T) {
+		// encoding/json reads and writes the keys of a map with a string
+		// key type as given, as long as the type has no UnmarshalText,
+		// so two spellings of the same value stay two keys and a map
+		// round-trips with all its entries.
+		for _, variant := range spec.Variants {
+			if variant == spec.Canonical {
+				continue
+			}
+			m := map[T]int{variant: 1, spec.Canonical: 2}
+			data, err := json.Marshal(m)
+			if err != nil {
+				t.Fatalf("json.Marshal(%v) error: %v", m, err)
+			}
+			var back map[T]int
+			if err := json.Unmarshal(data, &back); err != nil {
+				t.Fatalf("json.Unmarshal(%s) error: %v", data, err)
+			}
+			if !reflect.DeepEqual(back, m) {
+				t.Errorf("JSON map round trip of %v = %v, want the keys unchanged", m, back)
+			}
+		}
+	})
+
+	t.Run("XML chardata stays as given", func(t *testing.T) {
+		// encoding/xml reads a ,chardata field only through
+		// encoding.TextUnmarshaler, which the types don't implement
+		// with normalization, so such a field keeps the text as given.
+		for _, input := range spec.Variants {
+			var doc xmlCharData[T]
+			data := fmt.Sprintf(`<doc>%s</doc>`, xmlEscape(string(input)))
+			if err := xml.Unmarshal([]byte(data), &doc); err != nil || doc.Text != input {
+				t.Errorf("xml.Unmarshal(%s) into ,chardata = %q, %v; want %q", data, doc.Text, err, input)
+			}
+		}
+	})
+}
+
+func normalizedOrInput[T interface {
+	~string
+	Normalized() (T, error)
+}](v T) T {
+	if norm, err := v.Normalized(); err == nil {
+		return norm
+	}
+	return v
+}
+
+func jsonString(s string) []byte {
+	data, err := json.Marshal(s)
+	if err != nil {
+		panic(err)
+	}
+	return data
+}
+
+func xmlEscape(s string) string {
+	var b bytes.Buffer
+	if err := xml.EscapeText(&b, []byte(s)); err != nil {
+		panic(err)
+	}
+	return b.String()
+}

@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"regexp"
 	"testing"
+
+	"github.com/domonda/go-types/internal/normtest"
 )
 
 func TestNullableCode_Normalized(t *testing.T) {
@@ -181,28 +183,9 @@ func TestNullableCode_NullHandling(t *testing.T) {
 	n.Get()
 }
 
-func TestNullableCode_String(t *testing.T) {
-	tests := []struct {
-		n    NullableCode
-		want string
-	}{
-		{n: Null, want: ""},
-		{n: "de", want: "DE"},
-		{n: "Österreich", want: "AT"},
-		// String has no error result, so unresolvable input
-		// comes back unchanged instead of being lost.
-		{n: "Atlantis", want: "Atlantis"},
-	}
-	for _, tt := range tests {
-		if got := tt.n.String(); got != tt.want {
-			t.Errorf("NullableCode(%q).String() = %q, want %q", string(tt.n), got, tt.want)
-		}
-	}
-}
-
-// StringOr returns the normalized value like String, but the alternative
-// instead of a value that can't be normalized, so a caller printing
-// StringOr never shows a misspelled or invalid value as if it were valid.
+// StringOr returns the alternative only for null. A value that can't be
+// normalized comes back as stored, so a caller printing StringOr shows an
+// invalid value as what it is instead of hiding it like a missing one.
 func TestNullableCode_StringOr(t *testing.T) {
 	tests := []struct {
 		n    NullableCode
@@ -210,8 +193,9 @@ func TestNullableCode_StringOr(t *testing.T) {
 	}{
 		{n: Null, want: "none"},
 		{n: "  ", want: "none"},
-		{n: "de", want: "DE"},
-		{n: "Atlantis", want: "none"},
+		{n: "DE", want: "DE"},
+		{n: "de", want: "de"},
+		{n: "Atlantis", want: "Atlantis"},
 	}
 	for _, tt := range tests {
 		if got := tt.n.StringOr("none"); got != tt.want {
@@ -239,13 +223,13 @@ func TestNullableCode_Scan(t *testing.T) {
 			t.Errorf(`Scan("") = %q, want Null`, string(n))
 		}
 	})
-	t.Run("string is stored raw", func(t *testing.T) {
+	t.Run("string is stored normalized", func(t *testing.T) {
 		var n NullableCode
 		if err := n.Scan("de"); err != nil {
 			t.Fatal(err)
 		}
-		if n != "de" {
-			t.Errorf(`Scan("de") = %q, want "de"`, string(n))
+		if n != "DE" {
+			t.Errorf(`Scan("de") = %q, want "DE"`, string(n))
 		}
 	})
 	t.Run("bytes are copied", func(t *testing.T) {
@@ -364,17 +348,16 @@ func TestNullableCode_UnmarshalJSON(t *testing.T) {
 		t.Errorf("json.Unmarshal of null kept %q, want Null", string(d.Country))
 	}
 
-	// A JSON string is assigned unchanged, without normalization or
-	// validation, like encoding/json did before NullableCode had
-	// UnmarshalJSON, and the round trip of a code keeps it.
-	for _, str := range []string{"AT", "at", "XX", ""} {
+	// A JSON string is stored normalized if it is a valid code,
+	// unchanged without an error if not, so Validate can report it.
+	for str, want := range map[string]NullableCode{"AT": "AT", "at": "AT", "XX": "XX", "": Null} {
 		d := doc{Country: "DE"}
 		data, _ := json.Marshal(map[string]string{"country": str})
 		if err := json.Unmarshal(data, &d); err != nil {
 			t.Fatalf("json.Unmarshal(%s): %s", data, err)
 		}
-		if d.Country != NullableCode(str) {
-			t.Errorf("json.Unmarshal(%s) = %q, want %q", data, string(d.Country), str)
+		if d.Country != want {
+			t.Errorf("json.Unmarshal(%s) = %q, want %q", data, string(d.Country), want)
 		}
 	}
 
@@ -459,4 +442,15 @@ func TestNullableCode_ScanString(t *testing.T) {
 	if n != "Atlantis" {
 		t.Errorf(`ScanString("Atlantis", false) = %q, want the input unchanged`, string(n))
 	}
+}
+
+// TestNullableCode_ReadingAndWriting checks the reading and writing contract
+// shared by the normalizing types, with a blank NullableCode as null.
+func TestNullableCode_ReadingAndWriting(t *testing.T) {
+	normtest.Run(t, normtest.Spec[NullableCode]{
+		Canonical: "DE",
+		Variants:  []NullableCode{"de", " DE ", "d", "Deutschland"},
+		Invalid:   []NullableCode{"XX", "Atlantis"},
+		Nullable:  true,
+	})
 }

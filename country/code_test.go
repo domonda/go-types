@@ -6,6 +6,8 @@ import (
 	"regexp"
 	"slices"
 	"testing"
+
+	"github.com/domonda/go-types/internal/normtest"
 )
 
 func TestParseCode(t *testing.T) {
@@ -126,20 +128,22 @@ func TestCode_EnumsMatchCountryMap(t *testing.T) {
 // TestCode_CustomMethodsAndInvalidSentinel pins the two properties the
 // //#enum migration had to preserve, neither of which any other test touches.
 //
-// Valid, Validate and String carry a #custom marker because they resolve
-// through Normalized and therefore accept non-normalized input (lower case,
+// Valid and Validate carry a #custom marker because they resolve through
+// Normalized and therefore accept non-normalized input (lower case,
 // surrounding whitespace, AltCodes and German names). The exact-match switch
 // over the enum constants that go-enum generates instead would reject all of
-// it, and String would stop normalizing. Invalid is marked //#exclude so
-// that go-enum keeps it out of the enum value lists while it stays a typed
-// Code constant with working methods.
+// it. String is the one go-enum generates: it returns the code as stored,
+// so fmt shows what a Code holds instead of a normalized form that hides
+// a non-canonical value. Invalid is marked //#exclude so that go-enum keeps
+// it out of the enum value lists while it stays a typed Code constant with
+// working methods.
 //
-// Value: protects=country.Code's #custom Valid/Validate/String keep accepting
-// non-normalized input, and Invalid stays a typed sentinel outside Enums and
-// EnumStrings;
-// fails_when=a go-enum run replaces them with the generated exact-match
-// switch and plain string conversion, or Invalid loses its //#exclude
-// marker;
+// Value: protects=country.Code's #custom Valid/Validate keep accepting
+// non-normalized input, String returns the stored code, and Invalid stays
+// a typed sentinel outside Enums and EnumStrings;
+// fails_when=a go-enum run replaces Valid or Validate with the generated
+// exact-match switch, String normalizes again, or Invalid loses its
+// //#exclude marker;
 // why_new=no country test calls Valid, Validate, String or Invalid at all,
 // and TestCode_EnumsMatchCountryMap never looks at EnumStrings;
 // seam=none
@@ -164,16 +168,19 @@ func TestCode_CustomMethodsAndInvalidSentinel(t *testing.T) {
 				if err := tt.in.Validate(); err != nil {
 					t.Errorf("Code(%q).Validate() = %v, want nil", string(tt.in), err)
 				}
-				if got := tt.in.String(); got != tt.want {
-					t.Errorf("Code(%q).String() = %q, want the normalized %q", string(tt.in), got, tt.want)
+				if got, err := tt.in.Normalized(); err != nil || string(got) != tt.want {
+					t.Errorf("Code(%q).Normalized() = %q, %v; want %q", string(tt.in), got, err, tt.want)
+				}
+				if got := tt.in.String(); got != string(tt.in) {
+					t.Errorf("Code(%q).String() = %q, want the stored code", string(tt.in), got)
 				}
 			})
 		}
 	})
 
 	t.Run("rejected input is returned unchanged", func(t *testing.T) {
-		// String has no error result, so an unresolvable code has to come
-		// back unchanged instead of being replaced by the empty string.
+		// Normalized returns an unresolvable code unchanged with its error,
+		// and String returns every code as stored.
 		for _, in := range []Code{"", "xxx", "Atlantis"} {
 			t.Run(string(in), func(t *testing.T) {
 				if in.Valid() {
@@ -307,14 +314,15 @@ func TestCode_EnglishName(t *testing.T) {
 }
 
 func TestCode_Scan(t *testing.T) {
-	t.Run("string is stored raw", func(t *testing.T) {
-		// As documented, Scan does not normalize.
+	t.Run("string is stored normalized", func(t *testing.T) {
+		// Scan normalizes, so a code read from the database
+		// compares equal to the constant of the same country.
 		var c Code
 		if err := c.Scan("de"); err != nil {
 			t.Fatal(err)
 		}
-		if c != "de" {
-			t.Errorf("Scan(\"de\") = %q, want %q", string(c), "de")
+		if c != DE {
+			t.Errorf("Scan(\"de\") = %q, want %q", string(c), "DE")
 		}
 	})
 	t.Run("bytes are copied", func(t *testing.T) {
@@ -493,4 +501,17 @@ func TestCode_Nullable(t *testing.T) {
 	if got := Code("de").Nullable(); got != NullableCode("de") {
 		t.Errorf("Code(\"de\").Nullable() = %q, want the input unchanged", string(got))
 	}
+}
+
+// TestCode_ReadingAndWriting checks the reading and writing contract shared
+// by the normalizing types: every reading path stores a valid code
+// normalized and an invalid one unchanged, Value refuses an invalid code,
+// and fmt prints the stored code.
+func TestCode_ReadingAndWriting(t *testing.T) {
+	normtest.Run(t, normtest.Spec[Code]{
+		Canonical:    DE,
+		Variants:     []Code{"de", " DE ", "d", "Deutschland"},
+		Invalid:      []Code{"XX", "Atlantis"},
+		GoEnumString: true,
+	})
 }
