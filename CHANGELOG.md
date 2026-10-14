@@ -175,6 +175,23 @@ See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut.
   `Normalized` accepts, like `Validate` and the `Valid` of the other
   normalizing types, so `Code("EN").Valid()` is true. Use
   `ValidAndNormalized` to require the canonical code.
+- **Breaking:** without a language hint, an ambiguous numeric date with
+  slashes and the year last is read month first like in the US:
+  `"03/04/2024"` and `"03/04/24"` are 2024-03-04, which were 2024-04-03.
+  Dots, dashes, spaces and mixed separators stay day first, so
+  `"03.04.2024"` is 2024-04-03. This applies to `Normalize`, `Normalized`,
+  `Scan`, JSON and XML decoding, `ScanString`, `Parser`, `Finder` and
+  `NullableDate`, which have no hint, so a US date read from JSON is no
+  longer stored with day and month swapped. With a hint, `language.EN`
+  reads month first and every other language day first, also with
+  slashes. A hint that can't be normalized counts as no hint in
+  `ScanStringWithLang` and `Finder`, and `monthMustBeFirst` is true only
+  when month first is the only valid reading.
+- **Breaking:** `strfmt.NewEnglishFormatConfig` is renamed to
+  `NewUSFormatConfig` and writes dates as `01/02/2006` and times as
+  `01/02/2006 15:04:05 MST`, month first, which were day first, so its
+  dates read back unchanged with the slash rule above.
+  `NewScanConfig` accepts that time layout instead of the day first one.
 - **Breaking:** `date.YearMonth`, `YearQuarter`, `NullableYearMonth` and
   `NullableYearQuarter` read and write like `date.Date` and
   `NullableDate`, see "Reading and writing values" in the README.
@@ -557,20 +574,27 @@ See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut.
   so `"JPY 1234.50"` is not rounded to whole yen. The default
   `CurrencyAmountParser` keeps the three decimals too.
   `CurrencyAmount.ScanString` additionally accepts the minor units of the
-  currency written with a point like by `String`, so the stored text scans
-  back, but `"KWD 1,234"` is not read as 1.234. `FormatSep` and the
-  `strfmt` money formats keep their explicit precision.
+  currency after either decimal separator, so the stored text and the
+  `strfmt` formats scan back: `"KWD 1.234"` and the German `"KWD 1,234"` are
+  1.234. A whole KWD 1234 written in the shortest form with a thousands
+  comma, `"KWD 1,234"`, is read as 1.234 too, so write money with its
+  decimals. The `strfmt` money formats raise a `Precision` of 2 or more to
+  the minor units of the currency of a `CurrencyAmount` or
+  `CurrencyDecimalAmount`, `"KWD 1.234"` instead of `"KWD 1.23"`, and keep
+  a `Precision` of 0 or 1, which rounds below the cents on purpose, and the
+  `Precision` of an amount without currency. `FormatSep` keeps the precision
+  you pass.
 - `strfmt.Format` and `strfmt.Scan` use the default configuration for a nil
   config. `Format` panicked and `Scan` returned an error.
 - The default `strfmt.ScanConfig` accepts what the format presets write:
   `ja` and `nein` as booleans and the presets' date and time layouts, so
-  formatted values scan back. The English time layout
-  `"02/01/2006 15:04:05 MST"` is day first like `date.Date`, so a US time
-  like `"03/04/2024 10:00:00 UTC"`, which failed to scan, is now read as
-  3 April. Replace the layout in `TimeFormats` to scan US times.
+  formatted values scan back. The US time layout
+  `"01/02/2006 15:04:05 MST"` is month first like `date.Date` reads a date
+  with slashes, so a British time like `"03/04/2024 10:00:00 UTC"` is read
+  as 4 March. Replace the layout in `TimeFormats` to scan British times.
 - **Breaking:** `strfmt.ScanConfig.ParseTime`, and so `strfmt.Scan` into
   `time.Time` and `nullable.Time`, does not match a layout with a zone
-  abbreviation but no numeric offset, like the `MST` layouts of the English
+  abbreviation but no numeric offset, like the `MST` layouts of the US
   and German presets, when the abbreviation is not `UTC`, `GMT` or one of
   `time.Local`. `time.Parse` gives such an abbreviation a zero offset, so
   `"05.03.2024 10:00:00 CET"` scanned as 10:00 UTC on a server without CET,
