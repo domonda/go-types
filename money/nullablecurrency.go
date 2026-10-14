@@ -2,6 +2,7 @@ package money
 
 import (
 	"database/sql/driver"
+	"encoding/xml"
 	"fmt"
 
 	"github.com/domonda/go-types/internal"
@@ -10,12 +11,14 @@ import (
 )
 
 // NullableCurrency holds a 3 character ISO 4217 alphabetic code,
-// or an empty string as valid value representing NULL in SQL databases.
-// NullableCurrency implements the database/sql.Scanner and database/sql/driver.Valuer interfaces,
-// and will treat an empty or whitespace only NullableCurrency string as SQL NULL value.
+// or an empty or whitespace only string as valid value representing NULL.
 // The main difference between Currency and NullableCurrency is:
 // Currency("").Valid() == false
 // NullableCurrency("").Valid() == true
+//
+// NullableCurrency reads and writes like Currency, except that null is
+// SQL NULL and JSON null. See "Reading and writing values" in the README
+// of the module.
 type NullableCurrency string
 
 // Compile-time check that NullableCurrency implements nullable.NullSetable[Currency]
@@ -65,15 +68,13 @@ func (n NullableCurrency) GetOr(defaultVal Currency) Currency {
 	return Currency(n)
 }
 
-// StringOr returns the normalized NullableCurrency as string,
-// or the passed defaultString if the NullableCurrency is null
-// or can't be normalized.
+// StringOr returns the NullableCurrency as stored,
+// or the passed defaultString if the NullableCurrency is null.
 func (n NullableCurrency) StringOr(defaultString string) string {
-	norm, err := n.Normalized()
-	if err != nil || norm.IsNull() {
+	if n.IsNull() {
 		return defaultString
 	}
-	return string(norm)
+	return string(n)
 }
 
 // Valid returns true if n is null (empty or whitespace only),
@@ -135,55 +136,33 @@ func (n NullableCurrency) NormalizedOrNull() NullableCurrency {
 	return normalized
 }
 
-// ScanString tries to parse and assign the passed
-// source string as value of the implementing type.
-//
-// If validate is true, the source string is checked
-// for validity before it is assigned to the type.
-//
-// If validate is false and the source string
-// can still be assigned in some non-normalized way
-// it will be assigned without returning an error.
+// ScanString implements the strfmt.Scannable interface.
+// The strings "NULL", "null" and "nil" set the NullableCurrency to null.
+// Without validate it stores source like Scan, with validate it stores
+// the normalized currency or returns the error of Normalized.
 func (n *NullableCurrency) ScanString(source string, validate bool) error {
 	switch source {
-	case "", "NULL", "null", "nil":
+	case "NULL", "null", "nil":
 		n.SetNull()
 		return nil
 	}
-	newCurrency, err := NullableCurrency(source).Normalized()
-	if err != nil {
-		if validate {
-			return err
-		}
-		newCurrency = NullableCurrency(source)
-	}
-	*n = newCurrency
-	return nil
+	return internal.ScanStringNormalized(n, source, validate, NullableCurrency.Normalized, nil)
 }
 
 // Scan implements the database/sql.Scanner interface.
+// A valid currency is stored normalized, SQL NULL and a blank string as
+// CurrencyNull, and a currency that can't be normalized unchanged without
+// an error, so that one invalid value doesn't fail a whole query;
+// Validate reports it.
 func (n *NullableCurrency) Scan(value any) error {
-	switch x := value.(type) {
-	case string:
-		*n = NullableCurrency(x)
-	case []byte:
-		*n = NullableCurrency(x)
-	case nil:
-		*n = CurrencyNull
-	default:
-		return fmt.Errorf("can't scan SQL value of type %T as NullableCurrency", value)
-	}
-	return nil
+	return internal.ScanNormalized(n, value, NullableCurrency.Normalized, nil)
 }
 
 // Value implements the driver database/sql/driver.Valuer interface.
-// Returns nil for SQL NULL if the NullableCurrency is null, see IsNull,
-// else the normalized currency like Currency.Value.
+// It returns the normalized currency, SQL NULL if the NullableCurrency
+// is null, or the error of Normalized for a currency that can't be normalized.
 func (n NullableCurrency) Value() (driver.Value, error) {
-	if n.IsNull() {
-		return nil, nil
-	}
-	return Currency(n).Value()
+	return internal.ValueNormalized(n, NullableCurrency.Normalized, nil)
 }
 
 // Symbol returns the currency symbol like € for EUR if available,
@@ -206,41 +185,40 @@ func (n NullableCurrency) Currency() Currency {
 	return Currency(n)
 }
 
-// String returns the normalized currency as string if possible,
-// else it will be returned unchanged as string.
-// String implements the fmt.Stringer interface.
-func (n NullableCurrency) String() string {
-	norm, err := n.Normalized()
-	if err != nil {
-		return string(n)
-	}
-	return string(norm)
-}
-
-// MarshalJSON implements encoding/json.Marshaler
-// by returning the JSON null value if the NullableCurrency is null, see IsNull,
-// else the normalized currency like Currency.MarshalJSON.
+// MarshalJSON implements encoding/json.Marshaler by writing the JSON null
+// value if the NullableCurrency is null, else the normalized currency,
+// or the currency unchanged if it can't be normalized.
 func (n NullableCurrency) MarshalJSON() ([]byte, error) {
 	if n.IsNull() {
 		return []byte(`null`), nil
 	}
-	return Currency(n).MarshalJSON()
+	return internal.MarshalJSONNormalized(n, NullableCurrency.Normalized, nil)
 }
 
-// MarshalText implements encoding.TextMarshaler by returning String,
-// the normalized value, "" for null, or the unchanged string if it can't be
-// normalized, so that strfmt and encoding/xml write the canonical form
-// like Value and MarshalJSON. encoding/json writes map keys of string
-// types as they are and doesn't call MarshalText for them.
-func (n NullableCurrency) MarshalText() ([]byte, error) {
-	return []byte(n.String()), nil
-}
-
-// UnmarshalJSON implements encoding/json.Unmarshaler
-// by setting the NullableCurrency to null for the JSON null value,
-// so that decoding null into a field that holds a value resets it.
-// A JSON string is assigned unchanged, without normalization or validation,
-// like encoding/json does for a string type, any other JSON value is an error.
+// UnmarshalJSON implements encoding/json.Unmarshaler.
+// A JSON string is stored like Scan stores it, JSON null sets the
+// NullableCurrency to null, so that decoding null into a field that holds
+// a value resets it, and any other JSON value is an error.
 func (n *NullableCurrency) UnmarshalJSON(data []byte) error {
-	return internal.UnmarshalJSONStringOrNull(n, data)
+	return internal.UnmarshalJSONNormalized(n, data, true, NullableCurrency.Normalized, nil)
+}
+
+// MarshalText implements encoding.TextMarshaler like MarshalJSON,
+// but with "" for null, so that encoding/xml and strfmt write the
+// normalized currency. encoding/json writes map keys of string types
+// as they are and doesn't call MarshalText for them.
+func (n NullableCurrency) MarshalText() ([]byte, error) {
+	return internal.MarshalTextNormalized(n, NullableCurrency.Normalized, nil)
+}
+
+// UnmarshalXML implements encoding/xml.Unmarshaler
+// by storing the text of the element like Scan stores it.
+func (n *NullableCurrency) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	return internal.UnmarshalXMLNormalized(n, d, start, NullableCurrency.Normalized, nil)
+}
+
+// UnmarshalXMLAttr implements encoding/xml.UnmarshalerAttr
+// by storing the attribute value like Scan stores it.
+func (n *NullableCurrency) UnmarshalXMLAttr(attr xml.Attr) error {
+	return internal.UnmarshalXMLAttrNormalized(n, attr, NullableCurrency.Normalized, nil)
 }

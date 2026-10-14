@@ -371,32 +371,41 @@ func TestCurrencyAmount_SQL(t *testing.T) {
 	assert.Equal(t, CurrencyAmountEUR(1), ca, "a failed scan must not modify the value")
 }
 
-// Value, String and JSON write the currency of a CurrencyAmount normalized
-// like Currency.Value, because ParseCurrencyAmount, Scan and JSON decoding
-// keep a currency like "eur" as given: without normalization the same
-// amount would reach SQL and JSON in different spellings. A currency that
-// can't be normalized is written unchanged.
+// Value and JSON write the currency of a CurrencyAmount normalized like
+// Currency.Value, so the same amount can't reach SQL and JSON in different
+// spellings of its currency, while String shows the currency as stored.
+// Value refuses a currency that can't be normalized, JSON writes it
+// unchanged.
 func TestCurrencyAmount_NormalizedCurrencyOutput(t *testing.T) {
 	tests := []struct {
-		ca       CurrencyAmount
-		wantSQL  string
-		wantJSON string
+		ca         CurrencyAmount
+		wantSQL    string
+		wantString string
+		wantJSON   string
 	}{
-		{ca: CurrencyAmount{Currency: "eur", Amount: 1.5}, wantSQL: "EUR 1.50", wantJSON: `{"Currency":"EUR","Amount":1.5}`},
-		{ca: CurrencyAmount{Currency: "€", Amount: 1.5}, wantSQL: "EUR 1.50", wantJSON: `{"Currency":"EUR","Amount":1.5}`},
-		{ca: CurrencyAmount{Currency: "jpy", Amount: 1234.5}, wantSQL: "JPY 1234.50", wantJSON: `{"Currency":"JPY","Amount":1234.5}`},
-		{ca: CurrencyAmount{Currency: "XYZ", Amount: 1.5}, wantSQL: "XYZ 1.50", wantJSON: `{"Currency":"XYZ","Amount":1.5}`},
+		{ca: CurrencyAmount{Currency: "eur", Amount: 1.5}, wantSQL: "EUR 1.50", wantString: "eur 1.50", wantJSON: `{"Currency":"EUR","Amount":1.5}`},
+		{ca: CurrencyAmount{Currency: "€", Amount: 1.5}, wantSQL: "EUR 1.50", wantString: "€ 1.50", wantJSON: `{"Currency":"EUR","Amount":1.5}`},
+		{ca: CurrencyAmount{Currency: "jpy", Amount: 1234.5}, wantSQL: "JPY 1234.50", wantString: "jpy 1234.50", wantJSON: `{"Currency":"JPY","Amount":1234.5}`},
+		{ca: CurrencyAmount{Amount: 1.5}, wantSQL: "1.50", wantString: "1.50", wantJSON: `{"Currency":"","Amount":1.5}`},
 	}
 	for _, tt := range tests {
 		v, err := tt.ca.Value()
 		require.NoError(t, err)
 		assert.Equal(t, tt.wantSQL, v, "Value of %#v", tt.ca)
-		assert.Equal(t, tt.wantSQL, tt.ca.String(), "String of %#v", tt.ca)
+		assert.Equal(t, tt.wantString, tt.ca.String(), "String of %#v", tt.ca)
 
 		j, err := json.Marshal(tt.ca)
 		require.NoError(t, err)
 		assert.JSONEq(t, tt.wantJSON, string(j), "json.Marshal of %#v", tt.ca)
 	}
+
+	invalid := CurrencyAmount{Currency: "XYZ", Amount: 1.5}
+	_, err := invalid.Value()
+	assert.Error(t, err, "Value of an invalid currency")
+	assert.Equal(t, "XYZ 1.50", invalid.String())
+	j, err := json.Marshal(invalid)
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"Currency":"XYZ","Amount":1.5}`, string(j))
 }
 
 // TestCurrencyAmount_ScanStringMinorUnitsWithComma protects that the extra

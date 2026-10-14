@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/domonda/go-types/internal/normtest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -40,7 +41,9 @@ func TestNullableCurrency_WhitespaceIsNull(t *testing.T) {
 			assert.Panics(t, func() { n.Get() })
 			assert.Equal(t, EUR, n.GetOr(EUR))
 			assert.Equal(t, "none", n.StringOr("none"))
-			assert.Equal(t, "", n.String())
+			text, err := n.MarshalText()
+			require.NoError(t, err)
+			assert.Equal(t, "", string(text))
 
 			v, err := n.Value()
 			require.NoError(t, err)
@@ -52,9 +55,11 @@ func TestNullableCurrency_WhitespaceIsNull(t *testing.T) {
 	}
 }
 
-// TestNullableCurrency_GetOrStringOr pins the fallbacks: GetOr and StringOr
-// fall back for NULL and for invalid currencies, so that callers always
-// get a usable Currency or the canonical code, never a misspelled one.
+// TestNullableCurrency_GetOrStringOr pins the fallbacks: GetOr falls back
+// for NULL and for invalid currencies, so that callers always get a usable
+// Currency. StringOr falls back only for NULL and returns any other value
+// as stored, so an invalid currency is shown as what it is instead of
+// being hidden like a missing one.
 func TestNullableCurrency_GetOrStringOr(t *testing.T) {
 	assert.Equal(t, EUR, NullableCurrency("").GetOr(EUR))
 	assert.Equal(t, EUR, NullableCurrency("XYZ").GetOr(EUR))
@@ -62,8 +67,8 @@ func TestNullableCurrency_GetOrStringOr(t *testing.T) {
 
 	assert.Equal(t, "none", NullableCurrency("").StringOr("none"))
 	assert.Equal(t, "USD", NullableCurrency("USD").StringOr("none"))
-	assert.Equal(t, "USD", NullableCurrency(" usd ").StringOr("none"), "normalized like String")
-	assert.Equal(t, "none", NullableCurrency("XYZ").StringOr("none"))
+	assert.Equal(t, " usd ", NullableCurrency(" usd ").StringOr("none"), "as stored")
+	assert.Equal(t, "XYZ", NullableCurrency("XYZ").StringOr("none"), "an invalid currency as stored")
 }
 
 // TestNullableCurrency_Validity pins the main difference to Currency:
@@ -125,13 +130,11 @@ func TestNullableCurrency_Normalized(t *testing.T) {
 				// receiver comes back unchanged.
 				assert.Equal(t, tt.n, got, "Normalized must return an invalid value unchanged")
 				assert.Equal(t, NullableCurrency(CurrencyNull), tt.n.NormalizedOrNull())
-				assert.Equal(t, string(tt.n), tt.n.String(), "String must return an unnormalizable value unchanged")
 				return
 			}
 			require.NoError(t, err)
 			assert.Equal(t, tt.want, got)
 			assert.Equal(t, tt.want, tt.n.NormalizedOrNull())
-			assert.Equal(t, string(tt.want), tt.n.String(), "String must normalize")
 		})
 	}
 }
@@ -227,7 +230,8 @@ func TestNullableCurrency_JSON(t *testing.T) {
 
 // A non-null NullableCurrency is written normalized like Currency, see
 // TestCurrency_ValueAndMarshalJSONNormalize, and null stays SQL NULL and
-// JSON null, including the whitespace-only null.
+// JSON null, including the whitespace-only null. Value refuses an invalid
+// currency, JSON writes it unchanged.
 func TestNullableCurrency_ValueAndMarshalJSONNormalize(t *testing.T) {
 	tests := []struct {
 		n        NullableCurrency
@@ -238,7 +242,6 @@ func TestNullableCurrency_ValueAndMarshalJSONNormalize(t *testing.T) {
 		{n: "  ", wantSQL: nil, wantJSON: `null`},
 		{n: "eur", wantSQL: "EUR", wantJSON: `"EUR"`},
 		{n: "$", wantSQL: "USD", wantJSON: `"USD"`},
-		{n: "XYZ", wantSQL: "XYZ", wantJSON: `"XYZ"`},
 	}
 	for _, tt := range tests {
 		v, err := tt.n.Value()
@@ -249,14 +252,20 @@ func TestNullableCurrency_ValueAndMarshalJSONNormalize(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, tt.wantJSON, string(j), "json.Marshal(NullableCurrency(%q))", string(tt.n))
 	}
+
+	_, err := NullableCurrency("XYZ").Value()
+	assert.Error(t, err, "Value() of an invalid currency")
+	j, err := json.Marshal(NullableCurrency("XYZ"))
+	require.NoError(t, err)
+	assert.Equal(t, `"XYZ"`, string(j))
 }
 
 // TestNullableCurrency_UnmarshalJSON pins that JSON null resets a field
 // that holds a value, like for uu.NullableID and email.NullableAddress,
 // else decoding a partial update with null into an existing struct keeps
-// the old currency. A JSON string is assigned unchanged, without
-// normalization or validation, like encoding/json did before
-// NullableCurrency had UnmarshalJSON, and any other JSON value is an error.
+// the old currency. A JSON string is stored normalized if it is a valid
+// currency and unchanged without an error if not, so Validate can report
+// it, and any other JSON value is an error.
 func TestNullableCurrency_UnmarshalJSON(t *testing.T) {
 	type doc struct {
 		Currency NullableCurrency `json:"currency"`
@@ -265,12 +274,12 @@ func TestNullableCurrency_UnmarshalJSON(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(`{"currency":null}`), &d))
 	assert.Equal(t, NullableCurrency(CurrencyNull), d.Currency)
 
-	for _, str := range []string{"USD", "usd", "€", "XYZ", ""} {
+	for str, want := range map[string]NullableCurrency{"USD": "USD", "usd": "USD", "€": "EUR", "XYZ": "XYZ", "": CurrencyNull} {
 		d := doc{Currency: "EUR"}
 		data, err := json.Marshal(map[string]string{"currency": str})
 		require.NoError(t, err)
 		require.NoError(t, json.Unmarshal(data, &d))
-		assert.Equal(t, NullableCurrency(str), d.Currency, "json.Unmarshal(%s)", data)
+		assert.Equal(t, want, d.Currency, "json.Unmarshal(%s)", data)
 	}
 
 	for _, data := range []string{`123`, `true`, `{}`, `["EUR"]`} {
@@ -292,4 +301,16 @@ func TestNullableCurrency_Display(t *testing.T) {
 
 	assert.Equal(t, CHF, NullableCurrency("CHF").Currency())
 	assert.Equal(t, Currency(CurrencyNull), NullableCurrency(CurrencyNull).Currency(), "Currency must not panic on NULL")
+}
+
+// TestNullableCurrency_ReadingAndWriting checks the reading and writing
+// contract shared by the normalizing types, with a blank NullableCurrency
+// as null.
+func TestNullableCurrency_ReadingAndWriting(t *testing.T) {
+	normtest.Run(t, normtest.Spec[NullableCurrency]{
+		Canonical: "EUR",
+		Variants:  []NullableCurrency{"eur", " EUR ", "€", "Euro"},
+		Invalid:   []NullableCurrency{"XYZ", "Atlantean Dollar"},
+		Nullable:  true,
+	})
 }

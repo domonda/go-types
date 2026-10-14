@@ -2,7 +2,7 @@ package money
 
 import (
 	"database/sql/driver"
-	"encoding/json"
+	"encoding/xml"
 	"errors"
 	"fmt"
 	"slices"
@@ -10,6 +10,7 @@ import (
 	"unicode"
 
 	"github.com/domonda/go-types"
+	"github.com/domonda/go-types/internal"
 	"github.com/domonda/go-types/strutil"
 )
 
@@ -23,11 +24,18 @@ func StringIsCurrency(str string) bool {
 }
 
 // Currency is holds a 3 character ISO 4217 alphabetic code.
-// Currency implements the database/sql.Scanner and database/sql/driver.Valuer interfaces,
-// and will treat an empty Currency string as SQL NULL value.
 // The main difference between Currency and NullableCurrency is:
 // Currency("").Valid() == false
 // NullableCurrency("").Valid() == true
+//
+// Scan, UnmarshalJSON, UnmarshalXML and ScanString store a valid currency
+// normalized, a blank one as CurrencyNull and an invalid one unchanged.
+// Value writes the normalized currency, SQL NULL for a blank one, and
+// returns an error for an invalid one. MarshalJSON and MarshalText write
+// the normalized currency or an invalid one unchanged, and fmt prints the
+// currency as stored. Currency has no UnmarshalText, so encoding/json reads
+// and writes the keys of a map[Currency]V as given. See "Reading and
+// writing values" in the README of the module.
 type Currency string //#enum
 
 // NormalizeCurrency returns str as normalized Currency or an error.
@@ -35,25 +43,12 @@ func NormalizeCurrency(str string) (Currency, error) {
 	return Currency(str).Normalized()
 }
 
-// ScanString tries to parse and assign the passed
-// source string as value of the implementing type.
-//
-// If validate is true, the source string is checked
-// for validity before it is assigned to the type.
-//
-// If validate is false and the source string
-// can still be assigned in some non-normalized way
-// it will be assigned without returning an error.
+// ScanString implements the strfmt.Scannable interface.
+// Without validate it stores source like Scan, with validate it stores
+// the normalized currency or returns the error of Normalized,
+// also for a blank source.
 func (c *Currency) ScanString(source string, validate bool) error {
-	newCurrency, err := Currency(source).Normalized()
-	if err != nil {
-		if validate {
-			return err
-		}
-		newCurrency = Currency(source)
-	}
-	*c = newCurrency
-	return nil
+	return internal.ScanStringNormalized(c, source, validate, Currency.Normalized, nil)
 }
 
 // GetOrDefault returns the value c references if it is valid and c is not nil.
@@ -208,46 +203,54 @@ func (c Currency) IsEUR() bool {
 }
 
 // Scan implements the database/sql.Scanner interface.
+// A valid currency is stored normalized, SQL NULL and a blank string as
+// CurrencyNull, and a currency that can't be normalized unchanged without
+// an error, so that one invalid value doesn't fail a whole query;
+// Validate reports it.
 func (c *Currency) Scan(value any) error {
-	switch x := value.(type) {
-	case string:
-		*c = Currency(x)
-	case []byte:
-		*c = Currency(x)
-	case nil:
-		*c = CurrencyNull
-	default:
-		return fmt.Errorf("can't scan SQL value of type %T as Currency", value)
-	}
-	return nil
+	return internal.ScanNormalized(c, value, Currency.Normalized, nil)
 }
 
 // Value implements the driver database/sql/driver.Valuer interface.
-// Returns nil for SQL NULL if the Currency is empty, else the normalized
-// currency, or the unchanged string if it can't be normalized.
+// It returns the normalized currency, SQL NULL for a blank Currency,
+// or the error of Normalized for a currency that can't be normalized.
 func (c Currency) Value() (driver.Value, error) {
-	if c == CurrencyNull {
-		return nil, nil
-	}
-	norm, _ := c.Normalized()
-	return string(norm), nil
+	return internal.ValueNormalized(c, Currency.Normalized, nil)
 }
 
-// MarshalJSON implements encoding/json.Marshaler.
-// Returns the normalized currency as JSON string,
-// or the unchanged string if it can't be normalized.
+// MarshalJSON implements encoding/json.Marshaler by writing the
+// normalized currency, "" for a blank Currency, or the currency
+// unchanged if it can't be normalized.
 func (c Currency) MarshalJSON() ([]byte, error) {
-	norm, _ := c.Normalized()
-	return json.Marshal(string(norm))
+	return internal.MarshalJSONNormalized(c, Currency.Normalized, nil)
 }
 
-// MarshalText implements encoding.TextMarshaler by returning String,
-// the normalized value or the unchanged string if it can't be
-// normalized, so that strfmt and encoding/xml write the canonical form
-// like Value and MarshalJSON. encoding/json writes map keys of string
-// types as they are and doesn't call MarshalText for them.
+// UnmarshalJSON implements encoding/json.Unmarshaler.
+// A JSON string is stored like Scan stores it, JSON null leaves the
+// Currency unchanged like encoding/json does for a string type,
+// and any other JSON value is an error.
+func (c *Currency) UnmarshalJSON(data []byte) error {
+	return internal.UnmarshalJSONNormalized(c, data, false, Currency.Normalized, nil)
+}
+
+// MarshalText implements encoding.TextMarshaler like MarshalJSON,
+// so that encoding/xml and strfmt write the normalized currency.
+// encoding/json writes map keys of string types as they are
+// and doesn't call MarshalText for them.
 func (c Currency) MarshalText() ([]byte, error) {
-	return []byte(c.String()), nil
+	return internal.MarshalTextNormalized(c, Currency.Normalized, nil)
+}
+
+// UnmarshalXML implements encoding/xml.Unmarshaler
+// by storing the text of the element like Scan stores it.
+func (c *Currency) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	return internal.UnmarshalXMLNormalized(c, d, start, Currency.Normalized, nil)
+}
+
+// UnmarshalXMLAttr implements encoding/xml.UnmarshalerAttr
+// by storing the attribute value like Scan stores it.
+func (c *Currency) UnmarshalXMLAttr(attr xml.Attr) error {
+	return internal.UnmarshalXMLAttrNormalized(c, attr, Currency.Normalized, nil)
 }
 
 // Symbol returns the currency symbol like € for EUR if available,
@@ -279,22 +282,6 @@ func (c Currency) MinorUnits() int {
 		return minorUnits
 	}
 	return 2
-}
-
-// String returns the normalized currency as string if possible,
-// else it will be returned unchanged as string.
-// String implements the fmt.Stringer interface.
-//
-// Hand-written: normalizes before returning, unlike the plain string
-// conversion that go-enum would generate.
-//
-// #custom
-func (c Currency) String() string {
-	norm, err := c.Normalized()
-	if err != nil {
-		return string(c)
-	}
-	return string(norm)
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -829,4 +816,9 @@ func (Currency) EnumStrings() []string {
 		"ZWG",
 		"ZWL",
 	}
+}
+
+// String implements the fmt.Stringer interface for Currency
+func (c Currency) String() string {
+	return string(c)
 }

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/domonda/go-types/internal"
 	"github.com/domonda/go-types/strutil"
 )
 
@@ -91,27 +92,33 @@ func ParseCurrencyDecimalAmount(str string, acceptedDecimals ...int) (result Cur
 	return result, nil
 }
 
-// String implements the fmt.Stringer interface, placing the normalized currency
+// String implements the fmt.Stringer interface, placing the currency as stored
 // before the amount and using the amount's own scale (unlike CurrencyAmount.String, which
-// rounds to the minor unit of the currency).
+// rounds to the minor unit of the currency). Value writes the same format
+// with the normalized currency.
 func (ca CurrencyDecimalAmount) String() string {
-	return ca.FormatSep(true, 0, '.')
+	return ca.format(string(ca.Currency), true, 0, '.')
 }
 
 // FormatSep formats the CurrencyDecimalAmount using the given separators. If
 // currencyFirst is true the currency code is placed before the amount,
 // otherwise it is placed after. The currency is normalized if valid,
-// see Currency.String. The number of decimal places is the amount's
+// else written unchanged. The number of decimal places is the amount's
 // own Scale; see DecimalAmount.FormatSep for the separator arguments.
 func (ca CurrencyDecimalAmount) FormatSep(currencyFirst bool, thousandsSep, decimalSep rune) string {
+	currency := internal.NormalizedOrRaw(ca.Currency, Currency.Normalized, nil)
+	return ca.format(string(currency), currencyFirst, thousandsSep, decimalSep)
+}
+
+func (ca CurrencyDecimalAmount) format(currency string, currencyFirst bool, thousandsSep, decimalSep rune) string {
 	amountStr := ca.Amount.FormatSep(thousandsSep, decimalSep)
-	if ca.Currency == "" {
+	if currency == "" {
 		return amountStr
 	}
 	if currencyFirst {
-		return ca.Currency.String() + " " + amountStr
+		return currency + " " + amountStr
 	}
-	return amountStr + " " + ca.Currency.String()
+	return amountStr + " " + currency
 }
 
 // GoString returns a Go syntax representation of the CurrencyDecimalAmount for
@@ -162,8 +169,14 @@ func (ca *CurrencyDecimalAmount) Scan(value any) (err error) {
 	return nil
 }
 
-// Value implements the database/sql/driver.Valuer interface by returning the
-// result of the String method.
+// Value implements the database/sql/driver.Valuer interface by writing the
+// format of String with the normalized currency, or returning the error of
+// Currency.Normalized for a currency that can't be normalized.
 func (ca CurrencyDecimalAmount) Value() (driver.Value, error) {
-	return ca.String(), nil
+	if !internal.IsBlank(ca.Currency) {
+		if _, err := ca.Currency.Normalized(); err != nil {
+			return nil, err
+		}
+	}
+	return ca.FormatSep(true, 0, '.'), nil
 }

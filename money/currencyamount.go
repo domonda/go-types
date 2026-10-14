@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/domonda/go-types/internal"
 	"github.com/domonda/go-types/strutil"
 )
 
@@ -78,32 +79,43 @@ func ParseCurrencyAmount(str string, acceptedDecimals ...int) (result CurrencyAm
 	return result, nil
 }
 
-// String returns the normalized currency code followed by the amount
+// String returns the currency code as stored followed by the amount
 // rounded to two decimal places, or to the three of the minor unit of
 // currencies like KWD, see Currency.MinorUnits, like "EUR 1234.50",
 // "JPY 1234.50" or "KWD 1.234", with a point as decimal separator and
 // without thousands grouping. Never fewer than two decimal places,
 // because the amount of a currency without a minor unit, like JPY,
-// can still have a fraction, which String also writes for Value.
-// An amount without currency is formatted with two decimal places.
+// can still have a fraction. Value writes the same format with the
+// normalized currency. An amount without currency is formatted with
+// two decimal places.
 // String implements the fmt.Stringer interface.
 func (ca CurrencyAmount) String() string {
-	return ca.FormatSep(true, 0, '.', max(2, ca.Currency.MinorUnits()))
+	return ca.format(string(ca.Currency), true, 0, '.', ca.defaultPrecision())
 }
 
 // FormatSep formats the CurrencyAmount using the given separators and decimal precision.
 // If currencyFirst is true the currency code is placed before the amount,
 // otherwise it is placed after. The currency is normalized if valid,
-// see Currency.String. See Amount.FormatSep for details about the separator and precision arguments.
+// else written unchanged. See Amount.FormatSep for details about the
+// separator and precision arguments.
 func (ca CurrencyAmount) FormatSep(currencyFirst bool, thousandsSep, decimalSep rune, precision int) string {
+	currency := internal.NormalizedOrRaw(ca.Currency, Currency.Normalized, nil)
+	return ca.format(string(currency), currencyFirst, thousandsSep, decimalSep, precision)
+}
+
+func (ca CurrencyAmount) format(currency string, currencyFirst bool, thousandsSep, decimalSep rune, precision int) string {
 	amountStr := ca.Amount.FormatSep(thousandsSep, decimalSep, precision)
-	if ca.Currency == "" {
+	if currency == "" {
 		return amountStr
 	}
 	if currencyFirst {
-		return ca.Currency.String() + " " + amountStr
+		return currency + " " + amountStr
 	}
-	return amountStr + " " + ca.Currency.String()
+	return amountStr + " " + currency
+}
+
+func (ca CurrencyAmount) defaultPrecision() int {
+	return max(2, ca.Currency.MinorUnits())
 }
 
 // GoString returns a Go syntax representation of the CurrencyAmount for debugging.
@@ -169,7 +181,14 @@ func (ca *CurrencyAmount) Scan(value any) (err error) {
 }
 
 // Value implements the database/sql/driver.Valuer interface
-// by returning the result of the String method.
+// by writing the format of String with the normalized currency,
+// or returning the error of Currency.Normalized for a currency
+// that can't be normalized.
 func (ca CurrencyAmount) Value() (driver.Value, error) {
-	return ca.String(), nil
+	if !internal.IsBlank(ca.Currency) {
+		if _, err := ca.Currency.Normalized(); err != nil {
+			return nil, err
+		}
+	}
+	return ca.FormatSep(true, 0, '.', ca.defaultPrecision()), nil
 }

@@ -8,6 +8,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/domonda/go-types/internal/normtest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -63,20 +64,21 @@ func TestCurrency_EnumsMatchCurrencyCodeToName(t *testing.T) {
 	assert.ElementsMatch(t, slices.Collect(maps.Keys(currencyCodeToName)), Currency("").Enums())
 }
 
-// TestCurrency_CustomMethodsAcceptNonNormalizedInput pins why Valid, Validate
-// and String carry a #custom marker: they resolve through Normalized and
+// TestCurrency_CustomMethodsAcceptNonNormalizedInput pins why Valid and
+// Validate carry a #custom marker: they resolve through Normalized and
 // therefore accept currency symbols, English names and lower case, while the
 // exact-match switch over the enum constants that go-enum generates instead
-// would only accept the 3-letter ISO 4217 codes and String would stop
-// normalizing. Test_NormalizeCurrency exercises the same inputs through
-// NormalizeCurrency only, so a regenerated Valid/Validate/String would not
-// fail it.
+// would only accept the 3-letter ISO 4217 codes. String is the one go-enum
+// generates: it returns the currency as stored, so fmt shows what a
+// Currency holds. Test_NormalizeCurrency exercises the same inputs through
+// NormalizeCurrency only, so a regenerated Valid/Validate would not fail it.
 //
-// Value: protects=money.Currency's #custom Valid/Validate/String keep
-// accepting symbols, English names and lower case through Normalized;
-// fails_when=a go-enum run replaces them with the generated exact-match switch
-// and plain string conversion, so Currency("eur") and Currency("€") turn
-// invalid;
+// Value: protects=money.Currency's #custom Valid/Validate keep accepting
+// symbols, English names and lower case through Normalized, and String
+// returns the stored currency;
+// fails_when=a go-enum run replaces Valid or Validate with the generated
+// exact-match switch, so Currency("eur") and Currency("€") turn invalid,
+// or String normalizes again;
 // why_new=Test_NormalizeCurrency only calls NormalizeCurrency, and the only
 // Valid assertion in this package is for the empty Currency;
 // seam=none
@@ -100,14 +102,17 @@ func TestCurrency_CustomMethodsAcceptNonNormalizedInput(t *testing.T) {
 			t.Run(string(tt.in), func(t *testing.T) {
 				assert.True(t, tt.in.Valid(), "Currency(%q).Valid()", string(tt.in))
 				assert.NoError(t, tt.in.Validate(), "Currency(%q).Validate()", string(tt.in))
-				assert.Equal(t, tt.want, tt.in.String(), "Currency(%q).String() must normalize", string(tt.in))
+				norm, err := tt.in.Normalized()
+				assert.NoError(t, err)
+				assert.Equal(t, tt.want, string(norm), "Currency(%q).Normalized()", string(tt.in))
+				assert.Equal(t, string(tt.in), tt.in.String(), "Currency(%q).String() must return the stored currency", string(tt.in))
 			})
 		}
 	})
 
 	t.Run("rejected input is returned unchanged", func(t *testing.T) {
-		// String has no error result, so an unresolvable currency has to come
-		// back unchanged instead of being replaced by the empty string.
+		// Normalized returns an unresolvable currency unchanged with its
+		// error, and String returns every currency as stored.
 		for _, in := range []Currency{"", "xxx", "Atlantean Shell"} {
 			t.Run(string(in), func(t *testing.T) {
 				assert.False(t, in.Valid(), "Currency(%q).Valid()", string(in))
@@ -322,8 +327,9 @@ func TestCurrency_SQL(t *testing.T) {
 // Value and MarshalJSON write a Currency normalized, because Validate
 // accepts other spellings like "eur" and "€": without normalization they
 // would reach SQL and JSON as given, where "eur" and "EUR" compare as
-// different currencies. A currency that can't be normalized is written
-// unchanged instead of failing the write.
+// different currencies. Value refuses a currency that can't be normalized,
+// because the database is where an invalid value would stay; JSON writes
+// it unchanged, so a response that holds one still renders.
 func TestCurrency_ValueAndMarshalJSONNormalize(t *testing.T) {
 	tests := []struct {
 		c    Currency
@@ -333,7 +339,6 @@ func TestCurrency_ValueAndMarshalJSONNormalize(t *testing.T) {
 		{c: "eur", want: "EUR"},
 		{c: " € ", want: "EUR"},
 		{c: "Canadian Dollar", want: "CAD"},
-		{c: "XYZ", want: "XYZ"},
 	}
 	for _, tt := range tests {
 		v, err := tt.c.Value()
@@ -345,7 +350,13 @@ func TestCurrency_ValueAndMarshalJSONNormalize(t *testing.T) {
 		assert.Equal(t, `"`+tt.want+`"`, string(j), "json.Marshal(Currency(%q))", string(tt.c))
 	}
 
-	j, err := json.Marshal(Currency(CurrencyNull))
+	_, err := Currency("XYZ").Value()
+	assert.Error(t, err, "Value() of an invalid currency")
+	j, err := json.Marshal(Currency("XYZ"))
+	require.NoError(t, err)
+	assert.Equal(t, `"XYZ"`, string(j), "json.Marshal of an invalid currency")
+
+	j, err = json.Marshal(Currency(CurrencyNull))
 	require.NoError(t, err)
 	assert.Equal(t, `""`, string(j), "the empty Currency is no JSON null, use NullableCurrency")
 }
@@ -663,4 +674,17 @@ func TestCurrency_NormalizedRejectsAmountsAndSymbols(t *testing.T) {
 		require.NoError(t, err, "Currency(%q).Normalized()", c)
 		assert.Equal(t, want, norm, "Currency(%q).Normalized()", c)
 	}
+}
+
+// TestCurrency_ReadingAndWriting checks the reading and writing contract
+// shared by the normalizing types: every reading path stores a valid
+// currency normalized and an invalid one unchanged, Value refuses an
+// invalid currency, and fmt prints the stored currency.
+func TestCurrency_ReadingAndWriting(t *testing.T) {
+	normtest.Run(t, normtest.Spec[Currency]{
+		Canonical:    EUR,
+		Variants:     []Currency{"eur", " EUR ", "€", "Euro"},
+		Invalid:      []Currency{"XYZ", "Atlantean Dollar"},
+		GoEnumString: true,
+	})
 }

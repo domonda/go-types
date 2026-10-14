@@ -53,13 +53,14 @@ func (format *MoneyFormat) FormatCurrencyAmount(currencyAmount money.CurrencyAmo
 // with the number formatted by FormatDecimalAmount.
 func (format *MoneyFormat) FormatCurrencyDecimalAmount(currencyAmount money.CurrencyDecimalAmount) string {
 	amountStr := format.FormatDecimalAmount(currencyAmount.Amount)
-	if currencyAmount.Currency == "" {
+	currency, _ := currencyAmount.Currency.MarshalText()
+	if len(currency) == 0 {
 		return amountStr
 	}
 	if format.CurrencyFirst {
-		return currencyAmount.Currency.String() + " " + amountStr
+		return string(currency) + " " + amountStr
 	}
-	return amountStr + " " + currencyAmount.Currency.String()
+	return amountStr + " " + string(currency)
 }
 
 // FormatCentAmount formats a cent amount like FormatAmount formats an amount,
