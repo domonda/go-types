@@ -449,7 +449,10 @@ See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut.
   no longer returns NaN or ±Inf for more than 308 decimals or a scaled value
   outside the float64 range. `DecimalAmountFrom` uses the same digit
   rounding for values with more than `MaxDecimalAmountScale` decimals. NaN
-  and ±Inf behave as before.
+  and ±Inf behave as before. A float64 value only takes the slower digit
+  rounding within a provable error margin of a .5 tie, so `RoundToDecimals`
+  and `Amount.RoundToCents` take about 5 ns and `Format` and `Amount.String`
+  about 40 ns, faster than before.
 - **Breaking:** `float.Format`, and so `money.Amount.String`, `FormatSep`,
   `CurrencyAmount.String` and `Value` and the `strfmt` float and amount
   formatting, write negative zero and negative values that round to zero
@@ -623,7 +626,11 @@ See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut.
   while `Percentage(14.5)` was 15, and `DecimalAmount` results carried float
   noise like `0.30000000000000004`. `DecimalAmount` falls back to the
   `float64` product for a rate with more than 18 decimals. The `Amount`
-  methods still compute in `float64`.
+  methods still compute in `float64`. The `CentAmount` methods compute in
+  `float64` and the `DecimalAmount` methods find the shortest decimal of the
+  rate with a few `float64` operations wherever that provably gives the same
+  result, so only exact ties, like 50 cents at 19%, take the slower `big.Rat`
+  arithmetic.
 - **Breaking:** `money.DecimalAmount.Format` ignores the `+` flag of `%v`,
   which `fmt` uses to print struct field names, so `%+v` of a struct prints
   `{T:1234.50}` instead of `{T:+1234.50}`. `%+s`, `%+q`, `%+f` and `%+d`
