@@ -3,7 +3,7 @@ package email
 import (
 	"database/sql/driver"
 	"encoding/base64"
-	"encoding/json"
+	"encoding/xml"
 	"mime"
 	"net/mail"
 	"strings"
@@ -12,6 +12,7 @@ import (
 	"github.com/invopop/jsonschema"
 
 	"github.com/domonda/go-types"
+	"github.com/domonda/go-types/internal"
 )
 
 // Compile-time check that Address implements types.NormalizableValidator[Address]
@@ -20,6 +21,15 @@ var _ types.NormalizableValidator[Address] = Address("")
 // Address represents a non-normalized email address string that may contain
 // an optional display name part before the mandatory email address part.
 // Examples: "user@example.com", "John Doe <john@example.com>"
+//
+// Scan, UnmarshalJSON and UnmarshalXML store a valid address normalized,
+// a blank one as "" and an invalid one unchanged. Value writes the
+// normalized address, SQL NULL for a blank one, and returns an error for
+// an invalid one. MarshalJSON and MarshalText write the normalized address
+// or an invalid one unchanged, and fmt prints the address as stored.
+// Address has no UnmarshalText, so encoding/json reads and writes the keys
+// of a map[Address]V as given. See "Reading and writing values" in the
+// README of the module.
 type Address string
 
 // AddressFrom creates an Address from a parsed mail.Address.
@@ -139,16 +149,7 @@ func (a Address) Parse() (*mail.Address, error) {
 	return ParseAddress(string(a))
 }
 
-// String returns the normalized address,
-// or the unchanged address if it can't be normalized.
-// A non-ASCII name stays UTF-8, see ASCII.
-// String implements the fmt.Stringer interface.
-func (a Address) String() string {
-	norm, _ := a.Normalized()
-	return string(norm)
-}
-
-// ASCII returns the normalized address like String, but with
+// ASCII returns the normalized address, but with
 // a non-ASCII name RFC 2047 encoded like mail.Address.String does,
 // as required for message headers, or the unchanged address
 // if it can't be normalized. The address part is not encoded,
@@ -161,29 +162,54 @@ func (a Address) ASCII() string {
 	return asciiAddress(parsed)
 }
 
+// Scan implements the database/sql.Scanner interface.
+// A valid address is stored normalized, SQL NULL and a blank string as "",
+// and an address that can't be normalized unchanged without an error,
+// so that one invalid value doesn't fail a whole query; Validate reports it.
+func (a *Address) Scan(value any) error {
+	return internal.ScanNormalized(a, value, Address.Normalized, nil)
+}
+
 // Value implements the driver database/sql/driver.Valuer interface.
-// Returns the normalized address, or the unchanged string
-// if it can't be normalized, so an empty Address is written as empty string.
+// It returns the normalized address, SQL NULL for a blank Address,
+// or the error of Normalized for an address that can't be normalized.
 func (a Address) Value() (driver.Value, error) {
-	norm, _ := a.Normalized()
-	return string(norm), nil
+	return internal.ValueNormalized(a, Address.Normalized, nil)
 }
 
-// MarshalJSON implements encoding/json.Marshaler.
-// Returns the normalized address as JSON string,
-// or the unchanged string if it can't be normalized.
+// MarshalJSON implements encoding/json.Marshaler by writing the
+// normalized address, "" for a blank Address, or the address unchanged
+// if it can't be normalized.
 func (a Address) MarshalJSON() ([]byte, error) {
-	norm, _ := a.Normalized()
-	return json.Marshal(string(norm))
+	return internal.MarshalJSONNormalized(a, Address.Normalized, nil)
 }
 
-// MarshalText implements encoding.TextMarshaler by returning String,
-// the normalized value or the unchanged string if it can't be
-// normalized, so that strfmt and encoding/xml write the canonical form
-// like Value and MarshalJSON. encoding/json writes map keys of string
-// types as they are and doesn't call MarshalText for them.
+// UnmarshalJSON implements encoding/json.Unmarshaler.
+// A JSON string is stored like Scan stores it, JSON null leaves the
+// Address unchanged like encoding/json does for a string type,
+// and any other JSON value is an error.
+func (a *Address) UnmarshalJSON(data []byte) error {
+	return internal.UnmarshalJSONNormalized(a, data, false, Address.Normalized, nil)
+}
+
+// MarshalText implements encoding.TextMarshaler like MarshalJSON,
+// so that encoding/xml and strfmt write the normalized address.
+// encoding/json writes map keys of string types as they are
+// and doesn't call MarshalText for them.
 func (a Address) MarshalText() ([]byte, error) {
-	return []byte(a.String()), nil
+	return internal.MarshalTextNormalized(a, Address.Normalized, nil)
+}
+
+// UnmarshalXML implements encoding/xml.Unmarshaler
+// by storing the text of the element like Scan stores it.
+func (a *Address) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	return internal.UnmarshalXMLNormalized(a, d, start, Address.Normalized, nil)
+}
+
+// UnmarshalXMLAttr implements encoding/xml.UnmarshalerAttr
+// by storing the attribute value like Scan stores it.
+func (a *Address) UnmarshalXMLAttr(attr xml.Attr) error {
+	return internal.UnmarshalXMLAttrNormalized(a, attr, Address.Normalized, nil)
 }
 
 // Validate checks if the Address is a valid email address format.

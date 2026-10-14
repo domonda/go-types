@@ -1,21 +1,25 @@
 package email
 
 import (
+	"bytes"
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
 	"net/mail"
 	"strings"
 
-	"github.com/domonda/go-types/internal"
 	"github.com/domonda/go-types/nullable"
 	"github.com/domonda/go-types/strutil"
 )
 
 // NullableAddressList is a comma separated list
 // of email addresses.
-// The empty string default value represents
+// The empty or whitespace only string represents
 // an empty list and maps to SQL NULL and JSON null.
+//
+// NullableAddressList reads and writes like AddressList, except that null
+// is SQL NULL and JSON null. See "Reading and writing values" in the
+// README of the module.
 type NullableAddressList string
 
 var _ nullable.NullSetable[AddressList] = (*NullableAddressList)(nil)
@@ -58,17 +62,23 @@ func (n NullableAddressList) Parse() ([]*mail.Address, error) {
 	return AddressList(n).Parse()
 }
 
-// Split converts the NullableAddressList to a slice of Address values,
-// or returns nil if the list is null.
+// SplitNormalized parses the NullableAddressList and returns its addresses
+// normalized like AddressList.SplitNormalized, or nil if the list is null.
 //
-// Like AddressList.Split it returns all successfully parsed addresses
-// even when other addresses in the list can't be parsed, with the
-// parsing errors collected and returned joined.
-func (n NullableAddressList) Split() ([]Address, error) {
+// Like AddressList.SplitNormalized it returns all successfully parsed
+// addresses even when other addresses in the list can't be parsed, with
+// the parsing errors collected and returned joined.
+func (n NullableAddressList) SplitNormalized() ([]Address, error) {
 	if n.IsNull() {
 		return nil, nil
 	}
-	return AddressList(n).Split()
+	return AddressList(n).SplitNormalized()
+}
+
+// SplitRaw returns the entries of the NullableAddressList as stored,
+// only trimmed, see SplitAddressList.
+func (n NullableAddressList) SplitRaw() []Address {
+	return SplitAddressList(string(n))
 }
 
 // Validate returns an error if the NullableAddressList is not null
@@ -87,31 +97,26 @@ func (n NullableAddressList) ValidAndNormalized() bool {
 }
 
 // Normalized parses and normalizes the NullableAddressList,
-// returning the null value unchanged.
+// returning "" for null.
 func (n NullableAddressList) Normalized() (NullableAddressList, error) {
 	if n.IsNull() {
-		return n, nil
+		return "", nil
 	}
 	norm, err := AddressList(n).Normalized()
 	return NullableAddressList(norm), err
 }
 
-// IsNull returns true if the string n is empty.
+// IsNull returns true if the string n is empty or consists only of
+// the runes strutil.TrimSpace removes, like for NullableAddress.
+// IsNull implements the nullable.Nullable interface.
 func (n NullableAddressList) IsNull() bool {
-	return n == ""
+	return strutil.TrimSpace(n) == ""
 }
 
-// IsNotNull returns true if the string n is not empty.
+// IsNotNull returns true if the NullableAddressList is not null,
+// see IsNull.
 func (n NullableAddressList) IsNotNull() bool {
-	return n != ""
-}
-
-// String returns the normalized list like AddressList.String,
-// "" for null, or the unchanged list if it can't be normalized.
-// String implements the fmt.Stringer interface.
-func (n NullableAddressList) String() string {
-	norm, _ := n.Normalized()
-	return string(norm)
+	return !n.IsNull()
 }
 
 // ASCII returns the list like AddressList.ASCII, or "" for null.
@@ -122,15 +127,13 @@ func (n NullableAddressList) ASCII() string {
 	return AddressList(n).ASCII()
 }
 
-// StringOr returns the normalized NullableAddressList as string,
-// or the passed nullString if the NullableAddressList is null
-// or can't be normalized.
+// StringOr returns the NullableAddressList as stored,
+// or the passed nullString if the NullableAddressList is null.
 func (n NullableAddressList) StringOr(nullString string) string {
-	norm, err := n.Normalized()
-	if err != nil || norm.IsNull() {
+	if n.IsNull() {
 		return nullString
 	}
-	return string(norm)
+	return string(n)
 }
 
 // Get returns the non nullable string value
@@ -163,93 +166,68 @@ func (n *NullableAddressList) SetNull() {
 	*n = ""
 }
 
-// Scan implements the database/sql.Scanner interface.
-// It accepts a plain string (an already joined address list) or a
-// PostgreSQL array text literal ({"a@x.com","b@y.com"}, see
-// https://www.postgresql.org/docs/current/arrays.html) whose elements
-// are joined into the list. The array form requires PostgreSQL or an
-// array-compatible database such as CockroachDB or YugabyteDB; Value
-// always writes a plain string and works with any database.
-// Whitespace around the array elements or a plain string is trimmed
-// like by AddressSet.Scan. An empty or whitespace only string scans
-// as null like the empty array {}.
+// Scan implements the database/sql.Scanner interface like AddressList.Scan,
+// with SQL NULL, a blank string, "null" and an empty array as null.
+// A PostgreSQL array requires PostgreSQL or an array-compatible database
+// such as CockroachDB or YugabyteDB; Value always writes a plain string
+// and works with any database.
 func (n *NullableAddressList) Scan(value any) error {
-	switch s := value.(type) {
-	case nil:
-		n.SetNull()
-		return nil
-
-	case string:
-		// Trimmed like the array elements by scanAddressArray
-		list := strutil.TrimSpace(s)
-		if list == "" {
-			n.SetNull()
-			return nil
-		}
-		// Detected on the trimmed list, so a padded array is one too
-		if list[0] == '{' && list[len(list)-1] == '}' {
-			// Elements that are empty after the helper's trim are
-			// skipped by the join.
-			stringArray, err := scanAddressArray(list, "NullableAddressList")
-			if err != nil {
-				return err
-			}
-			*n = NullableAddressListJoinStrings(stringArray...)
-			return nil
-		}
-		*n = NullableAddressList(list)
-		return nil
-
-	case []byte:
-		return n.Scan(string(s))
-
-	default:
-		return fmt.Errorf("can't scan %T as email.NullableAddressList", value)
+	var list AddressList
+	if err := list.Scan(value); err != nil {
+		return err
 	}
+	*n = NullableAddressList(list)
+	return nil
 }
 
 // Value implements the driver database/sql/driver.Valuer interface.
-// Returns nil for SQL NULL if the normalized list is null,
-// which includes a whitespace only list or one without addresses
-// like "undisclosed-recipients:;", else the normalized list,
-// or the unchanged string if it can't be normalized.
+// It returns SQL NULL if the NullableAddressList is null, else the list as
+// stored with the surrounding whitespace trimmed, or the error of Validate
+// for an invalid list.
 func (n NullableAddressList) Value() (driver.Value, error) {
-	norm, _ := n.Normalized()
-	if norm.IsNull() {
-		return nil, nil
-	}
-	return string(norm), nil
+	return AddressList(n).Value()
 }
 
 // UnmarshalText implements encoding.TextUnmarshaler
+// by storing the text unchanged.
 func (n *NullableAddressList) UnmarshalText(text []byte) error {
 	*n = NullableAddressList(text)
 	return nil
 }
 
-// UnmarshalJSON implements the json.Unmarshaler interface
-// setting the NullableAddressList to null for the JSON null value
-// or an empty JSON string.
+// UnmarshalJSON implements encoding/json.Unmarshaler like
+// AddressList.UnmarshalJSON, but setting the NullableAddressList to null
+// for the JSON null value, so that decoding null into a field that holds
+// a value resets it.
 func (n *NullableAddressList) UnmarshalJSON(data []byte) error {
-	return internal.UnmarshalJSONStringOrNull(n, data)
-}
-
-// MarshalJSON implements the json.Marshaler interface
-// by returning the JSON null value if the normalized list is null like for Value,
-// else the normalized list, or the unchanged string if it can't be normalized.
-func (n NullableAddressList) MarshalJSON() ([]byte, error) {
-	norm, _ := n.Normalized()
-	if norm.IsNull() {
-		return []byte("null"), nil
+	if bytes.Equal(data, []byte(`null`)) {
+		n.SetNull()
+		return nil
 	}
-	return json.Marshal(string(norm))
+	var list AddressList
+	if err := list.UnmarshalJSON(data); err != nil {
+		return err
+	}
+	*n = NullableAddressList(list)
+	return nil
 }
 
-// MarshalText implements encoding.TextMarshaler by returning String,
-// the normalized value, "" for null, or the unchanged string if it can't be
-// normalized, so that strfmt and encoding/xml write the canonical form
-// like Value and MarshalJSON. encoding/json writes map keys of string
-// types as they are and doesn't call MarshalText for them.
+// MarshalJSON implements encoding/json.Marshaler by writing the JSON null
+// value if the NullableAddressList is null, else the list as stored
+// as JSON string.
+func (n NullableAddressList) MarshalJSON() ([]byte, error) {
+	if n.IsNull() {
+		return []byte(`null`), nil
+	}
+	return json.Marshal(string(n))
+}
+
+// MarshalText implements encoding.TextMarshaler by returning the list
+// as stored, or "" for null, so that encoding/xml and strfmt write it
+// unchanged.
 func (n NullableAddressList) MarshalText() ([]byte, error) {
-	return []byte(n.String()), nil
+	if n.IsNull() {
+		return nil, nil
+	}
+	return []byte(n), nil
 }

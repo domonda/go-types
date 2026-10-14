@@ -1,10 +1,9 @@
 package email
 
 import (
+	"bytes"
 	"database/sql/driver"
 	"encoding/json"
-	"errors"
-	"fmt"
 	"net/mail"
 	"strings"
 
@@ -45,8 +44,17 @@ func NormalizeAddressList(list string) (normalized []string, err error) {
 // AddressList represents a comma-separated list of email addresses.
 // The list is meant to contain at least one email address,
 // use NullableAddressList for lists that can be empty.
-// Note that only Scan rejects an empty string,
 // Validate and Valid accept an empty list.
+//
+// AddressList is a collection: every format reads and writes the list
+// as stored, because normalizing would rewrite every entry. Scan and
+// UnmarshalJSON also read a PostgreSQL array, a JSON array and a JSON
+// object with the addresses as keys, see Scan. Value writes the list
+// as a plain string that works with every database, SQL NULL for a blank
+// list, and returns an error for an invalid list. MarshalJSON writes the
+// list as JSON string, so MarshalJSON and UnmarshalJSON round-trip every
+// list. Use Normalized to normalize the list. See "Reading and writing
+// values" in the README of the module.
 type AddressList string
 
 // AddressListJoin creates an AddressList by joining multiple Address values
@@ -103,13 +111,15 @@ func (l AddressList) Parse() ([]*mail.Address, error) {
 	return ParseAddressList(string(l))
 }
 
-// Split converts the AddressList to a slice of Address values.
+// SplitNormalized parses the AddressList and returns its addresses
+// normalized, see Normalized.
 //
 // All successfully parsed addresses are returned even when other
 // addresses in the list can't be parsed. Parsing errors are collected
 // and returned joined (see ParseAddressList), so a non-nil error can
 // accompany a non-empty result slice. Returns nil if the list is empty.
-func (l AddressList) Split() ([]Address, error) {
+// Use SplitRaw to get the addresses as stored.
+func (l AddressList) SplitNormalized() ([]Address, error) {
 	parsed, err := l.Parse()
 	if len(parsed) == 0 {
 		return nil, err
@@ -119,6 +129,12 @@ func (l AddressList) Split() ([]Address, error) {
 		a[i] = AddressFrom(p)
 	}
 	return a, err
+}
+
+// SplitRaw returns the entries of the AddressList as stored,
+// only trimmed, see SplitAddressList.
+func (l AddressList) SplitRaw() []Address {
+	return SplitAddressList(string(l))
 }
 
 // UniqueAddressParts returns an AddressSet containing the unique normalized
@@ -176,26 +192,7 @@ func (l AddressList) Normalized() (AddressList, error) {
 	return AddressList(b.String()), nil
 }
 
-// undisclosedRecipients is the canonical placeholder
-// for a valid list without addresses, see AddressList.String.
-const undisclosedRecipients = "undisclosed-recipients:;"
-
-// String returns the normalized list,
-// or the unchanged list if it can't be normalized.
-// A list without addresses, like "Undisclosed recipients",
-// is returned as the canonical placeholder "undisclosed-recipients:;",
-// because Scan rejects the empty string of the normalized list.
-// Non-ASCII names stay UTF-8, see ASCII.
-// String implements the fmt.Stringer interface.
-func (l AddressList) String() string {
-	norm, _ := l.Normalized()
-	if norm == "" && strutil.TrimSpace(string(l)) != "" {
-		return undisclosedRecipients
-	}
-	return string(norm)
-}
-
-// ASCII returns the normalized list like String, but with
+// ASCII returns the normalized list, but with
 // non-ASCII names RFC 2047 encoded like Address.ASCII,
 // or the unchanged list if it can't be normalized.
 // A list without addresses is returned as "" for a message header,
@@ -236,28 +233,47 @@ func headerAddresses(addrs ...*mail.Address) string {
 }
 
 // Value implements the driver database/sql/driver.Valuer interface.
-// Returns String, or the unchanged string if it is empty
-// or whitespace only.
+// It returns the list as stored with the surrounding whitespace trimmed,
+// SQL NULL for a blank list, or the error of Validate for an invalid list.
 func (l AddressList) Value() (driver.Value, error) {
-	if strutil.TrimSpace(string(l)) == "" {
-		return string(l), nil
+	list := strutil.TrimSpace(l)
+	if list == "" {
+		return nil, nil
 	}
-	return l.String(), nil
+	if err := list.Validate(); err != nil {
+		return nil, err
+	}
+	return string(list), nil
 }
 
 // MarshalJSON implements encoding/json.Marshaler
-// by returning String as JSON string.
+// by writing the list as stored as JSON string.
 func (l AddressList) MarshalJSON() ([]byte, error) {
-	return json.Marshal(l.String())
+	return json.Marshal(string(l))
 }
 
-// MarshalText implements encoding.TextMarshaler by returning String,
-// the normalized value or the unchanged string if it can't be
-// normalized, so that strfmt and encoding/xml write the canonical form
-// like Value and MarshalJSON. encoding/json writes map keys of string
-// types as they are and doesn't call MarshalText for them.
+// UnmarshalJSON implements encoding/json.Unmarshaler.
+// A JSON string is stored unchanged, so MarshalJSON and UnmarshalJSON
+// round-trip every list. A JSON array of strings or an object with the
+// addresses as keys is joined with ", ". JSON null leaves the AddressList
+// unchanged like encoding/json does for a string type,
+// and any other JSON value is an error.
+func (l *AddressList) UnmarshalJSON(data []byte) error {
+	if bytes.Equal(data, []byte(`null`)) {
+		return nil
+	}
+	c, err := unmarshalJSONAddressCollection(data, "AddressList")
+	if err != nil {
+		return err
+	}
+	l.setCollection(c, false)
+	return nil
+}
+
+// MarshalText implements encoding.TextMarshaler by returning the list
+// as stored, so that encoding/xml and strfmt write it unchanged.
 func (l AddressList) MarshalText() ([]byte, error) {
-	return []byte(l.String()), nil
+	return []byte(l), nil
 }
 
 // Nullable converts the AddressList to a NullableAddressList type.
@@ -266,38 +282,46 @@ func (l AddressList) Nullable() NullableAddressList {
 }
 
 // Scan implements the database/sql.Scanner interface.
-// Supports scanning SQL strings and string arrays.
-// Whitespace around the array elements or a plain string is trimmed
-// like by AddressSet.Scan.
+// A plain address list is stored as given with the surrounding whitespace
+// trimmed, without parsing or validating it, so that one invalid value
+// doesn't fail a whole query; Validate reports it. The elements of a
+// PostgreSQL array (from a text[] column) or a JSON array and the keys of
+// a JSON object (from a json or jsonb column) are joined with ", ",
+// and a JSON string is read as address list. SQL NULL, a blank string
+// and "null" are stored as "". Other SQL types are an error.
 func (l *AddressList) Scan(value any) error {
+	var text string
 	switch s := value.(type) {
-	case string:
-		if s == "" {
-			return errors.New("can't scan empty string as email.AddressList")
-		}
-		// Trimmed like the array elements by scanAddressArray,
-		// before detecting an array, so a padded array is one too
-		list := strutil.TrimSpace(s)
-		if list == "" {
-			return errs.New("can't scan whitespace only string as email.AddressList")
-		}
-		if list[0] == '{' && list[len(list)-1] == '}' {
-			// Elements that are empty after the helper's trim are
-			// skipped by AddressListJoinStrings.
-			stringArray, err := scanAddressArray(list, "AddressList")
-			if err != nil {
-				return err
-			}
-			*l = AddressListJoinStrings(stringArray...)
-			return nil
-		}
-		*l = AddressList(list)
+	case nil:
+		*l = ""
 		return nil
-
+	case string:
+		text = s
 	case []byte:
-		return l.Scan(string(s))
-
+		text = string(s)
 	default:
-		return fmt.Errorf("can't scan %T as email.AddressList", value)
+		return errs.Errorf("can't scan SQL value of type %T as email.AddressList", value)
+	}
+	c, err := readAddressCollection(text, "AddressList")
+	if err != nil {
+		return err
+	}
+	l.setCollection(c, true)
+	return nil
+}
+
+// setCollection stores the address collection c read by Scan or
+// UnmarshalJSON, with the entries joined with ", " and a plain
+// list trimmed if trim is true.
+func (l *AddressList) setCollection(c addressCollection, trim bool) {
+	switch {
+	case c.null:
+		*l = ""
+	case c.entries != nil:
+		*l = AddressListJoinStrings(c.entries...)
+	case trim:
+		*l = AddressList(strutil.TrimSpace(c.list))
+	default:
+		*l = AddressList(c.list)
 	}
 }

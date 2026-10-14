@@ -7,6 +7,7 @@ import (
 	"net/mail"
 	"testing"
 
+	"github.com/domonda/go-types/internal/normtest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -120,7 +121,7 @@ func TestNullableAddress_NotNull(t *testing.T) {
 	assert.Equal(t, "john.doe", localPart)
 
 	assert.Equal(t, "Example.com", n.DomainPart())
-	assert.Equal(t, string(normalized), n.StringOr("<none>"), "StringOr normalizes like String")
+	assert.Equal(t, string(n), n.StringOr("<none>"), "StringOr returns the address as stored")
 	assert.Equal(t, Address(n), n.Get())
 	assert.Equal(t, Address(n), n.GetOr("default@example.com"))
 	assert.Equal(t, NullableAddressList(n), n.AsList())
@@ -297,7 +298,8 @@ func TestNullableAddress_JSON(t *testing.T) {
 
 // A non-null NullableAddress is written normalized like Address, see
 // TestAddress_ValueAndMarshalJSONNormalize, and null stays SQL NULL and
-// JSON null, including the whitespace-only null.
+// JSON null, including the whitespace-only null. Value refuses an invalid
+// address, JSON writes it unchanged.
 func TestNullableAddress_ValueAndMarshalJSONNormalize(t *testing.T) {
 	tests := []struct {
 		n        NullableAddress
@@ -307,7 +309,6 @@ func TestNullableAddress_ValueAndMarshalJSONNormalize(t *testing.T) {
 		{n: AddressNull, wantSQL: nil, wantJSON: `null`},
 		{n: "  ", wantSQL: nil, wantJSON: `null`},
 		{n: `Zoë Bäcker <Zoe@Example.com>`, wantSQL: `"Zoë Bäcker" <zoe@example.com>`, wantJSON: `"\"Zoë Bäcker\" \u003czoe@example.com\u003e"`},
-		{n: `not an address`, wantSQL: `not an address`, wantJSON: `"not an address"`},
 	}
 	for _, tt := range tests {
 		v, err := tt.n.Value()
@@ -318,25 +319,32 @@ func TestNullableAddress_ValueAndMarshalJSONNormalize(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, tt.wantJSON, string(j), "json.Marshal(NullableAddress(%q))", string(tt.n))
 	}
+
+	_, err := NullableAddress(`not an address`).Value()
+	assert.Error(t, err, "Value() of an invalid address")
+	j, err := json.Marshal(NullableAddress(`not an address`))
+	require.NoError(t, err)
+	assert.Equal(t, `"not an address"`, string(j))
 }
 
-// String and ASCII work like those of Address, see
-// TestAddress_StringAndASCII, and return "" for null. StringOr returns
-// the normalized address or the alternative for null and invalid values.
-func TestNullableAddress_StringASCIIStringOr(t *testing.T) {
+// MarshalText and ASCII work like those of Address, see
+// TestAddress_MarshalTextAndASCII, and return "" for null. StringOr
+// returns the alternative only for null and any other value as stored,
+// so an invalid address is shown as what it is.
+func TestNullableAddress_MarshalTextASCIIStringOr(t *testing.T) {
 	tests := []struct {
 		n            NullableAddress
-		wantStr      string
+		wantText     string
 		wantASCII    string
 		wantStringOr string
 	}{
-		{n: AddressNull, wantStr: ``, wantASCII: ``, wantStringOr: `none`},
-		{n: `  `, wantStr: ``, wantASCII: ``, wantStringOr: `none`},
-		{n: `Zoë <Zoe@Example.com>`, wantStr: `"Zoë" <zoe@example.com>`, wantASCII: `=?utf-8?q?Zo=C3=AB?= <zoe@example.com>`, wantStringOr: `"Zoë" <zoe@example.com>`},
-		{n: `not an address`, wantStr: `not an address`, wantASCII: `not an address`, wantStringOr: `none`},
+		{n: AddressNull, wantText: ``, wantASCII: ``, wantStringOr: `none`},
+		{n: `  `, wantText: ``, wantASCII: ``, wantStringOr: `none`},
+		{n: `Zoë <Zoe@Example.com>`, wantText: `"Zoë" <zoe@example.com>`, wantASCII: `=?utf-8?q?Zo=C3=AB?= <zoe@example.com>`, wantStringOr: `Zoë <Zoe@Example.com>`},
+		{n: `not an address`, wantText: `not an address`, wantASCII: `not an address`, wantStringOr: `not an address`},
 	}
 	for _, tt := range tests {
-		assert.Equal(t, tt.wantStr, tt.n.String(), "NullableAddress(%q).String()", string(tt.n))
+		assert.Equal(t, tt.wantText, marshalText(t, tt.n), "NullableAddress(%q).MarshalText()", string(tt.n))
 		assert.Equal(t, tt.wantASCII, tt.n.ASCII(), "NullableAddress(%q).ASCII()", string(tt.n))
 		assert.Equal(t, tt.wantStringOr, tt.n.StringOr("none"), "NullableAddress(%q).StringOr()", string(tt.n))
 	}
@@ -360,4 +368,16 @@ func TestNullableAddress_JSONSchema(t *testing.T) {
 	assert.Equal(t, "string", schema.OneOf[0].Type)
 	assert.Equal(t, "email", schema.OneOf[0].Format)
 	assert.Equal(t, "null", schema.OneOf[1].Type)
+}
+
+// TestNullableAddress_ReadingAndWriting checks the reading and writing
+// contract shared by the normalizing types, with a blank NullableAddress
+// as null.
+func TestNullableAddress_ReadingAndWriting(t *testing.T) {
+	normtest.Run(t, normtest.Spec[NullableAddress]{
+		Canonical: `"John Doe" <john@example.com>`,
+		Variants:  []NullableAddress{`John Doe <John@Example.com>`, ` "John Doe" <JOHN@example.com> `},
+		Invalid:   []NullableAddress{"not an address", "john@"},
+		Nullable:  true,
+	})
 }

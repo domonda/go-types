@@ -194,7 +194,8 @@ func TestFormatTextMarshaler(t *testing.T) {
 // writes the types that normalize their Value and JSON in the same
 // canonical form, through their MarshalText method. Formatted as their
 // string kind, "eur" and "EUR" would be different currencies in an export
-// that is read back or compared with the database.
+// that is read back or compared with the database. The collection types
+// write their MarshalText as stored.
 func TestFormatNormalizingTypes(t *testing.T) {
 	config := NewEnglishFormatConfig()
 	tests := []struct {
@@ -214,9 +215,10 @@ func TestFormatNormalizingTypes(t *testing.T) {
 		{value: vat.NullableID("atu 1022 3006"), want: "ATU10223006"},
 		{value: email.Address("Jürgen <J@Example.com>"), want: `"Jürgen" <j@example.com>`},
 		{value: email.NullableAddress("J@Example.com"), want: "j@example.com"},
-		{value: email.AddressList("A@Example.com,B@Example.com"), want: "a@example.com, b@example.com"},
-		{value: email.NullableAddressList("A@Example.com"), want: "a@example.com"},
-		// Invalid values are written unchanged like by Value
+		// The address lists are collections and written as stored
+		{value: email.AddressList("A@Example.com,B@Example.com"), want: "A@Example.com,B@Example.com"},
+		{value: email.NullableAddressList("A@Example.com"), want: "A@Example.com"},
+		// Invalid values are written unchanged like by MarshalJSON
 		{value: money.Currency("XYZ"), want: "XYZ"},
 		// Null is the Nil placeholder, not the empty text
 		{value: money.NullableCurrency(""), want: config.Nil},

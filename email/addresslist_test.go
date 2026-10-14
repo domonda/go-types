@@ -1,7 +1,10 @@
 package email
 
 import (
+	"database/sql/driver"
 	"encoding/json"
+	"encoding/xml"
+	"fmt"
 	"net/mail"
 	"reflect"
 	"testing"
@@ -49,13 +52,13 @@ func TestAddressList_Split(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(string(tt.l), func(t *testing.T) {
-			got, err := tt.l.Split()
+			got, err := tt.l.SplitNormalized()
 			if (err != nil) != tt.wantErr {
-				t.Errorf("AddressList(%#v).Split() error = %v, wantErr %v", string(tt.l), err, tt.wantErr)
+				t.Errorf("AddressList(%#v).SplitNormalized() error = %v, wantErr %v", string(tt.l), err, tt.wantErr)
 				return
 			}
 			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("AddressList(%#v).Split() = %v, want %v", string(tt.l), got, tt.want)
+				t.Errorf("AddressList(%#v).SplitNormalized() = %v, want %v", string(tt.l), got, tt.want)
 			}
 		})
 	}
@@ -116,13 +119,25 @@ func TestAddressList_Scan(t *testing.T) {
 		// and the padding would end up in the first and last address.
 		{name: "padded plain string", value: " a@example.com, b@example.com\t\n", want: "a@example.com, b@example.com"},
 		{name: "padded plain bytes", value: []byte(" a@example.com "), want: "a@example.com"},
-		// Whitespace only is no list, like the empty string
-		{name: "whitespace only plain string", value: " \t ", wantErr: true},
 		{name: "bytes", value: []byte(`{"a@example.com"}`), want: "a@example.com"},
-		// AddressList is the not-null type, so SQL NULL is an error here.
-		// NullableAddressList is what scans NULL into the empty list.
-		{name: "null", value: nil, wantErr: true},
-		{name: "empty string", value: "", wantErr: true},
+		// Like every non-nullable type, AddressList reads SQL NULL and a
+		// blank string as its empty value instead of failing the query;
+		// Value writes the empty list back as SQL NULL.
+		{name: "whitespace only plain string", value: " \t ", want: ""},
+		{name: "null", value: nil, want: ""},
+		{name: "empty string", value: "", want: ""},
+		// A plain list is kept as stored, also with other spellings or
+		// invalid entries, because AddressList is a collection
+		{name: "plain string not normalized", value: "A@Example.com, John <J@Example.com>", want: "A@Example.com, John <J@Example.com>"},
+		{name: "invalid plain string", value: "not an address", want: "not an address"},
+		// json and jsonb columns: arrays and objects are joined,
+		// a JSON string is read as address list
+		{name: "JSON array", value: `["b@example.com", "A@Example.com"]`, want: "b@example.com, A@Example.com"},
+		{name: "JSON object", value: `{"b@example.com": {}, "a@example.com": {}}`, want: "a@example.com, b@example.com"},
+		{name: "JSON string", value: `"a@example.com, b@example.com"`, want: "a@example.com, b@example.com"},
+		// A quoted display name is no JSON string, but an address list
+		{name: "quoted display name", value: `"Doe, John" <john@example.com>`, want: `"Doe, John" <john@example.com>`},
+		{name: "JSON array of numbers", value: `[1, 2]`, wantErr: true},
 		{name: "invalid array", value: `{,}`, wantErr: true},
 		{name: "unsupported type", value: 123, wantErr: true},
 	}
@@ -281,93 +296,98 @@ func TestAddressList_ValidateAndNormalized(t *testing.T) {
 	}
 }
 
-// Value and MarshalJSON write an AddressList normalized like Address,
-// see TestAddress_ValueAndMarshalJSONNormalize. A list that can't be
-// normalized is written unchanged instead of failing the write.
-func TestAddressList_ValueAndMarshalJSONNormalize(t *testing.T) {
+// AddressList is a collection: Value and MarshalJSON write the list as
+// stored, because normalizing would rewrite every entry of it. Value trims
+// the surrounding whitespace, writes a blank list as SQL NULL and refuses
+// an invalid list, because the database is where it would stay.
+// MarshalJSON writes every list unchanged, also an invalid one, so that
+// it round-trips through UnmarshalJSON.
+func TestAddressList_ValueAndMarshalJSONAsStored(t *testing.T) {
 	tests := []struct {
-		l    AddressList
-		want string
+		l       AddressList
+		wantSQL driver.Value
 	}{
-		{l: `a@example.com`, want: `a@example.com`},
-		{l: `A@Example.com,  Jürgen <J@Example.com>`, want: `a@example.com, "Jürgen" <j@example.com>`},
-		{l: `a@example.com, not an address`, want: `a@example.com, not an address`},
-		{l: ``, want: ``},
+		{l: `a@example.com`, wantSQL: `a@example.com`},
+		{l: `A@Example.com,  Jürgen <J@Example.com>`, wantSQL: `A@Example.com,  Jürgen <J@Example.com>`},
+		{l: ` a@example.com `, wantSQL: `a@example.com`},
+		// A valid list without addresses needs no special case
+		{l: `undisclosed-recipients:;`, wantSQL: `undisclosed-recipients:;`},
+		{l: `Undisclosed recipients`, wantSQL: `Undisclosed recipients`},
+		// An address that starts like a placeholder is an address
+		{l: `withheld recipients <victim@example.com>`, wantSQL: `withheld recipients <victim@example.com>`},
+		{l: ``, wantSQL: nil},
+		{l: `  `, wantSQL: nil},
 	}
 	for _, tt := range tests {
 		v, err := tt.l.Value()
 		require.NoError(t, err)
-		assert.Equal(t, tt.want, v, "AddressList(%q).Value()", string(tt.l))
-
-		j, err := json.Marshal(tt.l)
-		require.NoError(t, err)
-		var got string
-		require.NoError(t, json.Unmarshal(j, &got))
-		assert.Equal(t, tt.want, got, "json.Marshal(AddressList(%q))", string(tt.l))
+		assert.Equal(t, tt.wantSQL, v, "AddressList(%q).Value()", string(tt.l))
+		if v != nil {
+			var scanned AddressList
+			require.NoError(t, scanned.Scan(v))
+			assert.Equal(t, AddressList(v.(string)), scanned, "Scan(Value()) of %q", string(tt.l))
+		}
 	}
 
-	// A valid list without addresses normalizes to the empty string,
-	// which Scan rejects, so Value writes the canonical placeholder
-	// to keep the written row readable
-	undisclosed := AddressList("undisclosed-recipients:;")
-	require.NoError(t, undisclosed.Validate())
-	v, err := undisclosed.Value()
-	require.NoError(t, err)
-	assert.Equal(t, "undisclosed-recipients:;", v)
-	var scanned AddressList
-	require.NoError(t, scanned.Scan(v), "Scan(Value()) of a valid list")
+	invalid := AddressList(`a@example.com, not an address`)
+	_, err := invalid.Value()
+	assert.Error(t, err, "Value() of an invalid list")
 
-	// Other placeholder spellings are written as the canonical one,
-	// also as JSON and text, so that a list read from JSON can be
-	// written to SQL and scanned again
-	placeholder := AddressList("Undisclosed recipients")
-	v, err = placeholder.Value()
-	require.NoError(t, err)
-	assert.Equal(t, "undisclosed-recipients:;", v)
-	assert.Equal(t, "undisclosed-recipients:;", placeholder.String())
-	j, err := json.Marshal(placeholder)
-	require.NoError(t, err)
-	var fromJSON AddressList
-	require.NoError(t, json.Unmarshal(j, &fromJSON))
-	v, err = fromJSON.Value()
-	require.NoError(t, err)
-	require.NoError(t, scanned.Scan(v), "Scan(Value()) of a list read from JSON")
+	for _, l := range []AddressList{`A@Example.com,  Jürgen <J@Example.com>`, ` a@example.com `, `  `, ``, invalid} {
+		j, err := json.Marshal(l)
+		require.NoError(t, err)
+		var str string
+		require.NoError(t, json.Unmarshal(j, &str))
+		assert.Equal(t, string(l), str, "json.Marshal(AddressList(%q))", string(l))
+		var back AddressList
+		require.NoError(t, json.Unmarshal(j, &back))
+		assert.Equal(t, l, back, "JSON round trip of %q", string(l))
+	}
 
 	// Text after a placeholder is no list without addresses: other
 	// parsers read the address in it, so it must not pass Validate
-	// as empty list that Value would write as placeholder
+	// as empty list
 	for _, hidden := range []AddressList{
 		"undisclosed-recipients:;, victim@example.com",
 		"Undisclosed-Recipients: victim@example.com;",
 	} {
 		assert.Error(t, hidden.Validate(), hidden)
-	}
-
-	// An address that starts like a placeholder is an address,
-	// Value must not replace it with the placeholder
-	for list, want := range map[AddressList]string{
-		"undisclosed-recipients@example.com":       "undisclosed-recipients@example.com",
-		"withheld recipients <victim@example.com>": `"withheld recipients" <victim@example.com>`,
-	} {
-		v, err = list.Value()
-		require.NoError(t, err)
-		assert.Equal(t, want, v)
+		_, err := hidden.Value()
+		assert.Error(t, err, "Value() of %q", hidden)
 	}
 }
 
-// String and ASCII of a list work like those of Address,
-// see TestAddress_StringAndASCII.
-func TestAddressList_StringAndASCII(t *testing.T) {
+// ASCII writes a list normalized with non-ASCII names RFC 2047 encoded
+// for message headers, or the list unchanged if it can't be normalized,
+// while fmt prints a list as stored.
+func TestAddressList_ASCII(t *testing.T) {
 	l := AddressList(`A@Example.com, Jürgen <J@Example.com>`)
-	assert.Equal(t, `a@example.com, "Jürgen" <j@example.com>`, l.String())
 	assert.Equal(t, `a@example.com, =?utf-8?q?J=C3=BCrgen?= <j@example.com>`, l.ASCII())
+	assert.Equal(t, string(l), fmt.Sprint(l))
 
 	invalid := AddressList(`a@example.com, not an address`)
-	assert.Equal(t, string(invalid), invalid.String())
 	assert.Equal(t, string(invalid), invalid.ASCII())
+	assert.Equal(t, string(invalid), fmt.Sprint(invalid))
 }
 
 func TestAddressList_Nullable(t *testing.T) {
 	const list AddressList = `"Doe, John" <john@example.com>, b@example.com`
 	assert.Equal(t, NullableAddressList(list), list.Nullable(), "conversion must keep the exact string")
+}
+
+// AddressList is written and read as stored in XML, as element and as
+// attribute, like in every other format.
+func TestAddressList_XML(t *testing.T) {
+	type doc struct {
+		XMLName xml.Name            `xml:"doc"`
+		To      AddressList         `xml:"to"`
+		Cc      NullableAddressList `xml:"cc,attr"`
+	}
+	in := doc{To: `A@Example.com, "Doe, John" <john@example.com>`, Cc: `not an address`}
+	data, err := xml.Marshal(in)
+	require.NoError(t, err)
+	var got doc
+	require.NoError(t, xml.Unmarshal(data, &got))
+	assert.Equal(t, in.To, got.To)
+	assert.Equal(t, in.Cc, got.Cc)
 }

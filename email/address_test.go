@@ -1,11 +1,13 @@
 package email
 
 import (
+	"encoding"
 	"encoding/json"
 	"net/mail"
 	"testing"
 	"unicode"
 
+	"github.com/domonda/go-types/internal/normtest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -178,7 +180,7 @@ func TestAddress_NormalizedRoundTrip(t *testing.T) {
 
 			v, err := addr.Value()
 			require.NoError(t, err)
-			written, err := Address(v.(string)).AsList().Split()
+			written, err := Address(v.(string)).AsList().SplitNormalized()
 			require.NoError(t, err)
 			require.Len(t, written, 1, "Value %q must be one address", v)
 			gotPart, err := written[0].AddressPart()
@@ -200,8 +202,10 @@ func TestAddress_Normalized_InvalidReturnsInput(t *testing.T) {
 // Value and MarshalJSON write an Address normalized, because Validate
 // accepts other spellings like an upper case address part or an
 // RFC 2047 encoded name: without normalization the same address would
-// reach SQL and JSON as different strings. An address that can't be
-// normalized is written unchanged instead of failing the write.
+// reach SQL and JSON as different strings. Value refuses an address that
+// can't be normalized, because the database is where an invalid value
+// would stay, and MarshalJSON writes it unchanged, so a response that
+// holds one still renders.
 func TestAddress_ValueAndMarshalJSONNormalize(t *testing.T) {
 	tests := []struct {
 		addr Address
@@ -211,8 +215,6 @@ func TestAddress_ValueAndMarshalJSONNormalize(t *testing.T) {
 		{addr: `John.Doe@Example.com`, want: `john.doe@example.com`},
 		{addr: `John Doe <John@Example.com>`, want: `"John Doe" <john@example.com>`},
 		{addr: `=?utf-8?q?J=C3=BCrgen?= <j@example.com>`, want: `"Jürgen" <j@example.com>`},
-		{addr: `not an address`, want: `not an address`},
-		{addr: ``, want: ``},
 	}
 	for _, tt := range tests {
 		v, err := tt.addr.Value()
@@ -225,13 +227,23 @@ func TestAddress_ValueAndMarshalJSONNormalize(t *testing.T) {
 		require.NoError(t, json.Unmarshal(j, &got))
 		assert.Equal(t, tt.want, got, "json.Marshal(Address(%q))", string(tt.addr))
 	}
+
+	_, err := Address(`not an address`).Value()
+	assert.Error(t, err, "Value() of an invalid address")
+	j, err := json.Marshal(Address(`not an address`))
+	require.NoError(t, err)
+	assert.Equal(t, `"not an address"`, string(j))
+
+	v, err := Address(``).Value()
+	require.NoError(t, err)
+	assert.Nil(t, v, "an empty Address is written as SQL NULL")
 }
 
-// String returns the normalized address with a non-ASCII name as UTF-8
+// MarshalText writes the normalized address with a non-ASCII name as UTF-8
 // for readability, ASCII the same with the name RFC 2047 encoded for
-// message headers. Both return the original if it can't be normalized,
+// message headers. Both write the original if it can't be normalized,
 // so an invalid address is still shown instead of an empty string.
-func TestAddress_StringAndASCII(t *testing.T) {
+func TestAddress_MarshalTextAndASCII(t *testing.T) {
 	tests := []struct {
 		addr      Address
 		wantStr   string
@@ -246,20 +258,20 @@ func TestAddress_StringAndASCII(t *testing.T) {
 		{addr: `not an address`, wantStr: `not an address`, wantASCII: `not an address`},
 	}
 	for _, tt := range tests {
-		assert.Equal(t, tt.wantStr, tt.addr.String(), "Address(%q).String()", string(tt.addr))
+		assert.Equal(t, tt.wantStr, marshalText(t, tt.addr), "Address(%q).MarshalText()", string(tt.addr))
 		assert.Equal(t, tt.wantASCII, tt.addr.ASCII(), "Address(%q).ASCII()", string(tt.addr))
 	}
 
 	// The ASCII form parses back to the same normalized address
 	ascii := Address(Address(`Jürgen Müller <J@Example.com>`).ASCII())
-	assert.Equal(t, `"Jürgen Müller" <j@example.com>`, ascii.String())
+	assert.Equal(t, `"Jürgen Müller" <j@example.com>`, marshalText(t, ascii))
 
-	// A name holding "=?" is written as encoded-word by String and ASCII,
+	// A name holding "=?" is written as encoded-word by MarshalText and ASCII,
 	// so that ParseAddress and net/mail read the name as written instead
 	// of decoding it once more and showing other text
 	const literal = "=?utf-8?q?x?="
 	encoded := Address(`"=?utf-8?q?=3D=3Futf-8=3Fq=3Fx=3F=3D?=" <a@example.com>`)
-	for _, written := range []string{encoded.String(), encoded.ASCII()} {
+	for _, written := range []string{marshalText(t, encoded), encoded.ASCII()} {
 		name, err := Address(written).NamePart()
 		require.NoError(t, err)
 		assert.Equal(t, literal, name, written)
@@ -368,7 +380,7 @@ func TestAddress_Conversions(t *testing.T) {
 
 	list := addr.AsList()
 	assert.Equal(t, AddressList(addr), list)
-	split, err := list.Split()
+	split, err := list.SplitNormalized()
 	require.NoError(t, err)
 	assert.Equal(t, []Address{addr}, split, "the comma in the quoted name must not create a second list entry")
 }
@@ -378,4 +390,25 @@ func TestAddress_JSONSchema(t *testing.T) {
 	schema := Address("").JSONSchema()
 	assert.Equal(t, "string", schema.Type)
 	assert.Equal(t, "email", schema.Format)
+}
+
+// marshalText returns the text that MarshalText writes for v,
+// which is what encoding/xml and strfmt write.
+func marshalText(t *testing.T, v encoding.TextMarshaler) string {
+	t.Helper()
+	text, err := v.MarshalText()
+	require.NoError(t, err)
+	return string(text)
+}
+
+// TestAddress_ReadingAndWriting checks the reading and writing contract
+// shared by the normalizing types: every reading path stores a valid
+// address normalized and an invalid one unchanged, Value refuses an invalid
+// address, and fmt prints the stored address.
+func TestAddress_ReadingAndWriting(t *testing.T) {
+	normtest.Run(t, normtest.Spec[Address]{
+		Canonical: `"John Doe" <john@example.com>`,
+		Variants:  []Address{`John Doe <John@Example.com>`, ` "John Doe" <JOHN@example.com> `},
+		Invalid:   []Address{"not an address", "john@"},
+	})
 }

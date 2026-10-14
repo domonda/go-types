@@ -118,7 +118,7 @@ func ParseMIMEMessage(reader io.Reader) (msg *Message, err error) {
 	for _, to := range header.Values("To") {
 		// Split returns all parsable addresses even when others fail,
 		// so keep the usable ones and collect the error.
-		addrs, err := AddressList(addressHeader(to)).Split()
+		addrs, err := AddressList(addressHeader(to)).SplitNormalized()
 		if err != nil {
 			parseErrs = append(parseErrs, fmt.Errorf("can't parse email header 'To': %w", err))
 		}
@@ -128,21 +128,21 @@ func ParseMIMEMessage(reader io.Reader) (msg *Message, err error) {
 		// intentionally ignoring parsing issues with nullable lists
 		// (we've seen weird and unparsable values) but keep the
 		// addresses that could be parsed
-		addrs, _ := AddressList(addressHeader(deliveredTo)).Split()
+		addrs, _ := AddressList(addressHeader(deliveredTo)).SplitNormalized()
 		msg.DeliveredTo = msg.DeliveredTo.Append(addrs...)
 	}
 	for _, cc := range header.Values("Cc") {
 		// intentionally ignoring parsing issues with nullable lists
 		// (we've seen weird and unparsable values) but keep the
 		// addresses that could be parsed
-		addrs, _ := AddressList(addressHeader(cc)).Split()
+		addrs, _ := AddressList(addressHeader(cc)).SplitNormalized()
 		msg.Cc = msg.Cc.Append(addrs...)
 	}
 	for _, bcc := range header.Values("Bcc") {
 		// intentionally ignoring parsing issues with nullable lists
 		// (we've seen weird and unparsable values) but keep the
 		// addresses that could be parsed
-		addrs, _ := AddressList(addressHeader(bcc)).Split()
+		addrs, _ := AddressList(addressHeader(bcc)).SplitNormalized()
 		msg.Bcc = msg.Bcc.Append(addrs...)
 	}
 
