@@ -270,7 +270,7 @@ func main() {
 
 `money.ParseCurrencyAmount("€1.234,50")` parses such a word with its currency, if you already have it.
 
-**`date.Normalize` returns a different date than you expect for `05/06/2024`.** Without a language, the separators decide the order of an ambiguous date: slashes are month first, 2024-05-06, dots and other separators day first, so `05.06.2024` is 2024-06-05. Pass the language of the document to both `date.NewFinder` and `date.Normalize`: `language.EN` reads month first, every other language day first. To detect the order from the document itself, see [Detecting the date order of a whole document](explanation-lenient-parsing.md#detecting-the-date-order-of-a-whole-document).
+**`date.Normalize` returns a different date than you expect for `05/06/2024`.** Without a language, the separators decide the order of an ambiguous date: slashes are month first, 2024-05-06, dots and other separators day first, so `05.06.2024` is 2024-06-05. Pass the language of the document to both `date.NewFinder` and `date.Normalize`: for dates with slashes `language.EN` reads month first, every other language day first. Dates with dots, dashes or spaces are day first with every language. To detect the order from the document itself, see [Detecting the date order of a whole document](explanation-lenient-parsing.md#detecting-the-date-order-of-a-whole-document).
 
 **`vat.NormalizeVATID` fails with `invalid VAT ID: "GR094019245" has an unsupported country code: "GR"`.** Greek VAT IDs use the prefix `EL`, and `IDFinder` doesn't find `GR` IDs either. Replace the prefix if your source writes `GR`.
 

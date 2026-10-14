@@ -5,11 +5,13 @@
 // "Dec 25, 2023" or "1. Dezember 2016" into "2023-12-25".
 // A numeric date like "05/06/2024", where both orders are valid and no
 // ordinal suffix like "1st" marks the day, is read by its separators:
-// month first with slashes like in the US, day first with dots like
-// in Germany ("05.06.2024") and with any other separator. A language
-// hint decides instead: English (language.EN, "en-US") reads month
-// first, every other language day first. JSON, XML and SQL reading
-// has no hint, so it follows the separators.
+// day first with dots like in Germany ("05.06.2024") and with any other
+// separator but slashes, also with an English language hint. Slashes
+// are written in both orders, so for them a language hint decides:
+// English (language.EN, "en-US") reads month first, every other
+// language day first. Without a hint slashes are read month first like
+// in the US, which is how JSON, XML and SQL read them, because they
+// have no hint.
 // Two-digit years below 45 are read as 20xx, all others as 19xx.
 //
 // The package includes:

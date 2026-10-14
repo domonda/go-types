@@ -38,6 +38,25 @@ func TestFinder_LanguageHintKeepsUnambiguousDates(t *testing.T) {
 	assert.Equal(t, Date("2024-06-15"), Date(str[16:26]).NormalizedOrUnchanged(language.EN))
 }
 
+// TestFinder_EnglishHintOnlyDecidesSlashes protects text extraction from
+// English documents that quote a German date: the hint of the Finder
+// reads the found "05/06/2024" month first like the US does, but the
+// "05.06.2024" with dots of a German supplier stays day first, because
+// only slashes are written in both orders.
+func TestFinder_EnglishHintOnlyDecidesSlashes(t *testing.T) {
+	text := "Order of 05/06/2024, your delivery note of 05.06.2024"
+	finder := NewFinder(language.EN)
+	found := finder.FindAllIndex([]byte(text), -1)
+	require.Len(t, found, 2)
+	var dates []Date
+	for _, idx := range found {
+		d, err := Normalize(text[idx[0]:idx[1]], finder.LangHint)
+		require.NoError(t, err, "Normalize of the found text %q", text[idx[0]:idx[1]])
+		dates = append(dates, d)
+	}
+	assert.Equal(t, []Date{"2024-05-06", "2024-06-05"}, dates)
+}
+
 func TestFinder_FindsISO8601DateTimes(t *testing.T) {
 	// Normalize accepts an ISO 8601 date-time and uses its date part, so
 	// the finder must find it too, with a range that covers the whole

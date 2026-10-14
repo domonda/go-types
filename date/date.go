@@ -23,15 +23,17 @@ import (
 // or an error if the input cannot be parsed.
 //
 // A numeric date with the year last is ambiguous when both of its first
-// numbers are valid months, like "05/06/2024". Without a language hint
-// the separators decide: slashes are read month first like in the US,
-// "05/06/2024" is 2024-05-06, and dots day first like in Germany,
-// "05.06.2024" is 2024-06-05. Other separators, like "05-06-2024", are
-// read day first. The first lang argument, if present, is a hint that
-// decides instead of the separators: language.EN reads month first,
-// every other language day first, so "05/06/2024" with language.DE
-// is 2024-06-05. An English ordinal suffix marks the day and wins over
-// the hint: "1st 02 2003" is 2003-02-01 also with language.EN.
+// numbers are valid months, like "05/06/2024". The separators decide:
+// dots are read day first like in Germany, "05.06.2024" is 2024-06-05,
+// and so are other separators, like "05-06-2024", with any language
+// hint. Slashes are written month first in the US and day first in
+// Britain, so for slashes the first lang argument, if present, is a
+// hint: language.EN reads month first, every other language day first,
+// so "05/06/2024" with language.DE is 2024-06-05. Without a hint
+// slashes are read month first like in the US, "05/06/2024" is
+// 2024-05-06. An English ordinal suffix marks the day and wins over
+// the separators and the hint: "1st 02 2003" is 2003-02-01 also with
+// language.EN.
 //
 // Accepted input shapes (case-insensitive, lenient whitespace):
 //
@@ -952,10 +954,11 @@ func (date Date) Normalized() (Date, error) {
 
 // NormalizedLang returns the date in normalized form like Normalized,
 // with lang as hint for the order of day and month in an ambiguous
-// numeric date: language.EN reads "05.06.2024" month first and every
-// other language reads "05/06/2024" day first.
+// numeric date with slashes: language.EN reads "05/06/2024" month first
+// and every other language day first. Other separators, like in
+// "05.06.2024", are read day first with any hint.
 // An empty lang or one that can't be normalized gives no hint,
-// then the separators decide, see Normalize.
+// then slashes are read month first, see Normalize.
 // Returns the Date unchanged in case of an error.
 func (date Date) NormalizedLang(lang language.Code) (Date, error) {
 	if date.ValidAndNormalized() {
@@ -1188,21 +1191,26 @@ func normalizeDate(str string, lang language.Code) (string, bool, error) {
 // of the number with an ordinal suffix, or -1.
 //
 // An ordinal suffix marks the day explicitly, so it decides first.
-// Then a language hint decides, because it knows the convention of the
-// whole document: English reads month first, every other language day
-// first. Without a hint the separators decide: "03/04/2024" with
-// slashes is US style and read month first, because JSON, XML and SQL
-// can't pass a hint and read it day first as 3 April otherwise.
-// "03.04.2024" with dots is German style and read day first, and so are
-// other separators like "03-04-2024", which have no clear convention.
+// Then the separators decide: "03.04.2024" with dots is German style and
+// read day first, and so are other separators like "03-04-2024", which
+// have no month first convention, also with an English hint.
+// Only "03/04/2024" with slashes is written in both orders, US month
+// first and British day first, so for slashes a language hint decides,
+// because it knows the convention of the whole document: English reads
+// month first, every other language day first. Without a hint slashes
+// are read month first, because JSON, XML and SQL can't pass a hint and
+// read a US date day first as 3 April otherwise.
 func ambiguousMonthFirst(str string, dayHint int, lang language.Code) bool {
 	if dayHint != -1 {
 		return dayHint == 1
 	}
+	if !slashSeparated(str) {
+		return false
+	}
 	if hint := langHint(lang); hint != "" {
 		return hint == language.EN
 	}
-	return slashSeparated(str)
+	return true
 }
 
 // slashSeparated reports if both separators between the last three

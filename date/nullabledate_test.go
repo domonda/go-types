@@ -604,6 +604,8 @@ func TestNormalizeNullable(t *testing.T) {
 	}{
 		{input: "25.12.2023", want: "2023-12-25"},
 		{input: "05/06/2024", lang: []language.Code{language.EN}, want: "2024-05-06"},
+		// The EN hint only decides slashes, dots stay day first like for Date
+		{input: "05.06.2024", lang: []language.Code{language.EN}, want: "2024-06-05"},
 		// Empty and zero dates are valid NULL values for NullableDate
 		{input: "", want: Null},
 		{input: "0001-01-01", want: Null},
@@ -694,6 +696,8 @@ func TestNullableDate_ScanStringWithLang(t *testing.T) {
 		{name: "unambiguous US order", source: "12/25/2023", lang: language.DE, want: "2023-12-25", wantMonthMustBeFirst: true},
 		{name: "ambiguous with EN hint", source: "05/06/2024", lang: language.EN, want: "2024-05-06"},
 		{name: "ambiguous with DE hint", source: "05/06/2024", lang: language.DE, want: "2024-06-05"},
+		// Like Date: the EN hint only decides slashes, dots stay day first
+		{name: "ambiguous dots with EN hint", source: "05.06.2024", lang: language.EN, want: "2024-06-05"},
 		// Like Date: without a hint the separators decide the order of an
 		// ambiguous date, which still doesn't prove month first
 		{name: "ambiguous slashes without hint", source: "05/06/2024", want: "2024-05-06"},

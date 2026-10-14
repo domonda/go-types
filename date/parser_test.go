@@ -41,6 +41,9 @@ func TestParser_Parse(t *testing.T) {
 		{input: "05/06/2024", lang: []language.Code{language.EN}, want: "2024-05-06"},
 		{input: "05/06/2024", lang: []language.Code{"en-US"}, want: "2024-05-06"},
 		{input: "05/06/2024", lang: []language.Code{language.DE}, want: "2024-06-05"},
+		// The hint only decides slashes, so a German date with dots is
+		// read day first also in an English document
+		{input: "05.06.2024", lang: []language.Code{language.EN}, want: "2024-06-05"},
 		// Unambiguous input ignores a conflicting language hint
 		{input: "12/25/2023", lang: []language.Code{language.DE}, want: "2023-12-25"},
 	}

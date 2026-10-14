@@ -40,7 +40,7 @@ as different countries.
 `email.AddressList`, `email.AddressSet`, `language.Code`, `money.Currency`
 and `vat.ID`. The `Normalized` method of the
 `date` types takes no language hint; `NormalizedLang(lang language.Code)` takes
-the hint that decides between day-first and month-first dates.
+the hint that decides between day-first and month-first dates with slashes.
 
 ```
    input "atu 1022 3006"

@@ -39,7 +39,7 @@ func main() {
 	iban, err := bank.IBAN("DE89 3704 0044 0532 0130 00").Normalized()
 	fmt.Println(iban, err)
 
-	// Dots are day first, slashes month first, unless a language hint says otherwise
+	// Dots are day first, slashes month first unless a language hint says otherwise
 	d, err := date.Normalize("05.06.2024")
 	fmt.Println(d, err)
 	d, err = date.Normalize("05/06/2024", language.EN)
@@ -266,8 +266,8 @@ types gets resolved. Types that don't follow a rule yet are tracked in
   month, so `"13 1st 2024"` is an error, and `strfmt` rejects a time zone
   abbreviation whose offset is unknown on the machine instead of reading the
   time as UTC. A documented default is no guess: an ambiguous date like
-  `05/06/2024` is month first with slashes and day first with dots, like
-  `05.06.2024`, unless a language hint says otherwise.
+  `05.06.2024` is day first with dots, and `05/06/2024` is month first with
+  slashes unless a language hint says otherwise.
 - **Errors are created with
   [`github.com/domonda/go-errs`](https://github.com/domonda/go-errs)**
   (`errs.New`, `errs.Errorf`) instead of `errors.New` and `fmt.Errorf`.

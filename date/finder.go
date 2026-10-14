@@ -11,9 +11,10 @@ import (
 
 // NewFinder returns a Finder that uses the first element of lang as a language
 // hint when parsing date candidates. The hint is used to disambiguate ambiguous
-// dd/mm vs mm/dd orderings like Normalize: language.EN reads them month first,
-// every other language day first. Without a hint "05/06/2024" with slashes
-// is read month first and "05.06.2024" with dots day first.
+// dd/mm vs mm/dd orderings with slashes like Normalize: language.EN reads
+// "05/06/2024" month first, every other language day first, and without
+// a hint it is read month first. "05.06.2024" with dots or any other
+// separator is read day first with every hint.
 func NewFinder(lang ...language.Code) *Finder {
 	return &Finder{LangHint: getLangHint(lang)}
 }

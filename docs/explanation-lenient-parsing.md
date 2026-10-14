@@ -130,7 +130,7 @@ The error leaves the decision to code that has more context, like the language o
 - **Text around the date.** A leading weekday (`Fri, 03 Jul 2015`), the filler `of` (`1st of dec. 2020`), a trailing `00:00:00` and a `T` time after an ISO date are dropped.
 - **Month names.** English and German names and abbreviations are accepted in any case, including common OCR misreadings like `1an` and `apri1`. French, Italian and Spanish month names and their usual abbreviations are accepted too, like `févr.`, `luglio` and `septiembre`.
 - **ISO order.** A four digit first part means year, month, day: `2023-12-25`.
-- **The separators decide an ambiguous date.** Without a language hint, `05/06/2024` with slashes is month first like in the US, 2024-05-06, and `05.06.2024` with dots day first like in Germany, 2024-06-05. Other separators, like `05-06-2024`, are day first too.
+- **The separators decide an ambiguous date.** `05.06.2024` with dots is day first like in Germany, 2024-06-05, and so are other separators, like `05-06-2024`, with every language hint. `05/06/2024` with slashes is month first like in the US, 2024-05-06, unless a language hint says otherwise.
 - **The only valid order wins.** `12.25.2023` and `25/12/2023` are both 2023-12-25, because 25 can't be a month.
 - **Two-digit years.** 00 to 44 become 2000 to 2044, 45 to 99 become 1945 to 1999.
 
@@ -146,20 +146,21 @@ A numeric date with the year last is ambiguous when both numbers can be the mont
   13-31  1-12     day first                               25.12.2023 -> 2023-12-25
   1-12   1-12     ambiguous, decided by, in this order:
                   an ordinal suffix, which marks the day  02 1st 2003 -> 2003-02-01
-                  a hint: English month first,            05.06.2024 -> 2024-05-06 (EN)
-                          every other language day first  05/06/2024 -> 2024-06-05 (DE)
+                  dots, dashes, spaces: day first,        05.06.2024 -> 2024-06-05
+                          also with any hint              05-06-2024 -> 2024-06-05 (EN)
+                  slashes with a hint: English month      05/06/2024 -> 2024-05-06 (EN)
+                          first, every other language     05/06/2024 -> 2024-06-05 (DE)
+                          day first
                   slashes without a hint: month first     05/06/2024 -> 2024-05-06
-                  other separators: day first             05.06.2024 -> 2024-06-05
-                                                          05-06-2024 -> 2024-06-05
 ```
 
-The hint is the first `lang` argument, normalized with `language.Code.Normalized`, so `language.EN`, `"en-US"` and `"eng"` all mean English. A hint that can't be normalized is ignored like no hint. English reads month first and every other language day first. British English has no hint of its own: `en-GB` is English too and reads month first, so pass a day first language like `language.DE` for British dates with slashes. An ordinal suffix decides before the hint, so `1st 02 2003` is 2003-02-01 also with `language.EN`. The ordinal suffix, the hint and the separators only decide ambiguous dates, but a number with an ordinal suffix is never read as the month, so `13 1st 2024` is an error and not 2024-01-13. A date with one valid reading, like `15.06.2024` or `15/06/2024`, gives 2024-06-15 with any hint.
+The hint is the first `lang` argument, normalized with `language.Code.Normalized`, so `language.EN`, `"en-US"` and `"eng"` all mean English. A hint that can't be normalized is ignored like no hint. The hint only decides dates with slashes, the one separator written in both orders, month first in the US and day first in Britain: English reads them month first and every other language day first. Dots, dashes and spaces have no month first convention and are read day first also with `language.EN`, so a German `05.06.2024` in an English document stays 5 June, and an ambiguous US date written with dashes, like `05-06-2024`, can't be read month first. British English has no hint of its own: `en-GB` is English too and reads slashes month first, so pass a day first language like `language.DE` for British dates with slashes. An ordinal suffix decides before the separators and the hint, so `1st 02 2003` is 2003-02-01 also with `language.EN`. The ordinal suffix, the hint and the separators only decide ambiguous dates, but a number with an ordinal suffix is never read as the month, so `13 1st 2024` is an error and not 2024-01-13. A date with one valid reading, like `15.06.2024` or `15/06/2024`, gives 2024-06-15 with any hint.
 
-The separators decide without a hint, because the reading methods of `Date` and `NullableDate` have none: `Scan`, JSON and XML decoding and `strfmt.Scan` would read a US date like `03/04/2024` as 3 April and store a wrong date without an error. Slashes are the usual separator of US dates and dots of German dates, while dashes and spaces have no such convention and keep the day first reading.
+Slashes are month first without a hint, because the reading methods of `Date` and `NullableDate` have none: `Scan`, JSON and XML decoding and `strfmt.Scan` would read a US date like `03/04/2024` as 3 April and store a wrong date without an error. Slashes are the usual separator of US dates and dots of German dates, while dashes and spaces have no such convention and keep the day first reading.
 
 ### Detecting the date order of a whole document
 
-One ambiguous date can't tell you the order, but a document usually writes all its dates the same way. `Date.ScanStringWithLang` returns `monthMustBeFirst`, which is true when a date can only be read month first, not when an ambiguous date is read month first because of its slashes. Find one such date, and you know how to read the ambiguous ones, like in this document that writes US dates with dashes, which are read day first without a hint:
+One ambiguous date can't tell you the order, but a document usually writes all its dates the same way. `Date.ScanStringWithLang` returns `monthMustBeFirst`, which is true when a date can only be read month first, not when an ambiguous date is read month first because of its slashes. Find one such date, and you know how to read the ambiguous ones with slashes, like in this document that the language of its text marks as German, but that writes US dates, which the German hint reads day first:
 
 ```go
 package main
@@ -172,12 +173,12 @@ import (
 )
 
 func main() {
-	found := []string{"05-06-2024", "12-25-2023", "07-08-2024"}
+	found := []string{"05/06/2024", "12/25/2023", "07/08/2024"}
 
-	var hint language.Code
+	hint := language.DE // the language of the document text
 	for _, s := range found {
 		var d date.Date
-		_, monthMustBeFirst, err := d.ScanStringWithLang(s, "")
+		_, monthMustBeFirst, err := d.ScanStringWithLang(s, hint)
 		if err == nil && monthMustBeFirst {
 			hint = language.EN
 			break
@@ -190,13 +191,13 @@ func main() {
 	}
 
 	// Output:
-	// 05-06-2024 2024-05-06 <nil>
-	// 12-25-2023 2023-12-25 <nil>
-	// 07-08-2024 2024-07-08 <nil>
+	// 05/06/2024 2024-05-06 <nil>
+	// 12/25/2023 2023-12-25 <nil>
+	// 07/08/2024 2024-07-08 <nil>
 }
 ```
 
-Without `12-25-2023` in the list, the other two dates stay day first, 2024-06-05 and 2024-08-07. A list without any date that only reads month first can't tell the two orders apart, so the separators decide. Dates with slashes are already read month first without a hint, and `monthMustBeFirst` reports no date that can only be read day first, like `25/12/2023`. If you know that a document writes day first with slashes, like most British documents, pass `language.DE` or another day first language.
+Without `12/25/2023` in the list, the German hint reads the other two dates day first, 2024-06-05 and 2024-08-07. A list without any date that only reads month first can't tell the two orders apart, so the hint decides, and without a hint dates with slashes are already read month first. The hint only decides dates with slashes: a document that writes US dates with dots, dashes or spaces, like `05-06-2024`, is read day first with every hint, only its unambiguous dates like `12-25-2023` are month first. `monthMustBeFirst` reports no date that can only be read day first, like `25/12/2023`. If you know that a document writes day first with slashes, like most British documents, pass `language.DE` or another day first language.
 
 ## Identifiers
 
@@ -283,11 +284,11 @@ func main() {
 }
 ```
 
-The `strfmt` presets avoid both traps. Their money formats always write two decimals, or the three of a currency like KWD, so `1,234.50`, `1.234,50` and `KWD 1.234,000` read back exactly. Their float formats don't group thousands. `NewGermanFormatConfig` writes dates as `02.01.2006`, day first with dots, and `NewUSFormatConfig` as `01/02/2006`, month first with slashes, so both read back without a hint. If you define your own formats, write decimals whenever you group thousands, write month first with slashes and day first with dots, or pass a hint when you read back dates: `language.EN` for month first, `language.DE` for day first. For data exchanged between programs, use the canonical forms.
+The `strfmt` presets avoid both traps. Their money formats always write two decimals, or the three of a currency like KWD, so `1,234.50`, `1.234,50` and `KWD 1.234,000` read back exactly. Their float formats don't group thousands. `NewGermanFormatConfig` writes dates as `02.01.2006`, day first with dots, and `NewUSFormatConfig` as `01/02/2006`, month first with slashes, so both read back without a hint. If you define your own formats, write decimals whenever you group thousands, write month first with slashes and day first with dots, or pass `language.DE` when you read back day first dates with slashes. Never write month first with dots, dashes or spaces: an ambiguous date reads back day first with every hint. For data exchanged between programs, use the canonical forms.
 
 ## Trade-offs
 
-- **Leniency against ambiguity.** Every extra spelling accepted is a chance that a string has two readings. The parsers resolve them with fixed rules: a single separator is decimal, numeric dates are month first with slashes and day first with other separators. When the rule is wrong for your input, the caller has to supply the context. Use `acceptedDecimals` for numbers, a language hint for dates, `ScanStringWithLang` to detect the date order of a whole document, and `ParseCode` instead of `Normalized` for country and language names.
+- **Leniency against ambiguity.** Every extra spelling accepted is a chance that a string has two readings. The parsers resolve them with fixed rules: a single separator is decimal, numeric dates are month first with slashes and day first with other separators. When the rule is wrong for your input, the caller has to supply the context. Use `acceptedDecimals` for numbers, a language hint for dates with slashes, `ScanStringWithLang` to detect the date order of a whole document, and `ParseCode` instead of `Normalized` for country and language names.
 - **Leniency against false matches.** The finders that search free text, like `bank.BICFinder` and `money.AmountFinder`, can't accept as much as the parsers, or ordinary words and numbers would match. They require upper-case BICs and amounts with exactly two decimals, and still find words like `RECHNUNG` that happen to have BIC syntax. See [Extract identifiers from text](howto-extract-identifiers-from-text.md).
 - **Offline checks only.** A valid VAT ID or IBAN has the right format and check digit. Whether it is registered or belongs to the vendor needs an online check like VIES.
 - **Unvalidated input.** Reading never fails because of the text itself: `Scan`, JSON and XML decoding store an invalid value unchanged, so one bad row doesn't fail a whole query. Validate after decoding, see the [tutorial](tutorial-invoice-record.md); `Value` refuses an invalid value when it is written.
