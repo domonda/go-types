@@ -287,8 +287,8 @@ format.
   email types have an extra `ASCII()` method that RFC 2047 encodes
   non-ASCII names for message headers.
 
-Two inputs stay as given, because the types have no normalizing
-`UnmarshalText`: `encoding/json` reads and writes the keys of a map with a
+Two inputs stay as given, because the types have no `UnmarshalText`:
+`encoding/json` reads and writes the keys of a map with a
 string key type as they are, so `map[money.Currency]int{"eur": 1, "EUR": 2}`
 keeps both keys, and `encoding/xml` reads a `,chardata` field only through
 `UnmarshalText`, so such a field keeps the text as given.

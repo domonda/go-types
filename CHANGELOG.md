@@ -39,7 +39,7 @@ See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut.
 - `UnmarshalJSON`, `UnmarshalXML` and `UnmarshalXMLAttr` on the same
   normalizing types, and `Scan` on `email.Address`, which read a value like
   `Scan`: normalized if it is valid, unchanged and without an error if not,
-  see Changed. There is deliberately no normalizing `UnmarshalText`, so
+  see Changed. There is deliberately no `UnmarshalText` on them, so
   `encoding/json` reads the keys of a `map[money.Currency]V` as given, and
   two spellings of a currency stay two keys.
 - `email.SplitAddressList` and `AddressList.SplitRaw` and
@@ -687,6 +687,15 @@ See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut.
   commit, so `money.BTC.Valid()` always returned `false`. The symbol was the
   only input that reached it, which made `Currency("₿").Valid()` true while
   `money.BTC.Valid()` was false. `Currency("₿")` no longer normalizes.
+
+- **Breaking:** `email.NullableAddress.UnmarshalText`, so `NullableAddress`
+  no longer implements `encoding.TextUnmarshaler`. The Go 1.26
+  `encoding/json` decodes a map key whose type has `UnmarshalText` through
+  its `UnmarshalJSON`, which now normalizes, so two spellings of an address
+  merged into one key of a `map[NullableAddress]V`. Like `Address` and the
+  other normalizing types, a `NullableAddress` map key, `,chardata` field or
+  value of a decoder that sets strings directly is read as given.
+  `flag.TextVar` no longer accepts a `*NullableAddress`.
 
 ### Fixed
 

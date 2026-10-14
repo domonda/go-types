@@ -205,15 +205,6 @@ func (n NullableAddress) Value() (driver.Value, error) {
 	return internal.ValueNormalized(n, NullableAddress.Normalized, nil)
 }
 
-// UnmarshalText implements encoding.TextUnmarshaler by storing the text
-// unchanged, so that encoding/json reads the keys of a map[NullableAddress]V
-// as given. encoding/xml reads elements and attributes with UnmarshalXML
-// and UnmarshalXMLAttr and only a ,chardata field with UnmarshalText.
-func (n *NullableAddress) UnmarshalText(text []byte) error {
-	*n = NullableAddress(text)
-	return nil
-}
-
 // UnmarshalJSON implements encoding/json.Unmarshaler.
 // A JSON string is stored like Scan stores it, JSON null sets the
 // NullableAddress to null, so that decoding null into a field that holds

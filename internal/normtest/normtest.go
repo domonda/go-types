@@ -380,6 +380,15 @@ func Run[T Type[T], P Ptr[T]](t *testing.T, spec Spec[T]) {
 		// key type as given, as long as the type has no UnmarshalText,
 		// so two spellings of the same value stay two keys and a map
 		// round-trips with all its entries.
+		//
+		// The Go 1.26 encoding/json decodes the key of a type with
+		// UnmarshalText through its UnmarshalJSON, which normalizes and
+		// merges the keys. Go 1.27 builds encoding/json on json/v2,
+		// which doesn't, so the round trip below only fails on Go 1.26
+		// and this check catches an UnmarshalText on every Go version.
+		if _, ok := any(new(T)).(encoding.TextUnmarshaler); ok {
+			t.Errorf("%s implements encoding.TextUnmarshaler, so Go 1.26 encoding/json normalizes its map keys", typeName)
+		}
 		for _, variant := range spec.Variants {
 			if variant == spec.Canonical {
 				continue

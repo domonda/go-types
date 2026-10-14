@@ -350,17 +350,6 @@ func TestNullableAddress_MarshalTextASCIIStringOr(t *testing.T) {
 	}
 }
 
-func TestNullableAddress_UnmarshalText(t *testing.T) {
-	// Text unmarshalling (used for example by URL query and form decoders)
-	// maps empty text to NULL and keeps everything else verbatim.
-	n := NullableAddress("previous@example.com")
-	require.NoError(t, n.UnmarshalText([]byte("")))
-	assert.True(t, n.IsNull())
-
-	require.NoError(t, n.UnmarshalText([]byte("John <john@example.com>")))
-	assert.Equal(t, NullableAddress("John <john@example.com>"), n)
-}
-
 func TestNullableAddress_JSONSchema(t *testing.T) {
 	// The schema must allow both an email string and null.
 	schema := AddressNull.JSONSchema()
