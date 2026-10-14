@@ -125,24 +125,12 @@ func DecodeStringWithBOM(b []byte) (string, error) {
 }
 
 // trimExpectedBOM strips a leading bom from data and returns the rest.
-//
-// bom is what the caller already knows the encoding to be, so it is matched
-// before falling back to BOMOfBytes detection. That order matters for the
-// UTF-16LE/UTF-32LE overlap: the valid UTF-16LE sequence FF FE 00 00 (BOM
-// followed by U+0000) is indistinguishable from the UTF-32LE BOM, and
-// detection resolves it to UTF-32LE. A caller passing BOMUTF16LE has already
-// resolved that ambiguity and must not be second-guessed.
-//
 // Returns an error if data carries a different BOM than the expected one.
-// For the UTF-16 and UTF-32 BOMs that is left to DecodeUTF16 and DecodeUTF32,
-// which decode the bytes of another BOM if they are valid text.
+// Decode and DecodeString only call it for the BOMs other than UTF-16 and
+// UTF-32, whose BOM DecodeUTF16 and DecodeUTF32 validate themselves.
 func trimExpectedBOM(data []byte, bom BOM) ([]byte, error) {
 	if bom != NoBOM && bytes.HasPrefix(data, []byte(bom)) {
 		return data[len(bom):], nil
-	}
-	switch bom {
-	case BOMUTF16LE, BOMUTF16BE, BOMUTF32LE, BOMUTF32BE:
-		return data, nil
 	}
 	if dataBOM := BOMOfBytes(data); dataBOM != NoBOM && dataBOM != bom {
 		return nil, fmt.Errorf("wrong BOM in data: %v, expected: %v", []byte(dataBOM), []byte(bom))
