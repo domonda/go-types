@@ -48,14 +48,14 @@ func TestAddressFrom(t *testing.T) {
 		// Unlike mail.Address.String, a non-ASCII name is not RFC 2047
 		// encoded, so the Address stays readable in JSON and databases.
 		{name: `non-ASCII name`, addr: &mail.Address{Name: "Jürgen Müller", Address: "j@example.com"}, want: `"Jürgen Müller" <j@example.com>`},
-		// Quotes and backslashes are dropped instead of escaped, because
-		// the parser reads no escapes in names, an escaped quote would end
-		// the name and turn the rest into another address. Whitespace becomes
-		// a space and other runes that are not graphic, like the control
-		// characters that would break a header line, are dropped.
-		{name: `quotes and backslashes`, addr: &mail.Address{Name: `Say "Hi" \ Bye`, Address: "j@example.com"}, want: `"Say Hi  Bye" <j@example.com>`},
+		// Quotes and backslashes are escaped as quoted-pairs like by
+		// mail.Address.String, which the parser reads back unescaped, so the
+		// name keeps them and an escaped quote doesn't end it. Whitespace
+		// becomes a space and other runes that are not graphic, like the
+		// control characters that would break a header line, are dropped.
+		{name: `quotes and backslashes`, addr: &mail.Address{Name: `Say "Hi" \ Bye`, Address: "j@example.com"}, want: `"Say \"Hi\" \\ Bye" <j@example.com>`},
 		{name: `control characters`, addr: &mail.Address{Name: "A\r\nB\x00C", Address: "j@example.com"}, want: `"A  BC" <j@example.com>`},
-		{name: `only quotes`, addr: &mail.Address{Name: `""`, Address: "j@example.com"}, want: `j@example.com`},
+		{name: `only quotes`, addr: &mail.Address{Name: `""`, Address: "j@example.com"}, want: `"\"\"" <j@example.com>`},
 		// A local part that needs quoting is quoted like by mail.Address.String
 		{name: `quoted local part`, addr: &mail.Address{Address: "a b@example.com"}, want: `"a b"@example.com`},
 		// A hand-built value without @ is no address to format,

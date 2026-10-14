@@ -11,7 +11,6 @@ import (
 
 	"github.com/domonda/go-errs"
 
-	"github.com/domonda/go-types/strutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -53,7 +52,7 @@ var (
 		// mail.Address.Address holds the content without the quotes.
 		`"scanner@" <"example.at scanner"@example.at>`:     {Name: "scanner@", Address: "example.at scanner@example.at"},
 		`"Unger, Erik" <"Unger, Erik"@domonda.com>`:        {Name: "Unger, Erik", Address: "unger, erik@domonda.com"},
-		`"\"Example\" <ar1@example.com>" <ar@example.com>`: {Name: "Example", Address: "ar@example.com"}, // Use "ar1" in name part vs "ar" in address part to test picking up the right part
+		`"\"Example\" <ar1@example.com>" <ar@example.com>`: {Name: `"Example" <ar1@example.com>`, Address: "ar@example.com"}, // Use "ar1" in name part vs "ar" in address part to test picking up the right part, the escaped quotes are part of the name like for net/mail
 		`<xy=erik@example.com>`:                            {Name: "", Address: "xy=erik@example.com"},
 		// `A!#$%&'*+-/=?^_` + "`" + `{|}~@example.com`:      {Name: "", Address: "a!#$%&'*+-/=?^_`{|}~@example.com"},
 		`A!#$%&'*+-/=?^_{|}~@example.com`: {Name: "", Address: "a!#$%&'*+-/=?^_{|}~@example.com"},
@@ -144,12 +143,13 @@ func TestParseAddress(t *testing.T) {
 	// result, err = ParseAddress(`"alte.mücke@united-b.de" <alte.mücke@united-b.de>`)
 	// require.NoError(t, err)
 
-	// Test very special case
+	// Test very special case: the escaped quotes are part of the name,
+	// like for net/mail, so the address in it is no address of the name
 	result, err = ParseAddress(`"\"Example\" <ar1@example.com>" <ar@example.com>`)
 	if !assert.NoError(t, err, "valid email address") {
 		fmt.Println("DEBUG nameAddressRegex:", nameAddressRegex)
 	}
-	if result.Name != `Example` || result.Address != `ar@example.com` {
+	if result.Name != `"Example" <ar1@example.com>` || result.Address != `ar@example.com` {
 		t.Fatalf("wrong result: %v", result)
 	}
 
@@ -174,9 +174,10 @@ func TestParseAddress(t *testing.T) {
 }
 
 // TestParseAddress_CommentNameCleaned protects that a name from the
-// RFC 2822 comment syntax "addr (name)" is cleaned like a quoted name:
-// written back in quotes, a quote or backslash it kept would end the
-// name early and turn the rest into another address.
+// RFC 2822 comment syntax "addr (name)" can't turn into another address:
+// its quotes and backslashes are removed like from an unquoted name, a
+// backslash only escapes the next rune, and the normalized address reads
+// back as the same single address with the same name.
 func TestParseAddress_CommentNameCleaned(t *testing.T) {
 	for addr, want := range map[string]string{
 		`a@trusted.com (x" attacker@evil.com, z)`: "x attacker@evil.com, z",
@@ -186,6 +187,106 @@ func TestParseAddress_CommentNameCleaned(t *testing.T) {
 		require.NoError(t, err, addr)
 		assert.Equal(t, want, parsed.Name, addr)
 		assert.Equal(t, "a@trusted.com", parsed.Address, addr)
+
+		again, err := ParseAddressList(string(AddressFrom(parsed)))
+		require.NoError(t, err, addr)
+		assert.Equal(t, []*mail.Address{parsed}, again, addr)
+	}
+}
+
+// TestParseAddress_QuotedNameEscapes protects that a quoted name is read
+// with its quoted-pairs, like net/mail reads it. The parser read no
+// escapes, so an escaped quote ended the name, the name lost its quotes
+// and backslashes, and the rest of an address list was read as other
+// recipients than net/mail reads, see
+// TestParseAddressList_EscapedQuoteInName. The normalized address escapes
+// the quotes and backslashes again, so it parses back to the same name
+// with this parser and with net/mail, and normalizing it again doesn't
+// change it.
+func TestParseAddress_QuotedNameEscapes(t *testing.T) {
+	tests := []struct {
+		addr     string
+		wantName string
+		wantAddr string
+		wantNorm Address
+	}{
+		{addr: `"Say \"Hi\"" <a@b.com>`, wantName: `Say "Hi"`, wantAddr: "a@b.com", wantNorm: `"Say \"Hi\"" <a@b.com>`},
+		{addr: `"back\\slash" <a@b.com>`, wantName: `back\slash`, wantAddr: "a@b.com", wantNorm: `"back\\slash" <a@b.com>`},
+		{addr: `"\"\"" <a@b.com>`, wantName: `""`, wantAddr: "a@b.com", wantNorm: `"\"\"" <a@b.com>`},
+		// A quoted-pair of another rune is that rune
+		{addr: `"J\o\h\n" <a@b.com>`, wantName: `John`, wantAddr: "a@b.com", wantNorm: `"John" <a@b.com>`},
+		// An address in the name is no address of the name
+		{addr: `"\"Example\" <ar1@example.com>" <ar@example.com>`, wantName: `"Example" <ar1@example.com>`, wantAddr: "ar@example.com", wantNorm: `"\"Example\" <ar1@example.com>" <ar@example.com>`},
+		{addr: `"x\" <ok@example.com>" <other@example.net>`, wantName: `x" <ok@example.com>`, wantAddr: "other@example.net", wantNorm: `"x\" <ok@example.com>" <other@example.net>`},
+		// The text of an encoded-word keeps its quotes and backslashes
+		{addr: `=?utf-8?q?Say_=22Hi=22?= <a@b.com>`, wantName: `Say "Hi"`, wantAddr: "a@b.com", wantNorm: `"Say \"Hi\"" <a@b.com>`},
+		{addr: `=?utf-8?b?YVxi?= <a@b.com>`, wantName: `a\b`, wantAddr: "a@b.com", wantNorm: `"a\\b" <a@b.com>`},
+		// A non-ASCII name with a backslash, which ASCII must B encode
+		{addr: "\"Jürgen \\\\ Müller\" <j@example.com>", wantName: "Jürgen \\ Müller", wantAddr: "j@example.com", wantNorm: "\"Jürgen \\\\ Müller\" <j@example.com>"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.addr, func(t *testing.T) {
+			parsed, err := ParseAddress(tt.addr)
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantName, parsed.Name)
+			assert.Equal(t, tt.wantAddr, parsed.Address)
+			stdlib, err := mail.ParseAddress(tt.addr)
+			require.NoError(t, err)
+			assert.Equal(t, stdlib, parsed, "like net/mail")
+
+			norm, err := Address(tt.addr).Normalized()
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantNorm, norm)
+			again, err := norm.Normalized()
+			require.NoError(t, err)
+			assert.Equal(t, norm, again, "idempotent")
+			stdlib, err = mail.ParseAddress(string(norm))
+			require.NoError(t, err)
+			assert.Equal(t, parsed, stdlib, "net/mail reads the normalized address")
+
+			// The ASCII form for a message header reads back too
+			fromASCII, err := ParseAddress(Address(tt.addr).ASCII())
+			require.NoError(t, err)
+			assert.Equal(t, parsed, fromASCII, "ASCII %s", Address(tt.addr).ASCII())
+		})
+	}
+
+	// Outside a quoted name quotes and backslashes are no part of the name
+	for addr, want := range map[string]string{
+		`Jo"hn <a@example.com>`:             "John",
+		`John "Johnny" Doe <a@example.com>`: "John Johnny Doe",
+		`"Doe <a@example.com>`:              "Doe",
+	} {
+		parsed, err := ParseAddress(addr)
+		require.NoError(t, err, addr)
+		assert.Equal(t, want, parsed.Name, addr)
+	}
+}
+
+// TestParseAddressList_EscapedQuoteInName protects the recipients of a
+// message: the parser read no escapes in quoted names, so for this list
+// AddressList.Validate passed and ParseAddressList returned ok@example.com
+// and ok3@example.com, while net/mail, like a mail server, reads
+// other@example.net and ok3@example.com. A check of the recipients saw
+// other addresses than the message was sent to.
+func TestParseAddressList_EscapedQuoteInName(t *testing.T) {
+	const list = `"x\" <ok@example.com>, ok2@example.com (," <other@example.net>, "z)" <ok3@example.com>`
+	parsed, err := ParseAddressList(list)
+	require.NoError(t, err)
+	stdlib, err := mail.ParseAddressList(list)
+	require.NoError(t, err)
+	assert.Equal(t, stdlib, parsed, "like net/mail")
+	require.Len(t, parsed, 2)
+	assert.Equal(t, "other@example.net", parsed[0].Address)
+	assert.Equal(t, "ok3@example.com", parsed[1].Address)
+
+	// SplitAddressList finds the same entries
+	raw := SplitAddressList(list)
+	require.Len(t, raw, len(parsed))
+	for i, entry := range raw {
+		norm, err := entry.Normalized()
+		require.NoError(t, err)
+		assert.Equal(t, AddressFrom(parsed[i]), norm)
 	}
 }
 
@@ -414,11 +515,10 @@ func TestParseAddressList(t *testing.T) {
 		`<hello@example.com>,`: 1,
 		`"\"Example\" <ar1@example.com>" <ar@example.com>, test@example.com`: 2,
 
-		// The problem with this list is that `"\"Example\" <ar1@example.com>` gets parsed as: "Example" <ar1@example.com>
-		// and then `" <ar@example.com>, "alte.mücke@united-b.de` gets parsed as: " <ar@example.com>, " <alte.mücke@united-b.de>
-		// interpreting the double quote escaping accross 2 addresses including the , within the quotes
-		// TODO resolve this case
-		// `"\"Example\" <ar1@example.com>" <ar@example.com>, "alte.mücke@united-b.de" <alte.mücke@united-b.de>`: 2,
+		// The quoted name was read without escapes, up to its first escaped quote,
+		// so that a quote of the next address closed it and the comma between
+		// them was read as part of a name
+		`"\"Example\" <ar1@example.com>" <ar@example.com>, "alte.mücke@united-b.de" <alte.mücke@united-b.de>`: 2,
 	}
 	for problemList, numAddrs := range problemLists {
 		parsed, err := ParseAddressList(problemList)
@@ -442,10 +542,6 @@ func TestParseAddressList(t *testing.T) {
 	// For every list create variations with different separators
 	separators := []string{", ", ",", " ,", " , "}
 
-	dontUseFromValidEmailAddresses := strutil.NewStringSet(
-		`"alte.mücke@united-b.de" <alte.mücke@united-b.de>`,
-	)
-
 	// Map from joined address-list to source addresses
 	// which are also keys of validEmailAddresses
 	tests := make(map[string][]string)
@@ -453,9 +549,7 @@ func TestParseAddressList(t *testing.T) {
 	{
 		var sortedAddrs []string
 		for addr := range validEmailAddresses {
-			if !dontUseFromValidEmailAddresses.Contains(addr) {
-				sortedAddrs = append(sortedAddrs, addr)
-			}
+			sortedAddrs = append(sortedAddrs, addr)
 		}
 		sort.Strings(sortedAddrs)
 		for _, separator := range separators {

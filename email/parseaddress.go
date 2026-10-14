@@ -32,7 +32,7 @@ const (
 	domainPart        = `([` + domainChars + `][\-\.` + domainChars + `]*\.[a-zA-Z]{2,})`
 	addressRegex      = atext + `@` + domainPart
 
-	quotedNamePart         = `"([^"]*)"[ \t]*<?`
+	quotedNamePart         = `"((?:[^"\\]|\\.)*)"[ \t]*<?` // with quoted-pairs like \" and \\
 	unquotedNamePart       = `([^<@]*[^<@\s]|[^<,]*[^<,\s])[ \t]*<`
 	rfc2047EncodedNamePart = `((?:` + encodedWord + `[ \t]*)+)<` // Example: =?utf-8?b?wqFIb2xhLCBzZcOxb3Ih?= <
 	encodedWord            = `=\?[^?\s]+\?[bBqQ]\?[^?\s]*\?=`
@@ -112,8 +112,16 @@ func UniqueNormalizedAddressSlice(addrs []Address) []Address {
 // then it will not be returned as name.
 // The Address of a quoted local part holds its content without quotes,
 // like mail.ParseAddress, so use AddressFrom or Address.AddressPart
-// to get the quoted form. Quotes, backslashes and runes that are not
-// graphic are removed from the name.
+// to get the quoted form.
+//
+// A quoted name is read with its quoted-pairs unescaped like by
+// mail.ParseAddress, so `"Say \"Hi\"" <a@b.com>` has the name `Say "Hi"`,
+// and an escaped quote doesn't end the name. Quotes and backslashes in an
+// unquoted name or a comment are removed, because there they are no part
+// of the name: a stray quote of a malformed name or the backslash of an
+// escaped parenthesis. RFC 2047 encoded-words are decoded after that,
+// their text keeps its quotes and backslashes. Runes that are not graphic
+// are removed from the name.
 //
 // An address without name can be followed by an RFC 5322 comment,
 // which becomes the name, like in "mike@doe.com (Mike Doe)".
@@ -176,9 +184,9 @@ func parseAddress(addr string) (mailAddress *mail.Address, unparsed string, ok b
 	var name string
 	switch {
 	case i[3] != -1:
-		name = decodeName(addr[i[2]:i[3]])
+		name = decodeName(unescapeQuotedPairs(addr[i[2]:i[3]]))
 	case i[5] != -1:
-		name = decodeName(addr[i[4]:i[5]])
+		name = decodeName(removeQuotes(addr[i[4]:i[5]]))
 	case i[7] != -1:
 		name = decodeName(addr[i[6]:i[7]])
 	}
@@ -189,7 +197,7 @@ func parseAddress(addr string) (mailAddress *mail.Address, unparsed string, ok b
 		// stays the same mailbox. Like for net/mail.ParseAddress
 		// the quotes are not part of mail.Address.Address,
 		// addrSpec adds them again where needed.
-		local = unquoteLocalPart(local[1 : len(local)-1])
+		local = unescapeQuotedPairs(local[1 : len(local)-1])
 	}
 
 	domain := strings.ToLower(addr[i[10]:i[11]])
@@ -202,7 +210,7 @@ func parseAddress(addr string) (mailAddress *mail.Address, unparsed string, ok b
 	// A comment that isn't closed stays unparsed.
 	if name == "" {
 		if comment, rest, ok := readComment(unparsed); ok {
-			name = decodeName(comment)
+			name = decodeName(removeQuotes(comment))
 			unparsed = strings.TrimLeft(rest, " ")
 		}
 	}
@@ -239,7 +247,7 @@ func parseAddress(addr string) (mailAddress *mail.Address, unparsed string, ok b
 // closed. Like for SplitAddressList, a comment can contain nested
 // comments, and a backslash escapes the next character (quoted-pair),
 // so `\)` doesn't close the comment. The content is returned as written,
-// cleanName removes the backslashes from a name.
+// removeQuotes removes the backslashes from a name.
 func readComment(s string) (comment, rest string, ok bool) {
 	if !strings.HasPrefix(s, "(") {
 		return "", s, false
@@ -301,17 +309,40 @@ func decodeName(name string) string {
 	return cleanName(decoded)
 }
 
-// cleanName returns a display name without the quotes and backslashes
-// that the parser can't read escaped (quotedNamePart has no escapes),
-// without runes that are not graphic, like bidi overrides and control
-// characters, and without the replacement character, which sanitizeAddr
-// removes when the name is parsed again, and with whitespace mapped
-// to spaces.
+// removeQuotes returns an unquoted display name or the content of a
+// comment without its quotes and backslashes, which are no part of the
+// name there: a stray quote of a malformed name like `Jo"hn <j@x.com>`,
+// the quotes of a quoted word within an unquoted name, which net/mail
+// removes too, or the backslash that escapes a parenthesis in a comment.
+// Only a quoted name holds quotes and backslashes, as quoted-pairs.
+// It is called before the encoded-words are decoded, so that their text
+// keeps its quotes and backslashes, like the B encoded name that
+// AddressFrom writes for a name containing "=?".
+func removeQuotes(name string) string {
+	if !strings.ContainsAny(name, `"\`) {
+		return name
+	}
+	return strings.Map(
+		func(r rune) rune {
+			if r == '"' || r == '\\' {
+				return -1
+			}
+			return r
+		},
+		name,
+	)
+}
+
+// cleanName returns a display name without runes that are not graphic,
+// like bidi overrides and control characters, and without the replacement
+// character, which sanitizeAddr removes when the name is parsed again,
+// and with whitespace mapped to spaces. Quotes and backslashes are kept,
+// AddressFrom escapes them as quoted-pairs.
 func cleanName(name string) string {
 	return strutil.TrimSpace(strings.Map(
 		func(r rune) rune {
 			switch {
-			case r == '"' || r == '\\' || r == unicode.ReplacementChar:
+			case r == unicode.ReplacementChar:
 				return -1
 			case unicode.IsSpace(r):
 				return ' '
@@ -330,12 +361,13 @@ func isUnquotedLocalPart(local string) bool {
 	return !strings.HasPrefix(local, "'") && unquotedLocalPartRegexp.MatchString(local)
 }
 
-// quoteLocalPart returns local as quoted string
-// with quotes and backslashes escaped as quoted-pairs.
-func quoteLocalPart(local string) string {
+// quoteString returns s as quoted string, like a quoted local part or
+// display name, with quotes and backslashes escaped as quoted-pairs
+// like mail.Address.String escapes them.
+func quoteString(s string) string {
 	var b strings.Builder
 	b.WriteByte('"')
-	for _, r := range local {
+	for _, r := range s {
 		if r == '"' || r == '\\' {
 			b.WriteByte('\\')
 		}
@@ -345,11 +377,12 @@ func quoteLocalPart(local string) string {
 	return b.String()
 }
 
-// unquoteLocalPart returns the content of a quoted local part
-// with its quoted-pairs (a backslash followed by a rune) unescaped.
-// The localPart regex reads a quoted-pair as one unit, so a backslash
-// can't escape the closing quote and leave the local part unterminated.
-func unquoteLocalPart(quoted string) string {
+// unescapeQuotedPairs returns the content of a quoted local part or
+// display name with its quoted-pairs (a backslash followed by a rune)
+// unescaped. The localPart and quotedNamePart regexes read a quoted-pair
+// as one unit, so a backslash can't escape the closing quote and leave
+// the quoted string unterminated.
+func unescapeQuotedPairs(quoted string) string {
 	if !strings.Contains(quoted, `\`) {
 		return quoted
 	}

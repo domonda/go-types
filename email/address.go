@@ -36,11 +36,11 @@ type Address string
 // If the address has no name part, returns just the address.
 // If the address has a name part, returns the name as quoted string
 // followed by the address within angle brackets like mail.Address.String,
+// with quotes and backslashes escaped as quoted-pairs like `"Say \"Hi\""`,
 // but a non-ASCII name is kept as UTF-8 instead of being RFC 2047 encoded,
-// so that the Address stays readable in JSON and databases,
-// and quotes, backslashes and runes that are not graphic are removed
-// from the name instead of being escaped, because ParseAddress reads
-// no escapes in names. A local part is quoted if net/mail or
+// so that the Address stays readable in JSON and databases, and runes
+// that are not graphic are removed from the name, like control characters
+// that would break a header line. A local part is quoted if net/mail or
 // ParseAddress can't read it unquoted, like "a b"@example.com.
 // A name containing "=?" is RFC 2047 encoded, see encodedName.
 // Use mail.Address.String to format an address for a message header.
@@ -61,7 +61,7 @@ func AddressFrom(addr *mail.Address) Address {
 	case strings.Contains(name, "=?"):
 		return Address(encodedName(name) + " <" + addrSpec(addr) + ">")
 	}
-	return Address(`"` + name + `" <` + addrSpec(addr) + ">")
+	return Address(quoteString(name) + " <" + addrSpec(addr) + ">")
 }
 
 // encodedName returns name as RFC 2047 encoded-word, also if it is
@@ -91,7 +91,7 @@ func addrSpec(addr *mail.Address) string {
 	if strings.HasPrefix(s, `"`) || isUnquotedLocalPart(addr.Address[:at]) {
 		return s
 	}
-	return quoteLocalPart(addr.Address[:at]) + addr.Address[at:]
+	return quoteString(addr.Address[:at]) + addr.Address[at:]
 }
 
 // asciiAddress formats addr like AddressFrom, but RFC 2047 encodes
@@ -103,14 +103,17 @@ func asciiAddress(addr *mail.Address) string {
 		return addrSpec(addr)
 	case strings.Contains(name, "=?"):
 		name = encodedName(name)
-	case !isASCII(name) && strings.ContainsAny(name, "\"#$%&'(),.:;<>@[]^`{|}~"):
+	case !isASCII(name) && strings.ContainsAny(name, "\"#$%&'(),.:;<>@[]^`{|}~\\"):
 		// Like mail.Address.String, because an encoded-word
-		// in a name must not hold these characters unencoded
+		// in a name must not hold these characters unencoded,
+		// and also for a backslash, which RFC 2047 doesn't allow
+		// in a Q encoded word in a name either: ParseAddress
+		// removes it from an unquoted name before decoding
 		name = mime.BEncoding.Encode("utf-8", name)
 	case !isASCII(name):
 		name = mime.QEncoding.Encode("utf-8", name)
 	default:
-		name = `"` + name + `"`
+		name = quoteString(name)
 	}
 	return name + " <" + addrSpec(addr) + ">"
 }
