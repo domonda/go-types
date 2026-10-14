@@ -139,8 +139,8 @@ func (c Code) Normalized() (Code, error) {
 // unnormalized value for diagnostics.
 func ParseCode(str string) (Code, error) {
 	// 1. Short path: the input is already a canonical ISO 639-1 code.
-	if c := Code(str); c.ValidAndNormalized() {
-		return c, nil
+	if _, ok := codeNames[Code(str)]; ok {
+		return Code(str), nil
 	}
 	// 2. Codes and tags: case and whitespace variants, ISO 639-2/3,
 	//    639-2/B bibliographic variants, BCP-47 tags, POSIX locales.

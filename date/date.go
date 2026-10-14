@@ -543,7 +543,7 @@ func (date Date) Format(layout string) string {
 		return ""
 	}
 	if layout == Layout {
-		return string(internal.NormalizedOrRaw(date, Date.Normalized, Date.IsZero))
+		return string(date.NormalizedOrUnchanged())
 	}
 	t, ok := date.midnightInLocation(time.UTC)
 	if !ok {
@@ -855,8 +855,7 @@ func (date Date) BeforeTodayInUTC() bool {
 // invalid value doesn't fail a whole query; Validate reports it.
 func (date *Date) Scan(value any) error {
 	if t, ok := value.(time.Time); ok {
-		*date = internal.NormalizedOrRaw(OfTime(t), Date.Normalized, Date.IsZero)
-		return nil
+		value = string(OfTime(t))
 	}
 	return internal.ScanNormalized(date, value, Date.Normalized, Date.IsZero)
 }

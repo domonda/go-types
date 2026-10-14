@@ -185,10 +185,10 @@ func (ca *CurrencyAmount) Scan(value any) (err error) {
 // or returning the error of Currency.Normalized for a currency
 // that can't be normalized.
 func (ca CurrencyAmount) Value() (driver.Value, error) {
-	if !internal.IsBlank(ca.Currency) {
-		if _, err := ca.Currency.Normalized(); err != nil {
-			return nil, err
-		}
+	currency, err := ca.Currency.Value()
+	if err != nil {
+		return nil, err
 	}
-	return ca.FormatSep(true, 0, '.', ca.defaultPrecision()), nil
+	str, _ := currency.(string) // nil for a blank currency
+	return ca.format(str, true, 0, '.', ca.defaultPrecision()), nil
 }

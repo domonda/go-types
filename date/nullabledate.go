@@ -584,8 +584,7 @@ func (n NullableDate) Format(layout string) string {
 // invalid value doesn't fail a whole query; Validate reports it.
 func (n *NullableDate) Scan(value any) error {
 	if t, ok := value.(time.Time); ok {
-		*n = internal.NormalizedOrRaw(OfTime(t).Nullable(), NullableDate.Normalized, NullableDate.IsNull)
-		return nil
+		value = string(OfTime(t))
 	}
 	return internal.ScanNormalized(n, value, NullableDate.Normalized, NullableDate.IsNull)
 }
