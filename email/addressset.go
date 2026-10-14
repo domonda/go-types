@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"database/sql/driver"
 	"encoding/json"
+	"encoding/xml"
 	"iter"
 	"maps"
 	"slices"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/domonda/go-errs"
 	"github.com/domonda/go-types"
+	"github.com/domonda/go-types/internal"
 	"github.com/domonda/go-types/mapset"
 	"github.com/domonda/go-types/notnull"
 	"github.com/domonda/go-types/strutil"
@@ -560,4 +562,12 @@ func (set AddressSet) MarshalText() ([]byte, error) {
 		return nil, err
 	}
 	return []byte(strings.Join(addrs, ", ")), nil
+}
+
+// MarshalXMLAttr implements encoding/xml.MarshalerAttr by writing the
+// text of MarshalText, and no attribute for a nil pointer, because
+// encoding/xml calls MarshalText through a nil pointer attribute field
+// and panics.
+func (set *AddressSet) MarshalXMLAttr(name xml.Name) (xml.Attr, error) {
+	return internal.MarshalXMLAttrText(set, name)
 }

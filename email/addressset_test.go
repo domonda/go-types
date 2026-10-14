@@ -731,6 +731,10 @@ func TestAddressSet_MarshalText(t *testing.T) {
 	assert.Nil(t, set, "empty text is the nil set")
 }
 
+func TestAddressSet_MarshalXMLAttr(t *testing.T) {
+	testMarshalXMLAttr(t, AddressSet(nil), MakeAddressSet(), MakeAddressSet("b@example.com", `"Doe, John" <john@example.com>`))
+}
+
 // UnmarshalJSON reads the JSON array that MarshalJSON writes, the object
 // with the addresses as keys that MarshalJSON wrote before, and a string
 // with an address list, so that stored JSON of every version can be read.

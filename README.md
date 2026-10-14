@@ -150,14 +150,14 @@ the spellings they accept, see
 
 ### Methods per format
 
-| Format                    | Read                               | Write         |
-|---------------------------|------------------------------------|---------------|
-| SQL, `database/sql`       | `Scan`                             | `Value`       |
-| JSON, `encoding/json`     | `UnmarshalJSON`                    | `MarshalJSON` |
-| XML, `encoding/xml`       | `UnmarshalXML`, `UnmarshalXMLAttr` | `MarshalText` |
-| Text, `strfmt` and CSV    | `ScanString`                       | `MarshalText` |
-| JSON object keys of a map | as given                           | as given      |
-| `fmt`, templates, logs    |                                    | as stored     |
+| Format                    | Read                               | Write                           |
+|---------------------------|------------------------------------|---------------------------------|
+| SQL, `database/sql`       | `Scan`                             | `Value`                         |
+| JSON, `encoding/json`     | `UnmarshalJSON`                    | `MarshalJSON`                   |
+| XML, `encoding/xml`       | `UnmarshalXML`, `UnmarshalXMLAttr` | `MarshalText`, `MarshalXMLAttr` |
+| Text, `strfmt` and CSV    | `ScanString`                       | `MarshalText`                   |
+| JSON object keys of a map | as given                           | as given                        |
+| `fmt`, templates, logs    |                                    | as stored                       |
 
 ### Reading
 

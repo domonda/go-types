@@ -3,6 +3,7 @@ package internal
 import (
 	"bytes"
 	"database/sql/driver"
+	"encoding"
 	"encoding/json"
 	"encoding/xml"
 	"errors"
@@ -26,6 +27,7 @@ import (
 //     because the database is where an invalid value would stay.
 //   - MarshalJSON and MarshalText write the normalized value,
 //     "" for a blank value and an invalid value unchanged.
+//     MarshalXMLAttr writes MarshalText, and no attribute for a nil pointer.
 //
 // Each helper takes the Normalized method of the type as normalize,
 // which must return its receiver unchanged together with an error
@@ -114,6 +116,22 @@ func MarshalJSONNormalized[S ~string](s S, normalize func(S) (S, error), isBlank
 // string type by returning NormalizedOrRaw.
 func MarshalTextNormalized[S ~string](s S, normalize func(S) (S, error), isBlank func(S) bool) ([]byte, error) {
 	return []byte(NormalizedOrRaw(s, normalize, isBlank)), nil
+}
+
+// MarshalXMLAttrText implements encoding/xml.MarshalerAttr for a pointer
+// to a type with a value receiver MarshalText: it writes the text of
+// MarshalText like encoding/xml does, and no attribute for a nil v.
+// encoding/xml calls a value receiver MarshalText through a nil pointer
+// attribute field and panics, but checks for MarshalerAttr first.
+func MarshalXMLAttrText[T encoding.TextMarshaler](v *T, name xml.Name) (xml.Attr, error) {
+	if v == nil {
+		return xml.Attr{}, nil
+	}
+	text, err := (*v).MarshalText()
+	if err != nil {
+		return xml.Attr{}, err
+	}
+	return xml.Attr{Name: name, Value: string(text)}, nil
 }
 
 // UnmarshalJSONNormalized implements encoding/json.Unmarshaler for a

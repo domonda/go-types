@@ -231,7 +231,7 @@ Single word ISO names like `Yen`, `Rand`, or `Won` are errors, because they are 
 | `(*Currency).ScanString(source, validate) error` | Without `validate` like `Scan`. With `validate` the normalized source or the error of `Normalized`, also for a blank source. |
 | `(*Currency).Scan(value) error`, `Value()`, `MarshalJSON()`, `UnmarshalJSON(data)`, `MarshalText()`, `UnmarshalXML`, `UnmarshalXMLAttr` | See [Serialization](#serialization).               |
 
-Implements: `fmt.Stringer`, `sql.Scanner` (pointer), `driver.Valuer`, `json.Marshaler`, `json.Unmarshaler` (pointer), `encoding.TextMarshaler`, `encoding/xml.Unmarshaler` (pointer), `encoding/xml.UnmarshalerAttr` (pointer), `strfmt.Scannable` (pointer), `types.NormalizableValidator[Currency]`. No `UnmarshalText`, so `encoding/json` reads the keys of a `map[Currency]V` as given, and no `JSONSchema`.
+Implements: `fmt.Stringer`, `sql.Scanner` (pointer), `driver.Valuer`, `json.Marshaler`, `json.Unmarshaler` (pointer), `encoding.TextMarshaler`, `encoding/xml.Unmarshaler` (pointer), `encoding/xml.UnmarshalerAttr` (pointer), `encoding/xml.MarshalerAttr` (pointer), `strfmt.Scannable` (pointer), `types.NormalizableValidator[Currency]`. No `UnmarshalText`, so `encoding/json` reads the keys of a `map[Currency]V` as given, and no `JSONSchema`.
 
 ## NullableCurrency
 
@@ -258,7 +258,7 @@ A `Currency` where `""` (`CurrencyNull`) is the null value. A value of only the 
 | `(*NullableCurrency).ScanString(source, validate) error` | `""`, whitespace only, `NULL`, `null`, and `nil` set null, other values like `Currency.ScanString`. |
 | `(*NullableCurrency).Scan(value) error`, `Value()`, `MarshalJSON()`, `(*NullableCurrency).UnmarshalJSON(data) error`, `MarshalText()`, `UnmarshalXML`, `UnmarshalXMLAttr` | See [Serialization](#serialization).               |
 
-Implements: `sql.Scanner` (pointer), `driver.Valuer`, `json.Marshaler`, `json.Unmarshaler` (pointer), `encoding.TextMarshaler`, `encoding/xml.Unmarshaler` (pointer), `encoding/xml.UnmarshalerAttr` (pointer), `strfmt.Scannable` (pointer), `nullable.Nullable`, `nullable.NullSetable[Currency]` (pointer), `types.NormalizableValidator[NullableCurrency]`. No `String` method, `fmt` prints the stored currency. No `MinorUnits`, use `Get().MinorUnits()`.
+Implements: `sql.Scanner` (pointer), `driver.Valuer`, `json.Marshaler`, `json.Unmarshaler` (pointer), `encoding.TextMarshaler`, `encoding/xml.Unmarshaler` (pointer), `encoding/xml.UnmarshalerAttr` (pointer), `encoding/xml.MarshalerAttr` (pointer), `strfmt.Scannable` (pointer), `nullable.Nullable`, `nullable.NullSetable[Currency]` (pointer), `types.NormalizableValidator[NullableCurrency]`. No `String` method, `fmt` prints the stored currency. No `MinorUnits`, use `Get().MinorUnits()`.
 
 ## CurrencyAmount and CurrencyDecimalAmount
 

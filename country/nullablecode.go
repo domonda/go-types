@@ -189,6 +189,14 @@ func (n NullableCode) MarshalText() ([]byte, error) {
 	return internal.MarshalTextNormalized(n, NullableCode.Normalized, nil)
 }
 
+// MarshalXMLAttr implements encoding/xml.MarshalerAttr by writing the
+// text of MarshalText, and no attribute for a nil pointer, because
+// encoding/xml calls MarshalText through a nil pointer attribute field
+// and panics.
+func (n *NullableCode) MarshalXMLAttr(name xml.Name) (xml.Attr, error) {
+	return internal.MarshalXMLAttrText(n, name)
+}
+
 // UnmarshalXML implements encoding/xml.Unmarshaler
 // by storing the text of the element like Scan stores it.
 func (n *NullableCode) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {

@@ -615,6 +615,14 @@ func (n NullableDate) MarshalText() ([]byte, error) {
 	return internal.MarshalTextNormalized(n, NullableDate.Normalized, NullableDate.IsNull)
 }
 
+// MarshalXMLAttr implements encoding/xml.MarshalerAttr by writing the
+// text of MarshalText, and no attribute for a nil pointer, because
+// encoding/xml calls MarshalText through a nil pointer attribute field
+// and panics.
+func (n *NullableDate) MarshalXMLAttr(name xml.Name) (xml.Attr, error) {
+	return internal.MarshalXMLAttrText(n, name)
+}
+
 // UnmarshalJSON implements encoding/json.Unmarshaler.
 // A JSON string is stored like Scan stores it, JSON null sets the
 // NullableDate to null, so that decoding null into a field that holds

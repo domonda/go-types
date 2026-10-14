@@ -293,9 +293,11 @@ string key type as they are, so `map[money.Currency]int{"eur": 1, "EUR": 2}`
 keeps both keys, and `encoding/xml` reads a `,chardata` field only through
 `UnmarshalText`, so such a field keeps the text as given.
 
-`encoding/xml` calls `MarshalText` through a nil pointer in an attribute
-field and panics, like for a `*time.Time` attribute, so tag such fields
-`omitempty`.
+A nil pointer attribute field, like `Currency *money.Currency` with the tag
+`xml:"currency,attr"`, is left out, also without `omitempty`. The types
+implement `MarshalXMLAttr` with a pointer receiver for it, because
+`encoding/xml` would call the value receiver `MarshalText` through the nil
+pointer and panic, like it does for a `*time.Time` attribute.
 
 ### Collections keep their elements as given
 

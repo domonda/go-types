@@ -327,3 +327,7 @@ func TestNullableAddressList_UnmarshalText(t *testing.T) {
 	require.NoError(t, n.UnmarshalText([]byte("a@example.com, b@example.com")))
 	assert.Equal(t, NullableAddressList("a@example.com, b@example.com"), n)
 }
+
+func TestNullableAddressList_MarshalXMLAttr(t *testing.T) {
+	testMarshalXMLAttr(t, NullableAddressList(""), NullableAddressList(`A@Example.com, "Doe, John" <john@example.com>`))
+}

@@ -1,6 +1,7 @@
 package email
 
 import (
+	"encoding/xml"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -110,5 +111,36 @@ func TestReadAddressCollection(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, tt.want, got)
 		})
+	}
+}
+
+type xmlPtrAttrDoc[T any] struct {
+	XMLName xml.Name `xml:"doc"`
+	Attr    *T       `xml:"attr,attr"`
+}
+
+type xmlValueAttrDoc[T any] struct {
+	XMLName xml.Name `xml:"doc"`
+	Attr    T        `xml:"attr,attr"`
+}
+
+// testMarshalXMLAttr checks that a nil *T attribute is left out without
+// omitempty, because encoding/xml would call the value receiver
+// MarshalText through the nil pointer and panic, and that a *T attribute
+// is written exactly like a T attribute, with "" for an empty value.
+func testMarshalXMLAttr[T any](t *testing.T, values ...T) {
+	t.Helper()
+	var data []byte
+	var err error
+	require.NotPanics(t, func() { data, err = xml.Marshal(xmlPtrAttrDoc[T]{}) })
+	require.NoError(t, err)
+	assert.Equal(t, `<doc></doc>`, string(data))
+
+	for _, v := range values {
+		want, err := xml.Marshal(xmlValueAttrDoc[T]{Attr: v})
+		require.NoError(t, err)
+		got, err := xml.Marshal(xmlPtrAttrDoc[T]{Attr: &v})
+		require.NoError(t, err)
+		assert.Equal(t, string(want), string(got))
 	}
 }

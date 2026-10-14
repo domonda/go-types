@@ -94,7 +94,7 @@ The formats and checksum functions live in `formats.go` (`idRegex` and `checkSum
 | `Nullable()`                   | Plain conversion to `NullableID`, no normalization. |
 | `ScanString(source, validate)` | Without `validate` assigns `source` like `Scan`. With `validate` assigns the canonical `source` or returns the error of `Normalized`, also for a blank `source`. |
 
-Implements: `database/sql.Scanner`, `database/sql/driver.Valuer`, `json.Marshaler`, `json.Unmarshaler`, `encoding.TextMarshaler`, `encoding/xml.Unmarshaler`, `encoding/xml.UnmarshalerAttr`, `strfmt.Scannable`, `types.NormalizableValidator[ID]` and `JSONSchema()` (string with `minLength` 4 and no `maxLength`, because formatted IDs can be longer than `IDMaxLength`). `ID` has no `String` method, so `fmt` prints the stored ID, and no `UnmarshalText`, so `encoding/json` reads the keys of a `map[ID]V` as given.
+Implements: `database/sql.Scanner`, `database/sql/driver.Valuer`, `json.Marshaler`, `json.Unmarshaler`, `encoding.TextMarshaler`, `encoding/xml.Unmarshaler`, `encoding/xml.UnmarshalerAttr`, `encoding/xml.MarshalerAttr`, `strfmt.Scannable`, `types.NormalizableValidator[ID]` and `JSONSchema()` (string with `minLength` 4 and no `maxLength`, because formatted IDs can be longer than `IDMaxLength`). `ID` has no `String` method, so `fmt` prints the stored ID, and no `UnmarshalText`, so `encoding/json` reads the keys of a `map[ID]V` as given.
 
 ## NullableID
 
@@ -125,7 +125,7 @@ const Null NullableID = ""
 | `IsMOSS()`, `Number()`             | Like `ID`; false and `""` for `Null`.              |
 | `ScanString(source, validate)`     | `""`, whitespace only, `"NULL"`, `"null"` and `"nil"` set `Null`; otherwise like `ID`. |
 
-Implements: `database/sql.Scanner`, `database/sql/driver.Valuer`, `json.Marshaler`, `json.Unmarshaler`, `encoding.TextMarshaler`, `encoding/xml.Unmarshaler`, `encoding/xml.UnmarshalerAttr`, `strfmt.Scannable`, `nullable.NullSetable[ID]`, `types.NormalizableValidator[NullableID]` and `JSONSchema()` (the `ID` string or null). No `String` method, `fmt` prints the stored ID.
+Implements: `database/sql.Scanner`, `database/sql/driver.Valuer`, `json.Marshaler`, `json.Unmarshaler`, `encoding.TextMarshaler`, `encoding/xml.Unmarshaler`, `encoding/xml.UnmarshalerAttr`, `encoding/xml.MarshalerAttr`, `strfmt.Scannable`, `nullable.NullSetable[ID]`, `types.NormalizableValidator[NullableID]` and `JSONSchema()` (the `ID` string or null). No `String` method, `fmt` prints the stored ID.
 
 ## Finding VAT IDs in text
 

@@ -47,6 +47,10 @@ func (c refCode) MarshalText() ([]byte, error) {
 	return internal.MarshalTextNormalized(c, refCode.Normalized, nil)
 }
 
+func (c *refCode) MarshalXMLAttr(name xml.Name) (xml.Attr, error) {
+	return internal.MarshalXMLAttrText(c, name)
+}
+
 func (c *refCode) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 	return internal.UnmarshalXMLNormalized(c, d, start, refCode.Normalized, nil)
 }

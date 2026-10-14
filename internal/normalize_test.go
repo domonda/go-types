@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/domonda/go-errs"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -148,4 +149,34 @@ func TestUnmarshalXMLNormalized(t *testing.T) {
 
 	var c xmlCode
 	assert.Error(t, xml.Unmarshal([]byte(`<e>unterminated`), &c))
+}
+
+// failText is a TextMarshaler that fails for the value "fail".
+type failText string
+
+func (f failText) MarshalText() ([]byte, error) {
+	if f == "fail" {
+		return nil, errs.New("can't marshal")
+	}
+	return []byte(f), nil
+}
+
+// A nil pointer gets no attribute, because encoding/xml would call the
+// value receiver MarshalText through it and panic. A value gets the text
+// of MarshalText, also "", like encoding/xml writes a TextMarshaler.
+func TestMarshalXMLAttrText(t *testing.T) {
+	name := xml.Name{Local: "a"}
+	attr, err := MarshalXMLAttrText[failText](nil, name)
+	require.NoError(t, err)
+	assert.Equal(t, xml.Attr{}, attr, "encoding/xml leaves out an attribute without Name")
+
+	for _, v := range []failText{"", "x"} {
+		attr, err = MarshalXMLAttrText(&v, name)
+		require.NoError(t, err)
+		assert.Equal(t, xml.Attr{Name: name, Value: string(v)}, attr)
+	}
+
+	fail := failText("fail")
+	_, err = MarshalXMLAttrText(&fail, name)
+	assert.Error(t, err)
 }

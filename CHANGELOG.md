@@ -141,11 +141,12 @@ See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut.
     pointer receiver `UnmarshalJSON` and `UnmarshalXML` methods are promoted
     into structs that embed these types, which changes the JSON, XML and
     text form of such a struct to the embedded value; embed them as a named
-    field instead. `encoding/xml` calls the value receiver `MarshalText`
-    through a nil pointer in an attribute field, like
-    `Currency *money.Currency` with the tag `xml:"currency,attr"`, and
-    panics, as it does for a `*time.Time` attribute: add `omitempty` to such
-    fields.
+    field instead. A pointer receiver `MarshalXMLAttr` writes the text of
+    `MarshalText` and leaves out a nil pointer attribute field, like
+    `Currency *money.Currency` with the tag `xml:"currency,attr"`, with or
+    without `omitempty`. Without it `encoding/xml` would call `MarshalText`
+    through the nil pointer and panic, as it does for a `*time.Time`
+    attribute.
 - **Breaking:** the `String` method of the normalizing types is removed, so
   `fmt`, templates and logs show a value as stored instead of a normalized
   form that hid a non-canonical or invalid value. `country.Code`,

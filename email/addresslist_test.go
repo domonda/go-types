@@ -391,3 +391,7 @@ func TestAddressList_XML(t *testing.T) {
 	assert.Equal(t, in.To, got.To)
 	assert.Equal(t, in.Cc, got.Cc)
 }
+
+func TestAddressList_MarshalXMLAttr(t *testing.T) {
+	testMarshalXMLAttr(t, AddressList(""), AddressList(`A@Example.com, "Doe, John" <john@example.com>`))
+}

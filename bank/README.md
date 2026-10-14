@@ -45,7 +45,7 @@ There is no uppercasing and no removal of dashes or other punctuation.
 | `iban.Scan(value) error`, `iban.Value()`, JSON and XML | See [Serialization](#serialization).               |
 | `IBAN.JSONSchema()`                                | String with the `IBANRegex` pattern.               |
 
-Implements: `sql.Scanner`, `driver.Valuer`, `json.Marshaler`, `json.Unmarshaler`, `encoding.TextMarshaler`, `xml.Unmarshaler`, `xml.UnmarshalerAttr`, `strfmt.Scannable`, `types.NormalizableValidator[IBAN]`. No `String` method, `fmt` prints the stored IBAN, and no `UnmarshalText`, so `encoding/json` reads the keys of a `map[IBAN]V` as given.
+Implements: `sql.Scanner`, `driver.Valuer`, `json.Marshaler`, `json.Unmarshaler`, `encoding.TextMarshaler`, `xml.Unmarshaler`, `xml.UnmarshalerAttr`, `xml.MarshalerAttr`, `strfmt.Scannable`, `types.NormalizableValidator[IBAN]`. No `String` method, `fmt` prints the stored IBAN, and no `UnmarshalText`, so `encoding/json` reads the keys of a `map[IBAN]V` as given.
 
 ## NullableIBAN
 
@@ -74,7 +74,7 @@ An `IBAN` where `""` is the null value. A value of only the runes that `strutil.
 | `Scan(value) error`, `Value()`, `MarshalJSON()` | See [Serialization](#serialization).               |
 | `JSONSchema()`                                  | `IBANRegex` string or null.                        |
 
-Implements: `sql.Scanner`, `driver.Valuer`, `json.Marshaler`, `json.Unmarshaler`, `encoding.TextMarshaler`, `xml.Unmarshaler`, `xml.UnmarshalerAttr`, `strfmt.Scannable`, `nullable.NullSetable[IBAN]`, `types.NormalizableValidator[NullableIBAN]`. No `String` method.
+Implements: `sql.Scanner`, `driver.Valuer`, `json.Marshaler`, `json.Unmarshaler`, `encoding.TextMarshaler`, `xml.Unmarshaler`, `xml.UnmarshalerAttr`, `xml.MarshalerAttr`, `strfmt.Scannable`, `nullable.NullSetable[IBAN]`, `types.NormalizableValidator[NullableIBAN]`. No `String` method.
 
 ## BIC
 
@@ -110,7 +110,7 @@ A BIC has 8 or 11 uppercase characters: a 4 letter institution code, a 2 letter 
 | `bic.Scan(value) error`, `bic.Value()`, JSON and XML | See [Serialization](#serialization).               |
 | `BIC.JSONSchema()`                                 | String with the `BICRegex` pattern.                |
 
-Implements: `sql.Scanner`, `driver.Valuer`, `json.Marshaler`, `json.Unmarshaler`, `encoding.TextMarshaler`, `xml.Unmarshaler`, `xml.UnmarshalerAttr`, `strfmt.Scannable`, `types.NormalizableValidator[BIC]`. No `String` method, `fmt` prints the stored BIC, and no `UnmarshalText`, so `encoding/json` reads the keys of a `map[BIC]V` as given.
+Implements: `sql.Scanner`, `driver.Valuer`, `json.Marshaler`, `json.Unmarshaler`, `encoding.TextMarshaler`, `xml.Unmarshaler`, `xml.UnmarshalerAttr`, `xml.MarshalerAttr`, `strfmt.Scannable`, `types.NormalizableValidator[BIC]`. No `String` method, `fmt` prints the stored BIC, and no `UnmarshalText`, so `encoding/json` reads the keys of a `map[BIC]V` as given.
 
 ## NullableBIC
 
@@ -137,7 +137,7 @@ A `BIC` where `""` is the null value. A value of only the runes that `strutil.Tr
 | `Scan(value) error`, `Value()`, `MarshalJSON()` | See [Serialization](#serialization).               |
 | `JSONSchema()`                                  | `BICRegex` string or null.                         |
 
-Implements: `sql.Scanner`, `driver.Valuer`, `json.Marshaler`, `json.Unmarshaler`, `encoding.TextMarshaler`, `xml.Unmarshaler`, `xml.UnmarshalerAttr`, `strfmt.Scannable`, `nullable.NullSetable[BIC]`, `types.NormalizableValidator[NullableBIC]`. No `String` method. There is no `CountryCode` or `NormalizedShort`, use `Get()` first.
+Implements: `sql.Scanner`, `driver.Valuer`, `json.Marshaler`, `json.Unmarshaler`, `encoding.TextMarshaler`, `xml.Unmarshaler`, `xml.UnmarshalerAttr`, `xml.MarshalerAttr`, `strfmt.Scannable`, `nullable.NullSetable[BIC]`, `types.NormalizableValidator[NullableBIC]`. No `String` method. There is no `CountryCode` or `NormalizedShort`, use `Get()` first.
 
 ## Account
 

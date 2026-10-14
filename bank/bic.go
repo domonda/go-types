@@ -269,6 +269,14 @@ func (bic BIC) MarshalText() ([]byte, error) {
 	return internal.MarshalTextNormalized(bic, BIC.Normalized, nil)
 }
 
+// MarshalXMLAttr implements encoding/xml.MarshalerAttr by writing the
+// text of MarshalText, and no attribute for a nil pointer, because
+// encoding/xml calls MarshalText through a nil pointer attribute field
+// and panics.
+func (bic *BIC) MarshalXMLAttr(name xml.Name) (xml.Attr, error) {
+	return internal.MarshalXMLAttrText(bic, name)
+}
+
 // UnmarshalXML implements encoding/xml.Unmarshaler
 // by storing the text of the element like Scan stores it.
 func (bic *BIC) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {

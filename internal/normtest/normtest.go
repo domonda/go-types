@@ -87,8 +87,9 @@ type xmlCharData[T any] struct {
 }
 
 type xmlPtrAttr[T any] struct {
-	XMLName xml.Name `xml:"doc"`
-	Attr    *T       `xml:"attr,attr,omitempty"`
+	XMLName   xml.Name `xml:"doc"`
+	Attr      *T       `xml:"attr,attr"`
+	OmitEmpty *T       `xml:"omitempty,attr,omitempty"`
 }
 
 type stringScanner interface {
@@ -275,6 +276,13 @@ func Run[T Type[T], P Ptr[T]](t *testing.T, spec Spec[T]) {
 			if err != nil || string(gotXML) != wantXML {
 				t.Errorf("xml.Marshal of %q = %s, %v; want %s", input, gotXML, err, wantXML)
 			}
+			// A pointer attribute is written by MarshalXMLAttr instead of
+			// MarshalText, see below, which must not change the text
+			gotXML, err = xml.Marshal(xmlPtrAttr[T]{Attr: &input})
+			wantXML = fmt.Sprintf(`<doc attr="%s"></doc>`, xmlEscape(want))
+			if err != nil || string(gotXML) != wantXML {
+				t.Errorf("xml.Marshal of *%q attribute = %s, %v; want %s", input, gotXML, err, wantXML)
+			}
 		}
 		for _, input := range valid {
 			check(input, string(spec.Canonical), string(jsonString(string(spec.Canonical))))
@@ -290,13 +298,22 @@ func Run[T Type[T], P Ptr[T]](t *testing.T, spec Spec[T]) {
 			check(input, "", wantJSON)
 		}
 
-		// encoding/xml calls MarshalText through a nil pointer and panics
-		// for an attribute without omitempty, like for a *time.Time.
-		// With omitempty the attribute is left out.
-		gotXML, err := xml.Marshal(xmlPtrAttr[T]{})
-		if err != nil || string(gotXML) != `<doc></doc>` {
-			t.Errorf("xml.Marshal of nil *%s omitempty attribute = %s, %v", typeName, gotXML, err)
-		}
+		// encoding/xml calls the value receiver MarshalText through a nil
+		// pointer attribute field without omitempty and panics, like for a
+		// *time.Time, unless the pointer implements xml.MarshalerAttr,
+		// which encoding/xml checks first. A nil pointer attribute must be
+		// left out, with and without omitempty.
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					t.Errorf("xml.Marshal of nil *%s attribute panicked: %v", typeName, r)
+				}
+			}()
+			gotXML, err := xml.Marshal(xmlPtrAttr[T]{})
+			if err != nil || string(gotXML) != `<doc></doc>` {
+				t.Errorf("xml.Marshal of nil *%s attributes = %s, %v; want <doc></doc>", typeName, gotXML, err)
+			}
+		}()
 	})
 
 	t.Run("round trips", func(t *testing.T) {

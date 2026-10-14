@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"database/sql/driver"
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"net/mail"
 	"strings"
 
+	"github.com/domonda/go-types/internal"
 	"github.com/domonda/go-types/nullable"
 	"github.com/domonda/go-types/strutil"
 )
@@ -230,4 +232,12 @@ func (n NullableAddressList) MarshalText() ([]byte, error) {
 		return nil, nil
 	}
 	return []byte(n), nil
+}
+
+// MarshalXMLAttr implements encoding/xml.MarshalerAttr by writing the
+// text of MarshalText, and no attribute for a nil pointer, because
+// encoding/xml calls MarshalText through a nil pointer attribute field
+// and panics.
+func (n *NullableAddressList) MarshalXMLAttr(name xml.Name) (xml.Attr, error) {
+	return internal.MarshalXMLAttrText(n, name)
 }

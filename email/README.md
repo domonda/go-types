@@ -35,7 +35,7 @@ A non-normalized address with an optional display name. All parsing goes through
 | `a.Nullable() NullableAddress`                     | Type conversion.                                   |
 | `a.ASCII() string`                                 | Normalized, but a non-ASCII name RFC 2047 encoded for message headers, or unchanged if invalid. The address part is not encoded. |
 
-Implements: `sql.Scanner`, `driver.Valuer`, `json.Marshaler`, `json.Unmarshaler`, `encoding.TextMarshaler`, `xml.Unmarshaler`, `xml.UnmarshalerAttr`, `types.NormalizableValidator[Address]`, `JSONSchema()` (`string`, format `email`). No `String` method, `fmt` prints the stored address, and no `UnmarshalText`, so `encoding/json` reads the keys of a `map[Address]V` as given.
+Implements: `sql.Scanner`, `driver.Valuer`, `json.Marshaler`, `json.Unmarshaler`, `encoding.TextMarshaler`, `xml.Unmarshaler`, `xml.UnmarshalerAttr`, `xml.MarshalerAttr`, `types.NormalizableValidator[Address]`, `JSONSchema()` (`string`, format `email`). No `String` method, `fmt` prints the stored address, and no `UnmarshalText`, so `encoding/json` reads the keys of a `map[Address]V` as given.
 
 ## AddressList
 
@@ -64,7 +64,7 @@ A comma separated list. `Validate` and `Valid` accept the empty list. Use `Nulla
 | `l.ASCII() string`                                 | Like `Address.ASCII` for every address, `""` for a list without addresses. |
 | `l.Scan(value) error`, `l.Value()`, `l.MarshalJSON()`, `l.UnmarshalJSON(data)`, `l.MarshalText()` | See [Serialization](#serialization).               |
 
-Implements: `sql.Scanner`, `driver.Valuer`, `json.Marshaler`, `json.Unmarshaler`, `encoding.TextMarshaler`, `types.NormalizableValidator[AddressList]`. No `String` method, `fmt` prints the stored list.
+Implements: `sql.Scanner`, `driver.Valuer`, `json.Marshaler`, `json.Unmarshaler`, `encoding.TextMarshaler`, `xml.MarshalerAttr`, `types.NormalizableValidator[AddressList]`. No `String` method, `fmt` prints the stored list.
 
 ## AddressSet
 
@@ -99,7 +99,7 @@ A set of addresses, stored in SQL as a PostgreSQL text array; write `AddressList
 | `Validate`, `Valid`, `ValidAndNormalized`          | Validation of all elements.                        |
 | `Scan`, `Value`, `MarshalJSON`, `UnmarshalJSON`, `MarshalText`, `UnmarshalText` | See [Serialization](#serialization).               |
 
-Implements: `sql.Scanner`, `driver.Valuer`, `json.Marshaler`, `json.Unmarshaler`, `encoding.TextMarshaler`, `encoding.TextUnmarshaler`, `fmt.Stringer`, `types.NormalizableValidator[AddressSet]`, the collections proposal set interface.
+Implements: `sql.Scanner`, `driver.Valuer`, `json.Marshaler`, `json.Unmarshaler`, `encoding.TextMarshaler`, `encoding.TextUnmarshaler`, `xml.MarshalerAttr`, `fmt.Stringer`, `types.NormalizableValidator[AddressSet]`, the collections proposal set interface.
 
 ## NullableAddress
 
@@ -125,7 +125,7 @@ An `Address` where `""` is SQL NULL and JSON null. A value of only the runes tha
 | `n.Set(Address)`, `n.SetNull()`                    | `Set("")` sets null.                               |
 | `n.AsList() NullableAddressList`                   | List containing only `n`, the null list if `n` is null. |
 
-Implements: `sql.Scanner`, `driver.Valuer`, `json.Marshaler`, `json.Unmarshaler`, `encoding.TextMarshaler`, `xml.Unmarshaler`, `xml.UnmarshalerAttr`, `JSONSchema()` (email string or null), `nullable.NullSetable[Address]`, `types.NormalizableValidator[NullableAddress]`. No `String` method, `fmt` prints the stored address, and no `UnmarshalText`, so `encoding/json` reads the keys of a `map[NullableAddress]V` as given.
+Implements: `sql.Scanner`, `driver.Valuer`, `json.Marshaler`, `json.Unmarshaler`, `encoding.TextMarshaler`, `xml.Unmarshaler`, `xml.UnmarshalerAttr`, `xml.MarshalerAttr`, `JSONSchema()` (email string or null), `nullable.NullSetable[Address]`, `types.NormalizableValidator[NullableAddress]`. No `String` method, `fmt` prints the stored address, and no `UnmarshalText`, so `encoding/json` reads the keys of a `map[NullableAddress]V` as given.
 
 ## NullableAddressList
 
@@ -149,7 +149,7 @@ An `AddressList` where `""` and whitespace only are the empty list, SQL NULL, an
 | `n.StringOr(nullString)`                           | As stored, or the default if null.               |
 | `n.Set(AddressList)`, `n.SetNull()`                | `Set("")` sets null.                             |
 
-Implements: `sql.Scanner`, `driver.Valuer`, `json.Marshaler`, `json.Unmarshaler`, `encoding.TextMarshaler`, `encoding.TextUnmarshaler`, `nullable.NullSetable[AddressList]`. No `String` method, no `Valid()` and no `JSONSchema`.
+Implements: `sql.Scanner`, `driver.Valuer`, `json.Marshaler`, `json.Unmarshaler`, `encoding.TextMarshaler`, `encoding.TextUnmarshaler`, `xml.MarshalerAttr`, `nullable.NullSetable[AddressList]`. No `String` method, no `Valid()` and no `JSONSchema`.
 
 ## Message
 

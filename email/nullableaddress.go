@@ -243,6 +243,14 @@ func (n NullableAddress) MarshalText() ([]byte, error) {
 	return internal.MarshalTextNormalized(n, NullableAddress.Normalized, nil)
 }
 
+// MarshalXMLAttr implements encoding/xml.MarshalerAttr by writing the
+// text of MarshalText, and no attribute for a nil pointer, because
+// encoding/xml calls MarshalText through a nil pointer attribute field
+// and panics.
+func (n *NullableAddress) MarshalXMLAttr(name xml.Name) (xml.Attr, error) {
+	return internal.MarshalXMLAttrText(n, name)
+}
+
 // JSONSchema returns the JSON schema definition for the NullableAddress type.
 func (NullableAddress) JSONSchema() *jsonschema.Schema {
 	return &jsonschema.Schema{
