@@ -11,9 +11,9 @@ Calendar dates as ISO 8601 strings (`YYYY-MM-DD`) that parse the many ways peopl
 | `Date`                | A calendar date, canonical form `YYYY-MM-DD`. Empty and the zero dates are not valid. |
 | `NullableDate`        | Like `Date`, but `Null` (`""`) and the zero dates are valid and SQL NULL. |
 | `YearMonth`           | A month, `YYYY-MM`.                                |
-| `NullableYearMonth`   | `YearMonth` where `""` is null.                    |
+| `NullableYearMonth`   | `YearMonth` where `""` and whitespace are null.    |
 | `YearQuarter`         | A quarter, `YYYY-Qn` with an upper-case `Q`.       |
-| `NullableYearQuarter` | `YearQuarter` where `""` is null.                  |
+| `NullableYearQuarter` | `YearQuarter` where `""` and whitespace are null.  |
 | `Format`              | Layout plus nil and zero placeholders, for reflection based formatting. |
 | `Formatter`           | A `time` layout string that formats and parses dates. |
 | `Parser`              | Parses any accepted input to `YYYY-MM-DD`.         |
@@ -221,19 +221,22 @@ const YearMonthNull NullableYearMonth = ""
 
 | `YearMonth` method                   | Description                                        |
 |--------------------------------------|----------------------------------------------------|
-| `Validate()`, `Valid()`              | Exactly `YYYY-MM`, year 1 to 3000, month 1 to 12.  |
-| `IsZero()`                           | True for `""`, `"0000-00"` and `"0001-01"`.        |
+| `Normalized()`                       | Trims the surrounding whitespace; the value unchanged and an error if invalid. |
+| `Validate()`, `Valid()`              | `Normalized` succeeds: `YYYY-MM`, year 1 to 3000, month 1 to 12. |
+| `ValidAndNormalized()`               | Exactly `YYYY-MM` and valid.                       |
+| `IsZero()`                           | True for `""`, `"0000-00"` and `"0001-01"`, also with whitespace. |
 | `String()`                           | The raw string.                                    |
 | `Year()`, `Month()`                  | The parts, 0 if invalid.                           |
 | `Date(day)`                          | `"YYYY-MM-DD"` for `day`, without validation (`Date(30)` of February is invalid). |
 | `DateRange()`                        | First and last day of the month; `""`, `""` if invalid. |
-| `Format(layout)`                     | `""` if empty; `YearMonthLayout` returns the string as is; other layouts format the 1st of the month. |
+| `Format(layout)`                     | `""` if empty; `YearMonthLayout` returns the normalized value, an invalid one as is; other layouts format the 1st of the month. |
 | `AddYears(n)`, `AddMonths(n)`        | Arithmetic; months roll over into years. Invalid values are returned unchanged. |
 | `ContainsTime(t)`, `ContainsDate(d)` | True if `t` or `d` falls in the month (local time zone midnights). |
-| `Compare(other)`                     | String comparison.                                 |
+| `Compare(other)`                     | Compares the normalized values, invalid ones as stored. |
+| `UnmarshalJSON(data)`                | Reads a JSON string like `Date`, see Reading and writing. |
 | `Nullable()`                         | Plain conversion to `NullableYearMonth`.           |
 
-`NullableYearMonth` has the same methods (null returns 0, `""`, `false` or null) plus `IsNull()` (only `""`; `"0000-00"` is zero but not null), `IsNotNull()`, `ValidAndNotNull()` (false for null and zero values), `Get()` (panics if null), `GetOr(defaultYearMonth)`, `Set(ym)`, `SetNull()` and `StringOr(nullString)`. Its `Date` and `DateRange` return `NullableDate`. Implements `nullable.NullSetable[YearMonth]` and `json.Unmarshaler` (JSON `null` sets null, a string is assigned as is).
+`NullableYearMonth` has the same methods (null returns 0, `""`, `false` or null; `Normalized` returns `YearMonthNull` for null) plus `IsNull()` (`""` and whitespace only; `"0000-00"` is zero but not null), `IsNotNull()`, `ValidAndNotNull()` (false for null and zero values), `Get()` (panics if null), `GetOr(defaultYearMonth)`, `Set(ym)`, `SetNull()` and `StringOr(nullString)`. Its `Date` and `DateRange` return `NullableDate`. Implements `nullable.NullSetable[YearMonth]`, `types.NormalizableValidator` and `json.Unmarshaler` (JSON `null` sets null, a string is read like by `YearMonth`, a blank one as null).
 
 ## YearQuarter and NullableYearQuarter
 
@@ -249,8 +252,10 @@ const YearQuarterNull NullableYearQuarter = ""
 
 | `YearQuarter` method                               | Description                                        |
 |----------------------------------------------------|----------------------------------------------------|
-| `Validate()`, `Valid()`                            | Exactly `YYYY-Qn` with upper-case `Q`, year 1 to 3000, quarter 1 to 4. |
-| `IsZero()`                                         | True for `""`, `"0000-Q0"` and `"0001-Q1"`.        |
+| `Normalized()`                                     | Trims the surrounding whitespace and upper-cases `q`; the value unchanged and an error if invalid. |
+| `Validate()`, `Valid()`                            | `Normalized` succeeds: `YYYY-Qn`, year 1 to 3000, quarter 1 to 4. |
+| `ValidAndNormalized()`                             | Exactly `YYYY-Qn` with upper-case `Q` and valid.   |
+| `IsZero()`                                         | True for `""`, `"0000-Q0"` and `"0001-Q1"`, also with whitespace or `q`. |
 | `String()`                                         | The raw string.                                    |
 | `Year()`, `Quarter()`                              | The parts, 0 if invalid.                           |
 | `FirstMonth()`                                     | January, April, July or October; 0 if invalid.     |
@@ -258,10 +263,11 @@ const YearQuarterNull NullableYearQuarter = ""
 | `DateRange()`                                      | First and last day of the quarter; `""`, `""` if invalid. |
 | `AddYears(n)`, `AddQuarters(n)`                    | Arithmetic; quarters roll over into years. Invalid values are returned unchanged. |
 | `ContainsTime(t)`, `ContainsDate(d)`, `ContainsYearMonth(ym)` | True if the value falls in the quarter.            |
-| `Compare(other)`                                   | String comparison.                                 |
+| `Compare(other)`                                   | Compares the normalized values, invalid ones as stored. |
 | `Nullable()`                                       | Plain conversion to `NullableYearQuarter`.         |
+| `UnmarshalJSON(data)`                              | Reads a JSON string like `Date`, see Reading and writing. |
 
-`NullableYearQuarter` has the same methods plus the same null helpers as `NullableYearMonth`. Its `Date` and `DateRange` return `NullableDate`. Implements `nullable.NullSetable[YearQuarter]` and `json.Unmarshaler` like `NullableYearMonth`.
+`NullableYearQuarter` has the same methods plus the same null helpers as `NullableYearMonth`. Its `Date` and `DateRange` return `NullableDate`. Implements `nullable.NullSetable[YearQuarter]`, `types.NormalizableValidator` and `json.Unmarshaler` like `NullableYearMonth`.
 
 ## Format, Formatter and Parser
 
@@ -324,7 +330,7 @@ Reading values:
 | JSON `null`                                        | field left unchanged                               | `Null`                               |
 | other JSON values                                  | error                                              | error                                |
 
-An invalid date is read without error, so one bad row doesn't fail a whole query, and kept for `Validate` to report. `YearMonth` and `YearQuarter` have no `UnmarshalJSON`, so `encoding/json` stores any JSON string as is and ignores JSON `null`. The `UnmarshalJSON` of `NullableYearMonth` and `NullableYearQuarter` stores a JSON string as is, but sets null for JSON `null`. `YearMonth`, `YearQuarter`, `NullableYearMonth` and `NullableYearQuarter` have no SQL methods: `database/sql` writes them as plain strings and fails to scan NULL into them (`converting NULL to string is unsupported`); scan into a `*YearMonth` to accept NULL.
+An invalid date is read without error, so one bad row doesn't fail a whole query, and kept for `Validate` to report. `YearMonth` and `YearQuarter` read a JSON string like `Date`: normalized if valid, `""` if blank, else as is, without an error, and leave the value unchanged for JSON `null`. `NullableYearMonth` and `NullableYearQuarter` read a JSON string the same way, a blank one as null, and set null for JSON `null`. `YearMonth`, `YearQuarter`, `NullableYearMonth` and `NullableYearQuarter` have no SQL methods: `database/sql` writes them as plain strings and fails to scan NULL into them (`converting NULL to string is unsupported`); scan into a `*YearMonth` to accept NULL.
 
 ## Gotchas
 
@@ -337,8 +343,7 @@ An invalid date is read without error, so one bad row doesn't fail a whole query
 - **Reading doesn't validate.** `Scan`, JSON and XML decoding store a valid date as `YYYY-MM-DD` and an invalid one as is, without an error. An invalid date is an error for `Value` and written unchanged by `MarshalJSON`.
 - **`fmt` prints the stored date.** `fmt.Println(date.Date("25.12.2023"))` prints `25.12.2023`. Use `Format(date.Layout)` or `MarshalText` for the normalized form.
 - **Null ordering.** `Null` is before every date: `Null.Before(d)` and `d.After(Null)` are true, `Null.BeforeToday()` is true.
-- **Upper-case `Q`.** `YearQuarter("2024-q1").Valid()` is false, while `PeriodRange("2024-q1")` works.
-- **Nullable period types differ from `NullableDate`.** The `IsNull` of `NullableYearMonth` and `NullableYearQuarter` is only `""`, while `NullableDate.IsNull` also covers the zero dates.
+- **Nullable period types differ from `NullableDate`.** The `IsNull` of `NullableYearMonth` and `NullableYearQuarter` is only `""` and whitespace, while `NullableDate.IsNull` also covers the zero dates.
 - **`Format.AssignString` with empty input** assigns a non-nil pointer to the zero time to a `*time.Time` destination, not nil.
 - **`ParseTimeDefaultLayouts` is a shared package variable.** Pass layouts to `ParseTime` instead of changing it.
 

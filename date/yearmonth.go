@@ -5,13 +5,22 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	types "github.com/domonda/go-types"
+	"github.com/domonda/go-types/internal"
+	"github.com/domonda/go-types/strutil"
 )
 
 // YearMonthLayout is the layout string for formatting YearMonth values (YYYY-MM).
 // Compatible with time.Time.Format().
 const YearMonthLayout = "2006-01"
 
+// Compile-time check that YearMonth implements types.NormalizableValidator[YearMonth]
+var _ types.NormalizableValidator[YearMonth] = YearMonth("")
+
 // YearMonth represents a calendar year and month in ISO 8601 format (YYYY-MM).
+// Normalized trims the surrounding whitespace, UnmarshalJSON stores a valid
+// year-month normalized and an invalid one unchanged.
 type YearMonth string
 
 // YearMonthFrom creates a YearMonth from the given year and month values.
@@ -34,35 +43,66 @@ func YearMonthOfToday() YearMonth {
 	return YearMonthOfTime(time.Now())
 }
 
-// Validate returns an error if the year-month is not in valid YYYY-MM format.
-// Checks that the year is 1 to 3000, because Date has no year 0, and month is 1-12.
-func (ym YearMonth) Validate() error {
-	if len(ym) != 7 || ym[4] != '-' {
-		return fmt.Errorf("invalid year month: %q", ym)
+// Normalized returns the year-month with the surrounding whitespace trimmed,
+// or the YearMonth unchanged together with an error if that is not in
+// valid YYYY-MM format with a year from 1 to 3000, because Date has no
+// year 0, and a month from 1 to 12.
+func (ym YearMonth) Normalized() (YearMonth, error) {
+	norm := strutil.TrimSpace(ym)
+	if len(norm) != 7 || norm[4] != '-' {
+		return ym, fmt.Errorf("invalid year month: %q", ym)
 	}
-	yearStr := string(ym)[:4]
+	yearStr := string(norm)[:4]
 	year, err := strconv.ParseUint(yearStr, 10, 16)
 	if err != nil || year < 1 || year > 3000 {
-		return fmt.Errorf("invalid year: %q", yearStr)
+		return ym, fmt.Errorf("invalid year: %q", yearStr)
 	}
-	monthStr := string(ym)[5:7]
+	monthStr := string(norm)[5:7]
 	month, err := strconv.ParseUint(monthStr, 10, 8)
 	if err != nil || month < 1 || month > 12 {
-		return fmt.Errorf("invalid month: %q", monthStr)
+		return ym, fmt.Errorf("invalid month: %q", monthStr)
 	}
-	return nil
+	return norm, nil
 }
 
-// Valid returns true if the year-month is in valid YYYY-MM format.
+// Validate returns the error of Normalized,
+// so a year-month with surrounding whitespace is valid.
+func (ym YearMonth) Validate() error {
+	_, err := ym.Normalized()
+	return err
+}
+
+// Valid returns true if the year-month can be normalized, see Validate.
 func (ym YearMonth) Valid() bool {
 	return ym.Validate() == nil
 }
 
-// IsZero returns true when the year-month is any of ["", "0000-00", "0001-01"].
+// ValidAndNormalized returns true if the year-month is valid and already normalized.
+func (ym YearMonth) ValidAndNormalized() bool {
+	norm, err := ym.Normalized()
+	return err == nil && ym == norm
+}
+
+// UnmarshalJSON implements encoding/json.Unmarshaler.
+// A JSON string is stored normalized if it is a valid year-month,
+// blank as "" and unchanged if it is invalid, without an error, so that
+// one invalid value doesn't fail a whole document; Validate reports it.
+// JSON null leaves the YearMonth unchanged like encoding/json does for a
+// string type, and any other JSON value is an error.
+func (ym *YearMonth) UnmarshalJSON(data []byte) error {
+	return internal.UnmarshalJSONNormalized(ym, data, false, YearMonth.Normalized, nil)
+}
+
+// IsZero returns true when the year-month is any of ["", "0000-00", "0001-01"],
+// also with surrounding whitespace.
 // "0001-01" is treated as zero because "0001-01-01" is the zero value of time.Time.
 // "0000-00" may be the zero value of other date implementations.
 func (ym YearMonth) IsZero() bool {
-	return ym == "" || ym == "0000-00" || ym == "0001-01"
+	switch strutil.TrimSpace(ym) {
+	case "", "0000-00", "0001-01":
+		return true
+	}
+	return false
 }
 
 // String returns the year-month as a string in YYYY-MM format.
@@ -74,27 +114,31 @@ func (ym YearMonth) String() string {
 // Year returns the year component of the year-month.
 // Returns 0 if the year-month is not valid.
 func (ym YearMonth) Year() int {
-	if !ym.Valid() {
+	norm, err := ym.Normalized()
+	if err != nil {
 		return 0
 	}
-	year, _ := strconv.Atoi(string(ym)[:4])
+	year, _ := strconv.Atoi(string(norm)[:4])
 	return year
 }
 
 // Month returns the month component of the year-month.
 // Returns 0 if the year-month is not valid.
 func (ym YearMonth) Month() time.Month {
-	if !ym.Valid() {
+	norm, err := ym.Normalized()
+	if err != nil {
 		return 0
 	}
-	month, _ := strconv.Atoi(string(ym)[5:7])
+	month, _ := strconv.Atoi(string(norm)[5:7])
 	return time.Month(month)
 }
 
 // Date returns a Date for the given day within this year-month.
-// The day value is formatted as-is without validation.
+// The year-month is normalized if it is valid, the day value
+// is formatted as-is without validation.
 func (ym YearMonth) Date(day int) Date {
-	return Date(fmt.Sprintf("%s-%02d", ym, day))
+	norm, _ := ym.Normalized() // unchanged if invalid
+	return Date(fmt.Sprintf("%s-%02d", norm, day))
 }
 
 // Nullable returns the year-month as a NullableYearMonth.
@@ -121,14 +165,16 @@ func (ym YearMonth) DateRange() (fromDate, untilDate Date) {
 
 // Format formats the year-month using the given layout string (see time.Time.Format).
 // Returns an empty string if ym or layout are empty.
-// If layout equals YearMonthLayout constant, returns the year-month as-is for efficiency.
-// For other layouts, converts to Date using the 1st day of the month and delegates to Date.Format.
+// If layout equals YearMonthLayout constant, returns the normalized year-month,
+// or an invalid one unchanged. For other layouts, converts to Date using
+// the 1st day of the month and delegates to Date.Format.
 func (ym YearMonth) Format(layout string) string {
 	if ym == "" || layout == "" {
 		return ""
 	}
 	if layout == YearMonthLayout {
-		return string(ym)
+		norm, _ := ym.Normalized() // unchanged if invalid
+		return string(norm)
 	}
 	return ym.Date(1).Format(layout)
 }
@@ -169,8 +215,11 @@ func (ym YearMonth) ContainsDate(date Date) bool {
 	return ym.ContainsTime(date.Midnight())
 }
 
-// Compare compares the year-month with another YearMonth.
+// Compare compares the normalized year-month with another normalized
+// YearMonth, an invalid one as it is.
 // Returns -1 if ym is before other, +1 if after, 0 if equal.
 func (ym YearMonth) Compare(other YearMonth) int {
+	ym, _ = ym.Normalized()
+	other, _ = other.Normalized()
 	return strings.Compare(string(ym), string(other))
 }

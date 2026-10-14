@@ -1,6 +1,7 @@
 package date
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -72,6 +73,8 @@ func TestYearQuarter_Validate(t *testing.T) {
 	}{
 		{name: "valid Q1", yq: "2023-Q1", wantErr: false},
 		{name: "valid Q4", yq: "2023-Q4", wantErr: false},
+		{name: "lower case q", yq: "2023-q2", wantErr: false},
+		{name: "surrounding whitespace", yq: " 2023-Q3\t", wantErr: false},
 		{name: "empty", yq: "", wantErr: true},
 		{name: "too short", yq: "2023-Q", wantErr: true},
 		{name: "too long", yq: "2023-Q12", wantErr: true},
@@ -399,6 +402,7 @@ func TestYearQuarter_Compare(t *testing.T) {
 		{name: "after", yq: "2023-Q3", other: "2023-Q1", want: 1},
 		{name: "equal", yq: "2023-Q3", other: "2023-Q3", want: 0},
 		{name: "different years", yq: "2022-Q4", other: "2023-Q1", want: -1},
+		{name: "equal when normalized", yq: " 2023-q3", other: "2023-Q3", want: 0},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -851,4 +855,67 @@ func TestNullableYearQuarter_ContainsYearMonth(t *testing.T) {
 func TestYearQuarter_ValidateRejectsYearZero(t *testing.T) {
 	assert.Error(t, YearQuarter("0000-Q2").Validate())
 	assert.NoError(t, YearQuarter("0001-Q2").Validate())
+}
+
+// Normalized trims the surrounding whitespace and upper-cases a "q",
+// which PeriodRange accepts too, and returns an invalid value unchanged
+// with an error, like the other normalizing types.
+func TestYearQuarter_Normalized(t *testing.T) {
+	for input, want := range map[YearQuarter]YearQuarter{
+		"2023-Q3":   "2023-Q3",
+		"2023-q3":   "2023-Q3",
+		" 2023-q3 ": "2023-Q3",
+	} {
+		got, err := input.Normalized()
+		assert.NoError(t, err, "%q", input)
+		assert.Equal(t, want, got, "%q", input)
+		assert.Equal(t, input == want, input.ValidAndNormalized(), "%q", input)
+	}
+	for _, input := range []YearQuarter{"", "  ", "2023-Q5", "2023-q0", "0000-Q1", "2023-X1", "Q3/2023"} {
+		got, err := input.Normalized()
+		assert.Error(t, err, "%q", input)
+		assert.Equal(t, input, got, "%q unchanged", input)
+		assert.False(t, input.ValidAndNormalized(), "%q", input)
+	}
+}
+
+// The accessors work on the normalized year-quarter,
+// because Valid accepts the spellings that Normalized accepts.
+func TestYearQuarter_AccessorsNormalize(t *testing.T) {
+	yq := YearQuarter(" 2023-q3 ")
+	assert.Equal(t, 2023, yq.Year())
+	assert.Equal(t, 3, yq.Quarter())
+	from, until := yq.DateRange()
+	assert.Equal(t, Date("2023-07-01"), from)
+	assert.Equal(t, Date("2023-09-30"), until)
+	assert.Equal(t, YearQuarter("2023-Q4"), yq.AddQuarters(1))
+	assert.True(t, yq.ContainsYearMonth(" 2023-08"))
+	assert.True(t, YearQuarter("0001-q1").IsZero())
+}
+
+// Reading JSON normalizes like Date.UnmarshalJSON, so a value read from
+// JSON is canonical if it is valid and compares with ==. An invalid value
+// is kept without an error, so one bad period doesn't fail a whole
+// document, and Validate reports it.
+func TestYearQuarter_UnmarshalJSON(t *testing.T) {
+	for data, want := range map[string]YearQuarter{
+		`"2023-Q3"`:   "2023-Q3",
+		`" 2023-q3 "`: "2023-Q3",
+		`"2023-Q5"`:   "2023-Q5",
+		`"bad"`:       "bad",
+		`""`:          "",
+		`"  "`:        "",
+	} {
+		yq := YearQuarter("2024-Q1")
+		assert.NoError(t, json.Unmarshal([]byte(data), &yq), "json.Unmarshal(%s)", data)
+		assert.Equal(t, want, yq, "json.Unmarshal(%s)", data)
+	}
+
+	// JSON null leaves a non-nullable value unchanged like encoding/json
+	// does for a string type, any other JSON value is an error
+	yq := YearQuarter("2024-Q1")
+	assert.NoError(t, json.Unmarshal([]byte(`null`), &yq))
+	assert.Equal(t, YearQuarter("2024-Q1"), yq)
+	assert.Error(t, json.Unmarshal([]byte(`20233`), &yq))
+	assert.Equal(t, YearQuarter("2024-Q1"), yq)
 }

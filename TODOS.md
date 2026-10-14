@@ -19,8 +19,8 @@ package: every listed behaviour is documented in the package READMEs.
       `uu.NullableID`. `uu.IDSlice.Scan("")` gives a nil slice,
       `uu.IDSet.Scan("")` an empty non-nil set. Whitespace-only values are
       null for the country, vat, bank, money, account number, email address
-      and date nullable types, but a real value for `date.NullableYearMonth`,
-      `date.NullableYearQuarter` and `nullable.NonEmptyString`.
+      and date nullable types, but a real value for
+      `nullable.NonEmptyString`.
       Decided: empty and whitespace-only input is null for every nullable
       type, see Design decisions in the [README](README.md).
 - [ ] **One rule for the empty value of a non-nullable type.**
@@ -216,7 +216,7 @@ time.
       the scaled value is within a few ulps of a tie.
       The /ship review of 2026-10-13 measured more:
       `Amount.DecimalAmount` 9 ns to 95 ns (a string round trip),
-      `internal.UnmarshalJSONStringOrNull` about twice as slow as decoding a
+      `internal.UnmarshalJSONNormalized` about twice as slow as decoding a
       plain string (a nested `json.Unmarshal`, a fast path for unescaped
       strings would do), `CurrencyAmount.ScanString` parses twice,
       `types.DeepValidate` formats a path label for every slice element
@@ -238,8 +238,6 @@ time.
 - [ ] **Relax `cmp.Ordered` to `comparable`** in `set`, `types.ReduceSet` and
       `types.ReduceSlice`, which never compare order. This is backward
       compatible.
-- [ ] **`date.YearQuarter.Validate`** requires an upper case `Q` while
-      `date.PeriodRange` accepts `q`.
 - [ ] **Move the `NullableYearQuarter` tests** from
       `date/yearquarter_test.go` into `date/nullableyearquarter_test.go`.
 - [ ] **Multi-word currency names in `money.ParseCurrencyAmount`.** Only a
@@ -268,6 +266,10 @@ time.
 
 ## Completed
 
+- [x] **`date.YearMonth` and `date.YearQuarter` normalize.** `Normalized`
+      trims the whitespace and upper-cases the `q` that `PeriodRange`
+      accepts, `Valid` is lenient like for the other types, and JSON
+      reading normalizes. Whitespace-only is null for the nullable types.
 - [x] **Quadratic `email` address parsing.** `ParseAddressList` keeps
       the errors short and stops after 100 of them, so an invalid list of
       10,000 entries takes milliseconds instead of seconds and hundreds of

@@ -1,6 +1,7 @@
 package date
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -71,6 +72,8 @@ func TestYearMonth_Validate(t *testing.T) {
 		{name: "valid", ym: "2023-03", wantErr: false},
 		{name: "valid january", ym: "2020-01", wantErr: false},
 		{name: "valid december", ym: "2021-12", wantErr: false},
+		{name: "surrounding whitespace", ym: " 2023-03\t", wantErr: false},
+		{name: "whitespace only", ym: "  ", wantErr: true},
 		{name: "empty", ym: "", wantErr: true},
 		{name: "too short", ym: "2023-3", wantErr: true},
 		{name: "too long", ym: "2023-123", wantErr: true},
@@ -122,6 +125,8 @@ func TestYearMonth_IsZero(t *testing.T) {
 		{name: "0001-01", ym: "0001-01", want: true},
 		{name: "valid date", ym: "2023-03", want: false},
 		{name: "0001-02", ym: "0001-02", want: false},
+		{name: "whitespace only", ym: "  ", want: true},
+		{name: "padded 0001-01", ym: " 0001-01 ", want: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -383,6 +388,7 @@ func TestYearMonth_Compare(t *testing.T) {
 		{name: "after", ym: "2023-07", other: "2023-03", want: 1},
 		{name: "equal", ym: "2023-07", other: "2023-07", want: 0},
 		{name: "different years", ym: "2022-12", other: "2023-01", want: -1},
+		{name: "equal when normalized", ym: " 2023-07", other: "2023-07", want: 0},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -399,4 +405,63 @@ func TestYearMonth_ValidateRejectsYearZero(t *testing.T) {
 	require.Error(t, YearMonth("0000-05").Validate())
 	require.NoError(t, YearMonth("0001-05").Validate())
 	require.Equal(t, YearMonth("0000-05"), YearMonth("0000-05").AddMonths(1), "invalid stays unchanged")
+}
+
+// Normalized trims the surrounding whitespace, which a typed or OCR read
+// period often has, and returns an invalid value unchanged with an error,
+// like the other normalizing types, so the error can name the input.
+func TestYearMonth_Normalized(t *testing.T) {
+	for input, want := range map[YearMonth]YearMonth{
+		"2023-07":    "2023-07",
+		" 2023-07\t": "2023-07",
+	} {
+		got, err := input.Normalized()
+		require.NoError(t, err, "%q", input)
+		require.Equal(t, want, got, "%q", input)
+		require.Equal(t, input == want, input.ValidAndNormalized(), "%q", input)
+	}
+	for _, input := range []YearMonth{"", "  ", "2023-13", "0000-05", "2023-7", "07/2023"} {
+		got, err := input.Normalized()
+		require.Error(t, err, "%q", input)
+		require.Equal(t, input, got, "%q unchanged", input)
+		require.False(t, input.ValidAndNormalized(), "%q", input)
+	}
+}
+
+// The accessors work on the normalized year-month,
+// because Valid accepts the spellings that Normalized accepts.
+func TestYearMonth_AccessorsNormalize(t *testing.T) {
+	ym := YearMonth(" 2023-07 ")
+	require.Equal(t, 2023, ym.Year())
+	require.Equal(t, time.July, ym.Month())
+	require.Equal(t, Date("2023-07-15"), ym.Date(15))
+	require.Equal(t, "2023-07", ym.Format(YearMonthLayout))
+	require.Equal(t, YearMonth("2023-09"), ym.AddMonths(2))
+}
+
+// Reading JSON normalizes like Date.UnmarshalJSON, so a value read from
+// JSON is canonical if it is valid and compares with ==. An invalid value
+// is kept without an error, so one bad period doesn't fail a whole
+// document, and Validate reports it.
+func TestYearMonth_UnmarshalJSON(t *testing.T) {
+	for data, want := range map[string]YearMonth{
+		`"2023-07"`:   "2023-07",
+		`" 2023-07 "`: "2023-07",
+		`"2023-13"`:   "2023-13",
+		`"bad"`:       "bad",
+		`""`:          "",
+		`"  "`:        "",
+	} {
+		ym := YearMonth("2024-01")
+		require.NoError(t, json.Unmarshal([]byte(data), &ym), "json.Unmarshal(%s)", data)
+		require.Equal(t, want, ym, "json.Unmarshal(%s)", data)
+	}
+
+	// JSON null leaves a non-nullable value unchanged like encoding/json
+	// does for a string type, any other JSON value is an error
+	ym := YearMonth("2024-01")
+	require.NoError(t, json.Unmarshal([]byte(`null`), &ym))
+	require.Equal(t, YearMonth("2024-01"), ym)
+	require.Error(t, json.Unmarshal([]byte(`202307`), &ym))
+	require.Equal(t, YearMonth("2024-01"), ym)
 }

@@ -399,9 +399,9 @@ current code:
 - **Whitespace-only input.** `"  "` is null for `country.NullableCode`,
   `bank.NullableIBAN`, `bank.NullableBIC`, `money.NullableCurrency`,
   `vat.NullableID`, `email.NullableAddress`, `account.NullableNumber`,
-  `date.NullableDate`, `email.NullableAddressList` and
-  `nullable.TrimmedString`. `nullable.NonEmptyString`,
-  `date.NullableYearMonth` and `date.NullableYearQuarter` treat it as a
+  `date.NullableDate`, `date.NullableYearMonth`,
+  `date.NullableYearQuarter`, `email.NullableAddressList` and
+  `nullable.TrimmedString`. `nullable.NonEmptyString` treats it as a
   non-null value.
 - **JSON `""` into a nullable type.** For the string based `NullableX` types
   and `nullable.NonEmptyString` it means null. For `money.NullableAmount`,

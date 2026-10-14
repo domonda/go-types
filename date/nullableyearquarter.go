@@ -5,8 +5,10 @@ import (
 	"strings"
 	"time"
 
+	types "github.com/domonda/go-types"
 	"github.com/domonda/go-types/internal"
 	"github.com/domonda/go-types/nullable"
+	"github.com/domonda/go-types/strutil"
 )
 
 // YearQuarterNull is the null value for NullableYearQuarter (empty string).
@@ -17,11 +19,15 @@ const YearQuarterNull NullableYearQuarter = ""
 // Compile-time check that NullableYearQuarter implements nullable.NullSetable[YearQuarter]
 var _ nullable.NullSetable[YearQuarter] = (*NullableYearQuarter)(nil)
 
+// Compile-time check that NullableYearQuarter implements types.NormalizableValidator[NullableYearQuarter]
+var _ types.NormalizableValidator[NullableYearQuarter] = NullableYearQuarter("")
+
 // NullableYearQuarter is a year-quarter string in YYYY-Q# format (e.g. "2024-Q3")
 // that can also represent a NULL value as an empty string.
 type NullableYearQuarter string
 
-// Validate returns nil if the year-quarter is in valid YYYY-Q# format.
+// Validate returns nil if the year-quarter is null or can be normalized,
+// see YearQuarter.Validate.
 func (yq NullableYearQuarter) Validate() error {
 	if yq.IsNull() {
 		return nil
@@ -29,9 +35,29 @@ func (yq NullableYearQuarter) Validate() error {
 	return YearQuarter(yq).Validate()
 }
 
-// Valid returns true if the year-quarter is in valid YYYY-Q# format.
+// Valid returns true if the year-quarter is null or can be normalized,
+// see YearQuarter.Validate.
 func (yq NullableYearQuarter) Valid() bool {
 	return yq.Validate() == nil
+}
+
+// ValidAndNormalized returns true if the year-quarter is valid and already normalized,
+// or if it is the empty YearQuarterNull. A whitespace-only value is null and valid,
+// but not normalized.
+func (yq NullableYearQuarter) ValidAndNormalized() bool {
+	norm, err := yq.Normalized()
+	return err == nil && yq == norm
+}
+
+// Normalized returns YearQuarterNull for a null year-quarter, see IsNull,
+// else the year-quarter normalized like YearQuarter.Normalized,
+// or unchanged together with an error if it can't be normalized.
+func (yq NullableYearQuarter) Normalized() (NullableYearQuarter, error) {
+	if yq.IsNull() {
+		return YearQuarterNull, nil
+	}
+	norm, err := YearQuarter(yq).Normalized()
+	return NullableYearQuarter(norm), err
 }
 
 // ValidAndNotNull returns if the year-quarter is valid and not Null or Zero,
@@ -47,16 +73,18 @@ func (yq NullableYearQuarter) IsZero() bool {
 	return YearQuarter(yq).IsZero()
 }
 
-// IsNull returns true if the NullableYearQuarter is null (an empty string).
-// Zero values like "0000-Q0" are not null, see IsZero.
+// IsNull returns true if the NullableYearQuarter is null,
+// which includes a string of only the runes strutil.TrimSpace removes:
+// whitespace, control and other non-printable runes, and invalid UTF-8,
+// like for NullableDate. Zero values like "0000-Q0" are not null, see IsZero.
 // IsNull implements the nullable.Nullable interface.
 func (yq NullableYearQuarter) IsNull() bool {
-	return yq == YearQuarterNull
+	return strutil.TrimSpace(yq) == YearQuarterNull
 }
 
-// IsNotNull returns true if the NullableYearQuarter is not null.
+// IsNotNull returns true if the NullableYearQuarter is not null, see IsNull.
 func (yq NullableYearQuarter) IsNotNull() bool {
-	return yq != YearQuarterNull
+	return !yq.IsNull()
 }
 
 // Get returns the non-nullable YearQuarter value or panics if the NullableYearQuarter is null.
@@ -101,18 +129,21 @@ func (yq NullableYearQuarter) StringOr(nullString string) string {
 	return yq.String()
 }
 
-// UnmarshalJSON implements encoding/json.Unmarshaler
-// by setting the NullableYearQuarter to null for the JSON null value,
+// UnmarshalJSON implements encoding/json.Unmarshaler.
+// A JSON string is stored like YearQuarter.UnmarshalJSON stores it,
+// a blank one as null. JSON null sets the NullableYearQuarter to null,
 // so that decoding null into a field that holds a value resets it.
-// A JSON string is assigned unchanged, without normalization or validation,
-// like encoding/json does for a string type, any other JSON value is an error.
+// Any other JSON value is an error.
 func (yq *NullableYearQuarter) UnmarshalJSON(data []byte) error {
-	return internal.UnmarshalJSONStringOrNull(yq, data)
+	return internal.UnmarshalJSONNormalized(yq, data, true, NullableYearQuarter.Normalized, nil)
 }
 
-// Compare compares the year-quarter with another NullableYearQuarter.
+// Compare compares the normalized year-quarter with another normalized
+// NullableYearQuarter, an invalid one as it is. Null is before every year-quarter.
 // Returns -1 if yq is before other, +1 if after, 0 if equal.
 func (yq NullableYearQuarter) Compare(other NullableYearQuarter) int {
+	yq, _ = yq.Normalized()
+	other, _ = other.Normalized()
 	return strings.Compare(string(yq), string(other))
 }
 

@@ -5,9 +5,19 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	types "github.com/domonda/go-types"
+	"github.com/domonda/go-types/internal"
+	"github.com/domonda/go-types/strutil"
 )
 
+// Compile-time check that YearQuarter implements types.NormalizableValidator[YearQuarter]
+var _ types.NormalizableValidator[YearQuarter] = YearQuarter("")
+
 // YearQuarter represents a calendar year and quarter in format YYYY-Q# (e.g., "2023-Q1").
+// Normalized trims the surrounding whitespace and upper-cases a "q" like
+// PeriodRange accepts it, UnmarshalJSON stores a valid year-quarter
+// normalized and an invalid one unchanged.
 type YearQuarter string
 
 // YearQuarterFrom creates a YearQuarter from the given year and quarter values.
@@ -32,35 +42,69 @@ func YearQuarterOfToday() YearQuarter {
 	return YearQuarterOfTime(time.Now())
 }
 
-// Validate returns an error if the year-quarter is not in valid YYYY-Q# format.
-// Checks that the year is 1 to 3000, because Date has no year 0, and quarter is 1-4.
-func (yq YearQuarter) Validate() error {
-	if len(yq) != 7 || yq[4] != '-' || yq[5] != 'Q' {
-		return fmt.Errorf("invalid year quarter: %q", yq)
+// Normalized returns the year-quarter with the surrounding whitespace
+// trimmed and an upper case "Q", or the YearQuarter unchanged together
+// with an error if that is not in valid YYYY-Q# format with a year from
+// 1 to 3000, because Date has no year 0, and a quarter from 1 to 4.
+func (yq YearQuarter) Normalized() (YearQuarter, error) {
+	norm := strutil.TrimSpace(yq)
+	if len(norm) == 7 && norm[5] == 'q' {
+		norm = norm[:5] + "Q" + norm[6:]
 	}
-	yearStr := string(yq)[:4]
+	if len(norm) != 7 || norm[4] != '-' || norm[5] != 'Q' {
+		return yq, fmt.Errorf("invalid year quarter: %q", yq)
+	}
+	yearStr := string(norm)[:4]
 	year, err := strconv.ParseUint(yearStr, 10, 16)
 	if err != nil || year < 1 || year > 3000 {
-		return fmt.Errorf("invalid year: %q", yearStr)
+		return yq, fmt.Errorf("invalid year: %q", yearStr)
 	}
-	quarterStr := string(yq)[6:7]
+	quarterStr := string(norm)[6:7]
 	quarter, err := strconv.ParseUint(quarterStr, 10, 8)
 	if err != nil || quarter < 1 || quarter > 4 {
-		return fmt.Errorf("invalid quarter: %q", quarterStr)
+		return yq, fmt.Errorf("invalid quarter: %q", quarterStr)
 	}
-	return nil
+	return norm, nil
 }
 
-// Valid returns true if the year-quarter is in valid YYYY-Q# format.
+// Validate returns the error of Normalized,
+// so "2023-q1" and a year-quarter with surrounding whitespace are valid.
+func (yq YearQuarter) Validate() error {
+	_, err := yq.Normalized()
+	return err
+}
+
+// Valid returns true if the year-quarter can be normalized, see Validate.
 func (yq YearQuarter) Valid() bool {
 	return yq.Validate() == nil
 }
 
-// IsZero returns true when the year-quarter is any of ["", "0000-Q0", "0001-Q1"].
+// ValidAndNormalized returns true if the year-quarter is valid and already normalized.
+func (yq YearQuarter) ValidAndNormalized() bool {
+	norm, err := yq.Normalized()
+	return err == nil && yq == norm
+}
+
+// UnmarshalJSON implements encoding/json.Unmarshaler.
+// A JSON string is stored normalized if it is a valid year-quarter,
+// blank as "" and unchanged if it is invalid, without an error, so that
+// one invalid value doesn't fail a whole document; Validate reports it.
+// JSON null leaves the YearQuarter unchanged like encoding/json does for a
+// string type, and any other JSON value is an error.
+func (yq *YearQuarter) UnmarshalJSON(data []byte) error {
+	return internal.UnmarshalJSONNormalized(yq, data, false, YearQuarter.Normalized, nil)
+}
+
+// IsZero returns true when the year-quarter is any of ["", "0000-Q0", "0001-Q1"],
+// also with surrounding whitespace or a lower case "q".
 // "0001-Q1" is treated as zero because "0001-01-01" is the zero value of time.Time.
 // "0000-Q0" may be the zero value of other date implementations.
 func (yq YearQuarter) IsZero() bool {
-	return yq == "" || yq == "0000-Q0" || yq == "0001-Q1"
+	switch strings.ToUpper(string(strutil.TrimSpace(yq))) {
+	case "", "0000-Q0", "0001-Q1":
+		return true
+	}
+	return false
 }
 
 // String returns the year-quarter as a string in YYYY-Q# format.
@@ -72,20 +116,22 @@ func (yq YearQuarter) String() string {
 // Year returns the year component of the year-quarter.
 // Returns 0 if the year-quarter is not valid.
 func (yq YearQuarter) Year() int {
-	if !yq.Valid() {
+	norm, err := yq.Normalized()
+	if err != nil {
 		return 0
 	}
-	year, _ := strconv.Atoi(string(yq)[:4])
+	year, _ := strconv.Atoi(string(norm)[:4])
 	return year
 }
 
 // Quarter returns the quarter component of the year-quarter (1-4).
 // Returns 0 if the year-quarter is not valid.
 func (yq YearQuarter) Quarter() int {
-	if !yq.Valid() {
+	norm, err := yq.Normalized()
+	if err != nil {
 		return 0
 	}
-	quarter, _ := strconv.Atoi(string(yq)[6:7])
+	quarter, _ := strconv.Atoi(string(norm)[6:7])
 	return quarter
 }
 
@@ -187,8 +233,11 @@ func (yq YearQuarter) ContainsYearMonth(ym YearMonth) bool {
 	return yq.Year() == ym.Year() && ym.Month() >= yq.FirstMonth() && ym.Month() <= yq.FirstMonth()+2
 }
 
-// Compare compares the year-quarter with another YearQuarter.
+// Compare compares the normalized year-quarter with another normalized
+// YearQuarter, an invalid one as it is.
 // Returns -1 if yq is before other, +1 if after, 0 if equal.
 func (yq YearQuarter) Compare(other YearQuarter) int {
+	yq, _ = yq.Normalized()
+	other, _ = other.Normalized()
 	return strings.Compare(string(yq), string(other))
 }

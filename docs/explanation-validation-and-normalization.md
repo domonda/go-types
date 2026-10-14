@@ -34,7 +34,9 @@ as different countries.
 `types.NormalizableValidator[T]` combines `Validator`, `Normalizable[T]` and
 `ValidAndNormalized`. These types assert it at compile time: `bank.IBAN`,
 `bank.BIC`, `bank.NullableIBAN`, `country.Code`, `date.Date`,
-`date.NullableDate`, `email.Address`, `email.NullableAddress`,
+`date.NullableDate`, `date.YearMonth`, `date.NullableYearMonth`,
+`date.YearQuarter`, `date.NullableYearQuarter`, `email.Address`,
+`email.NullableAddress`,
 `email.AddressList`, `email.AddressSet`, `language.Code`, `money.Currency`
 and `vat.ID`. The `Normalized` method of the
 `date` types takes no language hint; `NormalizedLang(lang language.Code)` takes

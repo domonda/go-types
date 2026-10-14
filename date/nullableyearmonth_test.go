@@ -96,6 +96,7 @@ func TestNullableYearMonth_IsNull(t *testing.T) {
 	}{
 		{name: "null", ym: YearMonthNull, want: true},
 		{name: "empty", ym: "", want: true},
+		{name: "whitespace only", ym: " \t", want: true},
 		{name: "valid", ym: "2023-03", want: false},
 	}
 	for _, tt := range tests {
@@ -219,6 +220,8 @@ func TestNullableYearMonth_Compare(t *testing.T) {
 		{name: "null vs value", ym: YearMonthNull, other: "2023-03", want: -1},
 		{name: "value vs null", ym: "2023-03", other: YearMonthNull, want: 1},
 		{name: "both null", ym: YearMonthNull, other: YearMonthNull, want: 0},
+		{name: "whitespace is null", ym: "  ", other: YearMonthNull, want: 0},
+		{name: "equal when normalized", ym: "2023-07 ", other: "2023-07", want: 0},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -429,14 +432,22 @@ func TestNullableYearMonth_UnmarshalJSON(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(`{"period":null}`), &d))
 	require.Equal(t, YearMonthNull, d.Period)
 
-	// A JSON string is assigned unchanged, without validation,
-	// like encoding/json did before NullableYearMonth had UnmarshalJSON.
-	for _, str := range []string{"2023-07", "2023-13", "bad", ""} {
+	// A JSON string is stored normalized if it is valid, a blank one as
+	// null, and an invalid one unchanged without an error, so one bad
+	// period doesn't fail a whole document; Validate reports it.
+	for str, want := range map[string]NullableYearMonth{
+		"2023-07":   "2023-07",
+		" 2023-07 ": "2023-07",
+		"2023-13":   "2023-13",
+		"bad":       "bad",
+		"":          YearMonthNull,
+		"  ":        YearMonthNull,
+	} {
 		d := doc{Period: "2024-01"}
 		data, err := json.Marshal(map[string]string{"period": str})
 		require.NoError(t, err)
 		require.NoError(t, json.Unmarshal(data, &d))
-		require.Equal(t, NullableYearMonth(str), d.Period, "json.Unmarshal(%s)", data)
+		require.Equal(t, want, d.Period, "json.Unmarshal(%s)", data)
 	}
 
 	// Any other JSON value is an error and leaves the value unchanged.
@@ -445,4 +456,24 @@ func TestNullableYearMonth_UnmarshalJSON(t *testing.T) {
 		require.Error(t, json.Unmarshal([]byte(data), &ym), "json.Unmarshal(%s)", data)
 		require.Equal(t, NullableYearMonth("2024-01"), ym, "json.Unmarshal(%s)", data)
 	}
+}
+
+// A blank value is null, valid and normalizes to YearMonthNull,
+// like NullableDate, but it is not normalized itself.
+func TestNullableYearMonth_Normalized(t *testing.T) {
+	for input, want := range map[NullableYearMonth]NullableYearMonth{
+		"":          YearMonthNull,
+		" \t":       YearMonthNull,
+		"2023-07":   "2023-07",
+		" 2023-07 ": "2023-07",
+	} {
+		got, err := input.Normalized()
+		require.NoError(t, err, "%q", input)
+		require.Equal(t, want, got, "%q", input)
+		require.True(t, input.Valid(), "%q", input)
+		require.Equal(t, input == want, input.ValidAndNormalized(), "%q", input)
+	}
+	got, err := NullableYearMonth("2023-13").Normalized()
+	require.Error(t, err)
+	require.Equal(t, NullableYearMonth("2023-13"), got, "unchanged")
 }

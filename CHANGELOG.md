@@ -164,6 +164,21 @@ See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut.
   `Normalized` accepts, like `Validate` and the `Valid` of the other
   normalizing types, so `Code("EN").Valid()` is true. Use
   `ValidAndNormalized` to require the canonical code.
+- **Breaking:** `date.YearMonth`, `YearQuarter`, `NullableYearMonth` and
+  `NullableYearQuarter` normalize like `date.Date`. The new `Normalized`
+  trims the surrounding whitespace and upper-cases the `q` of a
+  year-quarter, which `PeriodRange` already accepted, and with the new
+  `ValidAndNormalized` the four types implement
+  `types.NormalizableValidator`. `Valid` and `Validate` accept every
+  spelling that `Normalized` accepts, so `YearQuarter("2023-q1").Valid()`
+  is true, and `Year`, `Month`, `Quarter`, `Format`, `Compare` and the
+  methods built on them use the normalized value. `UnmarshalJSON`, new on
+  `YearMonth` and `YearQuarter`, stores a valid JSON string normalized, a
+  blank one as the empty value and an invalid one unchanged, without an
+  error; the nullable types stored every string unchanged. Whitespace-only
+  is null for `NullableYearMonth` and `NullableYearQuarter`, like for the
+  other nullable types, and zero for `IsZero`. The four types still have no
+  SQL, `MarshalJSON` or XML methods and write the stored string.
 - **Breaking:** the zero dates are empty in every spelling: `"0001-01-01"`,
   `"0000-00-00"`, `"01.01.0001"`, Go's zero time `"0001-01-01T00:00:00Z"`
   and the MySQL zero date-time `"0000-00-00 00:00:00"` are

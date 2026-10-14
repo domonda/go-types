@@ -18,14 +18,22 @@ func TestNullableYearQuarter_UnmarshalJSON(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(`{"period":null}`), &d))
 	require.Equal(t, YearQuarterNull, d.Period)
 
-	// A JSON string is assigned unchanged, without validation,
-	// like encoding/json did before NullableYearQuarter had UnmarshalJSON.
-	for _, str := range []string{"2023-Q3", "2023-q3", "bad", ""} {
+	// A JSON string is stored normalized if it is valid, a blank one as
+	// null, and an invalid one unchanged without an error, so one bad
+	// period doesn't fail a whole document; Validate reports it.
+	for str, want := range map[string]NullableYearQuarter{
+		"2023-Q3":   "2023-Q3",
+		" 2023-q3 ": "2023-Q3",
+		"2023-Q5":   "2023-Q5",
+		"bad":       "bad",
+		"":          YearQuarterNull,
+		"  ":        YearQuarterNull,
+	} {
 		d := doc{Period: "2024-Q1"}
 		data, err := json.Marshal(map[string]string{"period": str})
 		require.NoError(t, err)
 		require.NoError(t, json.Unmarshal(data, &d))
-		require.Equal(t, NullableYearQuarter(str), d.Period, "json.Unmarshal(%s)", data)
+		require.Equal(t, want, d.Period, "json.Unmarshal(%s)", data)
 	}
 
 	// Any other JSON value is an error and leaves the value unchanged.
@@ -34,4 +42,26 @@ func TestNullableYearQuarter_UnmarshalJSON(t *testing.T) {
 		require.Error(t, json.Unmarshal([]byte(data), &yq), "json.Unmarshal(%s)", data)
 		require.Equal(t, NullableYearQuarter("2024-Q1"), yq, "json.Unmarshal(%s)", data)
 	}
+}
+
+// A blank value is null, valid and normalizes to YearQuarterNull,
+// like NullableDate, but it is not normalized itself.
+func TestNullableYearQuarter_Normalized(t *testing.T) {
+	for input, want := range map[NullableYearQuarter]NullableYearQuarter{
+		"":          YearQuarterNull,
+		" \t":       YearQuarterNull,
+		"2023-Q3":   "2023-Q3",
+		" 2023-q3 ": "2023-Q3",
+	} {
+		got, err := input.Normalized()
+		require.NoError(t, err, "%q", input)
+		require.Equal(t, want, got, "%q", input)
+		require.True(t, input.Valid(), "%q", input)
+		require.True(t, input.IsNull() == (want == YearQuarterNull), "IsNull of %q", input)
+		require.Equal(t, input == want, input.ValidAndNormalized(), "%q", input)
+	}
+	got, err := NullableYearQuarter("2023-Q5").Normalized()
+	require.Error(t, err)
+	require.Equal(t, NullableYearQuarter("2023-Q5"), got, "unchanged")
+	require.Equal(t, 0, NullableYearQuarter("  ").Compare(YearQuarterNull), "whitespace is null")
 }

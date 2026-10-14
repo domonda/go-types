@@ -5,8 +5,10 @@ import (
 	"strings"
 	"time"
 
+	types "github.com/domonda/go-types"
 	"github.com/domonda/go-types/internal"
 	"github.com/domonda/go-types/nullable"
+	"github.com/domonda/go-types/strutil"
 )
 
 // YearMonthNull is the null value for NullableYearMonth (empty string).
@@ -17,11 +19,15 @@ const YearMonthNull NullableYearMonth = ""
 // Compile-time check that NullableYearMonth implements nullable.NullSetable[YearMonth]
 var _ nullable.NullSetable[YearMonth] = (*NullableYearMonth)(nil)
 
+// Compile-time check that NullableYearMonth implements types.NormalizableValidator[NullableYearMonth]
+var _ types.NormalizableValidator[NullableYearMonth] = NullableYearMonth("")
+
 // NullableYearMonth is a year-month string in YYYY-MM format that
 // can also represent a NULL value as an empty string.
 type NullableYearMonth string
 
-// Validate returns nil if the year-month is in valid YYYY-MM format.
+// Validate returns nil if the year-month is null or can be normalized,
+// see YearMonth.Validate.
 func (ym NullableYearMonth) Validate() error {
 	if ym.IsNull() {
 		return nil
@@ -29,9 +35,29 @@ func (ym NullableYearMonth) Validate() error {
 	return YearMonth(ym).Validate()
 }
 
-// Valid returns true if the year-month is in valid YYYY-MM format.
+// Valid returns true if the year-month is null or can be normalized,
+// see YearMonth.Validate.
 func (ym NullableYearMonth) Valid() bool {
 	return ym.Validate() == nil
+}
+
+// ValidAndNormalized returns true if the year-month is valid and already normalized,
+// or if it is the empty YearMonthNull. A whitespace-only value is null and valid,
+// but not normalized.
+func (ym NullableYearMonth) ValidAndNormalized() bool {
+	norm, err := ym.Normalized()
+	return err == nil && ym == norm
+}
+
+// Normalized returns YearMonthNull for a null year-month, see IsNull,
+// else the year-month normalized like YearMonth.Normalized,
+// or unchanged together with an error if it can't be normalized.
+func (ym NullableYearMonth) Normalized() (NullableYearMonth, error) {
+	if ym.IsNull() {
+		return YearMonthNull, nil
+	}
+	norm, err := YearMonth(ym).Normalized()
+	return NullableYearMonth(norm), err
 }
 
 // ValidAndNotNull returns if the year-month is valid and not Null or Zero,
@@ -47,16 +73,18 @@ func (ym NullableYearMonth) IsZero() bool {
 	return YearMonth(ym).IsZero()
 }
 
-// IsNull returns true if the NullableYearMonth is null (an empty string).
-// Zero values like "0000-00" are not null, see IsZero.
+// IsNull returns true if the NullableYearMonth is null,
+// which includes a string of only the runes strutil.TrimSpace removes:
+// whitespace, control and other non-printable runes, and invalid UTF-8,
+// like for NullableDate. Zero values like "0000-00" are not null, see IsZero.
 // IsNull implements the nullable.Nullable interface.
 func (ym NullableYearMonth) IsNull() bool {
-	return ym == YearMonthNull
+	return strutil.TrimSpace(ym) == YearMonthNull
 }
 
-// IsNotNull returns true if the NullableYearMonth is not null.
+// IsNotNull returns true if the NullableYearMonth is not null, see IsNull.
 func (ym NullableYearMonth) IsNotNull() bool {
-	return ym != YearMonthNull
+	return !ym.IsNull()
 }
 
 // Get returns the non-nullable YearMonth value or panics if the NullableYearMonth is null.
@@ -101,18 +129,21 @@ func (ym NullableYearMonth) StringOr(nullString string) string {
 	return ym.String()
 }
 
-// UnmarshalJSON implements encoding/json.Unmarshaler
-// by setting the NullableYearMonth to null for the JSON null value,
+// UnmarshalJSON implements encoding/json.Unmarshaler.
+// A JSON string is stored like YearMonth.UnmarshalJSON stores it,
+// a blank one as null. JSON null sets the NullableYearMonth to null,
 // so that decoding null into a field that holds a value resets it.
-// A JSON string is assigned unchanged, without normalization or validation,
-// like encoding/json does for a string type, any other JSON value is an error.
+// Any other JSON value is an error.
 func (ym *NullableYearMonth) UnmarshalJSON(data []byte) error {
-	return internal.UnmarshalJSONStringOrNull(ym, data)
+	return internal.UnmarshalJSONNormalized(ym, data, true, NullableYearMonth.Normalized, nil)
 }
 
-// Compare compares the year-month with another NullableYearMonth.
+// Compare compares the normalized year-month with another normalized
+// NullableYearMonth, an invalid one as it is. Null is before every year-month.
 // Returns -1 if ym is before other, +1 if after, 0 if equal.
 func (ym NullableYearMonth) Compare(other NullableYearMonth) int {
+	ym, _ = ym.Normalized()
+	other, _ = other.Normalized()
 	return strings.Compare(string(ym), string(other))
 }
 
@@ -157,7 +188,8 @@ func (ym NullableYearMonth) DateRange() (fromDate, untilDate NullableDate) {
 
 // Format formats the year-month using the given layout string (see time.Time.Format).
 // Returns an empty string if ym or layout are empty, or if ym is null.
-// If layout equals YearMonthLayout constant, returns the year-month as-is for efficiency.
+// If layout equals YearMonthLayout constant, returns the normalized year-month,
+// or an invalid one unchanged.
 // For other layouts, converts to Date using the 1st day of the month and delegates to Date.Format.
 func (ym NullableYearMonth) Format(layout string) string {
 	if ym.IsNull() {
