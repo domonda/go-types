@@ -7,6 +7,7 @@ import (
 	"github.com/domonda/go-types/float"
 	"github.com/domonda/go-types/internal"
 	"github.com/domonda/go-types/money"
+	"github.com/domonda/go-types/strutil"
 )
 
 // Formatter converts a reflect.Value to a string using the provided FormatConfig.
@@ -46,11 +47,12 @@ func (format *MoneyFormat) FormatAmount(amount money.Amount) string {
 // FormatCurrencyAmount formats a currency-tagged monetary amount as a string,
 // placing the currency code before or after the number according to
 // format.CurrencyFirst, and applying the configured separators and precision.
-// A precision of zero or more is raised to the decimals of the minor unit of
+// A precision of 2 or more is raised to the decimals of the minor unit of
 // the currency, see money.Currency.MinorUnits, so that the presets write
 // "KWD 1,234.567" with the three decimals of the Kuwaiti dinar instead of
 // rounding away its fils, like money.CurrencyAmount.String keeps them.
-// A precision of -1 writes the shortest exact form.
+// A precision of 0 or 1 rounds below the cents on purpose and is kept,
+// and a precision of -1 writes the shortest exact form.
 func (format *MoneyFormat) FormatCurrencyAmount(currencyAmount money.CurrencyAmount) string {
 	precision := format.currencyPrecision(currencyAmount.Currency)
 	return currencyAmount.FormatSep(format.CurrencyFirst, format.ThousandsSep, format.DecimalSep, precision)
@@ -68,10 +70,12 @@ func (format *MoneyFormat) FormatCurrencyDecimalAmount(currencyAmount money.Curr
 }
 
 // currencyPrecision returns format.Precision raised to the decimals of the
-// minor unit of currency, which are 2 for a blank or unknown currency,
-// or a negative precision unchanged, which writes all decimals already.
+// minor unit of currency if it keeps the cents (2 or more decimals).
+// A precision below 2 rounds below the cents on purpose, -1 writes all
+// decimals already, and a blank currency has no minor unit to keep,
+// so these are returned unchanged.
 func (format *MoneyFormat) currencyPrecision(currency money.Currency) int {
-	if format.Precision < 0 {
+	if format.Precision < 2 || strutil.TrimSpace(currency) == "" {
 		return format.Precision
 	}
 	return max(format.Precision, currency.MinorUnits())
