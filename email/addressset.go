@@ -541,7 +541,7 @@ func (set AddressSet) MarshalText() ([]byte, error) {
 	}
 	text := strings.Join(addrs, ", ")
 	// Each address reads back alone, but an unclosed comment like in
-	// "a@example.com (x, (y)" also swallows the entries after it
+	// "Doe (Sales <doe@example.com>" also swallows the entries after it
 	entries := SplitAddressList(text)
 	if len(entries) != len(addrs) {
 		return nil, errs.Errorf("email.AddressSet %q would not read back as the same address list", text)

@@ -37,14 +37,7 @@ func SplitAddressList(list string) []Address {
 	if trimmed == "" || placeholderListRegexp.MatchString(strings.ToLower(trimmed)) {
 		return nil
 	}
-	var (
-		parts   []listPart
-		start   int
-		quoted  bool
-		escaped bool
-		comment int
-		angle   int
-	)
+	var parts []listPart
 	add := func(begin, end int) {
 		entry := strutil.TrimSpace(trimmed[begin:end])
 		if entry != "" {
@@ -52,9 +45,35 @@ func SplitAddressList(list string) []Address {
 			parts = append(parts, listPart{begin, begin + len(entry)})
 		}
 	}
-	for i := 0; i < len(trimmed); i++ {
+	start := 0
+	for {
+		i := nextListSeparator(trimmed[start:])
+		if i < 0 {
+			add(start, len(trimmed))
+			break
+		}
+		add(start, start+i)
+		start += i + 1
+	}
+	return joinDisplayNameParts(trimmed, parts)
+}
+
+// nextListSeparator returns the index of the first comma in list that
+// separates two entries of an address list, outside quotes, angle
+// brackets and nested comments, with backslash escapes in quotes and
+// comments, or -1 if there is none. SplitAddressList splits at these
+// commas, and ParseAddressList skips to them after an invalid entry, so
+// that both find the same entries.
+func nextListSeparator(list string) int {
+	var (
+		quoted  bool
+		escaped bool
+		comment int
+		angle   int
+	)
+	for i := 0; i < len(list); i++ {
 		// All delimiters are ASCII, so iterating bytes is safe for UTF-8
-		c := trimmed[i]
+		c := list[i]
 		switch {
 		case escaped:
 			escaped = false
@@ -83,12 +102,10 @@ func SplitAddressList(list string) []Address {
 		case c == '>' && angle > 0:
 			angle--
 		case c == ',' && angle == 0:
-			add(start, i)
-			start = i + 1
+			return i
 		}
 	}
-	add(start, len(trimmed))
-	return joinDisplayNameParts(trimmed, parts)
+	return -1
 }
 
 // checkSanitized returns an error naming text as name if sanitizeAddr

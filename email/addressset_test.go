@@ -718,11 +718,12 @@ func TestAddressSet_MarshalText(t *testing.T) {
 	require.NoError(t, back.UnmarshalText(text))
 	assert.Equal(t, MakeAddressSet("a@example.com", "Doe, John <john@example.com>"), back)
 
-	// A valid address with an unclosed comment reads back alone, but in
+	// A valid address whose name opens a comment reads back alone, but in
 	// the joined list the comment swallows the entries after it, so the
 	// set is refused instead of reading back with one entry
-	_, err = MakeAddressSet("a@example.com (x, (y)", "b@example.com").MarshalText()
-	assert.Error(t, err)
+	require.NoError(t, Address("Doe (Sales <doe@example.com>").Validate())
+	_, err = MakeAddressSet("Doe (Sales <doe@example.com>", "b@example.com").MarshalText()
+	assert.ErrorContains(t, err, "would not read back")
 
 	text, err = AddressSet(nil).MarshalText()
 	require.NoError(t, err)

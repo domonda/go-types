@@ -445,17 +445,15 @@ func ParseAddressList(list string) (addrs []*mail.Address, err error) {
 				continue
 			}
 		}
-		// Recover by skipping past the next separator so the
-		// remaining addresses can still be parsed and returned,
-		// unless the rest of the list is in a comment that isn't closed.
-		if endsInComment(remaining) {
+		// Recover at the comma where SplitAddressList ends this entry,
+		// so the remaining addresses can still be parsed and returned.
+		// Without one the rest of the list is part of this entry,
+		// like after a comment that isn't closed.
+		i := nextListSeparator(remaining)
+		if i < 0 {
 			break
 		}
-		_, after, found := strings.Cut(unparsed, ",")
-		if !found {
-			break
-		}
-		remaining = strings.TrimLeft(after, " ")
+		remaining = strings.TrimLeft(remaining[i+1:], " ")
 	}
 
 	return addrs, errors.Join(errList...)

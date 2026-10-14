@@ -312,6 +312,16 @@ func TestParseAddressList_Comments(t *testing.T) {
 		{list: `bad (x, b@example.com`, want: nil, wantErr: true},
 		{list: `bad, b@example.com`, want: []string{"b@example.com"}, wantErr: true},
 		{list: `"bad (x", b@example.com`, want: []string{"b@example.com"}, wantErr: true},
+		// An unclosed comment holds only the rest of the list after it:
+		// the valid entries between an earlier error and that comment
+		// are separate entries for SplitAddressList and are returned,
+		// because Message.Recipients ignores the error and lost them
+		{list: `garbage, c@d.com, e@f.com (unclosed`, want: []string{"c@d.com", "e@f.com"}, wantErr: true},
+		{list: `a@b.com junk, c@d.com (unclosed`, want: []string{"a@b.com", "c@d.com"}, wantErr: true},
+		{list: `bad@@, a@b.cc, c@d.ee, z@y.zz (x`, want: []string{"a@b.cc", "c@d.ee", "z@y.zz"}, wantErr: true},
+		// An escaped ')' doesn't close the comment that an unquoted
+		// name opened, so the comma is inside it and b is not separate
+		{list: `Doe (Sales \) <doe@example.com>, b@example.com`, want: []string{"doe@example.com"}, wantErr: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.list, func(t *testing.T) {
