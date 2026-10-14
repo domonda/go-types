@@ -189,6 +189,13 @@ See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut.
     are blank like the zero dates: `YearMonth("0001-01")` is no longer
     valid, and the nullable types are null for them and for whitespace,
     so `IsNull` is the same as `IsZero`, like for `NullableDate`.
+  - The years 1 to 9999 are valid like for `Date`, which were 1 to 3000,
+    so the year-month and year-quarter of every valid date can be written.
+    `YearMonth.AddMonths` after `9999-12` gives the invalid `"10000-01"`,
+    which `Value` refuses, instead of `""`, which it wrote as SQL NULL, and
+    `YearQuarter.DateRange` of `9999-Q4` ends on `9999-12-31` instead of
+    `0000-12-31`. `YearMonth.Compare` and `YearQuarter.Compare` compare
+    two normalized values without normalizing them again.
   - New `Scan`, `Value`, `MarshalJSON`, `MarshalText`, `UnmarshalXML`,
     `UnmarshalXMLAttr`, `MarshalXMLAttr`, `ScanString` and `JSONSchema`,
     and `UnmarshalJSON` on `YearMonth` and `YearQuarter`. Reading stores a
@@ -788,6 +795,25 @@ See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut.
   and memory for a list of unparsable entries: every error held the whole
   list, so 10,000 entries took seconds and hundreds of megabytes. Errors
   hold at most 100 bytes of the input, and parsing stops after 100 errors.
+- `email.ParseAddress` and `ParseAddressList`, and so the `Validate` and
+  `Normalized` methods and `ParseMIMEMessage`, read the comment in
+  `addr (Name)` without the RFC 5322 nesting and `\)` escapes that
+  `SplitAddressList` reads, so `AddressList.SplitRaw` and `SplitNormalized`
+  found different entries in a list like `a@example.com (x, (y),
+  b@example.com`. A nested comment stays in the name, so
+  `mike@doe.com (Mike (Sales))` normalizes to
+  `"Mike (Sales)" <mike@doe.com>`. A comma inside a comment no longer
+  separates addresses, `a@example.com (outer (inner, x)), b@example.com`
+  is valid, and a comment that isn't closed is an error:
+  `a@example.com (x (y)` was valid with the name `x (y`, and in a list it
+  holds the rest of the list, so parsing stops there with an error.
+  `Doe (Sales <doe@example.com>, b@example.com` is an error too.
+- `email.Address` and `NullableAddress` built an error with a call stack
+  for every invalid value they read or write unchanged, which `Scan`,
+  `UnmarshalJSON`, `UnmarshalXML`, `MarshalJSON` and `MarshalText` dropped;
+  `Scan` of an invalid address is about twice as fast and allocates
+  nothing. Each `ParseAddressList` error carries one call stack instead of
+  two.
 - `email.ParseAddress` read `attacker@evil.com ceo@corp.com` as
   `ceo@corp.com`, which `net/mail` rejects. A second address is only taken
   from angle brackets, like in `"Example" <ar1@example.com> <ar@example.com>`.
