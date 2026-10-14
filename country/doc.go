@@ -15,8 +15,10 @@
 //     to list all codes
 //
 // [Code.Valid] and [Code.Validate] normalize first, so "de" is valid.
-// SQL Value and JSON output are normalized ("de" is written as "DE"),
-// while Scan and JSON decoding store the input as it is.
+// Scan, JSON and XML decoding store a valid code normalized and an invalid
+// one unchanged, SQL Value and JSON output are normalized ("de" is written
+// as "DE"), Value returns an error for an invalid code, and fmt prints the
+// code as stored.
 //
 // See the README.md of this package for the full API
 // and how to add a country code.

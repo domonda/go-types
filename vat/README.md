@@ -1,6 +1,6 @@
 # vat
 
-European VAT identification numbers. `ID` normalizes VAT IDs as they appear on invoices and in forms (`"atu 1022 3006"`, `"DE 167-015-661"`) to the canonical form, checks the country format and, for most countries, the check digit, finds VAT IDs in text, and reads and writes SQL. The checks run offline: they do not ask VIES whether a number is registered. Use `ID` for required VAT IDs and `NullableID` for optional ones.
+European VAT identification numbers. `ID` normalizes VAT IDs as they appear on invoices and in forms (`"atu 1022 3006"`, `"DE 167-015-661"`) to the canonical form, checks the country format and, for most countries, the check digit, finds VAT IDs in text, and reads and writes SQL, JSON and XML. The checks run offline: they do not ask VIES whether a number is registered. Use `ID` for required VAT IDs and `NullableID` for optional ones.
 
     import "github.com/domonda/go-types/vat"
 
@@ -91,11 +91,10 @@ The formats and checksum functions live in `formats.go` (`idRegex` and `checkSum
 | `CountryCode()`                | `country.Code` of the prefix: `EU` gives `country.BE`, `XI` gives `country.GB`, `EL` stays `country.EL`. `country.Invalid` if invalid. |
 | `Number()`                     | Everything after the two-letter prefix, `""` if invalid. For Austria it includes the `U`: `"U10223006"`. |
 | `IsMOSS()`                     | True for a valid ID with the `EU` prefix.          |
-| `String()`                     | Canonical ID, or the raw string if invalid.        |
 | `Nullable()`                   | Plain conversion to `NullableID`, no normalization. |
-| `ScanString(source, validate)` | Assigns the canonical `source`. If that fails, returns the error when `validate` is true, else assigns `source` as is. |
+| `ScanString(source, validate)` | Without `validate` assigns `source` like `Scan`. With `validate` assigns the canonical `source` or returns the error of `Normalized`, also for a blank `source`. |
 
-Implements: `fmt.Stringer`, `database/sql.Scanner`, `database/sql/driver.Valuer`, `json.Marshaler`, `encoding.TextMarshaler`, `strfmt.Scannable`, `types.NormalizableValidator[ID]` and `JSONSchema()` (string with `minLength` 4 and no `maxLength`, because formatted IDs can be longer than `IDMaxLength`). `ID` has no `UnmarshalJSON`.
+Implements: `database/sql.Scanner`, `database/sql/driver.Valuer`, `json.Marshaler`, `json.Unmarshaler`, `encoding.TextMarshaler`, `encoding/xml.Unmarshaler`, `encoding/xml.UnmarshalerAttr`, `strfmt.Scannable`, `types.NormalizableValidator[ID]` and `JSONSchema()` (string with `minLength` 4 and no `maxLength`, because formatted IDs can be longer than `IDMaxLength`). `ID` has no `String` method, so `fmt` prints the stored ID, and no `UnmarshalText`, so `encoding/json` reads the keys of a `map[ID]V` as given.
 
 ## NullableID
 
@@ -121,13 +120,12 @@ const Null NullableID = ""
 | `Get()`                            | The `ID`; panics if null.                          |
 | `GetOr(defaultID)`                 | The `ID`, or `defaultID` if null.                  |
 | `Set(id)`, `SetNull()`             | Assign an `ID` or `Null`.                          |
-| `String()`                         | Canonical ID, `""` for `Null`, or the raw string if invalid. |
-| `StringOr(nullString)`             | Canonical ID, or `nullString` if null or invalid.  |
+| `StringOr(nullString)`             | The ID as stored, or `nullString` if null.         |
 | `CountryCode()`                    | Like `ID`, as `country.NullableCode`; `country.Null` if null or invalid. |
 | `IsMOSS()`, `Number()`             | Like `ID`; false and `""` for `Null`.              |
 | `ScanString(source, validate)`     | `""`, whitespace only, `"NULL"`, `"null"` and `"nil"` set `Null`; otherwise like `ID`. |
 
-Implements: `fmt.Stringer`, `database/sql.Scanner`, `database/sql/driver.Valuer`, `json.Marshaler`, `json.Unmarshaler`, `encoding.TextMarshaler`, `strfmt.Scannable`, `nullable.NullSetable[ID]`, `types.NormalizableValidator[NullableID]` and `JSONSchema()` (the `ID` string or null).
+Implements: `database/sql.Scanner`, `database/sql/driver.Valuer`, `json.Marshaler`, `json.Unmarshaler`, `encoding.TextMarshaler`, `encoding/xml.Unmarshaler`, `encoding/xml.UnmarshalerAttr`, `strfmt.Scannable`, `nullable.NullSetable[ID]`, `types.NormalizableValidator[NullableID]` and `JSONSchema()` (the `ID` string or null). No `String` method, `fmt` prints the stored ID.
 
 ## Finding VAT IDs in text
 
@@ -143,24 +141,25 @@ var IDFinder idFinder
 
 ## Serialization
 
-| Value                         | SQL `Value()`     | JSON (`json.Marshal`) | `String()`, `MarshalText` |
-|-------------------------------|-------------------|-----------------------|---------------------------|
-| `ID("")`                      | `""` (not `NULL`) | `""`                  | `""`                      |
-| `ID("atu 1022 3006")` (valid) | `"ATU10223006"`   | `"ATU10223006"`       | `"ATU10223006"`           |
-| `ID("ATU10223006")`           | `"ATU10223006"`   | `"ATU10223006"`       | `"ATU10223006"`           |
-| `ID("bad")` (invalid)         | `"bad"`, no error | `"bad"`               | `"bad"`                   |
-| `NullableID` `Null`, `"  "`   | `NULL`            | `null`                | `""`                      |
-| `NullableID("atu 1022 3006")` | `"ATU10223006"`   | `"ATU10223006"`       | `"ATU10223006"`           |
-| `NullableID("bad")` (invalid) | `"bad"`, no error | `"bad"`               | `"bad"`                   |
+`ID` and `NullableID` follow the rules of [Reading and writing values](../README.md#reading-and-writing-values): reading normalizes, `Value` refuses an invalid ID, and `fmt` prints the stored ID.
 
-| Input                          | `ID`                                    | `NullableID`         |
-|--------------------------------|-----------------------------------------|----------------------|
-| `Scan(nil)`                    | error wrapping `ErrInvalidID`           | `Null`               |
-| `Scan(string)`, `Scan([]byte)` | stored as is, not normalized or checked | same                 |
-| `Scan` of other types          | error wrapping `ErrInvalidID`           | error                |
-| JSON string                    | stored as is, not normalized or checked | same                 |
-| JSON `null`                    | field left unchanged                    | `Null`               |
-| other JSON values              | error                                   | error                |
+| Value                         | SQL `Value()`                 | JSON (`json.Marshal`) | `MarshalText`, XML | `fmt`           |
+|-------------------------------|-------------------------------|-----------------------|--------------------|-----------------|
+| `ID("")`, `ID("  ")`          | `NULL`                        | `""`                  | `""`               | as stored       |
+| `ID("atu 1022 3006")` (valid) | `"ATU10223006"`               | `"ATU10223006"`       | `"ATU10223006"`    | `atu 1022 3006` |
+| `ID("ATU10223006")`           | `"ATU10223006"`               | `"ATU10223006"`       | `"ATU10223006"`    | `ATU10223006`   |
+| `ID("bad")` (invalid)         | error wrapping `ErrInvalidID` | `"bad"`               | `"bad"`            | `bad`           |
+| `NullableID` `Null`, `"  "`   | `NULL`                        | `null`                | `""`               | as stored       |
+| `NullableID("atu 1022 3006")` | `"ATU10223006"`               | `"ATU10223006"`       | `"ATU10223006"`    | `atu 1022 3006` |
+| `NullableID("bad")` (invalid) | error wrapping `ErrInvalidID` | `"bad"`               | `"bad"`            | `bad`           |
+
+| Input                                              | `ID`                                               | `NullableID`          |
+|----------------------------------------------------|----------------------------------------------------|-----------------------|
+| `Scan(nil)`                                        | `""`                                               | `Null`                |
+| `Scan` of a string or `[]byte`, JSON string, XML element or attribute | normalized if valid, `""` if blank, else as is, without error | same, `Null` if blank |
+| `Scan` of other types                              | error                                              | error                 |
+| JSON `null`                                        | field left unchanged                               | `Null`                |
+| other JSON values                                  | error                                              | error                 |
 
 ## Gotchas
 
@@ -168,10 +167,11 @@ var IDFinder idFinder
 - **Greece uses `EL`.** `"GR094019245"` fails with "unsupported country code", `"EL094019245"` is valid. `CountryCode()` returns `country.EL`, which `country.Code.IsEU` counts as an EU member.
 - **Only listed prefixes.** A valid country without a format, like `US`, is rejected.
 - **Format only for some countries.** CH, IE, IS, LI, NL, SM and `EU` have no checksum; CZ (9 and 10 digits), FR (letter keys), GB/XI (`GD`, `HA`) and LV (natural persons) are checked partly. A well-formed made-up number passes there.
-- **The length limit applies after normalization.** `"AT - U - 1022 - 3006"` (20 characters) is valid. That's why the JSON schema has no `maxLength`: it would reject formatted IDs that `Normalized` accepts and that JSON decoding stores unnormalized.
+- **The length limit applies after normalization.** `"AT - U - 1022 - 3006"` (20 characters) is valid. That's why the JSON schema has no `maxLength`: it would reject formatted JSON input that `Normalized` accepts.
 - **`"No."` is not Norway.** Input starting with `"No."` or `"no."` is rejected, because it is far more often the English abbreviation for number.
-- **`ID` is not nullable.** `ID("").Value()` writes an empty string, and `Scan(nil)` returns an error. Use `NullableID` for nullable columns.
-- **Only writing normalizes.** `Value` and `MarshalJSON` write valid IDs canonical, but `Scan` and JSON decoding store the string as is.
+- **`ID` is not nullable.** `ID("")` is invalid, `Value` writes it as SQL NULL, and `Scan(nil)` reads `""`, so a `NOT NULL` column rejects it. Use `NullableID` for nullable columns.
+- **`Value` refuses invalid IDs.** It returns the error of `Normalized`, wrapping `ErrInvalidID`, so the insert fails. `MarshalJSON` and `MarshalText` write an invalid ID unchanged.
+- **A VAT ID built in Go keeps its spelling.** `Scan`, JSON and XML decoding store valid IDs canonical, but `vat.ID("atu 1022 3006")` stays as written, and `fmt` prints it so, until it is normalized or written.
 - **The finder reads at most three words.** `"DE 167 015 661"` spans four words and is not found; `"DE 167015661"` is.
 
 ## Examples

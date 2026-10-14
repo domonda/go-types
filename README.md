@@ -6,7 +6,8 @@ Go types for the data that business documents are made of: money amounts and
 currencies, dates, IBANs and BICs, VAT IDs, country and language codes, email
 addresses and messages, and UUIDs. Each type parses the many ways people and
 other systems write a value, normalizes it to one canonical form, validates
-it, and round-trips through `database/sql` and `encoding/json`. Optional
+it, and round-trips through `database/sql`, `encoding/json` and
+`encoding/xml`. Optional
 values have `Nullable` variants that map to SQL `NULL` and JSON `null`.
 
 ```
@@ -127,15 +128,95 @@ The [docs index](docs/README.md) lists everything. By what you need:
 - `Valid() bool` and `Validate() error` accept the input that `Normalized()`
   accepts, so `country.Code("de").Valid()` and `vat.ID("atu 1022 3006").Valid()`
   are true. `ValidAndNormalized()` reports whether a value is already in
-  canonical form. One type is strict: `language.Code.Valid` only accepts a
-  canonical code (its `Validate` normalizes first). `Value()` and
-  `MarshalJSON()` write the normalized form, so a non-canonical spelling that
-  `Validate` accepts doesn't reach SQL or JSON. See
+  canonical form. See
   [validation and normalization](docs/explanation-validation-and-normalization.md).
-- How each type is written to and read from SQL and JSON, including its zero
-  and null values, is in the Serialization section of its package README.
+- Reading normalizes, `Value()` refuses invalid values, and `fmt` prints the
+  stored value, see [Reading and writing values](#reading-and-writing-values).
+  How each type is written to and read from SQL, JSON and XML, including its
+  zero and null values, is in the Serialization section of its package README.
 - `types.Validate` and `types.DeepValidate` work with any type that implements
   `Validate() error` or `Valid() bool`, including your own.
+
+## Reading and writing values
+
+The identifier and code types read and write every format the same way:
+`country.Code`, `money.Currency`, `language.Code`, `vat.ID`, `bank.IBAN`,
+`bank.BIC`, `date.Date`, `email.Address` and their `Nullable` variants.
+Reading normalizes what it can and keeps the rest, writing to SQL refuses
+invalid values, and printing shows what is stored. The tables use
+`country.Code` and `country.NullableCode`; the other types differ only in
+the spellings they accept, see
+[lenient parsing](docs/explanation-lenient-parsing.md).
+
+### Methods per format
+
+| Format                    | Read                               | Write         |
+|---------------------------|------------------------------------|---------------|
+| SQL, `database/sql`       | `Scan`                             | `Value`       |
+| JSON, `encoding/json`     | `UnmarshalJSON`                    | `MarshalJSON` |
+| XML, `encoding/xml`       | `UnmarshalXML`, `UnmarshalXMLAttr` | `MarshalText` |
+| Text, `strfmt` and CSV    | `ScanString`                       | `MarshalText` |
+| JSON object keys of a map | as given                           | as given      |
+| `fmt`, templates, logs    |                                    | as stored     |
+
+### Reading
+
+| Input                    | `Scan`, JSON, XML, `ScanString(s, false)` | `ScanString(s, true)`               |
+|--------------------------|-------------------------------------------|-------------------------------------|
+| `"DE"`                   | `"DE"`                                    | `"DE"`                              |
+| `"de"`, `" DE "`         | `"DE"`                                    | `"DE"`                              |
+| `"XX"`                   | `"XX"`, no error                          | error                               |
+| `""`, `"  "`             | `""`                                      | `Code`: error, `NullableCode`: null |
+| SQL `NULL`               | `""`                                      |                                     |
+| JSON `null`              | `Code`: unchanged, `NullableCode`: `""`   |                                     |
+| JSON number, SQL integer | error                                     |                                     |
+
+For `date.Date` and `date.NullableDate` the zero dates `0001-01-01` and
+`0000-00-00`, and spellings of them like `01.01.0001`, are blank too. SQL
+`DATE` and `TIMESTAMP` columns, which drivers return as `time.Time`, read as
+their date part, and the zero `time.Time` as `""`.
+
+Reading never fails because of the text itself. An invalid value is kept as
+given, so one bad row doesn't fail a whole query or JSON document, and
+`types.DeepValidate` reports it together with its field path.
+
+### Writing
+
+| Value in Go             | `Value` (SQL) | `MarshalJSON`                        | `MarshalText`, XML | `fmt`, `String` |
+|-------------------------|---------------|--------------------------------------|--------------------|-----------------|
+| `"DE"`                  | `DE`          | `"DE"`                               | `DE`               | `DE`            |
+| `"de"`, converted in Go | `DE`          | `"DE"`                               | `DE`               | `de`            |
+| `"XX"`                  | error         | `"XX"`                               | `XX`               | `XX`            |
+| `""`                    | `NULL`        | `Code`: `""`, `NullableCode`: `null` | empty              | empty           |
+
+`Value` is the last check before data is stored for good, so it returns an
+error for an invalid value. JSON, XML and text write an invalid value
+unchanged, so a response or log that contains one still renders. `fmt`,
+templates and `String` show the value as it is stored, without normalizing.
+
+XML writes `<country>DE</country>` for an element and `country="DE"` for an
+attribute field. A nil `*country.Code` attribute field without `omitempty`
+makes `encoding/xml` panic, like a nil `*time.Time`; tag such fields
+`omitempty`.
+
+### Differences between types
+
+| Types                                              | Difference                                         |
+|----------------------------------------------------|----------------------------------------------------|
+| `country.Code`, `money.Currency`, `language.Code`  | `String()` is generated by go-enum and returns the stored value |
+| `vat.ID`, `bank.IBAN`, `bank.BIC`, `date.Date`, `email.Address` | no `String()` method, `fmt` prints the stored value |
+| `NullableX` variants                               | blank is null; `StringOr(alt)` returns `alt` only for null; `ScanString` also reads `NULL`, `null` and `nil` as null |
+| `language.Code`                                    | no nullable variant, its `""` is null              |
+| `email.AddressList`, `email.NullableAddressList`   | collections, stored unchanged in every format; `Value` returns an error for an invalid list; normalize with `Normalized()` |
+| `email.AddressSet`, `types.Set[T]`                 | elements as given in every format, so `{"a@x.com", "A@x.com"}` keeps two elements; `AddressSet` writes a PostgreSQL `text[]` array in SQL, a sorted array as JSON, and an address list as text and XML; convert with `AddressList()` to store a plain string in any database; `Value` and `MarshalText` trim valid elements and return an error for an invalid one; normalize with `Normalized()` or `NormalizedAddressList()` |
+| Scan and `UnmarshalJSON` of the email collections  | read a PostgreSQL array, a JSON array, a JSON object with the addresses as keys, a JSON string and a plain address list |
+| `money.CurrencyAmount`, `money.CurrencyDecimalAmount` | currency normalized in `Value`, JSON and `strfmt`, as stored in `String` |
+| `notnull.TrimmedString`, `nullable.TrimmedString`  | trimmed when read and in `String`                  |
+
+A set writes its elements as given because normalizing could merge two of
+them, and the set would come back with fewer elements than it was written
+with. For the same reason the keys of a `map[country.Code]V` are read and
+written as given in JSON.
 
 ## Design decisions
 
@@ -146,17 +227,26 @@ types gets resolved. Types that don't follow a rule yet are tracked in
 - **Be generous in accepting input, be canonical in generating output.**
   Parsing, normalizing, validating and scanning accept every common way people
   and other systems write a value: `country.Code("de")`,
-  `vat.ID("atu 1022 3006")` and `money.Currency("€")` are valid input. What a
-  type writes, its `Value`, its JSON and its `String`, is the canonical form:
+  `vat.ID("atu 1022 3006")` and `money.Currency("€")` are valid input.
+  Reading from SQL, JSON and XML stores the canonical form, and what a type
+  writes, its `Value`, its JSON, XML and text, is the canonical form:
   `country.Code("de")` is stored and marshalled as `DE`. Lenient validation
   and canonical output belong together, a value that passes `Validate` must
-  never be stored in another spelling. The canonical form is UTF-8 for
-  readability, the email types have an extra `ASCII()` for message headers.
-  `String` of a set lists its elements as given, because normalizing could
-  merge elements.
+  never be stored in another spelling, and `Value` refuses a value that has
+  no canonical form. The canonical form is UTF-8 for readability, the email
+  types have an extra `ASCII()` for message headers.
+- **Show what is stored.** `fmt`, templates and `String` print a value as it
+  is stored, never normalized, so a log can't show a non-canonical or invalid
+  value as if it were the canonical one.
+- **Collections keep their elements as given.** Sets and the email address
+  lists read and write their elements unchanged in every format, because
+  normalizing could merge two elements, and a set would read back with fewer
+  elements than it was written with. Normalizing them is an explicit call.
 - **Empty input is null.** For a nullable type, an empty or whitespace-only
   string from SQL, JSON or text is null, because an empty CSV cell or text
-  column means "no value".
+  column means "no value". A non-nullable type reads it as its empty value,
+  which is invalid, and writes that as SQL `NULL`, so a `NOT NULL` column
+  rejects it.
 - **Fail loudly instead of guessing.** Input that contradicts itself, or whose
   meaning depends on something the package can't know, is an error instead of
   a silently wrong value. A number with an ordinal suffix is never read as the

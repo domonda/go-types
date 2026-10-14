@@ -6,15 +6,22 @@
 //     parsed more leniently than [net/mail.ParseAddress] by [ParseAddress]
 //   - [AddressList]: a comma separated list of addresses
 //   - [AddressSet]: a set of addresses, stored in SQL as PostgreSQL text array
+//
+// Address and NullableAddress are normalized when read and written, the
+// collections AddressList, NullableAddressList and AddressSet are read and
+// written as stored, because normalizing rewrites their entries and could
+// merge two elements of a set. Value refuses an invalid address or list.
 //   - [NullableAddress] and [NullableAddressList]: the empty string
 //     is the null value and is written as SQL NULL and JSON null
 //
 // Normalization lowercases the address part and formats the display name
 // like [net/mail.Address.String], but keeps a non-ASCII name as UTF-8,
 // so normalized addresses can be compared as strings. The ASCII methods
-// and [Message.BuildRawMessage] encode non-ASCII names with RFC 2047. [ParseAddressList] and the Split methods are lenient and
+// and [Message.BuildRawMessage] encode non-ASCII names with RFC 2047. [ParseAddressList] and the SplitNormalized methods are lenient and
 // return the valid addresses together with the joined parsing errors,
 // while the Validate and Normalized methods fail on any invalid address.
+// [SplitAddressList] and the SplitRaw methods split a list without
+// parsing it.
 //
 // [Message] holds the headers, bodies, and [Attachment] values of one email.
 // [ParseMessage] detects and parses JSON, Microsoft TNEF (winmail.dat),

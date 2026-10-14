@@ -21,18 +21,16 @@ package: every listed behaviour is documented in the package READMEs.
       null for the country, vat, bank, money, account number, email address
       and date nullable types, but a real value for `date.NullableYearMonth`,
       `date.NullableYearQuarter` and `nullable.NonEmptyString`.
-      `email.NullableAddressList.Scan("  ")` is null, but
-      `NullableAddressList("  ").IsNull()` is false. `date.NullableDate` JSON
-      strings are stored as given while `Scan` normalizes them.
       Decided: empty and whitespace-only input is null for every nullable
       type, see Design decisions in the [README](README.md).
 - [ ] **One rule for the empty value of a non-nullable type.**
-      `country.Code("")` writes SQL NULL and JSON `""`, `bank.IBAN("")`
-      writes `""` to both, and `account.Number("")` writes SQL NULL and JSON
-      `null` but reads neither back (`Scan(nil)` and JSON `null` are errors).
-      `date.Date`, `language.Code`, `money.Currency`, `vat.ID`, `uu.ID`,
-      `notnull.TrimmedString` and `money.DecimalAmount` differ in the same
-      way; [docs/explanation-null-conventions.md](docs/explanation-null-conventions.md)
+      The normalizing types (`country.Code`, `money.Currency`,
+      `language.Code`, `vat.ID`, `bank.IBAN`, `bank.BIC`, `date.Date`,
+      `email.Address`, `email.AddressList`) write it as SQL NULL and JSON
+      `""` and read SQL NULL back as it. `account.Number("")` writes SQL NULL
+      and JSON `null` but reads neither back (`Scan(nil)` and JSON `null` are
+      errors). `uu.ID`, `notnull.TrimmedString` and `money.DecimalAmount`
+      differ too; [docs/explanation-null-conventions.md](docs/explanation-null-conventions.md)
       has the full table.
 - [ ] **`language.NullableCode`.** `language.Code` has no nullable variant,
       and `language.Null.Validate()` fails, so an optional language field

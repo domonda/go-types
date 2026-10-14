@@ -30,23 +30,36 @@ See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut.
   CI fails if the generated methods are stale.
 - `MarshalText` on `money.Currency`, `NullableCurrency`, `language.Code`,
   `country.Code`, `NullableCode`, `bank.IBAN`, `NullableIBAN`, `bank.BIC`,
-  `NullableBIC`, `vat.ID`, `NullableID`, `date.Date`, `NullableDate` and the
-  `email` address and list types, returning the normalized `String`, so
-  `strfmt` and `encoding/xml` write them in the same canonical form as
-  `Value` and JSON. `encoding/json` writes map keys of string types as they
-  are, without `MarshalText`.
+  `NullableBIC`, `vat.ID`, `NullableID`, `date.Date`, `NullableDate`,
+  `email.Address` and `NullableAddress`, writing the normalized value, or an
+  invalid value unchanged, so `strfmt` and `encoding/xml` write them in the
+  same canonical form as `Value` and JSON. `email.AddressList` and
+  `NullableAddressList` write the list as stored. `encoding/json` writes map
+  keys of string types as they are, without `MarshalText`.
+- `UnmarshalJSON`, `UnmarshalXML` and `UnmarshalXMLAttr` on the same
+  normalizing types, and `Scan` on `email.Address`, which read a value like
+  `Scan`: normalized if it is valid, unchanged and without an error if not,
+  see Changed. There is deliberately no normalizing `UnmarshalText`, so
+  `encoding/json` reads the keys of a `map[money.Currency]V` as given, and
+  two spellings of a currency stay two keys.
+- `email.SplitAddressList` and `AddressList.SplitRaw` and
+  `NullableAddressList.SplitRaw`, which split an address list at the commas
+  between its entries, outside quotes, angle brackets and comments, and
+  return the entries unchanged, without parsing or normalizing them.
+- `email.AddressSet.NormalizedAddressList`, which returns the normalized
+  addresses of a set, merged and sorted, as `AddressList`, and
+  `AddressSet.MarshalText`, `UnmarshalText` and `UnmarshalJSON`, so an
+  `AddressSet` works with `encoding/xml` as an address list.
+- `email.NullableAddress.Valid`, so `NullableAddress` implements
+  `types.NormalizableValidator`.
 - `language.Code.Validate()`, which normalizes first like `country.Code` and
   `money.Currency` and returns the error of `Normalized()`, naming the input.
   So `types.Validate`, `types.DeepValidate` and `strfmt` scanning accept
   `"EN"`, `"eng"` and `"en-US"`, which `Value` and `MarshalJSON` write as
-  `"en"`. `Valid()` stays strict and only accepts the canonical code.
-- `String()` on `email.Address`, `NullableAddress`, `AddressList` and
-  `NullableAddressList`, returning the normalized form with UTF-8 display
-  names, or the original if it can't be normalized, like the `String()` of
-  the other types with a `Normalized` method. `ASCII()` on the same types
-  returns the normalized form with non-ASCII names RFC 2047 encoded for
-  message headers. `email.AddressSet.String()` keeps listing the elements as
-  given, because normalizing could merge elements.
+  `"en"`. `Valid()` accepts them too, see Changed.
+- `ASCII()` on `email.Address`, `NullableAddress`, `AddressList` and
+  `NullableAddressList`, returning the normalized form with non-ASCII names
+  RFC 2047 encoded for message headers.
 - `charset.GetEncoding` resolves IANA and MIME charset labels as they appear
   in HTTP and MIME headers, like `windows-1252`, `ISO-8859-1`, `latin1`,
   `US-ASCII` and `UTF-16`, through `golang.org/x/text/encoding/ianaindex`.
@@ -84,39 +97,95 @@ See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut.
   `NormalizedLang(lang language.Code)`: `d.Normalized(language.EN)` becomes
   `d.NormalizedLang(language.EN)`. `Normalize`, `NormalizeNullable`,
   `NormalizedOrNull` and `NormalizedOrUnchanged` keep their optional hints.
-- **Breaking:** the types with a `Normalized` method write the normalized
-  form in `Value` and `MarshalJSON`, and their `Validate` accepts every value
-  that `Normalized` accepts, so a value that passes `types.DeepValidate`
-  reaches SQL and JSON in canonical form. `money.Currency("eur")` was stored
-  as `"eur"`. `Value` now normalizes for `money.Currency`,
-  `money.NullableCurrency`, `language.Code`, `bank.IBAN`, `bank.NullableIBAN`,
-  `bank.BIC`, `bank.NullableBIC`, `email.NullableAddress`,
-  `email.NullableAddressList` and `email.AddressSet`. `MarshalJSON` is new on
-  `money.Currency`, `language.Code`, `bank.IBAN`, `bank.BIC`, `vat.ID`,
-  `date.Date`, `email.AddressSet`, and `Value` and `MarshalJSON` on
-  `email.Address` and `email.AddressList`. `MarshalJSON` now normalizes for
-  `money.NullableCurrency`, `bank.NullableIBAN`, `bank.NullableBIC`,
-  `vat.NullableID`, `date.NullableDate`, `email.NullableAddress` and
-  `email.NullableAddressList`. A BIC is written with 11 characters,
-  `"BKAUATWW"` as `"BKAUATWWXXX"`. An `email.NullableAddressList` that
-  normalizes to the empty list, like `"  "` or `"undisclosed-recipients:;"`,
-  is written as SQL NULL and JSON `null`. The JSON of `email.AddressSet` keeps
-  its object form `{"a@example.com":{}}`. `money.CurrencyAmount` and
-  `CurrencyDecimalAmount` normalize their currency in `String`, `Value`,
-  JSON, `FormatSep` and the `strfmt` money formatters, `"jpy 1235.00"` is
-  now `"JPY 1235.00"`. A value that can't be normalized is still written unchanged,
-  and the `Value` of the `date` types still returns an error for it.
-  `country.Code` already worked this way. Because `Value` also encodes query
-  parameters, `WHERE bic = $1` with `BIC("DEUTDEFF")` now sends
-  `DEUTDEFFXXX`: normalize existing columns before comparing them with
-  values written by this version. The new value receiver `MarshalJSON`,
-  `MarshalText` and `String` methods and the pointer receiver
-  `UnmarshalJSON` methods are promoted into structs that embed these types,
-  which changes the JSON, XML and text form of such a struct to the embedded
-  value; embed them as a named field instead. `encoding/xml` calls the value
-  receiver `MarshalText` through a nil pointer in an attribute field, like
-  `Currency *money.Currency` with the tag `xml:"currency,attr"`, and panics,
-  as it does for a `*time.Time` attribute: add `omitempty` to such fields.
+- **Breaking:** the types with a `Normalized` method share one contract for
+  reading and writing, see "Reading and writing values" in the README:
+  `country.Code`, `money.Currency`, `language.Code`, `vat.ID`, `bank.IBAN`,
+  `bank.BIC`, `date.Date`, `email.Address` and their `Nullable` variants.
+  - `Scan`, `UnmarshalJSON`, `UnmarshalXML`, `UnmarshalXMLAttr` and
+    `ScanString` without `validate` store a valid value normalized, a blank
+    value as the empty value and an invalid value unchanged, without an
+    error, so one invalid value doesn't fail a whole query or document and
+    `Validate` reports it. They stored the text as given, and
+    `date.Date.Scan` and `NullableDate.Scan` returned an error for an
+    invalid date. A value read from SQL, JSON or XML is canonical if it is
+    valid, so `==` and map lookups work on it.
+  - `Value` writes the normalized value and SQL NULL for a blank value, and
+    returns the error of `Normalized` for an invalid value, because the
+    database is where it would stay. It wrote an invalid value unchanged,
+    and `money.Currency`, `language.Code`, `bank.IBAN` and `bank.BIC` wrote
+    every value unchanged. Only the `date` types already returned an error.
+    `vat.ID("")`, `bank.IBAN("")`, `bank.BIC("")`, `email.Address("")` and
+    `email.AddressList("")` are written as SQL NULL instead of `''`, and
+    `vat.ID.Scan(nil)` and `email.AddressList.Scan(nil)` read the empty
+    value instead of returning an error, and the error of `vat.ID.Scan` for
+    a wrong SQL type no longer wraps `vat.ErrInvalidID`. Because `Value` also encodes query
+    parameters, `WHERE bic = $1` with `BIC("DEUTDEFF")` now sends
+    `DEUTDEFFXXX`: normalize existing columns before comparing them with
+    values written by this version, and check them for invalid values,
+    which a load-modify-save of the row now refuses to write.
+  - `MarshalJSON` and `MarshalText` write the normalized value, or an
+    invalid value unchanged. `MarshalJSON` is new on `money.Currency`,
+    `language.Code`, `bank.IBAN`, `bank.BIC`, `vat.ID`, `date.Date` and
+    `email.Address`, `Value` on `email.Address`, and `MarshalJSON` now
+    normalizes for `money.NullableCurrency`,
+    `bank.NullableIBAN`, `bank.NullableBIC`, `vat.NullableID`,
+    `date.NullableDate` and `email.NullableAddress`. A BIC is written with
+    11 characters, `"BKAUATWW"` as `"BKAUATWWXXX"`.
+  - `money.CurrencyAmount` and `CurrencyDecimalAmount` write the normalized
+    currency in `Value`, JSON, `FormatSep` and the `strfmt` money
+    formatters, `"jpy 1235.00"` as `"JPY 1235.00"`, and `Value` returns an
+    error for an invalid currency.
+  - The new value receiver `MarshalJSON` and `MarshalText` methods and the
+    pointer receiver `UnmarshalJSON` and `UnmarshalXML` methods are promoted
+    into structs that embed these types, which changes the JSON, XML and
+    text form of such a struct to the embedded value; embed them as a named
+    field instead. `encoding/xml` calls the value receiver `MarshalText`
+    through a nil pointer in an attribute field, like
+    `Currency *money.Currency` with the tag `xml:"currency,attr"`, and
+    panics, as it does for a `*time.Time` attribute: add `omitempty` to such
+    fields.
+- **Breaking:** the `String` method of the normalizing types is removed, so
+  `fmt`, templates and logs show a value as stored instead of a normalized
+  form that hid a non-canonical or invalid value. `country.Code`,
+  `money.Currency` and `language.Code` keep the `String` that go-enum
+  generates, which returns the stored code. Replace `x.String()` with
+  `string(x)` for a value read from SQL, JSON or XML, which is canonical if
+  valid, and with `x.Normalized()` for a value built with a conversion like
+  `money.Currency(s)`. `money.CurrencyAmount.String`,
+  `CurrencyDecimalAmount.String`, `bank.Account.String` and
+  `email.Message.String` show the currency, IBAN, BIC and addresses as
+  stored too. `date.NullableDate.StringOr` returns the date as stored and the
+  alternative only for null, like the `StringOr` of the other nullable
+  types. `date.Date.Format(date.Layout)` keeps writing the normalized date.
+- **Breaking:** `language.Code.Valid` accepts every spelling that
+  `Normalized` accepts, like `Validate` and the `Valid` of the other
+  normalizing types, so `Code("EN").Valid()` is true. Use
+  `ValidAndNormalized` to require the canonical code.
+- **Breaking:** the zero dates are empty in every spelling: `"0001-01-01"`,
+  `"0000-00-00"`, `"01.01.0001"` and Go's zero time
+  `"0001-01-01T00:00:00Z"` are `date.Date.IsZero`, read as `""`, written as
+  SQL NULL and as JSON `""` by `Date` and `null` by `NullableDate`, and are
+  no valid `Date`. `Date("0001-01-01")` was valid and written as SQL NULL,
+  while `Date("01.01.0001")` was written as `'0001-01-01'`. The comparison
+  methods treat a zero date like an invalid date.
+- **Breaking:** the address collections `email.AddressList`,
+  `NullableAddressList` and `AddressSet` keep their addresses as stored in
+  every format, because normalizing rewrites every entry and could merge two
+  elements of a set: `{"John@Example.com", "john@example.com"}` was written
+  as one address and read back as a set with one element. `Value` writes the
+  stored list or addresses, trimmed, and returns an error for an invalid
+  list or address. `MarshalJSON` of the lists writes the stored string, and
+  of `AddressSet` a sorted JSON array, which was an object with the
+  addresses as keys; `UnmarshalJSON` of `AddressSet` still reads that
+  object. `Scan` and `UnmarshalJSON` of the three types read a PostgreSQL
+  array, a JSON array or object, a JSON string and a plain address list.
+  Normalize with `Normalized` or `AddressSet.NormalizedAddressList`.
+- **Breaking:** `email.AddressList.Split` and `NullableAddressList.Split`
+  are renamed to `SplitNormalized`, which says what they return, next to
+  the new `SplitRaw`.
+- **Breaking:** `types.Set[T]` of a string kind writes and reads its values
+  as stored in JSON, instead of through a normalizing `MarshalJSON` of `T`
+  that wrote `Set[money.Currency]{"eur", "EUR"}` as `["EUR","EUR"]`.
 - **Breaking:** `email.Address.Normalized`, `email.AddressFrom` and so the
   normalization of every `email` type keep a non-ASCII display name as
   quoted UTF-8 (RFC 6532) instead of encoding it with RFC 2047:
@@ -148,10 +217,6 @@ See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut.
   that earlier versions made of `"Doe, John"@example.com`, is now written
   quoted as `"doe..john"@example.com`: normalize stored columns again
   before comparing them with values written by this version.
-- `email.AddressList.Value`, `String`, `MarshalJSON` and `MarshalText`
-  write a list without addresses, like `"Undisclosed recipients"`, as the
-  placeholder `undisclosed-recipients:;`, because `Scan` rejects the empty
-  string of the normalized list, also after a JSON round trip.
 - **Breaking:** `email.ParseAddressList` reads only a whole placeholder,
   like `undisclosed-recipients` or `undisclosed-recipients:;`, as a list
   without addresses, instead of every list starting with one. The address
@@ -167,16 +232,10 @@ See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut.
   guessed, so `USD 1.5`, `€ USD` and `100 Dollars` are no currencies.
 - **Breaking:** `bank.BIC.Validate` and `Valid`, and so `NullableBIC`,
   `StringIsBIC` and `BIC.ScanString` with `validate`, remove whitespace like
-  `Normalized`, so `"BKAU AT WW"` is valid. `CountryCode`, `IsTestBIC`,
+  `Normalized`, so `"BKAU AT WW"` is valid, and `BIC.ScanString` stores the
+  normalized BIC like the other `ScanString` methods. `CountryCode`, `IsTestBIC`,
   `IsPassiveSWIFT` and `ReceiverPaysFees` read the normalized BIC.
   `BIC.Parse` and `BICParser` still reject whitespace.
-- **Breaking:** `StringOr` of `bank.NullableIBAN`, `bank.NullableBIC`,
-  `country.NullableCode`, `vat.NullableID`, `money.NullableCurrency`,
-  `email.NullableAddress`, `email.NullableAddressList` and
-  `date.NullableDate` returns the normalized value like `String`, and the
-  alternative for a value that can't be normalized, not only for null.
-  `NullableCode("de").StringOr("-")` was `"de"` and is now `"DE"`,
-  `NullableCurrency("XYZ").StringOr("-")` was `"XYZ"` and is now `"-"`.
 - `types.ValidatErrs.Validate` and so `types.CombinedValidatErr` validate
   every element and return all their errors joined with `errors.Join`,
   instead of stopping at the first error and returning it. A single error is
@@ -320,7 +379,7 @@ See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut.
   for it, like for any null. Only plain conversions are affected, because the
   constructors already trimmed.
 - **Breaking:** `country.NullableCode` treats a whitespace-only value as null
-  in `IsNull`, `IsNotNull` and `Value`, and so in `MarshalJSON`, `String`,
+  in `IsNull`, `IsNotNull` and `Value`, and so in `MarshalJSON`,
   `Get`, `GetOr` and `StringOr`, matching `Normalized`, which already
   returned `Null` for it. `Value` wrote `"  "` to the database, and `Get` now
   panics for it like for any null.
@@ -429,7 +488,7 @@ See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut.
   the last part, so `Amount(1).SplitEqually(200)` gave 199 parts of 0.01 and
   a last part of -0.99. All-zero weights put the whole amount into the last
   part instead of producing NaN.
-- **Breaking:** `money.CurrencyAmount.String`, and so its `Value`,
+- **Breaking:** `money.CurrencyAmount.String` and `Value`
   write the three decimals of the ISO 4217 minor unit of currencies like
   KWD instead of two: `"KWD 1.234"` instead of `"KWD 1.23"`. All other
   currencies keep two decimals, also those without a minor unit like JPY,
@@ -483,9 +542,10 @@ See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut.
 - **Breaking:** `vat.NullableID` treats a whitespace-only value as null, like
   `country.NullableCode`: `IsNull`, `Valid` and `ValidAndNotNull` report it as
   null, `Value` writes SQL NULL, `MarshalJSON` writes `null` and `Get` panics.
-- **Breaking:** `email.AddressSet.Scan` trims a plain string that is not a
-  PostgreSQL array like it trims array elements, and returns an error for a
-  whitespace-only one like for `""`.
+- **Breaking:** `email.AddressSet.Scan` reads a plain string that is not a
+  PostgreSQL array as address list, split with `email.SplitAddressList`,
+  instead of as one untrimmed address, and `""` and a whitespace-only string
+  as the nil set instead of returning an error.
 - **Breaking:** `nullable.JSON.Scan` scans an empty source as SQL NULL and
   `notnull.JSON.Scan` as `{}`, like a nil source, and the `MarshalJSON` method
   of an empty value writes `null` or `{}`. A scanned empty column was a
@@ -505,8 +565,8 @@ See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut.
   `vat.NullableID` and `money.NullableCurrency` to null. They had no
   `UnmarshalJSON` method, and `encoding/json` treats `null` as a no-op for
   such types, so decoding `{"country":null}` into a struct that already held
-  a value kept the old value. A JSON string is stored unchanged as before,
-  any other JSON value is now an error.
+  a value kept the old value. A JSON string is read like by `Scan`, any
+  other JSON value is now an error.
 - **Breaking:** `date.Date.Normalized`, `date.Normalize` and
   `NullableDate.Normalized` return the input unchanged together with the
   error, like every other `Normalized` method, instead of `""`.
@@ -528,10 +588,11 @@ See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut.
   and `Date("").BeforeToday()` were true. `Null` is still before every valid
   date.
 - **Breaking:** `email.AddressList.Scan` and `NullableAddressList.Scan` trim
-  a plain string like `AddressSet.Scan`. `AddressList.Scan` returns an error
-  for a whitespace-only string like for `""`. `NullableAddress.Scan` and
-  `NullableAddressList.Scan` read `""` and a whitespace-only string as null
-  instead of returning an error for `""`.
+  a plain string like `AddressSet.Scan`. `AddressList.Scan` reads SQL NULL,
+  `""` and a whitespace-only string as `""` instead of returning an error,
+  and `NullableAddress.Scan` and `NullableAddressList.Scan` read them as
+  null. `NullableAddressList.IsNull` is true for a whitespace-only list,
+  like the `IsNull` of the other nullable types.
 - **Breaking:** `float.Parse` and `float.ParseDetails`, and so the `money`
   parsers, return an error for a number with a sign at both ends. A leading
   and a trailing sign were both accepted and the trailing one won, so

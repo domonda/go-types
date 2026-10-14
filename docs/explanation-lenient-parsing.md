@@ -30,12 +30,13 @@ Each type parses leniently in one place and reduces every accepted spelling to o
 The methods follow one pattern, which [Validation and normalization](explanation-validation-and-normalization.md) explains in detail:
 
 - `Normalized()` returns the canonical form or an error.
-- `Valid()` and `Validate()` accept every spelling that normalizes. One exception is strict: `language.Code.Valid` accepts only a lower-case ISO 639-1 code (its `Validate` normalizes).
-- `Value()` and `MarshalJSON()` write the canonical form of a valid value.
+- `Valid()` and `Validate()` accept every spelling that normalizes.
+- `Scan`, JSON and XML decoding and `ScanString` store a valid value in the canonical form and an invalid one unchanged.
+- `Value()` writes the canonical form and refuses an invalid value, `MarshalJSON()` and `MarshalText()` write the canonical form of a valid value.
 - `ValidAndNormalized()` accepts only the canonical form.
-- `String()` returns the canonical form for a valid value.
+- `fmt` and `String()` show the value as stored.
 
-Normalize once, where the data enters your system, and store the canonical form.
+So the data is normalized where it enters your system from SQL, JSON or XML. Normalize values that you build in Go from other strings, like `money.Currency(s)`, yourself.
 
 When two readings are possible, a fixed rule decides, and the caller can override it with context: a list of accepted decimal counts for numbers, a language hint for dates. The rules below are the ones that make that decision.
 
@@ -283,7 +284,7 @@ The `strfmt` presets avoid both traps. Their money formats always write two deci
 - **Leniency against ambiguity.** Every extra spelling accepted is a chance that a string has two readings. The parsers resolve them with fixed rules: a single separator is decimal, numeric dates are day first. When the rule is wrong for your input, the caller has to supply the context. Use `acceptedDecimals` for numbers, a language hint for dates, `ScanStringWithLang` to detect the date order of a whole document, and `ParseCode` instead of `Normalized` for country and language names.
 - **Leniency against false matches.** The finders that search free text, like `bank.BICFinder` and `money.AmountFinder`, can't accept as much as the parsers, or ordinary words and numbers would match. They require upper-case BICs and amounts with exactly two decimals, and still find words like `RECHNUNG` that happen to have BIC syntax. See [Extract identifiers from text](howto-extract-identifiers-from-text.md).
 - **Offline checks only.** A valid VAT ID or IBAN has the right format and check digit. Whether it is registered or belongs to the vendor needs an online check like VIES.
-- **Unchecked input paths.** JSON decoding and the `Scan` methods of the identifier types (`bank.IBAN`, `bank.BIC`, `vat.ID`, `money.Currency`, `country.Code`) store the value as given, without normalization or validation. Normalize or validate after decoding, see the [tutorial](tutorial-invoice-record.md).
+- **Unvalidated input.** Reading never fails because of the text itself: `Scan`, JSON and XML decoding store an invalid value unchanged, so one bad row doesn't fail a whole query. Validate after decoding, see the [tutorial](tutorial-invoice-record.md); `Value` refuses an invalid value when it is written.
 
 ## Related
 

@@ -179,7 +179,11 @@ The nullable money types `money.NullableAmount`, `money.NullableCentAmount` and
 `money.NullableDecimalAmount` need no formatter of their own: like every
 `nullable.Type[T]` they are formatted like the wrapped type, and as `config.Nil`
 for null. The types that normalize their `Value` and JSON, like `money.Currency`,
-`bank.IBAN` and `email.Address`, are formatted normalized by their `MarshalText`.
+`bank.IBAN` and `email.Address`, are formatted normalized by their `MarshalText`,
+an invalid value unchanged. The collections `email.AddressList` and
+`email.NullableAddressList` are formatted as stored, and `strfmt.Scan` reads all
+of them with their `ScanString` or `Scan` methods, see
+[Reading and writing values](../README.md#reading-and-writing-values).
 
 ## MoneyFormat
 

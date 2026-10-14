@@ -302,7 +302,7 @@ Not every currency has cents. ISO 4217 defines the number of decimals of each cu
 
 Who uses it:
 
-- `CurrencyAmount.String`, and so `CurrencyAmount.Value`, writes two decimals, or the three of a currency like KWD, and never fewer: `CurrencyAmountJPY(1234.5)` is `JPY 1234.50`, because a JPY amount can still have a fraction, and a KWD amount of 1.2345 is `KWD 1.235`. The default `CurrencyAmountParser` normalizes the same way.
+- `CurrencyAmount.String` and `CurrencyAmount.Value` write two decimals, or the three of a currency like KWD, and never fewer: `CurrencyAmountJPY(1234.5)` is `JPY 1234.50`, because a JPY amount can still have a fraction, and a KWD amount of 1.2345 is `KWD 1.235`. `Value` writes the currency normalized and returns an error for an invalid one, `String` shows it as stored. The default `CurrencyAmountParser` normalizes the same way.
 - `CurrencyAmount.ScanString` accepts 0 or 2 decimals, or the minor units of the currency written without a comma, so `"KWD 1.234"` scans while `"EUR 1.234"` and `"KWD 1,234"` are rejected as ambiguous thousands groupings.
 - `CurrencyDecimalAmount` prints its own scale and doesn't need the table.
 - `CentAmount` and the `strfmt` money presets always use two decimals. The presets write `JPY 1.234,00`.

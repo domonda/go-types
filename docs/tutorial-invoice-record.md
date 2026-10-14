@@ -77,7 +77,7 @@ func main() {
 
 	// The grouped form is for display only
 	grouped, _ := iban.NormalizedWithSpaces()
-	fmt.Println(string(grouped))
+	fmt.Println(grouped)
 
 	// One wrong digit fails the check sum
 	_, err = bank.NormalizeIBAN("AT61 1904 3002 3457 3202")
@@ -91,7 +91,7 @@ func main() {
 }
 ```
 
-`string(grouped)` prints the value as it is. `fmt.Println(grouped)` would call the `String` method, which normalizes and removes the spaces again.
+`fmt.Println(grouped)` prints the value as it is stored, because `bank.IBAN` has no normalizing `String` method: what you see is what the variable holds.
 
 ## Step 3: Parse the dates
 
@@ -240,7 +240,7 @@ func main() {
 
 `DeepValidate` calls the `Validate` or `Valid` method of every exported field it can reach, also in nested structs, slices and maps, and prefixes each error with the path to the field. It returns a slice of errors. Pass it to `errors.Join` if you need a single error.
 
-The validation methods normalize before they check, so `DeepValidate` accepts `atu 1022 3006` as a valid VAT ID. It tells you whether a value is valid, not whether it is in canonical form. That's why `parseInvoice` stores the normalized values.
+The validation methods normalize before they check, so `DeepValidate` accepts `atu 1022 3006` as a valid VAT ID. It tells you whether a value is valid, not whether it is in canonical form. That's why `parseInvoice` stores the normalized values. Values read with `Scan` or from JSON and XML don't need that step: reading stores a valid value normalized.
 
 ## Step 6: Write the invoice as JSON
 
@@ -314,7 +314,7 @@ Three things to notice:
 
 - `dueDate` is `null`, because `date.NullableDate` writes `null` for `date.Null`. A plain `date.Date` would write `""`.
 - `total` is the JSON number `1234.50` with both decimals. A `money.Amount` (a `float64`) would write `1234.5`.
-- The identifier types write their normalized form, like their `Value` method, so the output would be canonical even for a value stored as `money.Currency("eur")`, which is written as `"EUR"`. A value that can't be normalized is written unchanged.
+- The identifier types write their normalized form, like their `Value` method, so the output would be canonical even for a value stored as `money.Currency("eur")`, which is written as `"EUR"`. A value that can't be normalized is written unchanged, so the response still renders.
 
 ## Step 7: See what goes to SQL
 
@@ -400,7 +400,7 @@ CREATE TABLE invoice (
 
 - The null due date is sent as SQL `NULL`.
 - The total is sent as the decimal string `"1234.50"`, so a `numeric` column stores it exactly. A `float64` would be rounded to binary.
-- Every `Value` method here sends the normalized form, so `bank.IBAN("AT61 1904 3002 3457 3201")` and `money.Currency("€")` would also be sent as `"AT611904300234573201"` and `"EUR"`. A value that can't be normalized is sent unchanged, except that `date.Date` returns an error for it.
+- Every `Value` method here sends the normalized form, so `bank.IBAN("AT61 1904 3002 3457 3201")` and `money.Currency("€")` would also be sent as `"AT611904300234573201"` and `"EUR"`. A value that can't be normalized makes `Value` return an error, so the insert fails instead of storing it.
 
 ## Step 8: Split the total into installments
 

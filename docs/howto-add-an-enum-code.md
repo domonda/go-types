@@ -94,9 +94,10 @@ the SIL tables. A new ISO 639-1 code doesn't require them to change;
 
 The script runs `go tool -modfile=tools/go.mod go-enum ./...` from the
 repository root. It rewrites `Enums()` and `EnumStrings()` of the changed type
-in the same file. `Valid`, `Validate` and `String` carry a `// #custom` line
-in their doc comment, so go-enum keeps the hand-written versions, which accept
-non-normalized input, except the strict `language.Code.Valid`.
+in the same file. `Valid` and `Validate` carry a `// #custom` line in their
+doc comment, so go-enum keeps the hand-written versions, which accept
+non-normalized input. `String` is the one go-enum generates, it returns the
+stored code.
 
 ### 4. Run the tests
 
@@ -206,14 +207,15 @@ in `country`, `const Null Code = "" //#exclude` in `language`.
 `money.CurrencyNull` is an untyped constant in `money/constants.go`; keep it
 there.
 
-**After regeneration `Code("de").Valid()` is false, or `String()` stops
-normalizing.**
-The `// #custom` line was removed from the doc comment of `Valid`, `Validate`
-or `String`, and go-enum replaced the method with its generated exact-match
+**After regeneration `Code("de").Valid()` is false.**
+The `// #custom` line was removed from the doc comment of `Valid` or
+`Validate`, and go-enum replaced the method with its generated exact-match
 version. Restore the hand-written method with its `// #custom` line;
 `git diff` shows the replaced body. `TestCode_CustomMethodsAndInvalidSentinel`,
 `TestCode_ValidateStringAndNullSentinel` and
-`TestCurrency_CustomMethodsAcceptNonNormalizedInput` fail until then.
+`TestCurrency_CustomMethodsAcceptNonNormalizedInput` fail until then. The
+same tests fail if a `String` method normalizes: it must return the stored
+code like the one go-enum generates.
 
 **`TestCode_EnglishName` fails with `enum value "QZ" has no English name`.**
 The `countryMap` entry is missing.

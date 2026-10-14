@@ -92,8 +92,16 @@ it parses: whitespace, control characters like `"\x00"`, other
 non-printable runes like zero-width spaces, and invalid UTF-8 like `"\xff"`.
 Such a value carries no data, so it is written as SQL NULL and JSON `null`
 instead of failing validation as a broken `X`.
-`date.NullableDate` widens the rule: `IsNull` is also true for `"0001-01-01"`
-(the zero `time.Time`) and `"0000-00-00"`, so those write SQL NULL too.
+`date.NullableDate` widens the rule: `IsNull` is also true for the zero
+dates `"0001-01-01"` (the zero `time.Time`) and `"0000-00-00"` in any
+spelling, like `"01.01.0001"`, so those write SQL NULL too. A zero date has
+no practical use as a date, so it isn't a valid `date.Date` either.
+
+The non-nullable `X` follows the same rule in SQL: it reads SQL NULL and a
+blank string as its zero value, and `Value` writes a blank `X` as SQL NULL.
+The zero value is invalid, so `Validate` reports it, and a `NOT NULL` column
+rejects it in the database. Only JSON keeps the difference: a blank `X` is
+written as `""`, a null `NullableX` as `null`.
 
 ### `nullable.Type[T]` when zero is a real value
 
@@ -329,13 +337,13 @@ it by its underlying kind.
 | `uu.ID`                                            | `IDNil`    | Nil UUID string    | Nil UUID string | error          |
 | `uu.NullableID`                                    | `IDNull`   | NULL               | `null`          | `IDNull`       |
 | `uu.IDSlice`, `uu.IDSet`                           | nil        | NULL               | `null`          | nil            |
-| `bank.IBAN`, `bank.BIC`                            | `""`       | `''`               | `""`            | `""`           |
+| `bank.IBAN`, `bank.BIC`                            | `""`       | NULL               | `""`            | `""`           |
 | `bank.NullableIBAN`, `bank.NullableBIC`            | `""`       | NULL               | `null`          | null           |
 | `date.Date`                                        | `""`       | NULL               | `""`            | `""`           |
 | `date.NullableDate`                                | `""`       | NULL               | `null`          | null           |
 | `date.YearMonth`, `date.YearQuarter`               | `""`       | no SQL methods     | `""`            | no SQL methods |
 | `date.NullableYearMonth`, `date.NullableYearQuarter` | `""`       | no SQL methods     | `""`            | no SQL methods |
-| `vat.ID`                                           | `""`       | `''`               | `""`            | error          |
+| `vat.ID`                                           | `""`       | NULL               | `""`            | `""`           |
 | `vat.NullableID`                                   | `""`       | NULL               | `null`          | null           |
 | `money.Currency`                                   | `""`       | NULL               | `""`            | `""`           |
 | `money.NullableCurrency`                           | `""`       | NULL               | `null`          | null           |
@@ -344,8 +352,8 @@ it by its underlying kind.
 | `language.Code`                                    | `""`       | NULL               | `""`            | `""`           |
 | `account.Number`                                   | `""`       | NULL               | `null`          | error          |
 | `account.NullableNumber`                           | `""`       | NULL               | `null`          | null           |
-| `email.Address`                                    | `""`       | `''`               | `""`            | no SQL methods |
-| `email.AddressList`                                | `""`       | `''`               | `""`            | error          |
+| `email.Address`                                    | `""`       | NULL               | `""`            | `""`           |
+| `email.AddressList`                                | `""`       | NULL               | `""`            | `""`           |
 | `email.NullableAddress`                            | `""`       | NULL               | `null`          | null           |
 | `email.AddressSet`                                 | nil        | NULL               | `null`          | nil            |
 | `money.Amount`, `money.Rate`                       | `0`        | `float64` 0 (kind) | `0`             | error          |
@@ -371,15 +379,15 @@ current code:
   while `nullable.TrimmedString.Scan("")` and the other string based
   `NullableX` types, including `email.NullableAddress` and
   `email.NullableAddressList`, store null.
-- **What a non-nullable zero value writes.** `date.Date`, `country.Code`,
-  `language.Code`, `money.Currency` and `account.Number` write SQL NULL.
-  `bank.IBAN`, `bank.BIC`, `vat.ID` and `notnull.TrimmedString` write `''`.
-  `uu.ID` writes the Nil UUID.
-- **What a non-nullable type does with SQL NULL.** `bank.IBAN`, `bank.BIC`,
-  `date.Date`, `country.Code`, `language.Code` and `money.Currency` scan it as
-  their zero value. `uu.ID`, `vat.ID`, `account.Number`,
-  `notnull.TrimmedString` and `money.DecimalAmount` return an error. So
-  `account.Number("")` writes a NULL it can't read back.
+- **What a non-nullable zero value writes.** The normalizing types
+  `date.Date`, `country.Code`, `language.Code`, `money.Currency`, `vat.ID`,
+  `bank.IBAN`, `bank.BIC`, `email.Address` and `email.AddressList` write SQL
+  NULL and read it back as their zero value, and so does `account.Number`
+  on writing. `notnull.TrimmedString` writes `''`, `uu.ID` the Nil UUID.
+- **What a non-nullable type does with SQL NULL.** The normalizing types scan
+  it as their zero value. `uu.ID`, `account.Number`, `notnull.TrimmedString`
+  and `money.DecimalAmount` return an error. So `account.Number("")` writes
+  a NULL it can't read back.
 - **`account.Number("")` marshals to JSON `null`**, while unmarshalling JSON
   `null` into an `account.Number` returns an error.
 - **`date.NullableYearMonth` and `date.NullableYearQuarter`** have no SQL
@@ -391,9 +399,8 @@ current code:
 - **Whitespace-only input.** `"  "` is null for `country.NullableCode`,
   `bank.NullableIBAN`, `bank.NullableBIC`, `money.NullableCurrency`,
   `vat.NullableID`, `email.NullableAddress`, `account.NullableNumber`,
-  `date.NullableDate` and `nullable.TrimmedString`.
-  `email.NullableAddressList` writes it as SQL NULL and JSON `null` and scans
-  it as null, but its `IsNull()` is false. `nullable.NonEmptyString`,
+  `date.NullableDate`, `email.NullableAddressList` and
+  `nullable.TrimmedString`. `nullable.NonEmptyString`,
   `date.NullableYearMonth` and `date.NullableYearQuarter` treat it as a
   non-null value.
 - **JSON `""` into a nullable type.** For the string based `NullableX` types

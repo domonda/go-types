@@ -20,21 +20,27 @@ operations, but not one encoding.
 
 ## The six set implementations
 
-| Implementation      | What it is                                         | Elements         | SQL                 | JSON                         |
-|---------------------|----------------------------------------------------|------------------|---------------------|------------------------------|
-| `mapset`            | functions over `~map[K]struct{}` and `~map[K]bool` | any `comparable` | none                | Go map default               |
-| `set`               | functions over `map[T]struct{}`                    | `cmp.Ordered`    | none                | Go map default               |
-| `types.Set[T]`      | `map[T]struct{}` with methods                      | `cmp.Ordered`    | none                | array, three states          |
-| `uu.IDSet`          | `map[uu.ID]struct{}` with methods                  | `uu.ID`          | array, three states | array, three states          |
-| `strutil.StringSet` | `map[string]struct{}` with methods                 | `string`         | none                | Go map default               |
-| `email.AddressSet`  | `map[email.Address]struct{}` with methods          | `email.Address`  | array, three states | map default, normalized keys |
+| Implementation      | What it is                                         | Elements         | SQL                 | JSON                |
+|---------------------|----------------------------------------------------|------------------|---------------------|---------------------|
+| `mapset`            | functions over `~map[K]struct{}` and `~map[K]bool` | any `comparable` | none                | Go map default      |
+| `set`               | functions over `map[T]struct{}`                    | `cmp.Ordered`    | none                | Go map default      |
+| `types.Set[T]`      | `map[T]struct{}` with methods                      | `cmp.Ordered`    | none                | array, three states |
+| `uu.IDSet`          | `map[uu.ID]struct{}` with methods                  | `uu.ID`          | array, three states | array, three states |
+| `strutil.StringSet` | `map[string]struct{}` with methods                 | `string`         | none                | Go map default      |
+| `email.AddressSet`  | `map[email.Address]struct{}` with methods          | `email.Address`  | array, three states | array, three states |
 
 "Go map default" is what `encoding/json` does with a map that has no
 `MarshalJSON` method: an object with empty object values, `{"a":{}}`. "Three
 states" means nil, empty and populated sets encode to three different values,
 see [Null conventions](explanation-null-conventions.md#three-states-for-sets-and-slices).
-`email.AddressSet` has a `MarshalJSON` that writes the same object shape with
-the normalized addresses as keys.
+`email.AddressSet` also reads the object shape, which its `MarshalJSON` wrote
+before, and an address list in a JSON string.
+
+Every set reads and writes its elements as given, also those of a string type
+whose own methods normalize, like `types.Set[money.Currency]`: normalizing
+could merge two elements, like `"eur"` and `"EUR"`, and the set would read
+back with fewer elements than it was written with. Normalize explicitly, for
+example with `email.AddressSet.Normalized` or `NormalizedAddressList`.
 
 All six work on plain maps, so `len` and `range` work on each of them, and a
 set converts to another set type with the same element type, like
@@ -76,9 +82,10 @@ algebra:
 
 - `uu.IDSet` reads and writes PostgreSQL `uuid[]` arrays and JSON arrays of
   UUID strings.
-- `email.AddressSet` normalizes and validates addresses (`Normalized`,
-  `Validate`, `AddNormalized`, `AddAddressPart`) and reads and writes
-  PostgreSQL text arrays.
+- `email.AddressSet` normalizes and validates addresses on request
+  (`Normalized`, `NormalizedAddressList`, `Validate`, `AddNormalized`,
+  `AddAddressPart`), reads and writes PostgreSQL text arrays, and writes an
+  address list as text and XML.
 - `strutil.StringSet` adds string helpers like `StringContainsAnyOfSet`.
 
 `set` and `types.Set[T]` require `cmp.Ordered` elements, so neither can hold a
@@ -197,12 +204,12 @@ function whose output may differ from the standard library version.
 
 JSON of a set holding the elements `a` and `b`, an empty set and a nil set:
 
-| Implementation                                     | nil    | empty | populated                  |
-|----------------------------------------------------|--------|-------|----------------------------|
-| `map[K]struct{}` with `mapset` or `set`, `strutil.StringSet` | `null` | `{}`  | `{"a":{},"b":{}}`          |
-| `types.Set[T]`                                     | `null` | `[]`  | `["a","b"]`, sorted        |
-| `uu.IDSet`                                         | `null` | `[]`  | `["<id>","<id>"]`, sorted  |
-| `email.AddressSet`                                 | `null` | `{}`  | `{"a@example.com":{},...}` |
+| Implementation                                     | nil    | empty | populated                       |
+|----------------------------------------------------|--------|-------|---------------------------------|
+| `map[K]struct{}` with `mapset` or `set`, `strutil.StringSet` | `null` | `{}`  | `{"a":{},"b":{}}`               |
+| `types.Set[T]`                                     | `null` | `[]`  | `["a","b"]`, sorted             |
+| `uu.IDSet`                                         | `null` | `[]`  | `["<id>","<id>"]`, sorted       |
+| `email.AddressSet`                                 | `null` | `[]`  | `["a@example.com",...]`, sorted |
 
 SQL, only for the two types with a `Value` method:
 
@@ -223,11 +230,13 @@ SQL, only for the two types with a `Value` method:
 
 Other differences:
 
-- `uu.IDSet.Scan("")` gives an empty non-nil set. `email.AddressSet.Scan("")`
-  returns the error `can't scan empty string as email.AddressSet`, and a
-  whitespace-only string an error as well. `email.AddressSet.Scan` of a plain
-  string that is not an array literal gives a set with that one address,
-  trimmed.
+- `uu.IDSet.Scan("")` gives an empty non-nil set, `email.AddressSet.Scan("")`
+  and a whitespace-only string the nil set. `email.AddressSet.Scan` also reads
+  a JSON array or object from a `json` or `jsonb` column, and a plain string
+  that is not an array literal as address list, split with
+  `email.SplitAddressList`.
+- `email.AddressSet.Value` and `MarshalText` return an error for an invalid
+  address, `MarshalJSON` writes every set and round-trips it exactly.
 - `types.Set.UnmarshalJSON` and `uu.IDSet.UnmarshalJSON` always assign a new
   map. Refilling the existing map would rewrite every other variable that
   shares it, like a default permission set copied into a struct field; the test
@@ -276,7 +285,7 @@ func main() {
 	// mapset: JSON {"a":{}}, SQL none
 	// types.Set: JSON ["a"], SQL none
 	// strutil.StringSet: JSON {"a":{}}, SQL none
-	// email.AddressSet: JSON {"a@example.com":{}}, SQL {"a@example.com"}
+	// email.AddressSet: JSON ["a@example.com"], SQL {"a@example.com"}
 	// uu.IDSet: JSON ["0e5f8a45-5f2c-4d6c-9e57-6a8d1e1b2c3d"], SQL {"0e5f8a45-5f2c-4d6c-9e57-6a8d1e1b2c3d"}
 	// empty uu.IDSet: JSON [], SQL {}
 	// nil uu.IDSet: JSON null, SQL <nil>

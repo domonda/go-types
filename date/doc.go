@@ -21,9 +21,11 @@
 //
 // Methods normalize their input, so a valid but non-normalized Date
 // like "25.12.2023" works everywhere except in == comparisons.
-// Decoded JSON strings are stored as they are, without normalization
-// or validation. Only the nullable types implement json.Unmarshaler,
-// to set null for JSON null.
+// Scan, JSON and XML decoding store a valid date normalized, a zero
+// date like "0001-01-01" as empty, and an invalid date unchanged without
+// validating it. Value writes the normalized date, SQL NULL for an empty
+// or zero date, and returns an error for an invalid date. fmt prints a
+// date as stored.
 //
 // See the README.md of this package for the full API,
 // the serialization rules and the gotchas.
