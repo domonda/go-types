@@ -127,11 +127,8 @@ func joinDisplayNameParts(list string, parts []listPart) []Address {
 }
 
 // addressCollection is the text of an address collection
-// as read by readAddressCollection.
+// as read by readAddressCollection. The zero value is null.
 type addressCollection struct {
-	// null is true for an empty or whitespace only text,
-	// "null" and the JSON null value.
-	null bool
 	// list is set for a plain address list and the content of a JSON
 	// string, both kept as given, if entries is nil.
 	list string
@@ -164,7 +161,7 @@ func readAddressCollection(text, typeName string) (addressCollection, error) {
 	trimmed := strutil.TrimSpace(text)
 	switch {
 	case trimmed == "" || trimmed == "null":
-		return addressCollection{null: true}, nil
+		return addressCollection{}, nil
 
 	case trimmed[0] == '[' && json.Valid([]byte(trimmed)):
 		entries := []string{}
@@ -202,15 +199,30 @@ func readAddressCollection(text, typeName string) (addressCollection, error) {
 		}
 		return addressCollection{entries: entries}, nil
 
-	case trimmed[0] == '"' && json.Valid([]byte(trimmed)):
+	case trimmed[0] == '"' && trimmed[len(trimmed)-1] == '"' && json.Valid([]byte(trimmed)):
 		var list string
 		err := json.Unmarshal([]byte(trimmed), &list)
 		if err != nil {
 			return addressCollection{}, errs.Errorf("can't read JSON string as email.%s because of: %w", typeName, err)
 		}
-		return addressCollection{list: list, null: list == ""}, nil
+		return addressCollection{list: list}, nil
 	}
 	return addressCollection{list: text}, nil
+}
+
+// scanAddressCollection reads the SQL value of an address collection
+// with readAddressCollection. SQL NULL is null, any other type than
+// string and []byte is an error that names typeName.
+func scanAddressCollection(value any, typeName string) (addressCollection, error) {
+	switch s := value.(type) {
+	case nil:
+		return addressCollection{}, nil
+	case string:
+		return readAddressCollection(s, typeName)
+	case []byte:
+		return readAddressCollection(string(s), typeName)
+	}
+	return addressCollection{}, errs.Errorf("can't scan SQL value of type %T as email.%s", value, typeName)
 }
 
 // unmarshalJSONAddressCollection reads the JSON value data of an address

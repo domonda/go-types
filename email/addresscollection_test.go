@@ -84,10 +84,10 @@ func TestReadAddressCollection(t *testing.T) {
 		want    addressCollection
 		wantErr bool
 	}{
-		{text: "", want: addressCollection{null: true}},
-		{text: "  ", want: addressCollection{null: true}},
-		{text: "null", want: addressCollection{null: true}},
-		{text: `""`, want: addressCollection{null: true}},
+		{text: "", want: addressCollection{}},
+		{text: "  ", want: addressCollection{}},
+		{text: "null", want: addressCollection{}},
+		{text: `""`, want: addressCollection{}},
 		{text: `["b@example.com", " a@example.com", ""]`, want: addressCollection{entries: []string{"b@example.com", " a@example.com", ""}}},
 		{text: `[]`, want: addressCollection{entries: []string{}}},
 		{text: `{"b@example.com": {}, "a@example.com": true}`, want: addressCollection{entries: []string{"a@example.com", "b@example.com"}}},

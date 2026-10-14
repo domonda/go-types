@@ -8,7 +8,6 @@ import (
 	"net/mail"
 	"strings"
 
-	"github.com/domonda/go-errs"
 	"github.com/domonda/go-types"
 	"github.com/domonda/go-types/internal"
 	"github.com/domonda/go-types/strutil"
@@ -300,19 +299,7 @@ func (l AddressList) Nullable() NullableAddressList {
 // and a JSON string is read as address list. SQL NULL, a blank string
 // and "null" are stored as "". Other SQL types are an error.
 func (l *AddressList) Scan(value any) error {
-	var text string
-	switch s := value.(type) {
-	case nil:
-		*l = ""
-		return nil
-	case string:
-		text = s
-	case []byte:
-		text = string(s)
-	default:
-		return errs.Errorf("can't scan SQL value of type %T as email.AddressList", value)
-	}
-	c, err := readAddressCollection(text, "AddressList")
+	c, err := scanAddressCollection(value, "AddressList")
 	if err != nil {
 		return err
 	}
@@ -325,8 +312,6 @@ func (l *AddressList) Scan(value any) error {
 // list trimmed if trim is true.
 func (l *AddressList) setCollection(c addressCollection, trim bool) {
 	switch {
-	case c.null:
-		*l = ""
 	case c.entries != nil:
 		*l = AddressListJoinStrings(c.entries...)
 	case trim:

@@ -3,7 +3,6 @@ package email
 import (
 	"bytes"
 	"database/sql/driver"
-	"encoding/json"
 	"encoding/xml"
 	"iter"
 	"maps"
@@ -420,19 +419,7 @@ func (set AddressSet) ValidAndNormalized() bool {
 // Validate reports it. SQL NULL, a blank string and "null" scan as nil
 // set, an empty array or object as empty set. Other SQL types are an error.
 func (set *AddressSet) Scan(value any) error {
-	var text string
-	switch s := value.(type) {
-	case nil:
-		*set = nil
-		return nil
-	case string:
-		text = s
-	case []byte:
-		text = string(s)
-	default:
-		return errs.Errorf("can't scan SQL value of type %T as email.AddressSet", value)
-	}
-	c, err := readAddressCollection(text, "AddressSet")
+	c, err := scanAddressCollection(value, "AddressSet")
 	if err != nil {
 		return err
 	}
@@ -444,8 +431,6 @@ func (set *AddressSet) Scan(value any) error {
 // read by Scan or UnmarshalJSON.
 func (set *AddressSet) setCollection(c addressCollection) {
 	switch {
-	case c.null:
-		*set = nil
 	case c.entries != nil:
 		*set = make(AddressSet, len(c.entries))
 		for _, addr := range c.entries {
@@ -485,12 +470,7 @@ func (set *AddressSet) UnmarshalJSON(data []byte) error {
 // by splitting text with SplitAddressList, without normalizing or
 // validating the addresses. An empty text sets the nil set.
 func (set *AddressSet) UnmarshalText(text []byte) error {
-	entries := SplitAddressList(string(text))
-	if entries == nil {
-		*set = nil
-		return nil
-	}
-	*set = MakeAddressSet(entries...)
+	set.setCollection(addressCollection{list: string(text)})
 	return nil
 }
 
@@ -507,10 +487,7 @@ func (set AddressSet) Value() (driver.Value, error) {
 	if err != nil {
 		return nil, err
 	}
-	if len(addrs) == 0 {
-		return "{}", nil
-	}
-	return (*notnull.StringArray)(&addrs).Value()
+	return notnull.StringArray(addrs).Value()
 }
 
 // writableAddresses returns the addresses of the set for Value and
@@ -544,11 +521,7 @@ func (set AddressSet) MarshalJSON() ([]byte, error) {
 	if set == nil {
 		return []byte(`null`), nil
 	}
-	addrs := set.Strings()
-	if addrs == nil {
-		addrs = []string{}
-	}
-	return json.Marshal(addrs)
+	return notnull.StringArray(set.Strings()).MarshalJSON()
 }
 
 // MarshalText implements encoding.TextMarshaler, used by encoding/xml, by
