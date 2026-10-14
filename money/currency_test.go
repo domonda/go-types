@@ -679,6 +679,6 @@ func TestCurrency_ReadingAndWriting(t *testing.T) {
 		Canonical:    EUR,
 		Variants:     []Currency{"eur", " EUR ", "€", "Euro"},
 		Invalid:      []Currency{"XYZ", "Atlantean Dollar"},
-		GoEnumString: true,
+		StoredString: true,
 	})
 }

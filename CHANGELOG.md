@@ -165,20 +165,33 @@ See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut.
   normalizing types, so `Code("EN").Valid()` is true. Use
   `ValidAndNormalized` to require the canonical code.
 - **Breaking:** `date.YearMonth`, `YearQuarter`, `NullableYearMonth` and
-  `NullableYearQuarter` normalize like `date.Date`. The new `Normalized`
-  trims the surrounding whitespace and upper-cases the `q` of a
-  year-quarter, which `PeriodRange` already accepted, and with the new
-  `ValidAndNormalized` the four types implement
-  `types.NormalizableValidator`. `Valid` and `Validate` accept every
-  spelling that `Normalized` accepts, so `YearQuarter("2023-q1").Valid()`
-  is true, and `Year`, `Month`, `Quarter`, `Format`, `Compare` and the
-  methods built on them use the normalized value. `UnmarshalJSON`, new on
-  `YearMonth` and `YearQuarter`, stores a valid JSON string normalized, a
-  blank one as the empty value and an invalid one unchanged, without an
-  error; the nullable types stored every string unchanged. Whitespace-only
-  is null for `NullableYearMonth` and `NullableYearQuarter`, like for the
-  other nullable types, and zero for `IsZero`. The four types still have no
-  SQL, `MarshalJSON` or XML methods and write the stored string.
+  `NullableYearQuarter` read and write like `date.Date` and
+  `NullableDate`, see "Reading and writing values" in the README.
+  - The new `Normalized` trims the surrounding whitespace and upper-cases
+    the `q` of a year-quarter, which `PeriodRange` already accepted, and
+    with the new `ValidAndNormalized` the four types implement
+    `types.NormalizableValidator`. `Valid` and `Validate` accept every
+    spelling that `Normalized` accepts, so `YearQuarter("2023-q1").Valid()`
+    is true, and `Year`, `Month`, `Quarter`, `Format`, `Compare` and the
+    methods built on them use the normalized value.
+  - The zero values `"0001-01"`, `"0000-00"`, `"0001-Q1"` and `"0000-Q0"`
+    are blank like the zero dates: `YearMonth("0001-01")` is no longer
+    valid, and the nullable types are null for them and for whitespace,
+    so `IsNull` is the same as `IsZero`, like for `NullableDate`.
+  - New `Scan`, `Value`, `MarshalJSON`, `MarshalText`, `UnmarshalXML`,
+    `UnmarshalXMLAttr`, `MarshalXMLAttr`, `ScanString` and `JSONSchema`,
+    and `UnmarshalJSON` on `YearMonth` and `YearQuarter`. Reading stores a
+    valid value normalized, a blank or zero one as the empty value or null
+    and an invalid one unchanged, without an error; `Scan` reads a
+    `time.Time` as its month or quarter. The nullable types read every JSON
+    string unchanged before.
+  - Stored values change: `Value` writes the normalized value, SQL NULL
+    for a blank or zero value, and returns the error of `Normalized` for an
+    invalid one. `database/sql` wrote the four types as the stored string
+    by their kind, so null was written as `''` instead of NULL, and NULL
+    could not be scanned into them. `MarshalJSON` writes the normalized
+    value, and JSON `null` for a null `NullableYearMonth` and
+    `NullableYearQuarter`, which were written as `""`.
 - **Breaking:** the zero dates are empty in every spelling: `"0001-01-01"`,
   `"0000-00-00"`, `"01.01.0001"`, Go's zero time `"0001-01-01T00:00:00Z"`
   and the MySQL zero date-time `"0000-00-00 00:00:00"` are

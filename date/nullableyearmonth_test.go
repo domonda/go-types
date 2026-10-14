@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/domonda/go-types/internal/normtest"
 )
 
 func TestNullableYearMonth_Validate(t *testing.T) {
@@ -97,6 +99,9 @@ func TestNullableYearMonth_IsNull(t *testing.T) {
 		{name: "null", ym: YearMonthNull, want: true},
 		{name: "empty", ym: "", want: true},
 		{name: "whitespace only", ym: " \t", want: true},
+		// The zero values are null like the zero dates of NullableDate
+		{name: "zero 0000-00", ym: "0000-00", want: true},
+		{name: "zero 0001-01", ym: "0001-01", want: true},
 		{name: "valid", ym: "2023-03", want: false},
 	}
 	for _, tt := range tests {
@@ -476,4 +481,28 @@ func TestNullableYearMonth_Normalized(t *testing.T) {
 	got, err := NullableYearMonth("2023-13").Normalized()
 	require.Error(t, err)
 	require.Equal(t, NullableYearMonth("2023-13"), got, "unchanged")
+}
+
+// TestNullableYearMonth_ReadingAndWriting checks the reading and writing
+// contract shared by the normalizing types, with a blank or zero
+// NullableYearMonth as null like for NullableDate.
+func TestNullableYearMonth_ReadingAndWriting(t *testing.T) {
+	normtest.Run(t, normtest.Spec[NullableYearMonth]{
+		Canonical:    "2023-07",
+		Variants:     []NullableYearMonth{" 2023-07 ", "\t2023-07\n"},
+		Invalid:      []NullableYearMonth{"2023-13", "2023-7", "0000-05", "07/2023", "bad"},
+		Blank:        []NullableYearMonth{"0001-01", "0000-00", " 0001-01 "},
+		Nullable:     true,
+		StoredString: true,
+	})
+}
+
+// A date or timestamp column scans as its year-month, like
+// NullableDate.Scan scans it as its date, and the zero time as null.
+func TestNullableYearMonth_ScanTime(t *testing.T) {
+	var ym NullableYearMonth
+	require.NoError(t, ym.Scan(time.Date(2023, 7, 15, 10, 0, 0, 0, time.UTC)))
+	require.Equal(t, NullableYearMonth("2023-07"), ym)
+	require.NoError(t, ym.Scan(time.Time{}))
+	require.Equal(t, YearMonthNull, ym)
 }

@@ -1,10 +1,14 @@
 package date
 
 import (
+	"database/sql/driver"
+	"encoding/xml"
 	"fmt"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/invopop/jsonschema"
 
 	types "github.com/domonda/go-types"
 	"github.com/domonda/go-types/internal"
@@ -15,9 +19,18 @@ import (
 var _ types.NormalizableValidator[YearQuarter] = YearQuarter("")
 
 // YearQuarter represents a calendar year and quarter in format YYYY-Q# (e.g., "2023-Q1").
+// See NullableYearQuarter for a nullable version of this type.
+//
+// YearQuarter reads and writes like Date.
 // Normalized trims the surrounding whitespace and upper-cases a "q" like
-// PeriodRange accepts it, UnmarshalJSON stores a valid year-quarter
-// normalized and an invalid one unchanged.
+// PeriodRange accepts it.
+// Scan, UnmarshalJSON, UnmarshalXML and ScanString store a valid
+// year-quarter normalized, a zero one (see IsZero) as "" and an invalid
+// one unchanged. Value writes the normalized year-quarter, SQL NULL for a
+// zero one, and returns an error for an invalid one. MarshalJSON and
+// MarshalText write the normalized year-quarter or an invalid one unchanged,
+// and fmt prints the year-quarter as stored. See "Reading and writing values"
+// in the README of the module.
 type YearQuarter string
 
 // YearQuarterFrom creates a YearQuarter from the given year and quarter values.
@@ -64,6 +77,10 @@ func (yq YearQuarter) Normalized() (YearQuarter, error) {
 	if err != nil || quarter < 1 || quarter > 4 {
 		return yq, fmt.Errorf("invalid quarter: %q", quarterStr)
 	}
+	if norm == "0001-Q1" {
+		// The year-quarter of the zero time.Time has no practical use, like the zero Date
+		return yq, fmt.Errorf("zero year quarter: %q", yq)
+	}
 	return norm, nil
 }
 
@@ -85,20 +102,92 @@ func (yq YearQuarter) ValidAndNormalized() bool {
 	return err == nil && yq == norm
 }
 
+// ScanString implements the strfmt.Scannable interface.
+// Without validate it stores source like Scan, with validate it stores
+// the normalized year-quarter or returns the error of Normalized,
+// also for a zero source.
+func (yq *YearQuarter) ScanString(source string, validate bool) error {
+	return internal.ScanStringNormalized(yq, source, validate, false, YearQuarter.Normalized, YearQuarter.IsZero)
+}
+
+// Scan implements the database/sql.Scanner interface.
+// A valid year-quarter from a string or []byte is stored normalized, a time.Time
+// as its year-quarter, SQL NULL and a zero year-quarter (see IsZero) as "", and a
+// year-quarter that can't be normalized unchanged without an error, so that one
+// invalid value doesn't fail a whole query; Validate reports it.
+func (yq *YearQuarter) Scan(value any) error {
+	if t, ok := value.(time.Time); ok {
+		value = string(YearQuarterOfTime(t))
+	}
+	return internal.ScanNormalized(yq, value, YearQuarter.Normalized, YearQuarter.IsZero)
+}
+
+// Value implements the database/sql/driver.Valuer interface.
+// It returns the normalized year-quarter, SQL NULL for a zero year-quarter (see IsZero),
+// or the error of Normalized for a year-quarter that can't be normalized.
+func (yq YearQuarter) Value() (driver.Value, error) {
+	return internal.ValueNormalized(yq, YearQuarter.Normalized, YearQuarter.IsZero)
+}
+
+// MarshalJSON implements encoding/json.Marshaler by writing the
+// normalized year-quarter, "" for a zero year-quarter (see IsZero),
+// or the year-quarter unchanged if it can't be normalized.
+func (yq YearQuarter) MarshalJSON() ([]byte, error) {
+	return internal.MarshalJSONNormalized(yq, false, YearQuarter.Normalized, YearQuarter.IsZero)
+}
+
 // UnmarshalJSON implements encoding/json.Unmarshaler.
-// A JSON string is stored normalized if it is a valid year-quarter,
-// blank as "" and unchanged if it is invalid, without an error, so that
-// one invalid value doesn't fail a whole document; Validate reports it.
-// JSON null leaves the YearQuarter unchanged like encoding/json does for a
-// string type, and any other JSON value is an error.
+// A JSON string is stored like Scan stores it, JSON null leaves the
+// YearQuarter unchanged like encoding/json does for a string type,
+// and any other JSON value is an error.
 func (yq *YearQuarter) UnmarshalJSON(data []byte) error {
-	return internal.UnmarshalJSONNormalized(yq, data, false, YearQuarter.Normalized, nil)
+	return internal.UnmarshalJSONNormalized(yq, data, false, YearQuarter.Normalized, YearQuarter.IsZero)
+}
+
+// MarshalText implements encoding.TextMarshaler like MarshalJSON,
+// so that encoding/xml and strfmt write the normalized year-quarter.
+// encoding/json writes map keys of string types as they are
+// and doesn't call MarshalText for them.
+func (yq YearQuarter) MarshalText() ([]byte, error) {
+	return internal.MarshalTextNormalized(yq, YearQuarter.Normalized, YearQuarter.IsZero)
+}
+
+// MarshalXMLAttr implements encoding/xml.MarshalerAttr by writing the
+// text of MarshalText, and no attribute for a nil pointer, because
+// encoding/xml calls MarshalText through a nil pointer attribute field
+// and panics.
+func (yq *YearQuarter) MarshalXMLAttr(name xml.Name) (xml.Attr, error) {
+	return internal.MarshalXMLAttrText(yq, name)
+}
+
+// UnmarshalXML implements encoding/xml.Unmarshaler
+// by storing the text of the element like Scan stores it.
+func (yq *YearQuarter) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	return internal.UnmarshalXMLNormalized(yq, d, start, YearQuarter.Normalized, YearQuarter.IsZero)
+}
+
+// UnmarshalXMLAttr implements encoding/xml.UnmarshalerAttr
+// by storing the attribute value like Scan stores it.
+func (yq *YearQuarter) UnmarshalXMLAttr(attr xml.Attr) error {
+	return internal.UnmarshalXMLAttrNormalized(yq, attr, YearQuarter.Normalized, YearQuarter.IsZero)
+}
+
+// JSONSchema returns the JSON schema definition for the YearQuarter type.
+// Implements the jsonschema.JSONSchemaProvider interface.
+func (YearQuarter) JSONSchema() *jsonschema.Schema {
+	return &jsonschema.Schema{
+		Title:   "Year Quarter",
+		Type:    "string",
+		Pattern: `^[0-9]{4}-Q[1-4]$`,
+	}
 }
 
 // IsZero returns true when the year-quarter is any of ["", "0000-Q0", "0001-Q1"],
 // also with surrounding whitespace or a lower case "q".
 // "0001-Q1" is treated as zero because "0001-01-01" is the zero value of time.Time.
 // "0000-Q0" may be the zero value of other date implementations.
+// A zero year-quarter has no practical use like a zero Date: reading stores it
+// as "", Value writes it as SQL NULL, and it is not a valid YearQuarter.
 func (yq YearQuarter) IsZero() bool {
 	switch strings.ToUpper(string(strutil.TrimSpace(yq))) {
 	case "", "0000-Q0", "0001-Q1":

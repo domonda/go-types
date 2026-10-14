@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/domonda/go-types/internal/normtest"
 )
 
 // Constructor tests
@@ -464,4 +466,28 @@ func TestYearMonth_UnmarshalJSON(t *testing.T) {
 	require.Equal(t, YearMonth("2024-01"), ym)
 	require.Error(t, json.Unmarshal([]byte(`202307`), &ym))
 	require.Equal(t, YearMonth("2024-01"), ym)
+}
+
+// TestYearMonth_ReadingAndWriting checks the reading and writing contract
+// shared by the normalizing types, like for Date: every reading path stores
+// a valid year-month normalized, a zero one as "" and an invalid one
+// unchanged, Value refuses an invalid year-month, and fmt prints it as stored.
+func TestYearMonth_ReadingAndWriting(t *testing.T) {
+	normtest.Run(t, normtest.Spec[YearMonth]{
+		Canonical:    "2023-07",
+		Variants:     []YearMonth{" 2023-07 ", "\t2023-07\n"},
+		Invalid:      []YearMonth{"2023-13", "2023-7", "0000-05", "07/2023", "bad"},
+		Blank:        []YearMonth{"0001-01", "0000-00", " 0001-01 "},
+		StoredString: true,
+	})
+}
+
+// A date or timestamp column scans as its year-month, like Date.Scan
+// scans it as its date, and the zero time as the zero value "".
+func TestYearMonth_ScanTime(t *testing.T) {
+	var ym YearMonth
+	require.NoError(t, ym.Scan(time.Date(2023, 7, 15, 10, 0, 0, 0, time.UTC)))
+	require.Equal(t, YearMonth("2023-07"), ym)
+	require.NoError(t, ym.Scan(time.Time{}))
+	require.Equal(t, YearMonth(""), ym)
 }

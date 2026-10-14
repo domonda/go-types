@@ -1,19 +1,21 @@
 package date
 
 import (
+	"database/sql/driver"
+	"encoding/xml"
 	"fmt"
 	"strings"
 	"time"
 
+	"github.com/invopop/jsonschema"
+
 	types "github.com/domonda/go-types"
 	"github.com/domonda/go-types/internal"
 	"github.com/domonda/go-types/nullable"
-	"github.com/domonda/go-types/strutil"
 )
 
 // YearQuarterNull is the null value for NullableYearQuarter (empty string).
-// NullableYearQuarter has no SQL methods, so database/sql writes
-// YearQuarterNull as an empty string, not as SQL NULL.
+// Value writes it as SQL NULL and MarshalJSON as JSON null.
 const YearQuarterNull NullableYearQuarter = ""
 
 // Compile-time check that NullableYearQuarter implements nullable.NullSetable[YearQuarter]
@@ -42,8 +44,8 @@ func (yq NullableYearQuarter) Valid() bool {
 }
 
 // ValidAndNormalized returns true if the year-quarter is valid and already normalized,
-// or if it is the empty YearQuarterNull. A whitespace-only value is null and valid,
-// but not normalized.
+// or if it is the empty YearQuarterNull. A whitespace-only or zero value is null and
+// valid, but not normalized.
 func (yq NullableYearQuarter) ValidAndNormalized() bool {
 	norm, err := yq.Normalized()
 	return err == nil && yq == norm
@@ -60,26 +62,23 @@ func (yq NullableYearQuarter) Normalized() (NullableYearQuarter, error) {
 	return NullableYearQuarter(norm), err
 }
 
-// ValidAndNotNull returns if the year-quarter is valid and not Null or Zero,
-// so it is false for "0001-Q1" although IsNull is false, see IsZero.
+// ValidAndNotNull returns if the year-quarter is valid and not null, see IsNull.
 func (yq NullableYearQuarter) ValidAndNotNull() bool {
-	return !yq.IsZero() && YearQuarter(yq).Valid()
+	return yq.IsNotNull() && YearQuarter(yq).Valid()
 }
 
-// IsZero returns true when the year-quarter is any of ["", "0000-Q0", "0001-Q1"].
-// "0001-Q1" is treated as zero because "0001-01-01" is the zero value of time.Time.
-// "0000-Q0" may be the zero value of other date implementations.
+// IsZero returns true if the year-quarter is zero like YearQuarter.IsZero,
+// which is the same as IsNull.
 func (yq NullableYearQuarter) IsZero() bool {
 	return YearQuarter(yq).IsZero()
 }
 
-// IsNull returns true if the NullableYearQuarter is null,
-// which includes a string of only the runes strutil.TrimSpace removes:
-// whitespace, control and other non-printable runes, and invalid UTF-8,
-// like for NullableDate. Zero values like "0000-Q0" are not null, see IsZero.
+// IsNull returns true if the NullableYearQuarter is null or zero, see YearQuarter.IsZero,
+// which includes a string of only whitespace and the zero values
+// like "0000-Q0", like NullableDate.IsNull includes the zero dates.
 // IsNull implements the nullable.Nullable interface.
 func (yq NullableYearQuarter) IsNull() bool {
-	return strutil.TrimSpace(yq) == YearQuarterNull
+	return YearQuarter(yq).IsZero()
 }
 
 // IsNotNull returns true if the NullableYearQuarter is not null, see IsNull.
@@ -129,13 +128,90 @@ func (yq NullableYearQuarter) StringOr(nullString string) string {
 	return yq.String()
 }
 
+// ScanString implements the strfmt.Scannable interface.
+// The strings "NULL", "null" and "nil" set the NullableYearQuarter to null.
+// Without validate it stores source like Scan, with validate it stores
+// the normalized year-quarter or returns the error of Normalized.
+func (yq *NullableYearQuarter) ScanString(source string, validate bool) error {
+	return internal.ScanStringNormalized(yq, source, validate, true, NullableYearQuarter.Normalized, NullableYearQuarter.IsNull)
+}
+
+// Scan implements the database/sql.Scanner interface.
+// A valid year-quarter from a string or []byte is stored normalized, a time.Time
+// as its year-quarter, SQL NULL and a null year-quarter (see IsNull) as YearQuarterNull, and a
+// year-quarter that can't be normalized unchanged without an error, so that one
+// invalid value doesn't fail a whole query; Validate reports it.
+func (yq *NullableYearQuarter) Scan(value any) error {
+	if t, ok := value.(time.Time); ok {
+		value = string(YearQuarterOfTime(t))
+	}
+	return internal.ScanNormalized(yq, value, NullableYearQuarter.Normalized, NullableYearQuarter.IsNull)
+}
+
+// Value implements the database/sql/driver.Valuer interface.
+// It returns the normalized year-quarter, SQL NULL if the NullableYearQuarter is null,
+// or the error of Normalized for a year-quarter that can't be normalized.
+func (yq NullableYearQuarter) Value() (driver.Value, error) {
+	return internal.ValueNormalized(yq, NullableYearQuarter.Normalized, NullableYearQuarter.IsNull)
+}
+
+// MarshalJSON implements encoding/json.Marshaler by writing the JSON null
+// value if the NullableYearQuarter is null, else the normalized year-quarter,
+// or the year-quarter unchanged if it can't be normalized.
+func (yq NullableYearQuarter) MarshalJSON() ([]byte, error) {
+	return internal.MarshalJSONNormalized(yq, true, NullableYearQuarter.Normalized, NullableYearQuarter.IsNull)
+}
+
 // UnmarshalJSON implements encoding/json.Unmarshaler.
-// A JSON string is stored like YearQuarter.UnmarshalJSON stores it,
-// a blank one as null. JSON null sets the NullableYearQuarter to null,
-// so that decoding null into a field that holds a value resets it.
-// Any other JSON value is an error.
+// A JSON string is stored like Scan stores it, JSON null sets the
+// NullableYearQuarter to null, so that decoding null into a field that holds
+// a value resets it, and any other JSON value is an error.
 func (yq *NullableYearQuarter) UnmarshalJSON(data []byte) error {
-	return internal.UnmarshalJSONNormalized(yq, data, true, NullableYearQuarter.Normalized, nil)
+	return internal.UnmarshalJSONNormalized(yq, data, true, NullableYearQuarter.Normalized, NullableYearQuarter.IsNull)
+}
+
+// MarshalText implements encoding.TextMarshaler like MarshalJSON,
+// but with "" for null, so that encoding/xml and strfmt write the
+// normalized year-quarter. encoding/json writes map keys of string types
+// as they are and doesn't call MarshalText for them.
+func (yq NullableYearQuarter) MarshalText() ([]byte, error) {
+	return internal.MarshalTextNormalized(yq, NullableYearQuarter.Normalized, NullableYearQuarter.IsNull)
+}
+
+// MarshalXMLAttr implements encoding/xml.MarshalerAttr by writing the
+// text of MarshalText, and no attribute for a nil pointer, because
+// encoding/xml calls MarshalText through a nil pointer attribute field
+// and panics.
+func (yq *NullableYearQuarter) MarshalXMLAttr(name xml.Name) (xml.Attr, error) {
+	return internal.MarshalXMLAttrText(yq, name)
+}
+
+// UnmarshalXML implements encoding/xml.Unmarshaler
+// by storing the text of the element like Scan stores it.
+func (yq *NullableYearQuarter) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	return internal.UnmarshalXMLNormalized(yq, d, start, NullableYearQuarter.Normalized, NullableYearQuarter.IsNull)
+}
+
+// UnmarshalXMLAttr implements encoding/xml.UnmarshalerAttr
+// by storing the attribute value like Scan stores it.
+func (yq *NullableYearQuarter) UnmarshalXMLAttr(attr xml.Attr) error {
+	return internal.UnmarshalXMLAttrNormalized(yq, attr, NullableYearQuarter.Normalized, NullableYearQuarter.IsNull)
+}
+
+// JSONSchema returns the JSON schema definition for the NullableYearQuarter type.
+// Implements the jsonschema.JSONSchemaProvider interface.
+func (NullableYearQuarter) JSONSchema() *jsonschema.Schema {
+	return &jsonschema.Schema{
+		Title: "Nullable Year Quarter",
+		OneOf: []*jsonschema.Schema{
+			{
+				Type:    "string",
+				Pattern: `^[0-9]{4}-Q[1-4]$`,
+			},
+			{Type: "null"},
+		},
+		Default: YearQuarterNull,
+	}
 }
 
 // Compare compares the normalized year-quarter with another normalized

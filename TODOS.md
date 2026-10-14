@@ -26,7 +26,8 @@ package: every listed behaviour is documented in the package READMEs.
 - [ ] **One rule for the empty value of a non-nullable type.**
       The normalizing types (`country.Code`, `money.Currency`,
       `language.Code`, `vat.ID`, `bank.IBAN`, `bank.BIC`, `date.Date`,
-      `email.Address`, `email.AddressList`) write it as SQL NULL and JSON
+      `date.YearMonth`, `date.YearQuarter`, `email.Address`,
+      `email.AddressList`) write it as SQL NULL and JSON
       `""` and read SQL NULL back as it. `account.Number("")` writes SQL NULL
       and JSON `null` but reads neither back (`Scan(nil)` and JSON `null` are
       errors). `uu.ID`, `notnull.TrimmedString` and `money.DecimalAmount`
@@ -42,10 +43,6 @@ package: every listed behaviour is documented in the package READMEs.
 - [ ] **`ValidAndNotNull` on every nullable type.** It is missing on
       `uu.NullableID`, `account.NullableNumber` and `email.NullableAddress`,
       and no package asserts `nullable.NullableValidator` at compile time.
-- [ ] **SQL and JSON methods for `date.NullableYearMonth` and
-      `date.NullableYearQuarter`.** Without them null is written as `""`
-      instead of SQL NULL and JSON `null`; adding them later changes stored
-      values.
 - [ ] **Consolidate the three per-key mutexes.** `types.KeyMutex[T]`,
       `uu.IDMutex` and `strutil.StrMutex` implement the same algorithm.
       Keep the generic `KeyMutex` (newest, has `IsLocked`), and make the other
@@ -266,10 +263,11 @@ time.
 
 ## Completed
 
-- [x] **`date.YearMonth` and `date.YearQuarter` normalize.** `Normalized`
-      trims the whitespace and upper-cases the `q` that `PeriodRange`
-      accepts, `Valid` is lenient like for the other types, and JSON
-      reading normalizes. Whitespace-only is null for the nullable types.
+- [x] **`date.YearMonth` and `date.YearQuarter` work like `date.Date`.**
+      `Normalized` trims the whitespace and upper-cases the `q` that
+      `PeriodRange` accepts, `Valid` is lenient like for the other types,
+      the zero values are blank, and SQL, JSON, XML and `strfmt` read and
+      write them like `Date`, with null as SQL NULL and JSON `null`.
 - [x] **Quadratic `email` address parsing.** `ParseAddressList` keeps
       the errors short and stops after 100 of them, so an invalid list of
       10,000 entries takes milliseconds instead of seconds and hundreds of

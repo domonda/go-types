@@ -512,6 +512,6 @@ func TestCode_ReadingAndWriting(t *testing.T) {
 		Canonical:    DE,
 		Variants:     []Code{"de", " DE ", "d", "Deutschland"},
 		Invalid:      []Code{"XX", "Atlantis"},
-		GoEnumString: true,
+		StoredString: true,
 	})
 }

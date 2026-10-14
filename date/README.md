@@ -221,8 +221,8 @@ const YearMonthNull NullableYearMonth = ""
 
 | `YearMonth` method                   | Description                                        |
 |--------------------------------------|----------------------------------------------------|
-| `Normalized()`                       | Trims the surrounding whitespace; the value unchanged and an error if invalid. |
-| `Validate()`, `Valid()`              | `Normalized` succeeds: `YYYY-MM`, year 1 to 3000, month 1 to 12. |
+| `Normalized()`                       | Trims the surrounding whitespace; the value unchanged and an error if invalid or zero. |
+| `Validate()`, `Valid()`              | `Normalized` succeeds: `YYYY-MM`, year 1 to 3000, month 1 to 12, not zero. |
 | `ValidAndNormalized()`               | Exactly `YYYY-MM` and valid.                       |
 | `IsZero()`                           | True for `""`, `"0000-00"` and `"0001-01"`, also with whitespace. |
 | `String()`                           | The raw string.                                    |
@@ -233,10 +233,11 @@ const YearMonthNull NullableYearMonth = ""
 | `AddYears(n)`, `AddMonths(n)`        | Arithmetic; months roll over into years. Invalid values are returned unchanged. |
 | `ContainsTime(t)`, `ContainsDate(d)` | True if `t` or `d` falls in the month (local time zone midnights). |
 | `Compare(other)`                     | Compares the normalized values, invalid ones as stored. |
-| `UnmarshalJSON(data)`                | Reads a JSON string like `Date`, see Reading and writing. |
 | `Nullable()`                         | Plain conversion to `NullableYearMonth`.           |
 
-`NullableYearMonth` has the same methods (null returns 0, `""`, `false` or null; `Normalized` returns `YearMonthNull` for null) plus `IsNull()` (`""` and whitespace only; `"0000-00"` is zero but not null), `IsNotNull()`, `ValidAndNotNull()` (false for null and zero values), `Get()` (panics if null), `GetOr(defaultYearMonth)`, `Set(ym)`, `SetNull()` and `StringOr(nullString)`. Its `Date` and `DateRange` return `NullableDate`. Implements `nullable.NullSetable[YearMonth]`, `types.NormalizableValidator` and `json.Unmarshaler` (JSON `null` sets null, a string is read like by `YearMonth`, a blank one as null).
+`YearMonth` reads and writes like `Date`, see [Serialization](#serialization).
+
+`NullableYearMonth` has the same methods (null returns 0, `""`, `false` or null; `Normalized` returns `YearMonthNull` for null) plus `IsNull()` (the same as `IsZero()`, like for `NullableDate`), `IsNotNull()`, `ValidAndNotNull()`, `Get()` (panics if null), `GetOr(defaultYearMonth)`, `Set(ym)`, `SetNull()` and `StringOr(nullString)`. Its `Date` and `DateRange` return `NullableDate`. Implements `nullable.NullSetable[YearMonth]` and `types.NormalizableValidator`, and reads and writes like `NullableDate`.
 
 ## YearQuarter and NullableYearQuarter
 
@@ -252,8 +253,8 @@ const YearQuarterNull NullableYearQuarter = ""
 
 | `YearQuarter` method                               | Description                                        |
 |----------------------------------------------------|----------------------------------------------------|
-| `Normalized()`                                     | Trims the surrounding whitespace and upper-cases `q`; the value unchanged and an error if invalid. |
-| `Validate()`, `Valid()`                            | `Normalized` succeeds: `YYYY-Qn`, year 1 to 3000, quarter 1 to 4. |
+| `Normalized()`                                     | Trims the surrounding whitespace and upper-cases `q`; the value unchanged and an error if invalid or zero. |
+| `Validate()`, `Valid()`                            | `Normalized` succeeds: `YYYY-Qn`, year 1 to 3000, quarter 1 to 4, not zero. |
 | `ValidAndNormalized()`                             | Exactly `YYYY-Qn` with upper-case `Q` and valid.   |
 | `IsZero()`                                         | True for `""`, `"0000-Q0"` and `"0001-Q1"`, also with whitespace or `q`. |
 | `String()`                                         | The raw string.                                    |
@@ -265,9 +266,10 @@ const YearQuarterNull NullableYearQuarter = ""
 | `ContainsTime(t)`, `ContainsDate(d)`, `ContainsYearMonth(ym)` | True if the value falls in the quarter.            |
 | `Compare(other)`                                   | Compares the normalized values, invalid ones as stored. |
 | `Nullable()`                                       | Plain conversion to `NullableYearQuarter`.         |
-| `UnmarshalJSON(data)`                              | Reads a JSON string like `Date`, see Reading and writing. |
 
-`NullableYearQuarter` has the same methods plus the same null helpers as `NullableYearMonth`. Its `Date` and `DateRange` return `NullableDate`. Implements `nullable.NullSetable[YearQuarter]`, `types.NormalizableValidator` and `json.Unmarshaler` like `NullableYearMonth`.
+`YearQuarter` reads and writes like `Date`, see [Serialization](#serialization).
+
+`NullableYearQuarter` has the same methods plus the same null helpers as `NullableYearMonth`. Its `Date` and `DateRange` return `NullableDate`. Implements `nullable.NullSetable[YearQuarter]` and `types.NormalizableValidator`, and reads and writes like `NullableDate`.
 
 ## Format, Formatter and Parser
 
@@ -305,7 +307,7 @@ These plug dates into the [`strfmt`](../strfmt/README.md) package, which calls `
 
 ## Serialization
 
-`Date` and `NullableDate` follow the rules of [Reading and writing values](../README.md#reading-and-writing-values), with the zero dates as blank: reading normalizes, `Value` refuses an invalid date, and `fmt` prints the stored date.
+`Date` and `NullableDate` follow the rules of [Reading and writing values](../README.md#reading-and-writing-values), with the zero dates as blank: reading normalizes, `Value` refuses an invalid date, and `fmt` prints the stored date. `YearMonth`, `YearQuarter` and their nullable types follow the same rules, with their zero values `"0001-01"`, `"0000-00"`, `"0001-Q1"` and `"0000-Q0"` as blank.
 
 | Value                                              | SQL `Value()`                              | JSON (`json.Marshal`)         | `MarshalText`, XML | `fmt`          |
 |----------------------------------------------------|--------------------------------------------|-------------------------------|--------------------|----------------|
@@ -317,7 +319,10 @@ These plug dates into the [`strfmt`](../strfmt/README.md) package, which calls `
 | `NullableDate` null or zero date                   | `NULL`                                     | `null`                        | `""`               | as stored      |
 | `NullableDate("25.12.2023")`                       | `"2023-12-25"`                             | `"2023-12-25"`                | `"2023-12-25"`     | `25.12.2023`   |
 | `NullableDate("bad")`                              | error                                      | `"bad"`                       | `"bad"`            | `bad`          |
-| `YearMonth`, `YearQuarter` and their nullable types | the raw string, `""` for null (not `NULL`) | the raw string, `""` for null | the raw string     | the raw string |
+| `YearMonth(" 2023-07 ")`, `YearQuarter("2023-q3")` | `"2023-07"`, `"2023-Q3"`                   | `"2023-07"`, `"2023-Q3"`      | `2023-07`, `2023-Q3` | as stored      |
+| `YearMonth("0001-01")`, `YearQuarter("")` (zero)   | `NULL`                                     | `""`                          | `""`               | as stored      |
+| `YearMonth("2023-13")` (invalid)                   | error                                      | `"2023-13"`                   | `2023-13`          | `2023-13`      |
+| `NullableYearMonth`, `NullableYearQuarter` null or zero | `NULL`                                     | `null`                        | `""`               | as stored      |
 
 Reading values:
 
@@ -326,11 +331,12 @@ Reading values:
 | `Scan(nil)`                                        | `""`                                               | `Null`                               |
 | `Scan` of a string or `[]byte`, JSON string, XML element or attribute | normalized if valid, `""` if blank or a zero date, else as is, without error | same, `Null` if blank or a zero date |
 | `Scan(time.Time)`                                  | its date, `""` if zero                             | its date, `Null` if zero             |
+| `Scan(time.Time)` into a `YearMonth`, `YearQuarter` | its month or quarter, `""` if zero                 | same, null if zero                   |
 | `Scan` of other types                              | error                                              | error                                |
 | JSON `null`                                        | field left unchanged                               | `Null`                               |
 | other JSON values                                  | error                                              | error                                |
 
-An invalid date is read without error, so one bad row doesn't fail a whole query, and kept for `Validate` to report. `YearMonth` and `YearQuarter` read a JSON string like `Date`: normalized if valid, `""` if blank, else as is, without an error, and leave the value unchanged for JSON `null`. `NullableYearMonth` and `NullableYearQuarter` read a JSON string the same way, a blank one as null, and set null for JSON `null`. `YearMonth`, `YearQuarter`, `NullableYearMonth` and `NullableYearQuarter` have no SQL methods: `database/sql` writes them as plain strings and fails to scan NULL into them (`converting NULL to string is unsupported`); scan into a `*YearMonth` to accept NULL.
+An invalid date is read without error, so one bad row doesn't fail a whole query, and kept for `Validate` to report. `YearMonth` and `YearQuarter` read like `Date`, and their nullable types like `NullableDate`.
 
 ## Gotchas
 
@@ -343,7 +349,6 @@ An invalid date is read without error, so one bad row doesn't fail a whole query
 - **Reading doesn't validate.** `Scan`, JSON and XML decoding store a valid date as `YYYY-MM-DD` and an invalid one as is, without an error. An invalid date is an error for `Value` and written unchanged by `MarshalJSON`.
 - **`fmt` prints the stored date.** `fmt.Println(date.Date("25.12.2023"))` prints `25.12.2023`. Use `Format(date.Layout)` or `MarshalText` for the normalized form.
 - **Null ordering.** `Null` is before every date: `Null.Before(d)` and `d.After(Null)` are true, `Null.BeforeToday()` is true.
-- **Nullable period types differ from `NullableDate`.** The `IsNull` of `NullableYearMonth` and `NullableYearQuarter` is only `""` and whitespace, while `NullableDate.IsNull` also covers the zero dates.
 - **`Format.AssignString` with empty input** assigns a non-nil pointer to the zero time to a `*time.Time` destination, not nil.
 - **`ParseTimeDefaultLayouts` is a shared package variable.** Pass layouts to `ParseTime` instead of changing it.
 

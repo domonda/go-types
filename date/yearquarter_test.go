@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/domonda/go-types/internal/normtest"
 )
 
 // Constructor tests
@@ -502,6 +504,10 @@ func TestNullableYearQuarter_IsNull(t *testing.T) {
 	}{
 		{name: "null", yq: YearQuarterNull, want: true},
 		{name: "empty", yq: "", want: true},
+		{name: "whitespace only", yq: " \t", want: true},
+		// The zero values are null like the zero dates of NullableDate
+		{name: "zero 0000-Q0", yq: "0000-Q0", want: true},
+		{name: "zero 0001-Q1", yq: "0001-Q1", want: true},
 		{name: "valid", yq: "2023-Q2", want: false},
 	}
 	for _, tt := range tests {
@@ -918,4 +924,28 @@ func TestYearQuarter_UnmarshalJSON(t *testing.T) {
 	assert.Equal(t, YearQuarter("2024-Q1"), yq)
 	assert.Error(t, json.Unmarshal([]byte(`20233`), &yq))
 	assert.Equal(t, YearQuarter("2024-Q1"), yq)
+}
+
+// TestYearQuarter_ReadingAndWriting checks the reading and writing contract
+// shared by the normalizing types, like for Date: every reading path stores
+// a valid year-quarter normalized, a zero one as "" and an invalid one
+// unchanged, Value refuses an invalid year-quarter, and fmt prints it as stored.
+func TestYearQuarter_ReadingAndWriting(t *testing.T) {
+	normtest.Run(t, normtest.Spec[YearQuarter]{
+		Canonical:    "2023-Q3",
+		Variants:     []YearQuarter{"2023-q3", " 2023-Q3 ", "\t2023-q3\n"},
+		Invalid:      []YearQuarter{"2023-Q5", "2023-Q", "0000-Q2", "Q3/2023", "bad"},
+		Blank:        []YearQuarter{"0001-Q1", "0001-q1", "0000-Q0", " 0001-Q1 "},
+		StoredString: true,
+	})
+}
+
+// A date or timestamp column scans as its year-quarter, like Date.Scan
+// scans it as its date, and the zero time as the zero value "".
+func TestYearQuarter_ScanTime(t *testing.T) {
+	var yq YearQuarter
+	assert.NoError(t, yq.Scan(time.Date(2023, 8, 15, 10, 0, 0, 0, time.UTC)))
+	assert.Equal(t, YearQuarter("2023-Q3"), yq)
+	assert.NoError(t, yq.Scan(time.Time{}))
+	assert.Equal(t, YearQuarter(""), yq)
 }

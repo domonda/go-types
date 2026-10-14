@@ -1,10 +1,14 @@
 package date
 
 import (
+	"database/sql/driver"
+	"encoding/xml"
 	"fmt"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/invopop/jsonschema"
 
 	types "github.com/domonda/go-types"
 	"github.com/domonda/go-types/internal"
@@ -19,8 +23,17 @@ const YearMonthLayout = "2006-01"
 var _ types.NormalizableValidator[YearMonth] = YearMonth("")
 
 // YearMonth represents a calendar year and month in ISO 8601 format (YYYY-MM).
-// Normalized trims the surrounding whitespace, UnmarshalJSON stores a valid
-// year-month normalized and an invalid one unchanged.
+// See NullableYearMonth for a nullable version of this type.
+//
+// YearMonth reads and writes like Date.
+// Normalized trims the surrounding whitespace.
+// Scan, UnmarshalJSON, UnmarshalXML and ScanString store a valid
+// year-month normalized, a zero one (see IsZero) as "" and an invalid
+// one unchanged. Value writes the normalized year-month, SQL NULL for a
+// zero one, and returns an error for an invalid one. MarshalJSON and
+// MarshalText write the normalized year-month or an invalid one unchanged,
+// and fmt prints the year-month as stored. See "Reading and writing values"
+// in the README of the module.
 type YearMonth string
 
 // YearMonthFrom creates a YearMonth from the given year and month values.
@@ -62,6 +75,10 @@ func (ym YearMonth) Normalized() (YearMonth, error) {
 	if err != nil || month < 1 || month > 12 {
 		return ym, fmt.Errorf("invalid month: %q", monthStr)
 	}
+	if norm == "0001-01" {
+		// The year-month of the zero time.Time has no practical use, like the zero Date
+		return ym, fmt.Errorf("zero year month: %q", ym)
+	}
 	return norm, nil
 }
 
@@ -83,20 +100,92 @@ func (ym YearMonth) ValidAndNormalized() bool {
 	return err == nil && ym == norm
 }
 
+// ScanString implements the strfmt.Scannable interface.
+// Without validate it stores source like Scan, with validate it stores
+// the normalized year-month or returns the error of Normalized,
+// also for a zero source.
+func (ym *YearMonth) ScanString(source string, validate bool) error {
+	return internal.ScanStringNormalized(ym, source, validate, false, YearMonth.Normalized, YearMonth.IsZero)
+}
+
+// Scan implements the database/sql.Scanner interface.
+// A valid year-month from a string or []byte is stored normalized, a time.Time
+// as its year-month, SQL NULL and a zero year-month (see IsZero) as "", and a
+// year-month that can't be normalized unchanged without an error, so that one
+// invalid value doesn't fail a whole query; Validate reports it.
+func (ym *YearMonth) Scan(value any) error {
+	if t, ok := value.(time.Time); ok {
+		value = string(YearMonthOfTime(t))
+	}
+	return internal.ScanNormalized(ym, value, YearMonth.Normalized, YearMonth.IsZero)
+}
+
+// Value implements the database/sql/driver.Valuer interface.
+// It returns the normalized year-month, SQL NULL for a zero year-month (see IsZero),
+// or the error of Normalized for a year-month that can't be normalized.
+func (ym YearMonth) Value() (driver.Value, error) {
+	return internal.ValueNormalized(ym, YearMonth.Normalized, YearMonth.IsZero)
+}
+
+// MarshalJSON implements encoding/json.Marshaler by writing the
+// normalized year-month, "" for a zero year-month (see IsZero),
+// or the year-month unchanged if it can't be normalized.
+func (ym YearMonth) MarshalJSON() ([]byte, error) {
+	return internal.MarshalJSONNormalized(ym, false, YearMonth.Normalized, YearMonth.IsZero)
+}
+
 // UnmarshalJSON implements encoding/json.Unmarshaler.
-// A JSON string is stored normalized if it is a valid year-month,
-// blank as "" and unchanged if it is invalid, without an error, so that
-// one invalid value doesn't fail a whole document; Validate reports it.
-// JSON null leaves the YearMonth unchanged like encoding/json does for a
-// string type, and any other JSON value is an error.
+// A JSON string is stored like Scan stores it, JSON null leaves the
+// YearMonth unchanged like encoding/json does for a string type,
+// and any other JSON value is an error.
 func (ym *YearMonth) UnmarshalJSON(data []byte) error {
-	return internal.UnmarshalJSONNormalized(ym, data, false, YearMonth.Normalized, nil)
+	return internal.UnmarshalJSONNormalized(ym, data, false, YearMonth.Normalized, YearMonth.IsZero)
+}
+
+// MarshalText implements encoding.TextMarshaler like MarshalJSON,
+// so that encoding/xml and strfmt write the normalized year-month.
+// encoding/json writes map keys of string types as they are
+// and doesn't call MarshalText for them.
+func (ym YearMonth) MarshalText() ([]byte, error) {
+	return internal.MarshalTextNormalized(ym, YearMonth.Normalized, YearMonth.IsZero)
+}
+
+// MarshalXMLAttr implements encoding/xml.MarshalerAttr by writing the
+// text of MarshalText, and no attribute for a nil pointer, because
+// encoding/xml calls MarshalText through a nil pointer attribute field
+// and panics.
+func (ym *YearMonth) MarshalXMLAttr(name xml.Name) (xml.Attr, error) {
+	return internal.MarshalXMLAttrText(ym, name)
+}
+
+// UnmarshalXML implements encoding/xml.Unmarshaler
+// by storing the text of the element like Scan stores it.
+func (ym *YearMonth) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	return internal.UnmarshalXMLNormalized(ym, d, start, YearMonth.Normalized, YearMonth.IsZero)
+}
+
+// UnmarshalXMLAttr implements encoding/xml.UnmarshalerAttr
+// by storing the attribute value like Scan stores it.
+func (ym *YearMonth) UnmarshalXMLAttr(attr xml.Attr) error {
+	return internal.UnmarshalXMLAttrNormalized(ym, attr, YearMonth.Normalized, YearMonth.IsZero)
+}
+
+// JSONSchema returns the JSON schema definition for the YearMonth type.
+// Implements the jsonschema.JSONSchemaProvider interface.
+func (YearMonth) JSONSchema() *jsonschema.Schema {
+	return &jsonschema.Schema{
+		Title:   "Year Month",
+		Type:    "string",
+		Pattern: `^[0-9]{4}-(0[1-9]|1[0-2])$`,
+	}
 }
 
 // IsZero returns true when the year-month is any of ["", "0000-00", "0001-01"],
 // also with surrounding whitespace.
 // "0001-01" is treated as zero because "0001-01-01" is the zero value of time.Time.
 // "0000-00" may be the zero value of other date implementations.
+// A zero year-month has no practical use like a zero Date: reading stores it
+// as "", Value writes it as SQL NULL, and it is not a valid YearMonth.
 func (ym YearMonth) IsZero() bool {
 	switch strutil.TrimSpace(ym) {
 	case "", "0000-00", "0001-01":

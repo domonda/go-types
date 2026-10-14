@@ -70,9 +70,11 @@ type Spec[T any] struct {
 	// InvalidErr, if not nil, must be wrapped by the error that Value
 	// returns for an invalid value, so errors.Is keeps working.
 	InvalidErr error
-	// GoEnumString is true for the go-enum types: go-enum generates a String
-	// method that returns the stored value. All other types have no String.
-	GoEnumString bool
+	// StoredString is true for a type with a String method that returns the
+	// stored value, like go-enum generates it for the enum types and like
+	// date.YearMonth and date.YearQuarter have it. All other types have no
+	// String.
+	StoredString bool
 }
 
 type xmlDoc[T any] struct {
@@ -394,8 +396,8 @@ func Run[T Type[T], P Ptr[T]](t *testing.T, spec Spec[T]) {
 			}
 		}
 		_, isStringer := any(spec.Canonical).(fmt.Stringer)
-		if isStringer != spec.GoEnumString {
-			t.Errorf("%s implements fmt.Stringer: %v, want %v", typeName, isStringer, spec.GoEnumString)
+		if isStringer != spec.StoredString {
+			t.Errorf("%s implements fmt.Stringer: %v, want %v", typeName, isStringer, spec.StoredString)
 		}
 	})
 

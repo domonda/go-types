@@ -382,6 +382,6 @@ func TestCode_ReadingAndWriting(t *testing.T) {
 		Canonical:    EN,
 		Variants:     []Code{"EN", " en ", "eng", "en-US", "en_GB"},
 		Invalid:      []Code{"xx", "English"},
-		GoEnumString: true,
+		StoredString: true,
 	})
 }

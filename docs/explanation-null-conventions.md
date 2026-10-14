@@ -341,8 +341,8 @@ it by its underlying kind.
 | `bank.NullableIBAN`, `bank.NullableBIC`            | `""`       | NULL               | `null`          | null           |
 | `date.Date`                                        | `""`       | NULL               | `""`            | `""`           |
 | `date.NullableDate`                                | `""`       | NULL               | `null`          | null           |
-| `date.YearMonth`, `date.YearQuarter`               | `""`       | no SQL methods     | `""`            | no SQL methods |
-| `date.NullableYearMonth`, `date.NullableYearQuarter` | `""`       | no SQL methods     | `""`            | no SQL methods |
+| `date.YearMonth`, `date.YearQuarter`               | `""`       | NULL               | `""`            | `""`           |
+| `date.NullableYearMonth`, `date.NullableYearQuarter` | `""`       | NULL               | `null`          | null           |
 | `vat.ID`                                           | `""`       | NULL               | `""`            | `""`           |
 | `vat.NullableID`                                   | `""`       | NULL               | `null`          | null           |
 | `money.Currency`                                   | `""`       | NULL               | `""`            | `""`           |
@@ -390,9 +390,6 @@ current code:
   a NULL it can't read back.
 - **`account.Number("")` marshals to JSON `null`**, while unmarshalling JSON
   `null` into an `account.Number` returns an error.
-- **`date.NullableYearMonth` and `date.NullableYearQuarter`** have no SQL
-  methods and no `MarshalJSON`, so their null is written as the string `""`
-  instead of NULL or `null`.
 - **`language.Code` has no nullable type.** `language.Null` writes SQL NULL,
   but `language.Null.Validate()` returns an error, so an optional language
   field fails `types.DeepValidate`.

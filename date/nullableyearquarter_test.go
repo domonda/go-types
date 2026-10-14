@@ -3,8 +3,11 @@ package date
 import (
 	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/domonda/go-types/internal/normtest"
 )
 
 func TestNullableYearQuarter_UnmarshalJSON(t *testing.T) {
@@ -64,4 +67,28 @@ func TestNullableYearQuarter_Normalized(t *testing.T) {
 	require.Error(t, err)
 	require.Equal(t, NullableYearQuarter("2023-Q5"), got, "unchanged")
 	require.Equal(t, 0, NullableYearQuarter("  ").Compare(YearQuarterNull), "whitespace is null")
+}
+
+// TestNullableYearQuarter_ReadingAndWriting checks the reading and writing
+// contract shared by the normalizing types, with a blank or zero
+// NullableYearQuarter as null like for NullableDate.
+func TestNullableYearQuarter_ReadingAndWriting(t *testing.T) {
+	normtest.Run(t, normtest.Spec[NullableYearQuarter]{
+		Canonical:    "2023-Q3",
+		Variants:     []NullableYearQuarter{"2023-q3", " 2023-Q3 ", "\t2023-q3\n"},
+		Invalid:      []NullableYearQuarter{"2023-Q5", "2023-Q", "0000-Q2", "Q3/2023", "bad"},
+		Blank:        []NullableYearQuarter{"0001-Q1", "0001-q1", "0000-Q0", " 0001-Q1 "},
+		Nullable:     true,
+		StoredString: true,
+	})
+}
+
+// A date or timestamp column scans as its year-quarter, like
+// NullableDate.Scan scans it as its date, and the zero time as null.
+func TestNullableYearQuarter_ScanTime(t *testing.T) {
+	var yq NullableYearQuarter
+	require.NoError(t, yq.Scan(time.Date(2023, 8, 15, 10, 0, 0, 0, time.UTC)))
+	require.Equal(t, NullableYearQuarter("2023-Q3"), yq)
+	require.NoError(t, yq.Scan(time.Time{}))
+	require.Equal(t, YearQuarterNull, yq)
 }
