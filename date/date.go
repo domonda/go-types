@@ -18,10 +18,6 @@ import (
 	"github.com/domonda/go-types/strutil"
 )
 
-// Note: Date does not implement types.NormalizableValidator[Date] because
-// its Normalized() method accepts optional language.Code parameters.
-// This is intentional as it provides more functionality than the interface requires.
-
 // Normalize returns str as a Date in the canonical YYYY-MM-DD form,
 // or an error if the input cannot be parsed.
 //
@@ -415,8 +411,9 @@ func (date Date) Valid() bool {
 
 // ValidAndNormalized returns true if the date is both valid and already in normalized form (YYYY-MM-DD).
 func (date Date) ValidAndNormalized() bool {
-	_, err := time.Parse(Layout, string(date))
-	return err == nil
+	t, err := time.Parse(Layout, string(date))
+	// time.Parse accepts the year 0, which Valid rejects
+	return err == nil && validYear(t.Year())
 }
 
 // Time returns a time.Time for the date at the specified hour, minute, and second in the given location.

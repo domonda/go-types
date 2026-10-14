@@ -113,15 +113,15 @@ func SplitBOM(b []byte) (BOM, []byte) {
 // DecodeWithBOM detects the BOM at the beginning of b and decodes the remaining
 // bytes to UTF-8. Returns an error if the BOM indicates an unsupported encoding.
 func DecodeWithBOM(b []byte) ([]byte, error) {
-	bom, data := SplitBOM(b)
-	return bom.Decode(data)
+	// BOM.Decode strips the one BOM itself
+	return BOMOfBytes(b).Decode(b)
 }
 
 // DecodeStringWithBOM detects the BOM at the beginning of b and decodes the remaining
 // bytes to a UTF-8 string. Returns an error if the BOM indicates an unsupported encoding.
 func DecodeStringWithBOM(b []byte) (string, error) {
-	bom, data := SplitBOM(b)
-	return bom.DecodeString(data)
+	// BOM.DecodeString strips the one BOM itself
+	return BOMOfBytes(b).DecodeString(b)
 }
 
 // trimExpectedBOM strips a leading bom from data and returns the rest.

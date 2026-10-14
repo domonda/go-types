@@ -561,6 +561,8 @@ func TestNullableIDMust(t *testing.T) {
 	require.Equal(t, IDNull, NullableIDMust(make([]byte, 16)))
 	require.Equal(t, IDNull, NullableIDMust(IDNull))
 	require.Equal(t, IDNull, NullableIDMust([16]byte{}))
+	// Also as ID argument, like NullableIDFromAny, the Nil UUID is NULL
+	require.Equal(t, IDNull, NullableIDMust(IDNil))
 
 	invalidVersion := ref
 	invalidVersion.SetVersion(0)

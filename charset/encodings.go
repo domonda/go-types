@@ -27,9 +27,9 @@ func AutoDecode(data []byte, encodings []Encoding, keyWords []string) (text []by
 		return nil, "", nil
 	}
 
-	bom, rest := SplitBOM(data)
-	if bom != NoBOM {
-		text, err = bom.Decode(rest)
+	if bom := BOMOfBytes(data); bom != NoBOM {
+		// BOM.Decode strips the one BOM itself
+		text, err = bom.Decode(data)
 		if err != nil {
 			return nil, "", err
 		}

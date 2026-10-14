@@ -1655,3 +1655,11 @@ func TestDate_FormatInvalid(t *testing.T) {
 	assert.Equal(t, "01.01.0001", Date("0001-01-01").Format("02.01.2006"), "the zero date is valid")
 	assert.Equal(t, "", NullableDate("0001-01-01").Format("02.01.2006"), "and null as NullableDate")
 }
+
+// TestDate_ValidAndNormalizedYearZero protects that ValidAndNormalized never
+// claims more than Valid: time.Parse accepts "0000-01-01", which Valid rejects.
+func TestDate_ValidAndNormalizedYearZero(t *testing.T) {
+	assert.False(t, Date("0000-01-01").Valid())
+	assert.False(t, Date("0000-01-01").ValidAndNormalized())
+	assert.True(t, Date("0001-01-01").ValidAndNormalized())
+}

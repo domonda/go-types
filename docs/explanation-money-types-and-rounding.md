@@ -150,7 +150,7 @@ Where the rule applies without a rounding argument:
 - `CurrencyAmount`: `String` and `FormatSep`.
 - `float`: `RoundToDecimals` and `Format`, which back all of the above.
 - `CentAmount`: `ScanString`, `MultipliedByRate`, `DividedByRate` and `Percentage`.
-- `DecimalAmount`: `DividedByRate`, for a quotient that doesn't terminate.
+- `DecimalAmount`: `MultipliedByRate`, `DividedByRate` and `Percentage`, for a result with more than 18 decimals like a quotient that doesn't terminate.
 - `strfmt`: `MoneyFormat.FormatDecimalAmount`, `FormatCentAmount` and `FormatCurrencyDecimalAmount`.
 
 `Amount.RoundToInt` uses `math.Round`, which gives the same result because a tie like `2.5` is exact in `float64`.
@@ -202,7 +202,7 @@ func main() {
 }
 ```
 
-On `Amount`, the methods that take a `Rate` or a percentage, `MultipliedByRate`, `DividedByRate` and `Percentage`, compute in `float64`. On `CentAmount` and `DecimalAmount` they convert the rate to its shortest decimal and compute exactly; `CentAmount` rounds the result once, half away from zero. `DecimalAmount` falls back to a `float64` product only for a rate with more than 18 decimals. When a percentage or exchange rate must give an exact cent result, keep the amount in a `CentAmount` or `DecimalAmount`, or put the factor in a `DecimalAmount` and use `Mul` or `Div`.
+On `Amount`, the methods that take a `Rate` or a percentage, `MultipliedByRate`, `DividedByRate` and `Percentage`, compute in `float64`. On `CentAmount` and `DecimalAmount` they convert the rate to its shortest decimal and compute exactly; `CentAmount` rounds the result once, half away from zero. `DecimalAmount` falls back to a `float64` product only for a rate with more than 18 decimals or beyond the coefficient range. When a percentage or exchange rate must give an exact cent result, keep the amount in a `CentAmount` or `DecimalAmount`, or put the factor in a `DecimalAmount` and use `Mul` or `Div`.
 
 ## Calculate exactly, round once
 
@@ -303,7 +303,7 @@ Not every currency has cents. ISO 4217 defines the number of decimals of each cu
 Who uses it:
 
 - `CurrencyAmount.String`, and so `CurrencyAmount.Value`, writes two decimals, or the three of a currency like KWD, and never fewer: `CurrencyAmountJPY(1234.5)` is `JPY 1234.50`, because a JPY amount can still have a fraction, and a KWD amount of 1.2345 is `KWD 1.235`. The default `CurrencyAmountParser` normalizes the same way.
-- `CurrencyAmount.ScanString` accepts 0 or 2 decimals or the minor units of the currency, so `"KWD 1.234"` scans while `"EUR 1.234"` is rejected as an ambiguous thousands grouping.
+- `CurrencyAmount.ScanString` accepts 0 or 2 decimals, or the minor units of the currency written without a comma, so `"KWD 1.234"` scans while `"EUR 1.234"` and `"KWD 1,234"` are rejected as ambiguous thousands groupings.
 - `CurrencyDecimalAmount` prints its own scale and doesn't need the table.
 - `CentAmount` and the `strfmt` money presets always use two decimals. The presets write `JPY 1.234,00`.
 

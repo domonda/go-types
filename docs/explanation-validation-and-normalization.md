@@ -33,11 +33,11 @@ as different countries.
 
 `types.NormalizableValidator[T]` combines `Validator`, `Normalizable[T]` and
 `ValidAndNormalized`. These types assert it at compile time: `bank.IBAN`,
-`bank.BIC`, `bank.NullableIBAN`, `country.Code`, `email.Address`,
-`email.AddressList`, `email.AddressSet`, `language.Code`, `money.Currency` and
-`vat.ID`. `date.Date` has all four methods but doesn't implement the
-interface, because its `Normalized` takes optional `language.Code` hints that
-decide between day-first and month-first dates.
+`bank.BIC`, `bank.NullableIBAN`, `country.Code`, `date.Date`,
+`date.NullableDate`, `email.Address`, `email.AddressList`, `email.AddressSet`,
+`language.Code`, `money.Currency` and `vat.ID`. The `Normalized` method of the
+`date` types takes no language hint; `NormalizedLang(lang language.Code)` takes
+the hint that decides between day-first and month-first dates.
 
 ```
    input "atu 1022 3006"
@@ -270,7 +270,11 @@ methods of the `date` types, which return an error. A null value of a
 nullable type is written as SQL NULL and JSON `null`.
 
 `String()` of these types returns the normalized form too, or the original
-if it can't be normalized. The normalized form is UTF-8, so a display name
+if it can't be normalized. A valid `email.AddressList` without addresses,
+like `"Undisclosed recipients"`, normalizes to `""`, but its `String`,
+`Value`, `MarshalJSON` and `MarshalText` write the placeholder
+`undisclosed-recipients:;`, because `Scan` rejects the empty string.
+The normalized form is UTF-8, so a display name
 like `"Jürgen Müller" <j@x.de>` stays readable; the email types have an
 extra `ASCII()` method that RFC 2047 encodes non-ASCII names for message
 headers. `StringOr(alternative)` of the nullable types returns the
@@ -289,8 +293,8 @@ of a map with a string key type as they are, so
 keys before building the map.
 
 Reading doesn't normalize: `Scan` and JSON decoding store the text without
-checking it, except `date.Date.Scan`, which normalizes and rejects invalid
-dates. So a Go value can hold `"eur"` until it is written. To compare values
+checking it, except the `Scan` methods of `date.Date` and
+`date.NullableDate`, which normalize and reject invalid dates. So a Go value can hold `"eur"` until it is written. To compare values
 in Go, call `Normalized()` where input enters your program, handle the error,
 and keep the result. Everything after that point can rely on
 `ValidAndNormalized()` being true.

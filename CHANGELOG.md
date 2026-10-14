@@ -3,11 +3,11 @@
 All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
-No version has been tagged yet, so releases are dated rather than numbered.
-See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut, including
-picking the semver baseline.
+Releases are numbered like the `VERSION` file and the git tags, without the
+`v` prefix; the entry from before the first version is dated.
+See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut.
 
-## [Unreleased]
+## [1.0.0-beta.1] - 2026-10-14
 
 ### Added
 
@@ -103,8 +103,8 @@ picking the semver baseline.
   is written as SQL NULL and JSON `null`. The JSON of `email.AddressSet` keeps
   its object form `{"a@example.com":{}}`. `money.CurrencyAmount` and
   `CurrencyDecimalAmount` normalize their currency in `String`, `Value`,
-  JSON, `FormatSep` and the `strfmt` money formatters, `"jpy 1235"` is now
-  `"JPY 1235"`. A value that can't be normalized is still written unchanged,
+  JSON, `FormatSep` and the `strfmt` money formatters, `"jpy 1235.00"` is
+  now `"JPY 1235.00"`. A value that can't be normalized is still written unchanged,
   and the `Value` of the `date` types still returns an error for it.
   `country.Code` already worked this way. Because `Value` also encodes query
   parameters, `WHERE bic = $1` with `BIC("DEUTDEFF")` now sends
@@ -628,6 +628,13 @@ picking the semver baseline.
   `money.BTC.Valid()` was false. `Currency("₿")` no longer normalizes.
 
 ### Fixed
+
+- `date.Date.ValidAndNormalized` was true for the year 0, like for
+  `"0000-01-01"`, which `Valid` rejects.
+- `account.NullableNumber.String` returned a null of whitespace or control
+  characters unchanged instead of `""`.
+- `uu.NullableIDMust` panicked for the Nil UUID passed as `uu.ID` instead of
+  returning `IDNull` like for the other argument types.
 
 - `email.ParseAddressList`, and so the `Validate`, `Normalized` and `Split`
   methods of the address lists and `ParseMIMEMessage`, took quadratic time

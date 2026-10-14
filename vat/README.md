@@ -105,7 +105,7 @@ type NullableID string
 const Null NullableID = ""
 ```
 
-`NullableID` is `ID` where `Null` (the empty string) is a valid null value. A whitespace only value is null too, like for `country.NullableCode`.
+`NullableID` is `ID` where `Null` (the empty string) is a valid null value. A value of only the runes that `strutil.TrimSpace` removes (whitespace, control and other non-printable runes, invalid UTF-8) is null too, like for `country.NullableCode`.
 
 | Method                             | Description                                        |
 |------------------------------------|----------------------------------------------------|
@@ -117,7 +117,7 @@ const Null NullableID = ""
 | `ValidAndNormalized()`             | True for `Null` and for a canonical ID.            |
 | `ValidateIsNormalized()`           | Like `ID`, but nil for `Null`.                     |
 | `ValidateIsNormalizedAndNotNull()` | `ID(n).ValidateIsNormalized()`: an error for `Null`. |
-| `IsNull()`, `IsNotNull()`          | Null is `""` or whitespace only.                   |
+| `IsNull()`, `IsNotNull()`          | Null is `""` or only runes that `strutil.TrimSpace` removes. |
 | `Get()`                            | The `ID`; panics if null.                          |
 | `GetOr(defaultID)`                 | The `ID`, or `defaultID` if null.                  |
 | `Set(id)`, `SetNull()`             | Assign an `ID` or `Null`.                          |
@@ -127,7 +127,7 @@ const Null NullableID = ""
 | `IsMOSS()`, `Number()`             | Like `ID`; false and `""` for `Null`.              |
 | `ScanString(source, validate)`     | `""`, whitespace only, `"NULL"`, `"null"` and `"nil"` set `Null`; otherwise like `ID`. |
 
-Implements: `fmt.Stringer`, `database/sql.Scanner`, `database/sql/driver.Valuer`, `json.Marshaler`, `json.Unmarshaler`, `encoding.TextMarshaler`, `strfmt.Scannable`, `nullable.NullSetable[ID]` and `JSONSchema()` (the `ID` string or null).
+Implements: `fmt.Stringer`, `database/sql.Scanner`, `database/sql/driver.Valuer`, `json.Marshaler`, `json.Unmarshaler`, `encoding.TextMarshaler`, `strfmt.Scannable`, `nullable.NullSetable[ID]`, `types.NormalizableValidator[NullableID]` and `JSONSchema()` (the `ID` string or null).
 
 ## Finding VAT IDs in text
 

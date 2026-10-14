@@ -218,7 +218,8 @@ Implements: `driver.Valuer`, `sql.Scanner`, `json.Marshaler`, `json.Unmarshaler`
 | `AsSlice()`                      | New `IDSlice` in undefined order. Returns nil for an empty set. |
 | `AsSet()`                        | The set unchanged, for the `IDs` interface.        |
 | `Strings()`                      | Sorted canonical strings. Returns nil for an empty set. |
-| `String()`, `PrettyString()`     | `set[id1,id2]` in sorted order. nil and empty both return `set[]`. |
+| `String()`                       | `set[id1,id2]` in sorted order. nil and empty both return `set[]`. |
+| `PrettyString()`                 | `[id1,id2]` in sorted order, without `set`. nil and empty both return `[]`. |
 | `ForEach(callback)`              | Calls `callback` for every ID in undefined order and returns its first error. |
 
 All reading methods, `Delete`, `DeleteAll`, `DeleteFunc`, `Clear`, `IntersectionWith` and `DifferenceWith` accept a nil set.

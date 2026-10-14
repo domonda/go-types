@@ -291,9 +291,8 @@ type from the table: `uu.NullableID`, `vat.NullableID`,
 `account.NullableNumber`, `nullable.TrimmedString`,
 `money.NullableDecimalAmount` or `money.NullableAmount`.
 
-**`can't scan empty string as nullable.NonEmptyString`** or **`can't scan
-empty string as email.NullableAddress`**.
-The column contains `''`, which these types can't hold apart from NULL. Use
+**`can't scan empty string as nullable.NonEmptyString`**.
+The column contains `''`, which this type can't hold apart from NULL. Use
 `nullable.TrimmedString`, which reads `''` as NULL, or `nullable.Type[string]`
 if `''` is a real value. Or clean the data: set the column to NULL where it is
 `''`.

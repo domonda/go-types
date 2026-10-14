@@ -390,11 +390,12 @@ current code:
   field fails `types.DeepValidate`.
 - **Whitespace-only input.** `"  "` is null for `country.NullableCode`,
   `bank.NullableIBAN`, `bank.NullableBIC`, `money.NullableCurrency`,
-  `vat.NullableID`, `email.NullableAddress`, `date.NullableDate` and
-  `nullable.TrimmedString`. `email.NullableAddressList`,
-  `account.NullableNumber` (although its `MarshalJSON` writes `null`),
-  `nullable.NonEmptyString`, `date.NullableYearMonth` and
-  `date.NullableYearQuarter` treat it as a non-null value.
+  `vat.NullableID`, `email.NullableAddress`, `account.NullableNumber`,
+  `date.NullableDate` and `nullable.TrimmedString`.
+  `email.NullableAddressList` writes it as SQL NULL and JSON `null` and scans
+  it as null, but its `IsNull()` is false. `nullable.NonEmptyString`,
+  `date.NullableYearMonth` and `date.NullableYearQuarter` treat it as a
+  non-null value.
 - **JSON `""` into a nullable type.** For the string based `NullableX` types
   and `nullable.NonEmptyString` it means null. For `money.NullableAmount`,
   `NullableDecimalAmount` and `NullableRate` it decodes as a present zero,
@@ -411,8 +412,7 @@ current code:
   `uu.NullableID`, `account.NullableNumber` or `email.NullableAddress`.
 
 Changing any of these changes stored data or wire formats, so each needs its
-own breaking-change decision. They are tracked in [TODOS.md](../TODOS.md),
-except the untyped `money.CurrencyNull`.
+own breaking-change decision. They are tracked in [TODOS.md](../TODOS.md).
 
 ## Related
 

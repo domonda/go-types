@@ -73,7 +73,7 @@ Any other value prints as `Invalid BOM: [...]`.
 | `DecodeWithBOM(b) ([]byte, error)`, `DecodeStringWithBOM(b) (string, error)` | `SplitBOM`, then decode the rest in the encoding of the BOM. Without a BOM the data is returned as UTF-8 unchanged. |
 | `bom.Encoding() (Encoding, error)`                 | `UTF8Encoding()` for `NoBOM` and `BOMUTF8`, the UTF-16 or UTF-32 encoding of the byte order otherwise, an error for invalid values. |
 | `bom.Endian() binary.ByteOrder`                    | `binary.LittleEndian` or `binary.BigEndian` for the UTF-16 and UTF-32 BOMs, nil for `NoBOM` and `BOMUTF8`. |
-| `bom.Decode(data) ([]byte, error)`, `bom.DecodeString(data) (string, error)` | Decodes from the encoding of `bom`. A leading `bom` in `data` is stripped, a different BOM is an error. |
+| `bom.Decode(data) ([]byte, error)`, `bom.DecodeString(data) (string, error)` | Decodes from the encoding of `bom`. One leading `bom` in `data` is stripped, a different BOM is an error unless its bytes are valid text in that encoding, see [UTF-16 and UTF-32 functions](#utf-16-and-utf-32-functions). |
 | `bom.String() string`                              | See the table above.                               |
 
 ### UTF-16LE vs. UTF-32LE detection

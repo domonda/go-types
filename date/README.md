@@ -53,7 +53,8 @@ Rules for numeric dates:
 - **Language hint.** The first `lang` argument is a hint, normalized with `language.Code.Normalized`, so `language.EN`, `"EN"`, `" en"`, `"en-US"` and `"eng"` all mean English. A hint that can't be normalized, like `"english"`, is ignored. Only English changes the result: it reads month first.
 - **The hint only decides ambiguous dates.** It applies only when both numbers are 1 to 12. `"15.06.2024"` and `"06/15/2024"` both give 2024-06-15 with any hint. The separator never matters.
 - **Ordinal suffix.** A suffix like `"1st"` marks the day for ambiguous dates and wins over the hint: `"02 1st 2003"` and `"1st 02 2003"` are 2003-02-01, also with `language.EN`. A number with a suffix is never the month, so `"13 1st 2024"` is an error.
-- **Two-digit years.** 00 to 44 become 2000 to 2044, 45 to 99 become 1945 to 1999. A single digit is never the year, so `"12.12.5"` is an error.
+- **Two-digit years.** 00 to 44 become 2000 to 2044, 45 to 99 become 1945 to 1999. A single digit is never the year, so `"12.12.5"` is an error, and the year 0 is an error in every order, like `"0000 25 may"`.
+- **Date-times.** A `T` after the date is only cut off with the time if a digit follows, so `"2023-12-25T10:00:00Z"` is 2023-12-25 and `"2023-12-25TOTAL"` is an error.
 
 ### Functions
 
@@ -147,7 +148,7 @@ Implements: `fmt.Stringer`, `database/sql.Scanner`, `database/sql/driver.Valuer`
 const Null NullableDate = ""
 ```
 
-`NullableDate` has the same string form as `Date`. `Null`, whitespace only (like for `country.NullableCode`), the zero dates `"0000-00-00"` and `"0001-01-01"`, and a zero date in another format like `"01.01.0001"` are null, valid, and written as SQL NULL and JSON `null`.
+`NullableDate` has the same string form as `Date`. `Null`, a value of only the runes `strutil.TrimSpace` removes (like for `country.NullableCode`), the zero dates `"0000-00-00"` and `"0001-01-01"`, and a zero date in another format like `"01.01.0001"` are null, valid, and written as SQL NULL and JSON `null`.
 
 | Function                          | Description                                        |
 |-----------------------------------|----------------------------------------------------|
@@ -157,7 +158,7 @@ const Null NullableDate = ""
 
 | Method                                             | Description                                        |
 |----------------------------------------------------|----------------------------------------------------|
-| `IsNull()`                                         | True for `Null`, whitespace only and the zero dates, also in another format like `"01.01.0001"`. |
+| `IsNull()`                                         | True for `Null`, only `strutil.TrimSpace` runes and the zero dates, also in another format like `"01.01.0001"`. |
 | `IsZero()`                                         | True for `Null` and the zero dates.                |
 | `IsNotNull()`                                      | `!IsNull()`.                                       |
 | `Get()`                                            | The `Date`; panics if null.                        |
@@ -220,7 +221,7 @@ const YearMonthNull NullableYearMonth = ""
 
 | `YearMonth` method                   | Description                                        |
 |--------------------------------------|----------------------------------------------------|
-| `Validate()`, `Valid()`              | Exactly `YYYY-MM`, year 0 to 3000, month 1 to 12.  |
+| `Validate()`, `Valid()`              | Exactly `YYYY-MM`, year 1 to 3000, month 1 to 12.  |
 | `IsZero()`                           | True for `""`, `"0000-00"` and `"0001-01"`.        |
 | `String()`                           | The raw string.                                    |
 | `Year()`, `Month()`                  | The parts, 0 if invalid.                           |
@@ -248,7 +249,7 @@ const YearQuarterNull NullableYearQuarter = ""
 
 | `YearQuarter` method                               | Description                                        |
 |----------------------------------------------------|----------------------------------------------------|
-| `Validate()`, `Valid()`                            | Exactly `YYYY-Qn` with upper-case `Q`, year 0 to 3000, quarter 1 to 4. |
+| `Validate()`, `Valid()`                            | Exactly `YYYY-Qn` with upper-case `Q`, year 1 to 3000, quarter 1 to 4. |
 | `IsZero()`                                         | True for `""`, `"0000-Q0"` and `"0001-Q1"`.        |
 | `String()`                                         | The raw string.                                    |
 | `Year()`, `Quarter()`                              | The parts, 0 if invalid.                           |
@@ -275,7 +276,7 @@ These plug dates into the [`strfmt`](../strfmt/README.md) package, which calls `
 | `(*Format).Format(d)`                        | `d.Format(f.Layout)`.                              |
 | `(*Format).Parse(str, langHints...)`         | `Normalize`, then formats with `Layout`. Pointer receiver: only `*Format` implements `strfmt.Parser`. |
 | `(*Format).AssignString(dest, source)`       | Parses `source` (with `Normalize` if `Layout` is empty, else `time.Parse(Layout)`) and assigns it to the addressable `dest` of type `Date`, `NullableDate`, `time.Time`, `*time.Time` or `nullable.Time`. Whitespace-only `source` assigns the empty value. A parsed zero time is an error. |
-| `(*Format).FormatString(val)`                | `NilString` for an invalid `reflect.Value` or a nil pointer, `ZeroString` for zero values with `Format`/`IsZero` methods (`Date`, `NullableDate`, `time.Time`), else `Format(Layout)`, so an invalid date like `"bad"` formats as the zero time. Other types are an error. |
+| `(*Format).FormatString(val)`                | `NilString` for an invalid `reflect.Value` or a nil pointer, `ZeroString` for zero values with `Format`/`IsZero` methods (`Date`, `NullableDate`, `time.Time`), else `Format(Layout)`, which returns an invalid date like `"bad"` unchanged. Other types are an error. |
 
 `Parser` and `Formatter` implement `strfmt.Parser` as values, `Format` only as `*Format`. None of them implements `strfmt.Formatter`.
 
@@ -336,7 +337,7 @@ Reading values:
 - **Zero dates.** `"0001-01-01"` is `Valid()` and `IsZero()`. `"0000-00-00"` is `IsZero()` but not valid. Both are written as SQL NULL and read back as `""`. `Date` encodes them in JSON as they are, `NullableDate` as `null`.
 - **Day first.** `"05/06/2024"` is June 5 unless the hint is English. The hint never changes a date that has only one valid reading. Only the first `lang` argument is used.
 - **Two-digit years** pivot at 45: `"25.12.44"` is 2044-12-25, `"25.12.45"` is 1945-12-25.
-- **Invalid and zero dates become the zero time.** `Date("bad").Format("02.01.2006")` returns `"01.01.0001"` and `Date("").AddDays(1)` returns `"0001-01-02"`. Check `Valid` (or `IsZero`) before formatting or doing arithmetic. `Format(Layout)` instead returns an invalid date unchanged. Comparisons don't use the zero time: `After`, `Before`, `WithinIncl`, `BetweenExcl`, `AfterTime` and `BeforeTime` are false for an invalid date, so `Date("bad").Before("2024-01-01")` and `Date("2024-01-01").EqualOrAfter("bad")` are false.
+- **Invalid and zero dates become the zero time in arithmetic.** `Date("").AddDays(1)` and `Date("bad").AddDays(1)` return `"0001-01-02"`. Check `Valid` (or `IsZero`) before doing arithmetic. `Format` returns an invalid date unchanged with every layout: `Date("bad").Format("02.01.2006")` is `"bad"`. Comparisons don't use the zero time: `After`, `Before`, `WithinIncl`, `BetweenExcl`, `AfterTime` and `BeforeTime` are false for an invalid date, so `Date("bad").Before("2024-01-01")` and `Date("2024-01-01").EqualOrAfter("bad")` are false.
 - **Only writing normalizes.** `Value` and `MarshalJSON` of `Date` and `NullableDate` write a valid date as `YYYY-MM-DD`, but JSON decoding stores the string as is without validating it. An invalid date is an error for `Value` and written unchanged by `MarshalJSON`.
 - **Null ordering.** `Null` is before every date: `Null.Before(d)` and `d.After(Null)` are true, `Null.BeforeToday()` is true.
 - **Upper-case `Q`.** `YearQuarter("2024-q1").Valid()` is false, while `PeriodRange("2024-q1")` works.

@@ -378,3 +378,14 @@ func TestNullableNumber_UnmarshalJSONTrimsLikeScan(t *testing.T) {
 
 	require.Error(t, json.Unmarshal([]byte(`"not a number!"`), &fromJSON))
 }
+
+// TestNullableNumber_StringOfNull protects that String writes "" for every
+// null value, like the other nullable types, and not the whitespace or
+// control characters that IsNull counts as null.
+func TestNullableNumber_StringOfNull(t *testing.T) {
+	for _, n := range []NullableNumber{"", " ", "\x00", "\u200b"} {
+		assert.True(t, n.IsNull(), "%q", n)
+		assert.Equal(t, "", n.String(), "%q", n)
+	}
+	assert.Equal(t, "123", NullableNumber("123").String())
+}

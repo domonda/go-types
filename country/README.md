@@ -1,6 +1,6 @@
 # country
 
-ISO 3166-1 alpha-2 country codes. `Code` normalizes the ways people and other systems write a country (`"de"`, `" AT "`, `"SUI"`, `"Österreich"`, `"Germany"`) to the canonical upper-case code, reports EU membership and English names, and reads and writes SQL and JSON. Use `Code` for required countries and `NullableCode` for optional ones.
+ISO 3166-1 alpha-2 country codes. `Code` normalizes the ways people and other systems write a country (`"de"`, `" AT "`, `"SUI"`, `"Österreich"`) to the canonical upper-case code, and `ParseCode` also reads English names like `"Germany"`. It reports EU membership and English names, and reads and writes SQL and JSON. Use `Code` for required countries and `NullableCode` for optional ones.
 
     import "github.com/domonda/go-types/country"
 
@@ -80,17 +80,17 @@ type NullableCode string
 const Null NullableCode = ""
 ```
 
-`NullableCode` is `Code` where `Null` and whitespace-only strings are a valid null value.
+`NullableCode` is `Code` where `Null` and strings of only the runes `strutil.TrimSpace` removes are a valid null value.
 
 | Method                         | Description                                        |
 |--------------------------------|----------------------------------------------------|
-| `Normalized()`                 | `Null` for empty or whitespace-only input, otherwise like `Code`. |
+| `Normalized()`                 | `Null` for input that is empty after `strutil.TrimSpace`, otherwise like `Code`. |
 | `NormalizedWithAltCodes()`     | Same result as `Normalized`, which already consults `AltCodes`. |
 | `NormalizedOrNull()`           | Normalized code, or `Null` if invalid.             |
 | `Valid()`, `Validate()`        | Null is valid, otherwise like `Code`.              |
 | `ValidAndNotNull()`            | Valid and not null.                                |
 | `ValidAndNormalized()`         | True for `Null` and for a canonical code.          |
-| `IsNull()`                     | True for `""` and whitespace-only strings.         |
+| `IsNull()`                     | True for `""` and strings of only the runes `strutil.TrimSpace` removes. |
 | `IsNotNull()`                  | `!IsNull()`.                                       |
 | `Get()`                        | The `Code`; panics if null.                        |
 | `GetOr(defaultCode)`           | The `Code`, or `defaultCode` if null.              |
@@ -100,7 +100,7 @@ const Null NullableCode = ""
 | `IsEU()`, `EnglishName()`      | As for `Code`.                                     |
 | `ScanString(source, validate)` | `""`, whitespace only, `"NULL"`, `"null"` and `"nil"` set `Null`; otherwise like `Code`. |
 
-Implements: `fmt.Stringer`, `database/sql.Scanner`, `database/sql/driver.Valuer`, `json.Marshaler`, `json.Unmarshaler`, `encoding.TextMarshaler`, `strfmt.Scannable`, `nullable.NullSetable[Code]` and `JSONSchema()` (the `Code` pattern or null).
+Implements: `fmt.Stringer`, `database/sql.Scanner`, `database/sql/driver.Valuer`, `json.Marshaler`, `json.Unmarshaler`, `encoding.TextMarshaler`, `strfmt.Scannable`, `nullable.NullSetable[Code]`, `types.NormalizableValidator[NullableCode]` and `JSONSchema()` (the `Code` pattern or null).
 
 ## Serialization
 

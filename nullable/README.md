@@ -133,10 +133,10 @@ Implements: `driver.Valuer`, `sql.Scanner`, `json.Marshaler`, `json.Unmarshaler`
 | `MarshalJSON(source)` | `json.Marshal(source)` as `JSON`. A nil `source` returns `JSON("null")`, which is not nil. |
 | `MarshalFrom(source)` | Marshals `source` into the receiver and sets nil if the result is `null`. |
 | `UnmarshalTo(dest)`   | `json.Unmarshal` into `dest`. A nil `JSON` returns an error. |
-| `IsNull()`            | Whether the value is nil.                          |
+| `IsNull()`            | Whether the value is nil or empty.                 |
 | `IsEmpty()`           | True for nil, `""`, `{}` and `[]`.                 |
-| `Valid()`             | True for nil, otherwise `json.Valid`.              |
-| `String()`            | The text, or `null` for nil.                       |
+| `Valid()`             | True for nil and empty, otherwise `json.Valid`.    |
+| `String()`            | The text, or `null` for nil and empty.             |
 | `GoString()`          | ``nullable.JSON(`...`)``.                          |
 | `PrettyPrint(w)`      | The text in backticks, for `github.com/domonda/go-pretty`. |
 | `Clone()`             | Copy. nil stays nil.                               |

@@ -194,8 +194,11 @@ func (n NullableNumber) TrimLeadingZeros() NullableNumber {
 }
 
 // String returns the string representation of the NullableNumber,
-// returning an empty string if the NullableNumber is null.
+// returning an empty string if the NullableNumber is null (see IsNull).
 func (n NullableNumber) String() string {
+	if n.IsNull() {
+		return ""
+	}
 	return string(n)
 }
 

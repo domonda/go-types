@@ -89,7 +89,7 @@ Decoding trims whitespace and validates strings with `NumberRegexp`. Numbers (SQ
 | `NullableNumber("12-34")`           | `"12-34"`    | `"12-34"` | `12-34`          |
 | `NumberNull`, `NullableNumber(" ")` | `nil` (NULL) | `null`    | empty            |
 
-Writing trims whitespace, and an empty or whitespace only value becomes SQL NULL, JSON `null`, or an empty XML element, for both types.
+Writing trims like `strutil.TrimSpace` (whitespace, control and other non-printable runes, invalid UTF-8), and a value that is empty after trimming becomes SQL NULL, JSON `null`, or an empty XML element, for both types.
 
 | Input                    | `Number`                                           | `NullableNumber`                                 |
 |--------------------------|----------------------------------------------------|--------------------------------------------------|
@@ -99,7 +99,7 @@ Writing trims whitespace, and an empty or whitespace only value becomes SQL NULL
 | SQL `float64`            | Non-negative integer only, `-0` gives `"0"`, NaN, infinities, and fractions are errors | Like `Number`, `0` and `-0` are `NumberNull`     |
 | Other SQL types          | Error                                              | Error                                            |
 | JSON string              | Trimmed and validated, `""` is an error            | Trimmed and validated, `""` is `NumberNull`      |
-| JSON number              | Non-negative integer as decimal string, else error | Like `Number`, so `0` is `"0"`, not `NumberNull` |
+| JSON number              | Non-negative integer as decimal string, else error | Like `Number`, but `0` is `NumberNull`           |
 | JSON `null`              | Error                                              | `NumberNull`                                     |
 | XML element text         | Trimmed and validated, empty is an error           | Trimmed and validated, empty is `NumberNull`     |
 | `UnmarshalText`          | Trimmed and validated, `""` is an error            | Trimmed and validated, `""` is `NumberNull`      |

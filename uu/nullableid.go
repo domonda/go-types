@@ -176,10 +176,12 @@ func NullableIDMust[T IDSource](val T) NullableID {
 		}
 		return id
 	case ID:
-		if err := x.Validate(); err != nil {
+		// Validated as NullableID like by NullableIDFromAny,
+		// so that the Nil UUID gives IDNull
+		if err := NullableID(x).Validate(); err != nil {
 			panic(err)
 		}
-		return x.Nullable()
+		return NullableID(x)
 	case NullableID:
 		if err := x.Validate(); err != nil {
 			panic(err)

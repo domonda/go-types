@@ -55,7 +55,7 @@ type NullableIBAN string
 const IBANNull NullableIBAN = ""
 ```
 
-An `IBAN` where `""` is the null value. A whitespace only value is null too, like for `country.NullableCode`. Null counts as valid.
+An `IBAN` where `""` is the null value. A value of only the runes that `strutil.TrimSpace` removes (whitespace, control and other non-printable runes, invalid UTF-8) is null too, like for `country.NullableCode`. Null counts as valid.
 
 | Method                                          | Description                                        |
 |-------------------------------------------------|----------------------------------------------------|
@@ -66,7 +66,7 @@ An `IBAN` where `""` is the null value. A whitespace only value is null too, lik
 | `ValidAndNotNull() bool`                        | Not null and valid.                                |
 | `ValidAndNormalized() bool`                     | `""`, or valid and in compact form. False for a whitespace only null, which normalizes to `""`. |
 | `CountryCode() country.Code`                    | Like `IBAN.CountryCode`, `""` for null or invalid values. |
-| `IsNull() bool`, `IsNotNull() bool`             | Null is `""` or whitespace only.                   |
+| `IsNull() bool`, `IsNotNull() bool`             | Null is `""` or only runes that `strutil.TrimSpace` removes. |
 | `Get() IBAN`                                    | Panics if null.                                    |
 | `GetOr(defaultIBAN IBAN) IBAN`                  | Value or the default.                              |
 | `StringOr(defaultString) string`                | Normalized, or the default if null or invalid.     |
@@ -90,7 +90,7 @@ const (
 type BIC string
 ```
 
-A BIC has 8 or 11 uppercase characters: a 4 letter institution code, a 2 letter country code at positions 5 and 6 that must be a valid `country.Code`, a 2 character location code, and an optional 3 character branch code where `XXX` means the primary office. `Validate` also rejects an internal deny-list of German words with valid BIC syntax that turn up when scanning documents: `AMTSGERICHT`, `AUTOBANK`, `DEUTSCHLAND`, `DIENSTGEBER`, `DOCUMENT`, `DOKUMENT`, `FACILITY`, `GELISTET`, `GESAMTNETTO`.
+A BIC has 8 or 11 uppercase characters: a 4 letter institution code, a 2 letter country code at positions 5 and 6 that must be a valid `country.Code`, a 2 character location code, and an optional 3 character branch code where `XXX` means the primary office. `Validate` also rejects an internal deny-list of German words with valid BIC syntax that turn up when scanning documents: `AMTSGERICHT`, `AUTOBANK`, `DEUTSCHLAND`, `DIENSTGEBER`, `DOCUMENT`, `DOKUMENT`, `FACILITY`, `GELISTET`, `GESAMTNETTO`. The 8 character words are also rejected with the `XXX` branch code that `Normalized` appends, like `AUTOBANKXXX`.
 
 | Function / Method                                  | Description                                        |
 |----------------------------------------------------|----------------------------------------------------|
@@ -122,7 +122,7 @@ type NullableBIC string
 const BICNull NullableBIC = ""
 ```
 
-A `BIC` where `""` is the null value. A whitespace only value is null too, like for `country.NullableCode`. Null counts as valid.
+A `BIC` where `""` is the null value. A value of only the runes that `strutil.TrimSpace` removes (whitespace, control and other non-printable runes, invalid UTF-8) is null too, like for `country.NullableCode`. Null counts as valid.
 
 | Method                                          | Description                                        |
 |-------------------------------------------------|----------------------------------------------------|
@@ -131,7 +131,7 @@ A `BIC` where `""` is the null value. A whitespace only value is null too, like 
 | `Valid() bool`, `Validate() error`              | Null or a valid BIC.                               |
 | `ValidAndNotNull() bool`                        | Not null and valid.                                |
 | `ValidAndNormalized() bool`                     | `""`, or the valid 11 character form. False for a whitespace only null, which normalizes to `""`. |
-| `IsNull() bool`, `IsNotNull() bool`             | Null is `""` or whitespace only.                   |
+| `IsNull() bool`, `IsNotNull() bool`             | Null is `""` or only runes that `strutil.TrimSpace` removes. |
 | `Get() BIC`                                     | Panics if null.                                    |
 | `GetOr(defaultBIC BIC) BIC`                     | Value or the default.                              |
 | `StringOr(defaultString) string`                | Normalized, or the default if null or invalid.     |
@@ -141,7 +141,7 @@ A `BIC` where `""` is the null value. A whitespace only value is null too, like 
 | `Scan(value) error`, `Value()`, `MarshalJSON()` | See [Serialization](#serialization).               |
 | `JSONSchema()`                                  | `BICRegex` string or null.                         |
 
-Implements: `sql.Scanner`, `driver.Valuer`, `json.Marshaler`, `json.Unmarshaler`, `encoding.TextMarshaler`, `fmt.Stringer`, `strfmt.Scannable`, `nullable.NullSetable[BIC]`. There is no `CountryCode` or `NormalizedShort`, use `Get()` first.
+Implements: `sql.Scanner`, `driver.Valuer`, `json.Marshaler`, `json.Unmarshaler`, `encoding.TextMarshaler`, `fmt.Stringer`, `strfmt.Scannable`, `nullable.NullSetable[BIC]`, `types.NormalizableValidator[NullableBIC]`. There is no `CountryCode` or `NormalizedShort`, use `Get()` first.
 
 ## Account
 
@@ -233,7 +233,7 @@ The tag paths start below the root element, which is not checked.
 | Type                          | `Value()` writes                             | `Scan` accepts                                     | JSON                                               | Text                                               |
 |-------------------------------|----------------------------------------------|----------------------------------------------------|----------------------------------------------------|----------------------------------------------------|
 | `IBAN`, `BIC`                 | Normalized if valid, else unchanged, `""` as `""`, not NULL | `string` and `[]byte` unchanged, NULL as `""`, other types are errors | `MarshalJSON` writes like `Value`, `""` as `""`. No `UnmarshalJSON`: a string is assigned unchanged, `null` leaves the value unchanged | `MarshalText` writes like `Value`. No `UnmarshalText`, `ScanString` for `strfmt` |
-| `NullableIBAN`, `NullableBIC` | Null (`""` or whitespace only) as NULL, else like `IBAN` and `BIC` | Like `IBAN`, NULL is null                          | `MarshalJSON` writes null as `null`, else like `IBAN` and `BIC`. `UnmarshalJSON` assigns strings unchanged and sets null for `null`, other JSON values are errors | `MarshalText` writes `""` for null, else like `IBAN` and `BIC`. No `UnmarshalText`, `ScanString` for `strfmt` |
+| `NullableIBAN`, `NullableBIC` | Null (see `IsNull`) as NULL, else like `IBAN` and `BIC` | Like `IBAN`, NULL is null                          | `MarshalJSON` writes null as `null`, else like `IBAN` and `BIC`. `UnmarshalJSON` assigns strings unchanged and sets null for `null`, other JSON values are errors | `MarshalText` writes `""` for null, else like `IBAN` and `BIC`. No `UnmarshalText`, `ScanString` for `strfmt` |
 | `Account`                     | No `Valuer`, marshal to JSON yourself        | `string` or `[]byte` with JSON or an IBAN, see `UnmarshalJSON`. NULL is an error. | Marshal: `{"iban":"...","bic":"...","currency":"...","holder":"..."}`, `iban` always, the others omitted when empty. Unmarshal: a JSON object is assigned without normalization or validation, a JSON string must be a valid IBAN and is normalized, `BIC`, `Currency`, and `Holder` become null. `null` leaves the account unchanged. | `UnmarshalText` like `UnmarshalJSON` after trimming, also for an unquoted IBAN |
 
 ## Gotchas

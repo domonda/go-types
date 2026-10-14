@@ -119,7 +119,7 @@ func Format(value any, config *FormatConfig) string
 func FormatValue(val reflect.Value, config *FormatConfig) string
 ```
 
-`Format` calls `FormatValue` with `reflect.ValueOf(value)`, or with `value` itself if it is a `reflect.Value`. A nil `config` formats with a new `NewFormatConfig()`. `FormatValue` resolves the value in this order:
+`Format` calls `FormatValue` with `reflect.ValueOf(value)`, or with `value` itself if it is a `reflect.Value`. A nil `config` formats with a default config that `NewFormatConfig()` builds once. `FormatValue` resolves the value in this order:
 
 1. An invalid value, like the one of a nil `any`, is `config.Nil`.
 2. The addressable value of an unexported struct field is read again through its address, so the steps below can call its methods. A non-addressable one, like a field of a struct not passed as pointer, skips steps 3 and 5 and ends with `fmt.Sprint` after step 6.
@@ -223,7 +223,7 @@ What the presets write, and whether `Scan` with the default `ScanConfig` reads i
 
 ## Gotchas
 
-- **`"1,000"` scans as 1.** Floats and the money types parse with `float.Parse`, where a single `.` or `,` is the decimal separator. Integers are plain base 10, so `"1.000"` and `"1,000"` into an `int` are errors.
+- **`"1,000"` scans as 1.** Floats and the money types except `money.CurrencyAmount`, which rejects 3 decimals, parse with the separator rules of `float.Parse`, where a single `.` or `,` is the decimal separator. Integers are plain base 10, so `"1.000"` and `"1,000"` into an `int` are errors.
 - **Empty cells scan as zero.** `""`, `NULL`, and the other nil strings scan as `0` into numbers and `money.Amount`, which can't be told apart from a real zero. Use a pointer field like `*money.Amount`, a nullable type like `money.NullableAmount` or `date.NullableDate`, or set `StrictEmptyStringParsing`.
 - **A nil string into a `string` field is kept.** `"NULL"` and `"nil"` scan as the strings `"NULL"` and `"nil"`. Use `nullable.TrimmedString` or a `*string` to get null.
 - **Strings are not trimmed.** A `string` destination and `Scannable.ScanString` get the source with its whitespace, bools and integers are compared and parsed trimmed.
@@ -233,12 +233,11 @@ What the presets write, and whether `Scan` with the default `ScanConfig` reads i
 - **The English preset time layout is day first.** `"02/01/2006 15:04:05 MST"` reads the US month-first `01/02/2024 10:00:00 EST` as the 1st of February when `EST` is known locally.
 - **Money presets use 2 decimals for every currency.** `CurrencyAmountJPY(1234.5)` formats as `JPY 1,234.50` like `CurrencyAmount.String`, but a KWD amount of 1.234 formats as `KWD 1.23`, while `CurrencyAmount.String` writes the 3 decimals of the currency. Set `MoneyFormat.Precision` to 3 for such currencies.
 - **Registered formatters run before the null check.** A zero `money.Amount` formats as `0.00`, not as `config.Nil`.
-- **Kinds win over `String` methods.** A type with a `string` or number kind and no registered formatter is formatted by its kind: `money.Currency("eur")` formats as `eur` although its `String` returns `EUR`, and `money.Rate(0.19)` as `0.19`.
+- **Kinds win over `String` methods.** A type with a `string` or number kind and no registered formatter or `MarshalText` method is formatted by its kind: `money.RoundHalfToEven` formats as `1` although its `String` returns `RoundHalfToEven`, and `money.Rate(0.19)` as `0.19`.
 - **Formatters are looked up by the dereferenced type.** A formatter registered for `*T` only runs for a nil `*T`. Register it for `T`.
 - **Don't change `DefaultScanConfig` in place.** It is shared by every caller that passes nil. Create your own with `NewScanConfig`.
 - **Zero value configs.** `FormatConfig{}` has `Float.DecimalSep` 0, so formatting a float panics in `float.Format`, and it writes `""` for both bools. `ScanConfig{}` has no nil, true, or false strings. Start from the constructors.
 - **`any`, slice, and map destinations without a scanning method can't be scanned** from a non-nil string, only set to nil by a nil string.
-- **A nil `FormatConfig` allocates.** `Format(v, nil)` builds a new default config on every call. Create the config once when formatting many values.
 
 ## Examples
 

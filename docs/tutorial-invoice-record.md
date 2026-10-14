@@ -314,7 +314,7 @@ Three things to notice:
 
 - `dueDate` is `null`, because `date.NullableDate` writes `null` for `date.Null`. A plain `date.Date` would write `""`.
 - `total` is the JSON number `1234.50` with both decimals. A `money.Amount` (a `float64`) would write `1234.5`.
-- The identifier types have no JSON methods and are written as the strings they hold. The output is canonical because you stored canonical values.
+- The identifier types write their normalized form, like their `Value` method, so the output would be canonical even for a value stored as `money.Currency("eur")`, which is written as `"EUR"`. A value that can't be normalized is written unchanged.
 
 ## Step 7: See what goes to SQL
 
@@ -400,7 +400,7 @@ CREATE TABLE invoice (
 
 - The null due date is sent as SQL `NULL`.
 - The total is sent as the decimal string `"1234.50"`, so a `numeric` column stores it exactly. A `float64` would be rounded to binary.
-- Not every `Value` method normalizes. `vat.ID` and `date.Date` send the canonical form of a valid value, while `bank.IBAN` and `money.Currency` send the string as it is. Store normalized values, as `parseInvoice` does, and every column holds the canonical form.
+- Every `Value` method here sends the normalized form, so `bank.IBAN("AT61 1904 3002 3457 3201")` and `money.Currency("€")` would also be sent as `"AT611904300234573201"` and `"EUR"`. A value that can't be normalized is sent unchanged, except that `date.Date` returns an error for it.
 
 ## Step 8: Split the total into installments
 

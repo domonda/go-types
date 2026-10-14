@@ -324,9 +324,10 @@ for types that hold secrets.
 **`Validate` is never called.**
 Check, in this order:
 
-- The method has a pointer receiver and you called `types.Validate(v)` with a
-  value. `types.TryValidate(v)` then returns `nil, false`. Pass `&v`, or use
-  `types.DeepValidate`, which finds pointer receivers.
+- The method has a pointer receiver and you called `types.Validate(v)` or
+  `types.DeepValidate(v)` with a value. `types.TryValidate(v)` then returns
+  `nil, false`. Pass `&v`. `types.DeepValidate` finds pointer receivers only
+  for the fields, elements and map values below the value passed to it.
 - The field is unexported. `DeepValidate` skips unexported fields, except the
   exported fields promoted from an unexported embedded struct.
 - The value is a map key. Only map values are validated.

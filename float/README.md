@@ -133,7 +133,7 @@ The package has no SQL support.
 
 | Type        | JSON written                                       | JSON accepted                                      |
 |-------------|----------------------------------------------------|----------------------------------------------------|
-| `FormatDef` | `{"thousandsSep":",","decimalSep":".","precision":2,"padPrecision":true}`. Separators are one-character strings, a zero `ThousandsSep` is omitted, a zero `DecimalSep` is `""`. | One-character strings, `""` for a zero separator, and the legacy code point strings like `"44"` for `','` that versions before the JSON methods wrote. Fields missing in the object keep their value. Strings of several characters and JSON numbers are errors. |
+| `FormatDef` | `{"thousandsSep":",","decimalSep":".","precision":2,"padPrecision":true}`. Separators are one-character strings, a zero `ThousandsSep` is omitted, a zero `DecimalSep` is `""`. | One-character strings, `""` for a zero separator, and the legacy code point strings like `"44"` for `','` that versions before the JSON methods wrote. Fields missing in the object keep their value. Strings of several characters, JSON numbers and separators that `Format` panics on, like `"x"` or the same rune for both, are errors, but a zero `DecimalSep` is accepted. An error leaves the value unchanged. |
 | `Tolerant`  | A JSON number via the `float64` kind. NaN and ±Inf fail with `json: unsupported value`. | Numbers, strings parsed with `Parse` after decoding JSON escapes (`"1.234,56"` is 1234.56), and `null` or `""` as 0. `"NaN"`, `"Inf"`, `"+Inf"`, `"-Inf"` as strings. An error leaves the value unchanged. |
 
 ## Gotchas

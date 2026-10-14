@@ -318,7 +318,7 @@ time.
       `email.AddressSet`.
       **Completed:** 2026-10-09
 - [x] **No `CHANGELOG.md`.** Add one for the v1 cut.
-      **Completed:** 2026-09-01 (unreleased section; no version tagged yet)
+      **Completed:** 2026-09-01 (no version was tagged then)
 - [x] **Require a Go version that accepts the collections proposal's
       self-referential constraints.** Raised the floor to Go 1.26.0.
       **Completed:** 2026-09-01

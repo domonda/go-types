@@ -287,3 +287,19 @@ func TestBOM_DecodeKeepsTextBOM(t *testing.T) {
 		assert.Equal(t, "\ufeffa", str, tt.bom.String())
 	}
 }
+
+// TestDecodeWithBOM_KeepsTextBOM protects that the BOM detecting functions
+// strip one BOM like BOM.Decode: they split the BOM off and then let
+// BOM.Decode strip a second one, a U+FEFF of the text.
+func TestDecodeWithBOM_KeepsTextBOM(t *testing.T) {
+	data := []byte{0xFF, 0xFE, 0xFF, 0xFE, 'A', 0}
+	decoded, err := DecodeWithBOM(data)
+	require.NoError(t, err)
+	assert.Equal(t, "\ufeffA", string(decoded))
+	str, err := DecodeStringWithBOM(data)
+	require.NoError(t, err)
+	assert.Equal(t, "\ufeffA", str)
+	text, encName, err := AutoDecode(data, nil, nil)
+	require.NoError(t, err)
+	assert.Equal(t, "\ufeffA", string(text), encName)
+}

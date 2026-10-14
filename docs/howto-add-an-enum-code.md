@@ -96,7 +96,7 @@ The script runs `go tool -modfile=tools/go.mod go-enum ./...` from the
 repository root. It rewrites `Enums()` and `EnumStrings()` of the changed type
 in the same file. `Valid`, `Validate` and `String` carry a `// #custom` line
 in their doc comment, so go-enum keeps the hand-written versions, which accept
-non-normalized input.
+non-normalized input, except the strict `language.Code.Valid`.
 
 ### 4. Run the tests
 
@@ -124,7 +124,7 @@ to `master`, with Go 1.26. Run its steps locally before you push:
 go build -v ./...
 go vet ./...
 ./run-go-enum.sh -validate
-go test -count=1 -v ./...
+go test -count=1 -race -v ./...
 ```
 
 The CI step "Validate go-enum methods" runs
