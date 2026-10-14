@@ -23,6 +23,11 @@
 // [SplitAddressList] and the SplitRaw methods split a list without
 // parsing it.
 //
+// The address types are made for the recipients of a message, a form
+// field or a database column, not for mailing lists with millions of
+// addresses: parsing millions of chained addresses can exhaust the
+// goroutine stack. Store such a list one address per row or as []string.
+//
 // [Message] holds the headers, bodies, and [Attachment] values of one email.
 // [ParseMessage] detects and parses JSON, Microsoft TNEF (winmail.dat),
 // and MIME data, [Message.BuildRawMessage] encodes a message as MIME,
