@@ -110,7 +110,12 @@ See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut.
     `Validate` reports it. They stored the text as given, and
     `date.Date.Scan` and `NullableDate.Scan` returned an error for an
     invalid date. A value read from SQL, JSON or XML is canonical if it is
-    valid, so `==` and map lookups work on it.
+    valid, so `==` and map lookups work on it. For some inputs the canonical
+    form loses information, and a load-modify-save of the row writes it
+    back that way: `language.Code` drops region and script subtags, so
+    `"pt-BR"` is read as `"pt"` and `"zh-Hant"` as `"zh"`, and
+    `money.Currency` reads the ambiguous symbols `"$"` as `"USD"` and `"¥"`
+    as `"JPY"`, although `"¥"` is also the symbol of the Chinese yuan.
   - `Value` writes the normalized value and SQL NULL for a blank value, and
     returns the error of `Normalized` for an invalid value, because the
     database is where it would stay. It wrote an invalid value unchanged,
