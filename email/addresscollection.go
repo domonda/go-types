@@ -3,6 +3,7 @@ package email
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"slices"
 	"strings"
 
@@ -157,57 +158,107 @@ type addressCollection struct {
 // JSON, and `"John Doe" <john@example.com>` is no valid JSON string.
 // A JSON array with other elements than strings is an error, like a
 // malformed PostgreSQL array literal. typeName is used only in errors.
-func readAddressCollection(text, typeName string) (addressCollection, error) {
-	trimmed := strutil.TrimSpace(text)
+//
+// text is a string or a []byte, so that neither the string of Scan nor
+// the []byte of UnmarshalJSON is copied into the other type just to be
+// read; the JSON decoder reads a []byte.
+func readAddressCollection[T string | []byte](text T, typeName string) (addressCollection, error) {
+	trimmed := trimSpace(text)
 	switch {
-	case trimmed == "" || trimmed == "null":
+	case len(trimmed) == 0 || string(trimmed) == "null":
 		return addressCollection{}, nil
 
-	case trimmed[0] == '[' && json.Valid([]byte(trimmed)):
+	case trimmed[0] == '[':
 		entries := []string{}
-		err := json.Unmarshal([]byte(trimmed), &entries)
-		if err != nil {
-			return addressCollection{}, errs.Errorf("can't read JSON array as email.%s because of: %w", typeName, err)
+		if isJSON, err := unmarshalIfJSON([]byte(trimmed), &entries); isJSON {
+			if err != nil {
+				return addressCollection{}, errs.Errorf("can't read JSON array as email.%s because of: %w", typeName, err)
+			}
+			return addressCollection{entries: entries}, nil
 		}
-		return addressCollection{entries: entries}, nil
 
-	case trimmed[0] == '{' && json.Valid([]byte(trimmed)):
-		var object map[string]json.RawMessage
-		err := json.Unmarshal([]byte(trimmed), &object)
-		if err != nil {
-			return addressCollection{}, errs.Errorf("can't read JSON object as email.%s because of: %w", typeName, err)
-		}
-		entries := make([]string, 0, len(object))
-		for key := range object {
-			entries = append(entries, key)
-		}
-		slices.Sort(entries)
-		return addressCollection{entries: entries}, nil
-
-	case trimmed[0] == '{' && trimmed[len(trimmed)-1] == '}':
-		array, err := scanAddressArray(trimmed, typeName)
-		if err != nil {
-			return addressCollection{}, err
-		}
-		entries := make([]string, 0, len(array))
-		for _, addr := range array {
-			// scanAddressArray trims, so an element that was only
-			// padding is empty here and is not an entry
-			if addr != "" {
-				entries = append(entries, addr)
+	case trimmed[0] == '{':
+		if canBeJSONObject(trimmed) {
+			var object map[string]json.RawMessage
+			if isJSON, err := unmarshalIfJSON([]byte(trimmed), &object); isJSON {
+				if err != nil {
+					return addressCollection{}, errs.Errorf("can't read JSON object as email.%s because of: %w", typeName, err)
+				}
+				entries := make([]string, 0, len(object))
+				for key := range object {
+					entries = append(entries, key)
+				}
+				slices.Sort(entries)
+				return addressCollection{entries: entries}, nil
 			}
 		}
-		return addressCollection{entries: entries}, nil
-
-	case trimmed[0] == '"' && trimmed[len(trimmed)-1] == '"' && json.Valid([]byte(trimmed)):
-		var list string
-		err := json.Unmarshal([]byte(trimmed), &list)
-		if err != nil {
-			return addressCollection{}, errs.Errorf("can't read JSON string as email.%s because of: %w", typeName, err)
+		if trimmed[len(trimmed)-1] == '}' {
+			array, err := scanAddressArray(string(trimmed), typeName)
+			if err != nil {
+				return addressCollection{}, err
+			}
+			entries := make([]string, 0, len(array))
+			for _, addr := range array {
+				// scanAddressArray trims, so an element that was only
+				// padding is empty here and is not an entry
+				if addr != "" {
+					entries = append(entries, addr)
+				}
+			}
+			return addressCollection{entries: entries}, nil
 		}
-		return addressCollection{list: list}, nil
+
+	case trimmed[0] == '"' && trimmed[len(trimmed)-1] == '"':
+		var list string
+		if isJSON, err := unmarshalIfJSON([]byte(trimmed), &list); isJSON {
+			if err != nil {
+				return addressCollection{}, errs.Errorf("can't read JSON string as email.%s because of: %w", typeName, err)
+			}
+			return addressCollection{list: list}, nil
+		}
 	}
-	return addressCollection{list: text}, nil
+	return addressCollection{list: string(text)}, nil
+}
+
+// trimSpace returns text trimmed like by strutil.TrimSpace.
+func trimSpace[T string | []byte](text T) T {
+	if b, ok := any(text).([]byte); ok {
+		return T(strutil.TrimSpaceBytes(b))
+	}
+	return T(strutil.TrimSpace(string(text)))
+}
+
+// unmarshalIfJSON unmarshals data into v and reports whether data is
+// valid JSON, so that readAddressCollection reads text that is no JSON
+// as another shape of an address collection without an error, but returns
+// the error for JSON of another type than v, like [1] for a []string.
+// json.Unmarshal checks the whole data before it decodes and reports a
+// syntax error instead of any other error, so its *json.SyntaxError tells
+// that data is no JSON without another pass over data with json.Valid.
+func unmarshalIfJSON(data []byte, v any) (isJSON bool, err error) {
+	err = json.Unmarshal(data, v)
+	var syntaxErr *json.SyntaxError
+	if errors.As(err, &syntaxErr) {
+		return false, nil
+	}
+	return true, err
+}
+
+// canBeJSONObject reports whether text, which starts with '{', can be
+// a JSON object, because its first byte after JSON whitespace is the quote
+// of a key or the closing brace. A PostgreSQL array literal like
+// {a@example.com} can't, so it is not decoded as JSON first.
+func canBeJSONObject[T string | []byte](text T) bool {
+	for i := 1; i < len(text); i++ {
+		switch text[i] {
+		case ' ', '\t', '\n', '\r':
+			continue
+		case '"', '}':
+			return true
+		}
+		return false
+	}
+	return false
 }
 
 // scanAddressCollection reads the SQL value of an address collection
@@ -220,7 +271,7 @@ func scanAddressCollection(value any, typeName string) (addressCollection, error
 	case string:
 		return readAddressCollection(s, typeName)
 	case []byte:
-		return readAddressCollection(string(s), typeName)
+		return readAddressCollection(s, typeName)
 	}
 	return addressCollection{}, errs.Errorf("can't scan SQL value of type %T as email.%s", value, typeName)
 }
@@ -233,5 +284,5 @@ func unmarshalJSONAddressCollection(data []byte, typeName string) (addressCollec
 	if len(trimmed) == 0 || (trimmed[0] != '"' && trimmed[0] != '[' && trimmed[0] != '{') {
 		return addressCollection{}, errs.Errorf("can't unmarshal JSON %s as email.%s", data, typeName)
 	}
-	return readAddressCollection(string(trimmed), typeName)
+	return readAddressCollection(trimmed, typeName)
 }

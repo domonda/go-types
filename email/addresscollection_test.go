@@ -1,10 +1,15 @@
 package email
 
 import (
+	"encoding/json"
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/domonda/go-types/notnull"
 )
 
 // SplitAddressList splits only where a comma separates two entries, so
@@ -110,16 +115,112 @@ func TestReadAddressCollection(t *testing.T) {
 		{text: ` a@example.com `, want: addressCollection{list: ` a@example.com `}},
 		{text: `[1]`, wantErr: true},
 		{text: `{NULL}`, wantErr: true},
+		// Trimmed like strutil.TrimSpace, not only of JSON whitespace
+		{text: "\u200b[\"a@example.com\"]\x00", want: addressCollection{entries: []string{"a@example.com"}}},
+		// JSON whitespace before the first key or the closing brace
+		// doesn't make a JSON object a PostgreSQL array
+		{text: "{ \n\t\"a@example.com\": 1}", want: addressCollection{entries: []string{"a@example.com"}}},
+		{text: `{ }`, want: addressCollection{entries: []string{}}},
+		// A PostgreSQL array with quoted elements, as AddressSet.Value
+		// writes it, starts like a JSON object
+		{text: `{"b@example.com","a@example.com"}`, want: addressCollection{entries: []string{"b@example.com", "a@example.com"}}},
+		{text: `{"a@example.com"}`, want: addressCollection{entries: []string{"a@example.com"}}},
+		// Text that only starts like JSON is no JSON and is read as address
+		// list without an error, like a column value that was cut off,
+		// so that one bad value doesn't fail a whole query; Validate
+		// reports it. A type error in it doesn't make it JSON either.
+		{text: `["a@example.com"`, want: addressCollection{list: `["a@example.com"`}},
+		{text: `[1, }`, want: addressCollection{list: `[1, }`}},
+		{text: `["a@example.com"] x`, want: addressCollection{list: `["a@example.com"] x`}},
+		{text: `{"a@example.com": 1} x`, want: addressCollection{list: `{"a@example.com": 1} x`}},
+		{text: `{`, want: addressCollection{list: `{`}},
+		{text: `"a\x" <a@example.com>"`, want: addressCollection{list: `"a\x" <a@example.com>"`}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.text, func(t *testing.T) {
 			got, err := readAddressCollection(tt.text, "AddressSet")
+			// Scan passes a string or a []byte and UnmarshalJSON a []byte,
+			// which must read the same without being copied into a string
+			gotBytes, errBytes := readAddressCollection([]byte(tt.text), "AddressSet")
 			if tt.wantErr {
 				assert.Error(t, err)
+				assert.Error(t, errBytes, "[]byte")
 				return
 			}
 			require.NoError(t, err)
 			assert.Equal(t, tt.want, got)
+			require.NoError(t, errBytes, "[]byte")
+			assert.Equal(t, tt.want, gotBytes, "[]byte")
+		})
+	}
+}
+
+// BenchmarkReadAddressCollection measures reading 1000 addresses in every
+// shape that Scan and UnmarshalJSON accept, next to decoding the JSON array
+// into a []string, because a JSON document or a column with a long list
+// should not cost several times more to read than the JSON decoding itself.
+func BenchmarkReadAddressCollection(b *testing.B) {
+	addrs := make([]string, 1000)
+	object := make(map[string]struct{}, len(addrs))
+	for i := range addrs {
+		addrs[i] = fmt.Sprintf("user%d@example.com", i)
+		object[addrs[i]] = struct{}{}
+	}
+	list := strings.Join(addrs, ", ")
+	jsonArray, err := json.Marshal(addrs)
+	require.NoError(b, err)
+	jsonObject, err := json.Marshal(object)
+	require.NoError(b, err)
+	jsonString, err := json.Marshal(list)
+	require.NoError(b, err)
+	pgArray, err := notnull.StringArray(addrs).Value()
+	require.NoError(b, err)
+
+	b.Run("json.Unmarshal into []string", func(b *testing.B) {
+		b.ReportAllocs()
+		for b.Loop() {
+			var s []string
+			if err := json.Unmarshal(jsonArray, &s); err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+	for _, bc := range []struct {
+		name string
+		data []byte
+	}{
+		{name: "UnmarshalJSON array", data: jsonArray},
+		{name: "UnmarshalJSON object", data: jsonObject},
+		{name: "UnmarshalJSON string", data: jsonString},
+	} {
+		b.Run(bc.name, func(b *testing.B) {
+			b.ReportAllocs()
+			for b.Loop() {
+				var l AddressList
+				if err := l.UnmarshalJSON(bc.data); err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+	}
+	for _, bc := range []struct {
+		name  string
+		value any
+	}{
+		{name: "Scan JSON array", value: string(jsonArray)},
+		{name: "Scan JSON array bytes", value: jsonArray},
+		{name: "Scan PostgreSQL array", value: pgArray},
+		{name: "Scan list", value: list},
+		{name: "Scan one address", value: "a@example.com"},
+	} {
+		b.Run(bc.name, func(b *testing.B) {
+			b.ReportAllocs()
+			for b.Loop() {
+				var l AddressList
+				if err := l.Scan(bc.value); err != nil {
+					b.Fatal(err)
+				}
+			}
 		})
 	}
 }
