@@ -2,6 +2,7 @@ package vat
 
 import (
 	"database/sql/driver"
+	"encoding/xml"
 	"fmt"
 
 	"github.com/invopop/jsonschema"
@@ -18,6 +19,9 @@ const Null NullableID = ""
 // NullableID is identical to ID, except that the Null value (empty string)
 // is considered valid by the Valid() and Validate() methods.
 // A whitespace only NullableID is also null, like for country.NullableCode.
+//
+// NullableID reads and writes like ID, except that null is SQL NULL and
+// JSON null. See "Reading and writing values" in the README of the module.
 type NullableID string
 
 // Compile-time check that NullableID implements nullable.NullSetable[ID]
@@ -94,15 +98,13 @@ func (n NullableID) GetOr(defaultID ID) ID {
 	return ID(n)
 }
 
-// StringOr returns the normalized NullableID as string,
-// or the passed nullString if the NullableID is null
-// or can't be normalized.
+// StringOr returns the NullableID as stored,
+// or the passed nullString if the NullableID is null.
 func (n NullableID) StringOr(nullString string) string {
-	norm, err := n.Normalized()
-	if err != nil || norm.IsNull() {
+	if n.IsNull() {
 		return nullString
 	}
-	return string(norm)
+	return string(n)
 }
 
 // Valid returns if id is a valid VAT ID or Null,
@@ -176,93 +178,71 @@ func (n NullableID) Number() string {
 	return ID(n).Number()
 }
 
-// String returns the normalized ID if possible,
-// else it will be returned unchanged as string.
-// String implements the fmt.Stringer interface.
-func (n NullableID) String() string {
-	norm, err := n.Normalized()
-	if err != nil {
-		return string(n)
-	}
-	return string(norm)
-}
-
-// ScanString tries to parse and assign the passed
-// source string as value of the implementing type.
-//
-// If validate is true, the source string is checked
-// for validity before it is assigned to the type.
-//
-// If validate is false and the source string
-// can still be assigned in some non-normalized way
-// it will be assigned without returning an error.
+// ScanString implements the strfmt.Scannable interface.
+// The strings "NULL", "null" and "nil" set the NullableID to null.
+// Without validate it stores source like Scan, with validate it stores
+// the normalized ID or returns the error of Normalized.
 func (n *NullableID) ScanString(source string, validate bool) error {
 	switch source {
-	case "", "NULL", "null", "nil":
+	case "NULL", "null", "nil":
 		n.SetNull()
 		return nil
 	}
-	newID, err := NullableID(source).Normalized()
-	if err != nil {
-		if validate {
-			return err
-		}
-		newID = NullableID(source)
-	}
-	*n = newID
-	return nil
+	return internal.ScanStringNormalized(n, source, validate, NullableID.Normalized, nil)
 }
 
 // Scan implements the database/sql.Scanner interface.
+// A valid ID is stored normalized, SQL NULL and a blank string as Null,
+// and an ID that can't be normalized unchanged without an error,
+// so that one invalid value doesn't fail a whole query; Validate reports it.
 func (n *NullableID) Scan(value any) error {
-	switch x := value.(type) {
-	case string:
-		*n = NullableID(x)
-	case []byte:
-		*n = NullableID(x)
-	case nil:
-		*n = Null
-	default:
-		return fmt.Errorf("can't scan SQL value of type %T as vat.NullableID", value)
-	}
-	return nil
+	return internal.ScanNormalized(n, value, NullableID.Normalized, nil)
 }
 
 // Value implements the driver database/sql/driver.Valuer interface.
-// Returns nil for SQL NULL if the NullableID is null, see IsNull.
+// It returns the normalized ID, SQL NULL if the NullableID is null,
+// or the error of Normalized wrapping ErrInvalidID
+// for an ID that can't be normalized.
 func (n NullableID) Value() (driver.Value, error) {
-	if n.IsNull() {
-		return nil, nil
-	}
-	return ID(n).Value()
+	return internal.ValueNormalized(n, NullableID.Normalized, nil)
 }
 
-// MarshalJSON implements encoding/json.Marshaler
-// by returning the JSON null value if the NullableID is null, see IsNull,
-// else the normalized ID like ID.MarshalJSON.
+// MarshalJSON implements encoding/json.Marshaler by writing the JSON null
+// value if the NullableID is null, else the normalized ID,
+// or the ID unchanged if it can't be normalized.
 func (n NullableID) MarshalJSON() ([]byte, error) {
 	if n.IsNull() {
 		return []byte(`null`), nil
 	}
-	return ID(n).MarshalJSON()
+	return internal.MarshalJSONNormalized(n, NullableID.Normalized, nil)
 }
 
-// MarshalText implements encoding.TextMarshaler by returning String,
-// the normalized value, "" for null, or the unchanged string if it can't be
-// normalized, so that strfmt and encoding/xml write the canonical form
-// like Value and MarshalJSON. encoding/json writes map keys of string
-// types as they are and doesn't call MarshalText for them.
-func (n NullableID) MarshalText() ([]byte, error) {
-	return []byte(n.String()), nil
-}
-
-// UnmarshalJSON implements encoding/json.Unmarshaler
-// by setting the NullableID to null for the JSON null value,
-// so that decoding null into a field that holds a value resets it.
-// A JSON string is assigned unchanged, without normalization or validation,
-// like encoding/json does for a string type, any other JSON value is an error.
+// UnmarshalJSON implements encoding/json.Unmarshaler.
+// A JSON string is stored like Scan stores it, JSON null sets the
+// NullableID to null, so that decoding null into a field that holds
+// a value resets it, and any other JSON value is an error.
 func (n *NullableID) UnmarshalJSON(data []byte) error {
-	return internal.UnmarshalJSONStringOrNull(n, data)
+	return internal.UnmarshalJSONNormalized(n, data, true, NullableID.Normalized, nil)
+}
+
+// MarshalText implements encoding.TextMarshaler like MarshalJSON,
+// but with "" for null, so that encoding/xml and strfmt write the
+// normalized ID. encoding/json writes map keys of string types
+// as they are and doesn't call MarshalText for them.
+func (n NullableID) MarshalText() ([]byte, error) {
+	return internal.MarshalTextNormalized(n, NullableID.Normalized, nil)
+}
+
+// UnmarshalXML implements encoding/xml.Unmarshaler
+// by storing the text of the element like Scan stores it.
+func (n *NullableID) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	return internal.UnmarshalXMLNormalized(n, d, start, NullableID.Normalized, nil)
+}
+
+// UnmarshalXMLAttr implements encoding/xml.UnmarshalerAttr
+// by storing the attribute value like Scan stores it.
+func (n *NullableID) UnmarshalXMLAttr(attr xml.Attr) error {
+	return internal.UnmarshalXMLAttrNormalized(n, attr, NullableID.Normalized, nil)
 }
 
 // JSONSchema returns the JSON schema for NullableID, describing it with the

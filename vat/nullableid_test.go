@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/domonda/go-types/country"
+	"github.com/domonda/go-types/internal/normtest"
 )
 
 // Null must be a typed constant like date.Null and country.Null,
@@ -202,19 +203,14 @@ func TestNullableID_Number(t *testing.T) {
 	assert.Equal(t, "", NullableID("ATU12345678").Number())
 }
 
-func TestNullableID_String(t *testing.T) {
-	assert.Equal(t, "", Null.String())
-	assert.Equal(t, "ATU10223006", NullableID("at u 1022 3006").String())
-	assert.Equal(t, "atu 1234 5678", NullableID("atu 1234 5678").String(), "invalid input is returned unchanged")
-}
-
-// StringOr returns the normalized value like String, but the alternative
-// instead of a value that can't be normalized, so a caller printing
-// StringOr never shows a misspelled or invalid value as if it were valid.
+// StringOr returns the alternative only for null. Any other value comes
+// back as stored, so a caller printing StringOr shows an invalid value as
+// what it is instead of hiding it like a missing one.
 func TestNullableID_StringOr(t *testing.T) {
 	assert.Equal(t, "none", Null.StringOr("none"))
-	assert.Equal(t, "ATU10223006", NullableID("atu 1022 3006").StringOr("none"))
-	assert.Equal(t, "none", NullableID("invalid").StringOr("none"))
+	assert.Equal(t, "none", NullableID("  ").StringOr("none"))
+	assert.Equal(t, "atu 1022 3006", NullableID("atu 1022 3006").StringOr("none"))
+	assert.Equal(t, "invalid", NullableID("invalid").StringOr("none"))
 }
 
 func TestNullableID_ScanString(t *testing.T) {
@@ -344,15 +340,14 @@ func TestNullableID_UnmarshalJSON(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(`{"vat":null}`), &d))
 	assert.Equal(t, Null, d.VAT)
 
-	// A JSON string is assigned unchanged, without normalization or
-	// validation, like encoding/json did before NullableID had
-	// UnmarshalJSON.
-	for _, str := range []string{"ATU10223006", "atu 1022 3006", "bad", ""} {
+	// A JSON string is stored normalized if it is a valid ID and
+	// unchanged without an error if not, so Validate can report it.
+	for str, want := range map[string]NullableID{"ATU10223006": "ATU10223006", "atu 1022 3006": "ATU10223006", "bad": "bad", "": Null} {
 		d := doc{VAT: "DE167015661"}
 		data, err := json.Marshal(map[string]string{"vat": str})
 		require.NoError(t, err)
 		require.NoError(t, json.Unmarshal(data, &d))
-		assert.Equal(t, NullableID(str), d.VAT, "json.Unmarshal(%s)", data)
+		assert.Equal(t, want, d.VAT, "json.Unmarshal(%s)", data)
 	}
 
 	// Any other JSON value is an error and leaves the value unchanged.
@@ -383,4 +378,16 @@ func TestNullableID_JSONSchema(t *testing.T) {
 	def, ok := decoded["default"]
 	assert.True(t, ok, "schema has a default")
 	assert.Nil(t, def, "schema default is JSON null")
+}
+
+// TestNullableID_ReadingAndWriting checks the reading and writing contract
+// shared by the normalizing types, with a blank NullableID as null.
+func TestNullableID_ReadingAndWriting(t *testing.T) {
+	normtest.Run(t, normtest.Spec[NullableID]{
+		Canonical:  "ATU10223006",
+		Variants:   []NullableID{"atu 1022 3006", "AT-U 1022.3006", " ATU10223006 "},
+		Invalid:    []NullableID{"ATU12345678", "not a VAT ID"},
+		Nullable:   true,
+		InvalidErr: ErrInvalidID,
+	})
 }

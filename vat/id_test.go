@@ -2,6 +2,7 @@ package vat
 
 import (
 	"encoding/json"
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -10,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/domonda/go-types/country"
+	"github.com/domonda/go-types/internal/normtest"
 )
 
 var validVATIDs = map[string]string{
@@ -443,12 +445,13 @@ func TestID_Number(t *testing.T) {
 	}
 }
 
-// String must not lose information: valid IDs are shown normalized,
-// invalid input is shown exactly as given so it can be corrected.
-func TestID_String(t *testing.T) {
-	assert.Equal(t, "ATU10223006", ID("at u 1022 3006").String())
-	assert.Equal(t, "atu 1234 5678", ID("atu 1234 5678").String())
-	assert.Equal(t, "", ID("").String())
+// ID has no String method, so fmt prints the ID as stored: a valid ID
+// in another spelling is not shown as if it were normalized, and invalid
+// input is shown exactly as given so it can be corrected.
+func TestID_FormatsAsStored(t *testing.T) {
+	assert.Equal(t, "at u 1022 3006", fmt.Sprint(ID("at u 1022 3006")))
+	assert.Equal(t, "atu 1234 5678", fmt.Sprint(ID("atu 1234 5678")))
+	assert.Equal(t, "", fmt.Sprint(ID("")))
 }
 
 func TestID_ScanString(t *testing.T) {
@@ -487,15 +490,18 @@ func TestID_Scan(t *testing.T) {
 		copy(buf, "XXXXXXXXXXX")
 		assert.Equal(t, ID("ATU10223006"), id)
 	})
-	t.Run("NULL is an error", func(t *testing.T) {
-		// ID is not nullable, NULL must not silently become an empty ID.
-		// Use NullableID for nullable columns.
+	t.Run("NULL is the empty ID", func(t *testing.T) {
+		// Like every non-nullable type, ID reads NULL as its empty value
+		// instead of failing the query; the empty ID is invalid, so
+		// Validate reports it, and Value writes it back as NULL.
 		id := ID("ATU10223006")
-		assert.ErrorIs(t, id.Scan(nil), ErrInvalidID)
+		require.NoError(t, id.Scan(nil))
+		assert.Equal(t, ID(""), id)
+		assert.ErrorIs(t, id.Validate(), ErrInvalidID)
 	})
 	t.Run("unsupported type", func(t *testing.T) {
 		var id ID
-		assert.ErrorIs(t, id.Scan(int64(10223006)), ErrInvalidID)
+		assert.Error(t, id.Scan(int64(10223006)))
 	})
 }
 
@@ -535,8 +541,8 @@ func TestID_MarshalJSON(t *testing.T) {
 
 // The JSON schema must accept every valid ID that JSON decoding accepts,
 // otherwise API validation and Go validation would disagree.
-// Decoding assigns the ID unnormalized, and IDMaxLength only limits
-// the length after removing whitespace and punctuation, so the schema
+// JSON input may be formatted with whitespace and punctuation, and
+// IDMaxLength only limits the length after removing them, so the schema
 // can't have a maximum length. Formatting only adds characters,
 // so the minimum length still holds.
 func TestID_JSONSchema(t *testing.T) {
@@ -546,8 +552,22 @@ func TestID_JSONSchema(t *testing.T) {
 	assert.Equal(t, uint64(IDMinLength), *s.MinLength)
 	assert.Nil(t, s.MaxLength)
 
-	var formatted ID
-	require.NoError(t, json.Unmarshal([]byte(`"NL 123 456 789 B 01"`), &formatted))
-	require.True(t, formatted.Valid())
+	const formatted = "NL 123 456 789 B 01"
+	var decoded ID
+	require.NoError(t, json.Unmarshal([]byte(`"`+formatted+`"`), &decoded))
+	require.True(t, decoded.Valid())
 	assert.Greater(t, len(formatted), IDMaxLength, "formatted ID is longer than IDMaxLength")
+}
+
+// TestID_ReadingAndWriting checks the reading and writing contract shared
+// by the normalizing types: every reading path stores a valid ID normalized
+// and an invalid one unchanged, Value refuses an invalid ID with an error
+// wrapping ErrInvalidID, and fmt prints the stored ID.
+func TestID_ReadingAndWriting(t *testing.T) {
+	normtest.Run(t, normtest.Spec[ID]{
+		Canonical:  "ATU10223006",
+		Variants:   []ID{"atu 1022 3006", "AT-U 1022.3006", " ATU10223006 "},
+		Invalid:    []ID{"ATU12345678", "not a VAT ID"},
+		InvalidErr: ErrInvalidID,
+	})
 }
