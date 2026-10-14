@@ -100,12 +100,12 @@ The arguments of `Format` as a struct, for storing a number format in a configur
 | Function / Method                                  | Description                                        |
 |----------------------------------------------------|----------------------------------------------------|
 | `NewFormatDef() *FormatDef`                        | `&FormatDef{DecimalSep: '.', Precision: -1}`: no grouping, dot decimal separator, shortest exact form. |
-| `(*FormatDef).Format(f float64) string`            | `Format(f, ThousandsSep, DecimalSep, Precision, PadPrecision)`. |
+| `(*FormatDef).Format(f float64) string`            | `Format(f, ThousandsSep, DecimalSep, Precision, PadPrecision)` with `'.'` for a zero `DecimalSep`. |
 | `(*FormatDef).Parse(str string, langHints ...language.Code) (string, error)` | Parses `str` with `Parse` and returns it formatted with the definition: `"1.234.567,89"` becomes `"1,234,567.89"` for `{',', '.', 2, true}`. Ignores `langHints`. |
 | `FormatDef.MarshalJSON() ([]byte, error)`          | See [Serialization](#serialization).               |
 | `(*FormatDef).UnmarshalJSON(j []byte) error`       | See [Serialization](#serialization).               |
 
-Implements: `json.Marshaler`, `json.Unmarshaler` (pointer), `strfmt.Parser` (pointer). The zero `FormatDef` has `DecimalSep` 0, so its `Format` panics: start from `NewFormatDef()` or set `DecimalSep`.
+Implements: `json.Marshaler`, `json.Unmarshaler` (pointer), `strfmt.Parser` (pointer). The zero `FormatDef` has `DecimalSep` 0, which `Format` and `Parse` write as `'.'`, and `Precision` 0, which rounds to whole numbers: it formats 1234.5 as `"1235"`. Start from `NewFormatDef()` for the shortest exact form.
 
 ## Tolerant
 
@@ -133,7 +133,7 @@ The package has no SQL support.
 
 | Type        | JSON written                                       | JSON accepted                                      |
 |-------------|----------------------------------------------------|----------------------------------------------------|
-| `FormatDef` | `{"thousandsSep":",","decimalSep":".","precision":2,"padPrecision":true}`. Separators are one-character strings, a zero `ThousandsSep` is omitted, a zero `DecimalSep` is `""`. | One-character strings, `""` for a zero separator, and the legacy code point strings like `"44"` for `','` that versions before the JSON methods wrote. Fields missing in the object keep their value. Strings of several characters, JSON numbers and separators that `Format` panics on, like `"x"` or the same rune for both, are errors, but a zero `DecimalSep` is accepted. An error leaves the value unchanged. |
+| `FormatDef` | `{"thousandsSep":",","decimalSep":".","precision":2,"padPrecision":true}`. Separators are one-character strings, a zero `ThousandsSep` is omitted, a zero `DecimalSep` is `""`. | One-character strings, `""` for a zero separator, and the legacy code point strings like `"44"` for `','` that versions before the JSON methods wrote. Fields missing in the object keep their value. Strings of several characters, JSON numbers and separators that `Format` panics on, like `"x"` or the same rune for both, are errors, but a zero `DecimalSep` is accepted. It formats as `'.'`, so it is an error with `"."` as `thousandsSep`. An error leaves the value unchanged. |
 | `Tolerant`  | A JSON number via the `float64` kind. NaN and ±Inf fail with `json: unsupported value`. | Numbers, strings parsed with `Parse` after decoding JSON escapes (`"1.234,56"` is 1234.56), and `null` or `""` as 0. `"NaN"`, `"Inf"`, `"+Inf"`, `"-Inf"` as strings. An error leaves the value unchanged. |
 
 ## Gotchas
@@ -141,7 +141,7 @@ The package has no SQL support.
 - **`"1,234"` is 1.234.** A single `.` or `,` is always the decimal separator, so `Format(1234, ',', '.', -1, false)` writes `"1,234"`, which `Parse` reads back as 1.234. This affects integers from 1000 to 999999 formatted with a thousands separator and without decimals. Write decimals to make the output unambiguous: `Format(1234, ',', '.', 2, true)` is `"1,234.00"`, which parses back as 1234.
 - **`"1.000"` is 1**, not 1000. Parse German style integers with thousands separators only when they have at least two groups, or check the result against the expected magnitude.
 - **A detected decimal separator can be 0.** `ParseDetails("1'234")` returns `decimalSep` 0, which `Format` rejects with a panic. Pick a decimal separator that differs from `thousandsSep` before passing the detected separators back to `Format`.
-- **The zero `FormatDef` panics in `Format`**, because its `DecimalSep` is 0.
+- **Only `FormatDef` reads a zero decimal separator as `'.'`.** The package function `Format` panics for it, and so does `strfmt.Format` for a float with a zero `FormatConfig.Float.DecimalSep`, because it passes the fields to `Format`.
 - **Negative values that round to zero lose the sign.** `Format(-0.001, 0, '.', 2, true)` is `"0.00"` and negative zero is `"0"`, unlike `strconv.FormatFloat`, which writes `"-0.00"` and `"-0"`. `RoundToDecimals(-0.001, 2)` still returns negative zero.
 - **`Tolerant` can't tell missing from zero.** JSON `null`, `""`, and `0` all decode to 0. Use a pointer field if the difference matters.
 - **Unquoted `NaN` needs a direct call.** `Tolerant.UnmarshalJSON([]byte("NaN"))` works, but `json.Unmarshal` rejects `NaN` as invalid JSON before calling it. Only the quoted `"NaN"` works through `encoding/json`.

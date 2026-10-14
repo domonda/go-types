@@ -181,4 +181,38 @@ func TestFormatDef_UnmarshalJSONRejectsSeparatorsFormatPanicsOn(t *testing.T) {
 	assert.Equal(t, "1,234.5", ff.Format(1234.5))
 	var zero FormatDef
 	assert.NoError(t, json.Unmarshal([]byte(`{}`), &zero), "a zero FormatDef stays accepted")
+
+	// A zero decimalSep formats a point, the thousandsSep of german
+	ff = german
+	assert.Error(t, json.Unmarshal([]byte(`{"decimalSep":""}`), &ff), "a zero decimalSep with '.' as thousandsSep")
+	assert.Equal(t, german, ff, "unchanged on error")
+}
+
+// TestFormatDef_ZeroDecimalSep protects that a FormatDef without a decimal
+// separator formats instead of panicking. The zero FormatDef, like an unset
+// field of a config struct, and {"decimalSep":""}, which MarshalJSON writes
+// for it and UnmarshalJSON accepts, are valid values, and the package
+// function Format panics for a zero decimalSep. Format and Parse use a
+// point for it alike, so that what Parse normalizes is what Format writes.
+func TestFormatDef_ZeroDecimalSep(t *testing.T) {
+	var zero FormatDef
+	assert.Equal(t, "1235", zero.Format(1234.5), "rounded to its precision 0")
+	normalized, err := zero.Parse("1.234,5")
+	assert.NoError(t, err)
+	assert.Equal(t, "1235", normalized)
+	shortest := FormatDef{Precision: -1}
+	assert.Equal(t, "1234.5", shortest.Format(1234.5))
+	normalized, err = shortest.Parse("1.234,5")
+	assert.NoError(t, err)
+	assert.Equal(t, "1234.5", normalized)
+
+	var fromJSON FormatDef
+	assert.NoError(t, json.Unmarshal([]byte(`{"thousandsSep":",","decimalSep":"","precision":2,"padPrecision":true}`), &fromJSON))
+	assert.Equal(t, rune(0), fromJSON.DecimalSep, "stays zero, so it marshals back unchanged")
+	assert.Equal(t, "1,234.50", fromJSON.Format(1234.5))
+	normalized, err = fromJSON.Parse("1.234,5")
+	assert.NoError(t, err)
+	assert.Equal(t, "1,234.50", normalized)
+
+	assert.Panics(t, func() { Format(1234.5, 0, 0, -1, false) }, "the package function stays strict")
 }

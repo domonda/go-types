@@ -46,13 +46,26 @@ func NewFormatDef() *FormatDef {
 
 // Format formats the float64 value f using the thousands separator, decimal
 // separator, precision, and padding settings defined in ff.
+// A zero DecimalSep, like that of the zero FormatDef, formats a point,
+// so FormatDef{Precision: -1} formats 1234.5 as "1234.5", where the
+// package function Format panics for a zero decimalSep.
 func (ff *FormatDef) Format(f float64) string {
-	return Format(f, ff.ThousandsSep, ff.DecimalSep, ff.Precision, ff.PadPrecision)
+	return Format(f, ff.ThousandsSep, decimalSepOrPoint(ff.DecimalSep), ff.Precision, ff.PadPrecision)
+}
+
+// decimalSepOrPoint returns the decimal separator that FormatDef formats
+// with: sep, or a point for a zero sep.
+func decimalSepOrPoint(sep rune) rune {
+	if sep == 0 {
+		return '.'
+	}
+	return sep
 }
 
 // Parse implements the strfmt.Parser interface.
 // It parses str with the package function Parse
-// and returns the value formatted with ff.
+// and returns the value formatted with ff like FormatDef.Format,
+// so a zero DecimalSep formats a point.
 // The langHints are ignored.
 func (ff *FormatDef) Parse(str string, langHints ...language.Code) (normalized string, err error) {
 	f, err := Parse(str)
@@ -85,7 +98,8 @@ func (ff FormatDef) MarshalJSON() ([]byte, error) {
 // Separators and a precision that Format panics on are an error, like an
 // invalid rune, the same rune for both separators, which a missing field
 // that keeps its value can give, or a precision below -1, but a zero
-// DecimalSep is accepted like for the zero FormatDef.
+// DecimalSep is accepted like for the zero FormatDef. It formats a point,
+// so it is an error together with a point as ThousandsSep.
 func (ff *FormatDef) UnmarshalJSON(j []byte) error {
 	v := formatDefJSON{
 		ThousandsSep: separatorString(ff.ThousandsSep),
@@ -110,8 +124,8 @@ func (ff *FormatDef) UnmarshalJSON(j []byte) error {
 		return errs.Errorf("can't unmarshal float.FormatDef with invalid thousandsSep: %q", thousandsSep)
 	case decimalSep != 0 && !validDecimalSep(decimalSep):
 		return errs.Errorf("can't unmarshal float.FormatDef with invalid decimalSep: %q", decimalSep)
-	case decimalSep != 0 && thousandsSep == decimalSep:
-		return errs.Errorf("can't unmarshal float.FormatDef with the same thousandsSep and decimalSep: %q", decimalSep)
+	case thousandsSep == decimalSepOrPoint(decimalSep):
+		return errs.Errorf("can't unmarshal float.FormatDef with the same thousandsSep and decimalSep: %q", thousandsSep)
 	case v.Precision < -1:
 		return errs.Errorf("can't unmarshal float.FormatDef with precision below -1: %d", v.Precision)
 	}
