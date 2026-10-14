@@ -72,7 +72,8 @@ func (n NullableDate) IsZero() bool {
 }
 
 // IsNull returns true if the NullableDate is null or zero,
-// which includes whitespace only like for country.NullableCode,
+// which includes a string of only the runes strutil.TrimSpace removes
+// like for country.NullableCode,
 // and a zero date in another format like "01.01.0001",
 // which would else be written as "0001-01-01" that reads back as null.
 // IsNull implements the nullable.Nullable interface.

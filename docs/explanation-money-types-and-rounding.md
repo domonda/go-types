@@ -302,7 +302,7 @@ Not every currency has cents. ISO 4217 defines the number of decimals of each cu
 
 Who uses it:
 
-- `CurrencyAmount.String`, and so `CurrencyAmount.Value`, rounds to the minor units: `CurrencyAmountJPY(1234.5)` is `JPY 1235` and a KWD amount of 1.2345 is `KWD 1.235`.
+- `CurrencyAmount.String`, and so `CurrencyAmount.Value`, writes two decimals, or the three of a currency like KWD, and never fewer: `CurrencyAmountJPY(1234.5)` is `JPY 1234.50`, because a JPY amount can still have a fraction, and a KWD amount of 1.2345 is `KWD 1.235`. The default `CurrencyAmountParser` normalizes the same way.
 - `CurrencyAmount.ScanString` accepts 0 or 2 decimals or the minor units of the currency, so `"KWD 1.234"` scans while `"EUR 1.234"` is rejected as an ambiguous thousands grouping.
 - `CurrencyDecimalAmount` prints its own scale and doesn't need the table.
 - `CentAmount` and the `strfmt` money presets always use two decimals. The presets write `JPY 1.234,00`.
@@ -319,7 +319,7 @@ For a currency with 0 or 3 decimals, store a `DecimalAmount` and round it with `
 | Optional amount of any of the above                | `NullableDecimalAmount` etc. | the same type, `NULL` allowed | `null` for null                       |
 | Currency and amount in one text column             | `CurrencyDecimalAmount`      | `text`, like `EUR 1234.50`    | `{"Currency":"EUR","Amount":1234.50}` |
 
-`CurrencyAmount` is the `float64` counterpart of `CurrencyDecimalAmount`. It writes text like `EUR 1234.50` to SQL too, rounded to the minor units of the currency, and `{"Currency":"EUR","Amount":1234.5}` to JSON.
+`CurrencyAmount` is the `float64` counterpart of `CurrencyDecimalAmount`. It writes text like `EUR 1234.50` to SQL too, with two decimals or the three of a currency like KWD, and `{"Currency":"EUR","Amount":1234.5}` to JSON.
 
 If you are not sure, `DecimalAmount` is the safe default. It is exact, keeps whatever scale the input has, and converts to `CentAmount` for a split with one call that reports an error instead of clamping.
 

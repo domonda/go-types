@@ -10,7 +10,8 @@ import (
 // user input for strfmt: currency symbols and names become the ISO code
 // placed first, any separator convention becomes a plain point decimal
 // number padded to the largest accepted decimal count (2 if none are
-// given), and unknown currencies or unaccepted decimal counts are errors.
+// given, or the 3 of a currency like KWD, so that no decimal is lost),
+// and unknown currencies or unaccepted decimal counts are errors.
 func TestCurrencyAmountParser_Parse(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -25,6 +26,8 @@ func TestCurrencyAmountParser_Parse(t *testing.T) {
 		{name: "code after without space", str: "12,34EUR", want: "EUR 12.34"},
 		{name: "negative", str: "EUR -12,34", want: "EUR -12.34"},
 		{name: "no currency", str: "12", want: "12.00"},
+		{name: "3 decimal currency", str: "KWD 1.234", want: "KWD 1.234"},
+		{name: "0 decimal currency", str: "JPY 1234.5", want: "JPY 1234.50"},
 
 		{name: "integer only", decimals: []int{0}, str: "EUR 12", want: "EUR 12"},
 		{name: "cents not accepted", decimals: []int{0}, str: "EUR 12.50", wantErr: true},

@@ -430,13 +430,15 @@ picking the semver baseline.
   a last part of -0.99. All-zero weights put the whole amount into the last
   part instead of producing NaN.
 - **Breaking:** `money.CurrencyAmount.String`, and so its `Value`,
-  write the ISO 4217 minor units of the currency instead of
-  always two decimals: `"KWD 1.234"` instead of `"KWD 1.23"`, `"JPY 1235"`
-  instead of `"JPY 1234.50"`. `CurrencyAmount.ScanString` additionally
-  accepts the minor units of the currency written with a point like by
-  `String`, so the stored text scans back, but `"KWD 1,234"` is not read
-  as 1.234.
-  `FormatSep` keeps its explicit precision.
+  write the three decimals of the ISO 4217 minor unit of currencies like
+  KWD instead of two: `"KWD 1.234"` instead of `"KWD 1.23"`. All other
+  currencies keep two decimals, also those without a minor unit like JPY,
+  so `"JPY 1234.50"` is not rounded to whole yen. The default
+  `CurrencyAmountParser` keeps the three decimals too.
+  `CurrencyAmount.ScanString` additionally accepts the minor units of the
+  currency written with a point like by `String`, so the stored text scans
+  back, but `"KWD 1,234"` is not read as 1.234. `FormatSep` and the
+  `strfmt` money formats keep their explicit precision.
 - `strfmt.Format` and `strfmt.Scan` use the default configuration for a nil
   config. `Format` panicked and `Scan` returned an error.
 - The default `strfmt.ScanConfig` accepts what the format presets write:

@@ -192,7 +192,9 @@ func (iban NullableIBAN) StringOr(defaultString string) string {
 }
 
 // IsNull returns true if the NullableIBAN is null,
-// which includes whitespace only like for Normalized.
+// which includes a string of only the runes strutil.TrimSpace removes:
+// whitespace, control and other non-printable runes, and invalid UTF-8,
+// like for Normalized.
 // IsNull implements the nullable.Nullable interface.
 func (iban NullableIBAN) IsNull() bool {
 	return strutil.TrimSpace(iban) == IBANNull

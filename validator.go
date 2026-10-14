@@ -10,6 +10,14 @@ import (
 
 // Validator can be implemented by types that can validate their data.
 // The Valid method should return true if the data is valid, false otherwise.
+//
+// Because Valid can't tell why the data is invalid, Validate, TryValidate,
+// DeepValidate and ValidatorAsValidatErr return an error naming the type
+// and the value formatted with %#v, like `invalid main.Status value: "unknown"`.
+// So the whole value is part of the error message. Implement ValidatErr
+// instead for other errors, like for a value that must not be logged,
+// such as a password, or that can be large, because the error
+// of ValidatErr.Validate is returned unchanged.
 type Validator interface {
 	// Valid returns if the data of the implementation is valid.
 	Valid() bool

@@ -37,7 +37,9 @@ func (s Status) Valid() bool {
 ```
 
 When `Valid()` returns `false`, the module builds the error for you from the
-type and the value: `invalid main.Status value: "unknown"`.
+type and the value: `invalid main.Status value: "unknown"`. The whole value
+is part of the message, so implement `ValidatErr` instead for a value that
+must not be logged, like a password, or that can be large.
 
 ### 2. Implement `ValidatErr` on types that can say why
 

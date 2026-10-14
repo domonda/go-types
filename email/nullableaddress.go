@@ -114,8 +114,9 @@ func (n NullableAddress) DomainPart() string {
 	return Address(n).DomainPart()
 }
 
-// IsNull returns true if the string n is empty or whitespace only
-// like for Normalized.
+// IsNull returns true if the string n is empty or consists only of
+// the runes strutil.TrimSpace removes: whitespace, control and other
+// non-printable runes, and invalid UTF-8, like for Normalized.
 // IsNull implements the nullable.Nullable interface.
 func (n NullableAddress) IsNull() bool {
 	return strutil.TrimSpace(n) == AddressNull

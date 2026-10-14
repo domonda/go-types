@@ -171,7 +171,9 @@ func (bic NullableBIC) StringOr(defaultString string) string {
 }
 
 // IsNull returns true if the NullableBIC is null,
-// which includes whitespace only like for Normalized.
+// which includes a string of only the runes strutil.TrimSpace removes:
+// whitespace, control and other non-printable runes, and invalid UTF-8,
+// like for Normalized.
 // IsNull implements the nullable.Nullable interface.
 func (bic NullableBIC) IsNull() bool {
 	return strutil.TrimSpace(bic) == BICNull

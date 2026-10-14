@@ -96,7 +96,9 @@ func (n NullableNumber) ValidateNumeric() error {
 	return nil
 }
 
-// IsNull returns true if the string is empty or whitespace only,
+// IsNull returns true if the string is empty or consists only of
+// the runes strutil.TrimSpace removes: whitespace, control and other
+// non-printable runes, and invalid UTF-8,
 // which Value writes as SQL NULL and MarshalJSON as null.
 // IsNull implements the Nullable interface.
 func (n NullableNumber) IsNull() bool {

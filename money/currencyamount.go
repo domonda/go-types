@@ -78,14 +78,17 @@ func ParseCurrencyAmount(str string, acceptedDecimals ...int) (result CurrencyAm
 	return result, nil
 }
 
-// String returns the normalized currency code followed by the amount rounded to the
-// decimal places of the minor unit of the currency, see Currency.MinorUnits,
-// like "EUR 1234.50", "JPY 1235" or "KWD 1.234", with a point as decimal
-// separator and without thousands grouping. An amount without currency
-// is formatted with two decimal places.
+// String returns the normalized currency code followed by the amount
+// rounded to two decimal places, or to the three of the minor unit of
+// currencies like KWD, see Currency.MinorUnits, like "EUR 1234.50",
+// "JPY 1234.50" or "KWD 1.234", with a point as decimal separator and
+// without thousands grouping. Never fewer than two decimal places,
+// because the amount of a currency without a minor unit, like JPY,
+// can still have a fraction, which String also writes for Value.
+// An amount without currency is formatted with two decimal places.
 // String implements the fmt.Stringer interface.
 func (ca CurrencyAmount) String() string {
-	return ca.FormatSep(true, 0, '.', ca.Currency.MinorUnits())
+	return ca.FormatSep(true, 0, '.', max(2, ca.Currency.MinorUnits()))
 }
 
 // FormatSep formats the CurrencyAmount using the given separators and decimal precision.

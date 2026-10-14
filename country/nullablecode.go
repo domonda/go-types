@@ -95,7 +95,9 @@ func (n NullableCode) EnglishName() string {
 }
 
 // IsNull returns true if the NullableCode is null,
-// which includes whitespace only like for Normalized.
+// which includes a string of only the runes strutil.TrimSpace removes:
+// whitespace, control and other non-printable runes, and invalid UTF-8,
+// like for Normalized.
 // IsNull implements the nullable.Nullable interface.
 func (n NullableCode) IsNull() bool {
 	return strutil.TrimSpace(n) == Null

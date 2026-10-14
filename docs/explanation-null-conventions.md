@@ -86,6 +86,12 @@ What this buys:
 
 The cost is that `NullableX` can't hold the zero value of `X` as a present
 value. Since that value is invalid anyway, nothing real is lost.
+The string based types also treat a value as null that consists only of
+the runes `strutil.TrimSpace` removes, like `X.Normalized` does before
+it parses: whitespace, control characters like `"\x00"`, other
+non-printable runes like zero-width spaces, and invalid UTF-8 like `"\xff"`.
+Such a value carries no data, so it is written as SQL NULL and JSON `null`
+instead of failing validation as a broken `X`.
 `date.NullableDate` widens the rule: `IsNull` is also true for `"0001-01-01"`
 (the zero `time.Time`) and `"0000-00-00"`, so those write SQL NULL too.
 

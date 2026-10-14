@@ -94,7 +94,7 @@ Entry points:
 `Validate` and `TryValidate` follow these rules:
 
 1. If `v` implements `ValidatErr`, only `Validate()` is called and its error is returned unchanged, even if `v` also implements `Validator`.
-2. Otherwise, if `v` implements `Validator` and `Valid()` is false, the error is `fmt.Errorf("invalid %T value: %#v", v, v)`, like `invalid main.Status value: "bad"`.
+2. Otherwise, if `v` implements `Validator` and `Valid()` is false, the error is `fmt.Errorf("invalid %T value: %#v", v, v)`, like `invalid main.Status value: "bad"`. The whole value is part of the message, so implement `ValidatErr` for a value that must not be logged, like a password, or that can be large.
 3. A nil pointer whose element type implements the method with a value receiver is not validated: `Validate` returns nil and `TryValidate` returns `nil, true`. A method with a pointer receiver is called with the nil pointer, so it can report nil itself.
 
 `DeepValidate` walks `v` with reflection:

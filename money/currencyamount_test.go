@@ -171,23 +171,23 @@ func TestCurrencyAmount_Constructors(t *testing.T) {
 
 // TestCurrencyAmount_Format pins the String format that is also used
 // as SQL value: currency code first, no thousands grouping, a point as
-// decimal separator and the decimal places of the minor unit of the
-// currency, two for an empty currency, and no currency prefix if the
-// currency is empty.
+// decimal separator and two decimal places, or the three of the minor unit
+// of a currency like KWD, and no currency prefix if the currency is empty.
 func TestCurrencyAmount_Format(t *testing.T) {
 	assert.Equal(t, "EUR 1234.56", CurrencyAmountEUR(1234.56).String())
 	assert.Equal(t, "EUR -1234567.89", CurrencyAmountEUR(-1234567.89).String())
 	assert.Equal(t, "USD 5.00", CurrencyAmountUSD(5).String())
 	assert.Equal(t, "5.00", CurrencyAmount{Amount: 5}.String())
 
-	// Two decimals lost the third decimal of a dinar and wrote a yen
-	// fraction that doesn't exist: "KWD 1.23" and "JPY 1235.00" before
+	// Two decimals lost the third decimal of a dinar: "KWD 1.23" before
 	assert.Equal(t, "KWD 1.234", CurrencyAmount{Currency: KWD, Amount: 1.234}.String())
 	assert.Equal(t, "BHD 0.500", CurrencyAmount{Currency: BHD, Amount: 0.5}.String())
 	assert.Equal(t, "KWD 1.235", CurrencyAmount{Currency: KWD, Amount: 1.2345}.String(), "rounded half away from zero")
-	assert.Equal(t, "JPY 1235", CurrencyAmountJPY(1234.5).String())
-	assert.Equal(t, "JPY -1000", CurrencyAmountJPY(-1000).String())
-	assert.Equal(t, "KRW 50000", CurrencyAmount{Currency: KRW, Amount: 50000}.String())
+	// A currency without minor unit keeps two decimals, because String
+	// is the SQL value and rounding to whole yen would change the amount
+	assert.Equal(t, "JPY 1234.50", CurrencyAmountJPY(1234.5).String())
+	assert.Equal(t, "JPY -1000.00", CurrencyAmountJPY(-1000).String())
+	assert.Equal(t, "KRW 50000.00", CurrencyAmount{Currency: KRW, Amount: 50000}.String())
 
 	ca := CurrencyAmountEUR(1234567.891)
 	assert.Equal(t, "1.234.567,89 EUR", ca.FormatSep(false, '.', ',', 2))
@@ -384,7 +384,7 @@ func TestCurrencyAmount_NormalizedCurrencyOutput(t *testing.T) {
 	}{
 		{ca: CurrencyAmount{Currency: "eur", Amount: 1.5}, wantSQL: "EUR 1.50", wantJSON: `{"Currency":"EUR","Amount":1.5}`},
 		{ca: CurrencyAmount{Currency: "€", Amount: 1.5}, wantSQL: "EUR 1.50", wantJSON: `{"Currency":"EUR","Amount":1.5}`},
-		{ca: CurrencyAmount{Currency: "jpy", Amount: 1234.5}, wantSQL: "JPY 1235", wantJSON: `{"Currency":"JPY","Amount":1234.5}`},
+		{ca: CurrencyAmount{Currency: "jpy", Amount: 1234.5}, wantSQL: "JPY 1234.50", wantJSON: `{"Currency":"JPY","Amount":1234.5}`},
 		{ca: CurrencyAmount{Currency: "XYZ", Amount: 1.5}, wantSQL: "XYZ 1.50", wantJSON: `{"Currency":"XYZ","Amount":1.5}`},
 	}
 	for _, tt := range tests {
