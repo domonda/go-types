@@ -582,12 +582,13 @@ See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut.
   `strfmt` formats scan back: `"KWD 1.234"` and the German `"KWD 1,234"` are
   1.234. A whole KWD 1234 written in the shortest form with a thousands
   comma, `"KWD 1,234"`, is read as 1.234 too, so write money with its
-  decimals. The `strfmt` money formats raise a `Precision` of 2 or more to
-  the minor units of the currency of a `CurrencyAmount` or
-  `CurrencyDecimalAmount`, `"KWD 1.234"` instead of `"KWD 1.23"`, and keep
-  a `Precision` of 0 or 1, which rounds below the cents on purpose, and the
-  `Precision` of an amount without currency. `FormatSep` keeps the precision
-  you pass.
+  decimals. The `strfmt` money formats raise a `Precision` of 0 or more to
+  the 3 decimals of a currency like KWD in a `CurrencyAmount` or
+  `CurrencyDecimalAmount`, `"KWD 1.234"` instead of `"KWD 1.23"`, so they
+  never write a KWD amount that scans back as a thousandth of it. They keep
+  the `Precision` of other currencies, so a `Precision` of 0 still writes
+  whole euros, and of an amount without currency. `FormatSep` keeps the
+  precision you pass.
 - `strfmt.Format` and `strfmt.Scan` use the default configuration for a nil
   config. `Format` panicked and `Scan` returned an error.
 - The default `strfmt.ScanConfig` accepts what the format presets write:

@@ -29,8 +29,8 @@ func (f FormatterFunc) FormatValue(val reflect.Value, config *FormatConfig) stri
 // MoneyFormat specifies how monetary amounts are serialized to strings,
 // including digit grouping, decimal notation, precision, and whether
 // the currency symbol appears before or after the numeric value.
-// For the currency amount types a Precision of 2 or more is raised to
-// the decimals of the minor unit of the currency, see FormatCurrencyAmount.
+// For the currency amount types the Precision is raised to the decimals
+// of the minor unit of a currency with more than 2, see FormatCurrencyAmount.
 type MoneyFormat struct {
 	CurrencyFirst bool
 	ThousandsSep  rune
@@ -47,12 +47,13 @@ func (format *MoneyFormat) FormatAmount(amount money.Amount) string {
 // FormatCurrencyAmount formats a currency-tagged monetary amount as a string,
 // placing the currency code before or after the number according to
 // format.CurrencyFirst, and applying the configured separators and precision.
-// A precision of 2 or more is raised to the decimals of the minor unit of
-// the currency, see money.Currency.MinorUnits, so that the presets write
-// "KWD 1,234.567" with the three decimals of the Kuwaiti dinar instead of
-// rounding away its fils, like money.CurrencyAmount.String keeps them.
-// A precision of 0 or 1 rounds below the cents on purpose and is kept,
-// and a precision of -1 writes the shortest exact form.
+// For a currency with more than 2 decimals in its minor unit, like KWD,
+// see money.Currency.MinorUnits, a precision of zero or more is raised to
+// them, so that "KWD 1,234.567" keeps the fils of the Kuwaiti dinar like
+// money.CurrencyAmount.String does, and is never written as "KWD 1,234",
+// which money.CurrencyAmount.ScanString reads back as 1.234. For other
+// currencies and without currency the precision is kept, so a precision
+// of 0 writes whole euros. A precision of -1 writes the shortest form.
 func (format *MoneyFormat) FormatCurrencyAmount(currencyAmount money.CurrencyAmount) string {
 	precision := format.currencyPrecision(currencyAmount.Currency)
 	return currencyAmount.FormatSep(format.CurrencyFirst, format.ThousandsSep, format.DecimalSep, precision)
@@ -70,15 +71,18 @@ func (format *MoneyFormat) FormatCurrencyDecimalAmount(currencyAmount money.Curr
 }
 
 // currencyPrecision returns format.Precision raised to the decimals of the
-// minor unit of currency if it keeps the cents (2 or more decimals).
-// A precision below 2 rounds below the cents on purpose, -1 writes all
-// decimals already, and a blank currency has no minor unit to keep,
-// so these are returned unchanged.
+// minor unit of a currency with more than 2 of them, because fewer decimals
+// would scan back as an amount 10 or 1000 times smaller. A precision of -1
+// writes all decimals already, and the precision of other currencies and
+// of a blank currency, which has no minor unit, is kept.
 func (format *MoneyFormat) currencyPrecision(currency money.Currency) int {
-	if format.Precision < 2 || strutil.TrimSpace(currency) == "" {
+	if format.Precision < 0 || strutil.TrimSpace(currency) == "" {
 		return format.Precision
 	}
-	return max(format.Precision, currency.MinorUnits())
+	if units := currency.MinorUnits(); units > 2 {
+		return max(format.Precision, units)
+	}
+	return format.Precision
 }
 
 // FormatCentAmount formats a cent amount like FormatAmount formats an amount,

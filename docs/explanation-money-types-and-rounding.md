@@ -305,7 +305,7 @@ Who uses it:
 - `CurrencyAmount.String` and `CurrencyAmount.Value` write two decimals, or the three of a currency like KWD, and never fewer: `CurrencyAmountJPY(1234.5)` is `JPY 1234.50`, because a JPY amount can still have a fraction, and a KWD amount of 1.2345 is `KWD 1.235`. `Value` writes the currency normalized and returns an error for an invalid one, `String` shows it as stored. The default `CurrencyAmountParser` normalizes the same way.
 - `CurrencyAmount.ScanString` accepts 0 or 2 decimals, or the minor units of the currency, so `"KWD 1.234"` and `"KWD 1,234"` scan as 1.234, while `"EUR 1.234"` is rejected as an ambiguous thousands grouping.
 - `CurrencyDecimalAmount.String` prints its own scale and doesn't need the table.
-- The `strfmt` money formats raise a precision of 2 or more to the minor units of the currency of a `CurrencyAmount` or `CurrencyDecimalAmount`: the German preset writes `KWD 1.234,567`, and, with its 2 decimals, `JPY 1.234,00`. A precision of 0 or 1 rounds below the cents on purpose and is kept.
+- The `strfmt` money formats raise their precision to the 3 decimals of a currency like KWD in a `CurrencyAmount` or `CurrencyDecimalAmount`, also a precision of 0, so the German preset writes `KWD 1.234,567`. Other currencies keep the precision, so with its 2 decimals the preset writes `JPY 1.234,00`, and a precision of 0 writes whole euros.
 - `CentAmount` always uses two decimals.
 
 For a currency with 0 or 3 decimals, store a `DecimalAmount` and round it with `RoundToDecimals(currency.MinorUnits(), mode)`.

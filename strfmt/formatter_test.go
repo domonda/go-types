@@ -79,8 +79,9 @@ func TestMoneyFormat_FormatCurrencyDecimalAmount(t *testing.T) {
 // fils, and the two decimals of the presets rounded KWD 1.234 to "KWD 1.23",
 // losing a fils that money.CurrencyAmount.String keeps. The precision is
 // only raised, so JPY keeps the two decimals of the presets like String.
-// A precision of 0 or 1 rounds below the cents on purpose and is kept for
-// every currency, and a precision of -1 keeps writing the shortest form.
+// A precision of 0 or 1 rounds below the cents on purpose and is kept, but
+// not for a currency with 3 decimals, whose amount without them would scan
+// back 1000 times smaller. A precision of -1 keeps writing the shortest form.
 // CurrencyDecimalAmount is formatted the same way as CurrencyAmount.
 func TestMoneyFormat_CurrencyMinorUnits(t *testing.T) {
 	precision0 := MoneyFormat{CurrencyFirst: true, ThousandsSep: ',', DecimalSep: '.', Precision: 0}
@@ -96,11 +97,14 @@ func TestMoneyFormat_CurrencyMinorUnits(t *testing.T) {
 		{name: "currency normalized for its minor units", format: EnglishMoneyFormat(true), amount: money.CurrencyAmount{Currency: "bhd", Amount: 0.5}, want: "BHD 0.500"},
 		{name: "JPY keeps the two decimals of the presets", format: EnglishMoneyFormat(true), amount: money.CurrencyAmountJPY(1234.5), want: "JPY 1,234.50"},
 		{name: "precision 0 writes whole yen", format: precision0, amount: money.CurrencyAmountJPY(1234.5), want: "JPY 1,235"},
-		// A precision below 2 rounds below the cents on purpose,
-		// also for a currency with more decimals and without currency
+		// A precision below 2 rounds below the cents on purpose for a
+		// currency with up to 2 decimals and without currency
 		{name: "precision 0 writes whole euros", format: precision0, amount: money.CurrencyAmountEUR(1234.5), want: "EUR 1,235"},
-		{name: "precision 0 writes whole dinars", format: precision0, amount: money.CurrencyAmount{Currency: money.KWD, Amount: 1234.5678}, want: "KWD 1,235"},
-		{name: "precision 1 is kept", format: MoneyFormat{DecimalSep: '.', Precision: 1}, amount: money.CurrencyAmount{Currency: money.KWD, Amount: 1.234}, want: "1.2 KWD"},
+		{name: "precision 1 is kept for euros", format: MoneyFormat{DecimalSep: '.', Precision: 1}, amount: money.CurrencyAmountEUR(1.25), want: "1.3 EUR"},
+		// but not for a currency with 3 decimals: "KWD 1,235" would scan
+		// back as 1.235, a thousandth of the amount
+		{name: "precision 0 keeps the fils of dinars", format: precision0, amount: money.CurrencyAmount{Currency: money.KWD, Amount: 1234.5678}, want: "KWD 1,234.568"},
+		{name: "precision 1 keeps the fils of dinars", format: MoneyFormat{DecimalSep: '.', Precision: 1}, amount: money.CurrencyAmount{Currency: money.KWD, Amount: 1.234}, want: "1.234 KWD"},
 		{name: "precision 0 without currency", format: precision0, amount: money.CurrencyAmount{Amount: 1234.5}, want: "1,235"},
 		// A blank currency has no minor unit to keep
 		{name: "precision 3 without currency", format: MoneyFormat{DecimalSep: '.', Precision: 3}, amount: money.CurrencyAmount{Amount: 1.5}, want: "1.500"},
