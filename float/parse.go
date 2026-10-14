@@ -25,6 +25,8 @@ func Parse(str string) (float64, error) {
 //
 // One sign, '+' or '-', may be the first or the last character,
 // but not both, so "+1-" and "-1-" are errors.
+// A '-' right after the decimal separator means no cents,
+// so "12,-" and "12.-" are 12.
 //
 // A single '.' or ',' is the decimal separator, so "1,234" parses as 1.234.
 // The apostrophe and the space are only ever thousands separators,
@@ -46,6 +48,12 @@ func ParseDetails(str string) (f float64, thousandsSep, decimalSep rune, decimal
 		return math.Inf(1), 0, 0, 0, nil
 	case "-Inf":
 		return math.Inf(-1), 0, 0, 0, nil
+	}
+
+	// A dash right after the decimal separator means no cents,
+	// like the German "12,-" or the Swiss "12.-", and is no minus sign
+	if strings.HasSuffix(str, ",-") || strings.HasSuffix(str, ".-") {
+		str = str[:len(str)-1]
 	}
 
 	var (

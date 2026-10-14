@@ -2,6 +2,7 @@ package float
 
 import (
 	"math"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -80,8 +81,33 @@ func Test_ParseFloat(t *testing.T) {
 		t.Run("minus in front", testFunc("-"+str, -ref.f, ref.thousandsSep, ref.decimalSep, ref.decimals))
 		if str != "Inf" {
 			t.Run("minus in front with space", testFunc("- "+str, -ref.f, ref.thousandsSep, ref.decimalSep, ref.decimals))
-			t.Run("minus on end", testFunc(str+"-", -ref.f, ref.thousandsSep, ref.decimalSep, ref.decimals))
+			// A minus right after the decimal separator means no cents,
+			// see Test_ParseFloat_NoCentsDash
+			if !strings.HasSuffix(str, ",") && !strings.HasSuffix(str, ".") {
+				t.Run("minus on end", testFunc(str+"-", -ref.f, ref.thousandsSep, ref.decimalSep, ref.decimals))
+			}
 			t.Run("minus on end with space", testFunc(str+" -", -ref.f, ref.thousandsSep, ref.decimalSep, ref.decimals))
+		}
+	}
+}
+
+// Test_ParseFloat_NoCentsDash protects the price notation "12,-" for 12
+// without cents, common in German and Swiss prices: reading its dash as
+// a trailing minus sign silently turned a price into a negative amount.
+// A minus separated by a space or after cents is still a sign.
+func Test_ParseFloat_NoCentsDash(t *testing.T) {
+	for str, want := range map[string]float64{
+		"12,-":     12,
+		"12.-":     12,
+		"1.234,-":  1234,
+		"-12,-":    -12,
+		"12, -":    -12,
+		"12,50-":   -12.5,
+		"1.234,5-": -1234.5,
+	} {
+		got, err := Parse(str)
+		if assert.NoError(t, err, "Parse(%q)", str) {
+			assert.Equal(t, want, got, "Parse(%q)", str)
 		}
 	}
 }

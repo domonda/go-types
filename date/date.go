@@ -11,6 +11,8 @@ import (
 
 	"github.com/invopop/jsonschema"
 
+	"github.com/domonda/go-errs"
+
 	types "github.com/domonda/go-types"
 	"github.com/domonda/go-types/language"
 	"github.com/domonda/go-types/strutil"
@@ -488,7 +490,9 @@ func (date Date) midnightInLocation(loc *time.Location) (t time.Time, valid bool
 // Format formats the date using the given layout string (see time.Time.Format).
 // Returns an empty string if date or layout are empty.
 // If layout equals Layout constant, returns the normalized date
-// without a time conversion, or the date unchanged if it is not valid.
+// without a time conversion.
+// A date that is not valid is returned unchanged for every layout
+// instead of formatting the zero time.Time like "01.01.0001".
 func (date Date) Format(layout string) string {
 	if date == "" || layout == "" {
 		return ""
@@ -496,7 +500,11 @@ func (date Date) Format(layout string) string {
 	if layout == Layout {
 		return date.String()
 	}
-	return date.MidnightUTC().Format(layout)
+	t, ok := date.midnightInLocation(time.UTC)
+	if !ok {
+		return string(date)
+	}
+	return t.Format(layout)
 }
 
 // NormalizedOrUnchanged returns the normalized date if possible, otherwise returns the date unchanged.
@@ -904,9 +912,13 @@ func normalizeAndCheckDate(str string, langHint language.Code) (Date, bool, erro
 	if err != nil {
 		return "", monthMustBeFirst, err
 	}
-	_, err = time.Parse(Layout, normalized)
+	t, err := time.Parse(Layout, normalized)
 	if err != nil {
 		return "", monthMustBeFirst, err
+	}
+	// time.Parse accepts the year 0, which Date rejects
+	if !validYear(t.Year()) {
+		return "", monthMustBeFirst, errs.Errorf("invalid year 0 in date: %q", str)
 	}
 	return Date(normalized), monthMustBeFirst, nil
 }

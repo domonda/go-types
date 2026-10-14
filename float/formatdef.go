@@ -7,6 +7,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/domonda/go-errs"
+
 	"github.com/domonda/go-types/language"
 )
 
@@ -80,6 +82,10 @@ func (ff FormatDef) MarshalJSON() ([]byte, error) {
 // of the separator, which is how FormatDef was written before it
 // implemented encoding/json.Marshaler.
 // Fields missing in the JSON object keep their value.
+// Separators that Format panics on are an error, like an invalid rune
+// or the same rune for both separators, which a missing field that keeps
+// its value can give, but a zero DecimalSep is accepted like for the zero
+// FormatDef.
 func (ff *FormatDef) UnmarshalJSON(j []byte) error {
 	v := formatDefJSON{
 		ThousandsSep: separatorString(ff.ThousandsSep),
@@ -98,6 +104,14 @@ func (ff *FormatDef) UnmarshalJSON(j []byte) error {
 	decimalSep, err := parseSeparator(v.DecimalSep)
 	if err != nil {
 		return fmt.Errorf("can't unmarshal float.FormatDef decimalSep: %w", err)
+	}
+	switch {
+	case thousandsSep != 0 && !strings.ContainsRune(".,' ", thousandsSep):
+		return errs.Errorf("can't unmarshal float.FormatDef with invalid thousandsSep: %q", thousandsSep)
+	case decimalSep != 0 && decimalSep != '.' && decimalSep != ',':
+		return errs.Errorf("can't unmarshal float.FormatDef with invalid decimalSep: %q", decimalSep)
+	case decimalSep != 0 && thousandsSep == decimalSep:
+		return errs.Errorf("can't unmarshal float.FormatDef with the same thousandsSep and decimalSep: %q", decimalSep)
 	}
 	*ff = FormatDef{
 		ThousandsSep: thousandsSep,

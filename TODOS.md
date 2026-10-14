@@ -187,17 +187,25 @@ time.
       metadata (`protects=… why_new=… seam=none`, "this branch changed").
       `charset/encoding_test.go` holds the tests of `utf16.go`, `utf32.go`
       and `bom.go`, some of them twice.
-- [ ] **Quadratic `email` address parsing.** `ParseAddressList` copies the
-      whole list into every per-element error and keeps all of them
-      (`email/parseaddress.go`, the two `errList = append` lines), and
-      `parseAddress` recurses once per address-like token, matching
-      `nameAddressRegexp` against the whole rest each time. Measured in the
-      2026-10-12 review: an invalid 40 KB list builds a 481 MB error in 9 s,
-      a 32 KB address without commas takes 3.5 s, and it is reachable from
-      `Address.Validate`, `AddressList.Validate` and the `Normalized` and
-      `Split` methods. Cap and truncate the collected errors, make the
-      duplicated-address case a single second attempt instead of a
-      recursion, and reject inputs beyond a few KB.
+- [ ] **Bugs from the PR #28 adversarial review that predate it.**
+      - `email.ParseAddressList` doesn't read group syntax, so
+        `Team: x@example.com, y@example.com;` gives only `y@example.com`
+        and `undisclosed-recipients: a@b.com;` is an error, while
+        `net/mail` reads both addresses.
+      - `ParseMIMEMessage` turns `To: undisclosed-recipients:;` into an
+        empty `To`, whose `Value` `""` `AddressList.Scan` rejects; set the
+        placeholder when a To header was present without addresses.
+      - `date` language hints are languages only, so `"en-GB"` reads
+        ambiguous dates month first like US English.
+      - `types.DeepValidate` calls a `Validate` method that a struct
+        promotes from an embedded field twice, for the struct and for the
+        field.
+      - `types.KeyMutex` gives `NaN` keys no mutual exclusion, because
+        `NaN != NaN`, and `Unlock` then panics.
+      - `money.Amount.WithinOneCent(1e20, 5e20)` is true, because the
+        float64 difference loses the cents beyond 2^53.
+      - `vat` accepts `" No.974760673"` but rejects `"No.974760673"`: the
+        Norwegian "No." guard depends on the spacing.
 - [ ] **Fast paths for the exact money and date math.** The exact
       rewrites made hot paths slower, measured against master in the
       2026-10-12 review: `CentAmount.MultipliedByRate`, `DividedByRate` and
@@ -262,6 +270,11 @@ time.
 
 ## Completed
 
+- [x] **Quadratic `email` address parsing.** `ParseAddressList` keeps
+      the errors short and stops after 100 of them, so an invalid list of
+      10,000 entries takes milliseconds instead of seconds and hundreds of
+      megabytes, and a second address is only taken from angle brackets.
+      **Completed:** 2026-10-14
 - [x] **One rule for what `Value` writes.** The types with a `Normalized`
       method write the normalized form in `Value` and `MarshalJSON`, and
       their `Validate` normalizes first, also for `language.Code` and

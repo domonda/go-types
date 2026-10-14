@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"runtime"
 	"slices"
 	"strings"
 )
@@ -55,7 +56,11 @@ func (v Validators) Valid() bool {
 		if validator == nil || isNilFunc(validator) || isNilPointerWithValueMethod(validator, validatorType) {
 			continue
 		}
-		if !validator.Valid() {
+		var valid bool
+		if callSkippingNilEmbedded(validator, func() { valid = validator.Valid() }) {
+			continue
+		}
+		if !valid {
 			return false
 		}
 	}
@@ -138,7 +143,8 @@ type ValidatorAsValidatErr struct {
 
 // Validate returns an error if the wrapped validator is not valid.
 func (v ValidatorAsValidatErr) Validate() error {
-	if v.Valid() {
+	var valid bool
+	if callSkippingNilEmbedded(v.Validator, func() { valid = v.Valid() }) || valid {
 		return nil
 	}
 	return fmt.Errorf("invalid %T value: %#v", v.Validator, v.Validator)
@@ -160,6 +166,9 @@ func (v ValidatorAsValidatErr) Validate() error {
 // is called with the nil pointer, so it can handle nil itself.
 // If v is a nil func like ValidatorFunc(nil), whose method would call
 // the nil func, then nil is returned, like [DeepValidate] skips nil funcs.
+// If v embeds a nil pointer that its method is promoted from, like
+// struct{ *T } with a nil *T and a value receiver on T, then nil is
+// returned too, because the method can't be called without the value.
 func Validate(v any) error {
 	err, _ := TryValidate(v)
 	return err
@@ -182,7 +191,8 @@ func Validate(v any) error {
 // receiver is called with the nil pointer, so it can handle nil itself.
 // If v is a nil func like ValidatorFunc(nil), whose method would call
 // the nil func, then nil and true are returned, like [DeepValidate]
-// skips nil funcs.
+// skips nil funcs. The same is returned if v embeds a nil pointer
+// that its method is promoted from, see [Validate].
 // The boolean return value indicates whether the value was validatable.
 func TryValidate(v any) (err error, isValidatable bool) {
 	switch x := v.(type) {
@@ -190,12 +200,19 @@ func TryValidate(v any) (err error, isValidatable bool) {
 		if isNilFunc(v) || isNilPointerWithValueMethod(v, validatErrType) {
 			return nil, true
 		}
-		return x.Validate(), true
+		if callSkippingNilEmbedded(v, func() { err = x.Validate() }) {
+			return nil, true
+		}
+		return err, true
 	case Validator:
 		if isNilFunc(v) || isNilPointerWithValueMethod(v, validatorType) {
 			return nil, true
 		}
-		if !x.Valid() {
+		var valid bool
+		if callSkippingNilEmbedded(v, func() { valid = x.Valid() }) {
+			return nil, true
+		}
+		if !valid {
 			return fmt.Errorf("invalid %T value: %#v", v, v), true
 		}
 		return nil, true
@@ -211,6 +228,64 @@ func TryValidate(v any) (err error, isValidatable bool) {
 func isNilPointerWithValueMethod(v any, iface reflect.Type) bool {
 	val := reflect.ValueOf(v)
 	return val.Kind() == reflect.Pointer && val.IsNil() && val.Type().Elem().Implements(iface)
+}
+
+// callSkippingNilEmbedded calls call, the Valid or Validate method of v,
+// and reports if it panicked because the method is promoted from a nil
+// pointer that v embeds, like Validate of struct{ *T } with a nil *T and
+// a value receiver on T, which dereferences the nil pointer. Such a value
+// is not validated, like a nil pointer, because the method can't be called
+// without the embedded value. A struct can declare the method itself
+// instead, which reflection can't tell apart, so the call is made and
+// only the nil pointer dereference of a value embedding a nil pointer
+// is recovered, every other panic is passed on.
+func callSkippingNilEmbedded(v any, call func()) (skipped bool) {
+	if !hasNilEmbeddedPointer(reflect.ValueOf(v), 0) {
+		call()
+		return false
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			if rErr, ok := r.(runtime.Error); ok && strings.Contains(rErr.Error(), "nil pointer dereference") {
+				skipped = true
+				return
+			}
+			panic(r)
+		}
+	}()
+	call()
+	return false
+}
+
+// hasNilEmbeddedPointer reports if the struct v, or the struct v points to,
+// embeds a nil pointer, also within its embedded fields.
+// The depth is limited because embedded pointers can form cycles.
+func hasNilEmbeddedPointer(v reflect.Value, depth int) bool {
+	if depth > 8 {
+		return false
+	}
+	if v.Kind() == reflect.Pointer {
+		if v.IsNil() {
+			return false
+		}
+		v = v.Elem()
+	}
+	if v.Kind() != reflect.Struct {
+		return false
+	}
+	for i := range v.NumField() {
+		if !v.Type().Field(i).Anonymous {
+			continue
+		}
+		field := v.Field(i)
+		if field.Kind() == reflect.Pointer && field.IsNil() {
+			return true
+		}
+		if hasNilEmbeddedPointer(field, depth+1) {
+			return true
+		}
+	}
+	return false
 }
 
 // isNilFunc reports if v is a nil func, like ValidatorFunc(nil).

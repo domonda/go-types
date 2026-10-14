@@ -1633,3 +1633,25 @@ func TestDate_NormalizedLang(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, Null, nullable)
 }
+
+// TestNormalize_NoYearZero protects that every date format rejects the
+// year 0 like "0000-05-25" does, because PostgreSQL and Scan reject it:
+// the year-day-month order "0000 25 may" passed time.Parse.
+func TestNormalize_NoYearZero(t *testing.T) {
+	_, err := Normalize("0000 25 may")
+	assert.Error(t, err)
+	got, err := Normalize("2023 25 may")
+	require.NoError(t, err)
+	assert.Equal(t, Date("2023-05-25"), got)
+}
+
+// TestDate_FormatInvalid protects formatted output from a made up date:
+// an invalid date was formatted as the zero time "01.01.0001"
+// with any layout but Layout, so garbage looked like a real date.
+func TestDate_FormatInvalid(t *testing.T) {
+	assert.Equal(t, "garbage", Date("garbage").Format("02.01.2006"))
+	assert.Equal(t, "garbage", NullableDate("garbage").Format("02.01.2006"))
+	assert.Equal(t, "25.12.2023", Date("2023-12-25").Format("02.01.2006"))
+	assert.Equal(t, "01.01.0001", Date("0001-01-01").Format("02.01.2006"), "the zero date is valid")
+	assert.Equal(t, "", NullableDate("0001-01-01").Format("02.01.2006"), "and null as NullableDate")
+}

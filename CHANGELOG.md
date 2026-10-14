@@ -629,6 +629,33 @@ picking the semver baseline.
 
 ### Fixed
 
+- `email.ParseAddressList`, and so the `Validate`, `Normalized` and `Split`
+  methods of the address lists and `ParseMIMEMessage`, took quadratic time
+  and memory for a list of unparsable entries: every error held the whole
+  list, so 10,000 entries took seconds and hundreds of megabytes. Errors
+  hold at most 100 bytes of the input, and parsing stops after 100 errors.
+- `email.ParseAddress` read `attacker@evil.com ceo@corp.com` as
+  `ceo@corp.com`, which `net/mail` rejects. A second address is only taken
+  from angle brackets, like in `"Example" <ar1@example.com> <ar@example.com>`.
+- `date.Normalize` accepted the year 0 in the year-day-month order, like
+  `"0000 25 may"`, which `Scan` and PostgreSQL reject.
+- `date.Date.Format` and `NullableDate.Format` formatted an invalid date as
+  the zero time, like `"01.01.0001"`, with every layout but `Layout`, and so
+  did `strfmt`. An invalid date is returned unchanged.
+- `types.Validate`, `TryValidate`, `DeepValidate`, `Validators.Valid` and
+  `ValidatorAsValidatErr.Validate` panicked for a struct that embeds a nil
+  `*T` whose `T` implements the method with a value receiver. Such a value
+  is not validated, like a nil pointer.
+- `float.FormatDef.UnmarshalJSON` accepted separators that `Format` panics
+  on, like `{"decimalSep":"."}` into a `FormatDef` with `.` as thousands
+  separator, which gave the same rune for both.
+- `float.Parse` read the price notation `"12,-"`, 12 without cents, as -12.
+  A `-` right after the decimal separator is no sign.
+- `bank.BIC` accepted the false BICs of 8 characters with the `XXX` branch
+  code that `Normalized` appends, like `"AUTOBANKXXX"` and `"AUTOBANK XXX"`.
+- `charset.DecodeUTF16` and `EncodeUTF16` panicked for a nil
+  `binary.ByteOrder`; it is an error.
+
 - `email.ParseMIMEMessage` RFC 2047 decoded the whole `From`, `Reply-To`,
   `To`, `Cc`, `Bcc` and `Delivered-To` headers before splitting them into
   addresses, so an encoded comma and `@` in a display name, like in

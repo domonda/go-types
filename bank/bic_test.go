@@ -407,3 +407,16 @@ func TestBIC_SQL(t *testing.T) {
 		assert.Equal(t, BIC("BELADEBEXXX"), bic)
 	})
 }
+
+// TestBIC_FalseBICWithBranchCode protects the list of words that look like
+// BICs: Normalized appends "XXX" to an 8 character BIC, so the false BIC
+// "AUTOBANK" was valid as "AUTOBANKXXX" and with whitespace.
+func TestBIC_FalseBICWithBranchCode(t *testing.T) {
+	for _, bic := range []BIC{"AUTOBANK", "AUTOBANKXXX", "AUTOBANK XXX", "autobank"} {
+		assert.False(t, bic.Valid(), "BIC(%q).Valid()", bic)
+		_, _, _, isValid := bic.Parse()
+		assert.False(t, isValid, "BIC(%q).Parse()", bic)
+	}
+	assert.Empty(t, BICFinder.FindAllIndex([]byte("Kontakt: AUTOBANKXXX"), -1))
+	assert.True(t, BIC("DEUTDEFFXXX").Valid())
+}

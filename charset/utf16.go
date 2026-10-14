@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"unicode/utf16"
 	"unicode/utf8"
+
+	"github.com/domonda/go-errs"
 )
 
 // UTF16Encoding returns an UTF-16 Encoding with the passed binary.ByteOrder
@@ -57,10 +59,14 @@ func decodeUTF16Runes(b []byte, byteOrder binary.ByteOrder) []rune {
 // DecodeUTF16 decodes the UTF-16 encoded bytes b using byteOrder and returns
 // the equivalent UTF-8 bytes. An optional BOM at the start of b is validated
 // against byteOrder and then stripped before decoding.
-// Returns an error if b has odd length or contains an unexpected BOM.
+// Returns an error if b has odd length or contains an unexpected BOM,
+// or if byteOrder is nil.
 func DecodeUTF16(b []byte, byteOrder binary.ByteOrder) ([]byte, error) {
 	if len(b) == 0 {
 		return nil, nil
+	}
+	if byteOrder == nil {
+		return nil, errs.New("nil binary.ByteOrder for UTF-16")
 	}
 	if len(b)&1 != 0 {
 		return nil, fmt.Errorf("odd length of UTF-16 string: %d", len(b))
@@ -109,10 +115,14 @@ func DecodeUTF16(b []byte, byteOrder binary.ByteOrder) ([]byte, error) {
 // EncodeUTF16 encodes the UTF-8 bytes b to UTF-16 using byteOrder and returns
 // the encoded bytes without a leading BOM.
 // Returns an error if b contains invalid UTF-8,
-// a valid U+FFFD replacement character is encoded like any other rune.
+// a valid U+FFFD replacement character is encoded like any other rune,
+// or if byteOrder is nil.
 func EncodeUTF16(b []byte, byteOrder binary.ByteOrder) ([]byte, error) {
 	if len(b) == 0 {
 		return nil, nil
+	}
+	if byteOrder == nil {
+		return nil, errs.New("nil binary.ByteOrder for UTF-16")
 	}
 	buf := bytes.Buffer{}
 	buf.Grow(len(b) * 2)

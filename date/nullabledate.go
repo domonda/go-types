@@ -593,18 +593,14 @@ func (n NullableDate) BeforeTodayInUTC() bool {
 	return Date(n).BeforeTodayInUTC()
 }
 
-// Format returns n.MidnightUTC().Format(layout),
+// Format returns the date formatted like Date.Format,
 // or an empty string if n is null (see IsNull) or layout is an empty string.
-// If layout equals Layout constant, returns the normalized date
-// without a time conversion, or the date unchanged if it is not valid.
+// A date that is not valid is returned unchanged.
 func (n NullableDate) Format(layout string) string {
 	if n.IsNull() || layout == "" {
 		return ""
 	}
-	if layout == Layout {
-		return Date(n).String()
-	}
-	return n.MidnightUTC().Format(layout)
+	return Date(n).Format(layout)
 }
 
 // Scan implements the database/sql.Scanner interface.

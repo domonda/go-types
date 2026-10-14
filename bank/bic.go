@@ -73,12 +73,12 @@ func (bic BIC) validateCompact() error {
 		return fmt.Errorf("invalid BIC %q length: %d", string(bic), length)
 	}
 
+	if isFalseBIC(bic) {
+		return fmt.Errorf("BIC %q is in list of invalid BICs", string(bic))
+	}
 	_, _, _, isValid := bic.Parse()
 	if !isValid {
 		return fmt.Errorf("invalid BIC %q", string(bic))
-	}
-	if _, isFalse := falseBICs[bic]; isFalse {
-		return fmt.Errorf("BIC %q is in list of invalid BICs", string(bic))
 	}
 	return nil
 }
@@ -144,7 +144,7 @@ func (bic BIC) Nullable() NullableBIC {
 // The BIC is parsed as given, so a BIC containing whitespace is invalid,
 // use Normalized first.
 func (bic BIC) Parse() (bankCode string, countryCode country.Code, branchCode string, isValid bool) {
-	if _, isFalse := falseBICs[bic]; isFalse {
+	if isFalseBIC(bic) {
 		return "", "", "", false
 	}
 
@@ -292,6 +292,20 @@ func (BIC) JSONSchema() *jsonschema.Schema {
 		Type:    "string",
 		Pattern: BICRegex,
 	}
+}
+
+// isFalseBIC returns if bic is in falseBICs, also as 11 character BIC
+// with the "XXX" branch code appended to an 8 character entry,
+// like "AUTOBANKXXX", which Normalized writes for "AUTOBANK".
+func isFalseBIC(bic BIC) bool {
+	if _, isFalse := falseBICs[bic]; isFalse {
+		return true
+	}
+	if len(bic) == BICMaxLength && strings.HasSuffix(string(bic), "XXX") {
+		_, isFalse := falseBICs[bic[:BICMinLength]]
+		return isFalse
+	}
+	return false
 }
 
 // falseBICs contains a list of known invalid BIC codes.

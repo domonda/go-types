@@ -466,3 +466,34 @@ func TestParseAddressList_GarbageAfterAddress(t *testing.T) {
 	require.Len(t, addrs, 1)
 	require.Equal(t, "a@example.com", addrs[0].Address)
 }
+
+// TestParseAddressList_LongGarbageList protects the parsing of inbound mail
+// from a header with many unparsable entries: every entry was matched
+// against the rest of the list and its error held the whole list, so
+// 10,000 entries took seconds and hundreds of megabytes of error text.
+// Parsing stops after maxAddressListErrors and the errors stay short.
+func TestParseAddressList_LongGarbageList(t *testing.T) {
+	list := "a@example.com, " + strings.Repeat("x, ", 10000) + "b@example.com"
+	addrs, err := ParseAddressList(list)
+	require.Error(t, err)
+	require.Len(t, addrs, 1, "addresses after too many errors are not returned")
+	assert.Equal(t, "a@example.com", addrs[0].Address)
+	assert.Less(t, len(err.Error()), 64*1024, "error text must not grow with the list")
+	assert.Contains(t, err.Error(), "stopped parsing email address list after 100 errors")
+}
+
+// TestParseAddress_NoSecondUnbracketedAddress protects the sender of a
+// message: "attacker@evil.com ceo@corp.com" was read as ceo@corp.com,
+// which net/mail rejects, while a check of the first address saw
+// evil.com. Only an address in angle brackets is the address of a name.
+func TestParseAddress_NoSecondUnbracketedAddress(t *testing.T) {
+	_, err := ParseAddress("attacker@evil.com ceo@corp.com")
+	assert.Error(t, err)
+
+	parsed, err := ParseAddress("attacker@evil.com <ceo@corp.com>")
+	require.NoError(t, err)
+	assert.Equal(t, "ceo@corp.com", parsed.Address)
+	parsed, err = ParseAddress(`"\"Example\" <ar1@example.com>" <ar@example.com>`)
+	require.NoError(t, err)
+	assert.Equal(t, "ar@example.com", parsed.Address)
+}

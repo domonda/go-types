@@ -1429,3 +1429,49 @@ func TestDeepValidate_Cycles(t *testing.T) {
 		}
 	})
 }
+
+type validatedByValue string
+
+func (v validatedByValue) Validate() error {
+	if v == "" {
+		return errors.New("empty")
+	}
+	return nil
+}
+
+type embedsNilPointer struct {
+	*validatedByValue
+	Name string
+}
+
+type declaresOwnValidate struct {
+	*validatedByValue
+}
+
+func (declaresOwnValidate) Validate() error { return errors.New("own") }
+
+// TestValidate_NilEmbeddedPointer protects against a panic: a struct that
+// embeds a nil *T, where T implements Validate with a value receiver,
+// promotes a method that dereferences the nil pointer. Such a value is
+// not validated, like a nil pointer, but a method the struct declares
+// itself still runs.
+func TestValidate_NilEmbeddedPointer(t *testing.T) {
+	v := embedsNilPointer{Name: "x"}
+	if err := Validate(v); err != nil {
+		t.Errorf("Validate(%#v) = %v, want nil", v, err)
+	}
+	if err := Validate(&v); err != nil {
+		t.Errorf("Validate(&%#v) = %v, want nil", v, err)
+	}
+	if errs := DeepValidate(v); len(errs) != 0 {
+		t.Errorf("DeepValidate(%#v) = %v, want none", v, errs)
+	}
+
+	empty := validatedByValue("")
+	if err := Validate(embedsNilPointer{validatedByValue: &empty}); err == nil {
+		t.Error("a non-nil embedded value must be validated")
+	}
+	if err := Validate(declaresOwnValidate{}); err == nil || err.Error() != "own" {
+		t.Errorf("a declared Validate must run, got %v", err)
+	}
+}

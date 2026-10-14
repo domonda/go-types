@@ -9,7 +9,10 @@ import (
 	"slices"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 	"unsafe"
+
+	"github.com/domonda/go-errs"
 
 	"github.com/domonda/go-types/strutil"
 )
@@ -134,7 +137,7 @@ func parseAddress(addr string) (mailAddress *mail.Address, unparsed string, err 
 	i := nameAddressRegexp.FindStringSubmatchIndex(addr)
 	if len(i) != 12 {
 		// fmt.Println("REGEX:", nameAddressRegex)
-		return nil, "", fmt.Errorf("could not parse email address: %s", addr)
+		return nil, "", errs.Errorf("could not parse email address: %s", truncateForError(addr))
 	}
 
 	var name string
@@ -178,7 +181,10 @@ func parseAddress(addr string) (mailAddress *mail.Address, unparsed string, err 
 	// Special case where the address is duplicated in the name part.
 	// Example:
 	//   "\"Example\" <ar1@example.com>" <ar@example.com>
-	if unparsed != "" && !strings.HasPrefix(strings.TrimLeft(unparsed, " "), ",") {
+	// The second address must be within angle brackets, which mark
+	// the address of a name, so that "attacker@evil.com ceo@corp.com"
+	// is not read as ceo@corp.com, which net/mail rejects.
+	if strings.HasPrefix(strings.TrimLeft(unparsed, ` "`), "<") {
 		right, unp, err := parseAddress(unparsed)
 		if err == nil && right.Name == "" {
 			mailAddress.Address = right.Address
@@ -272,6 +278,26 @@ func unquoteLocalPart(quoted string) string {
 	return b.String()
 }
 
+// maxAddressListErrors is the number of errors after which
+// ParseAddressList stops parsing a list, because every entry that
+// can't be parsed is matched against the rest of the list,
+// so a long list of garbage would take quadratic time.
+const maxAddressListErrors = 100
+
+// truncateForError returns s cut to at most 100 bytes for an error message,
+// so that the errors of a long address list don't grow with its length.
+func truncateForError(s string) string {
+	const maxLen = 100
+	if len(s) <= maxLen {
+		return s
+	}
+	cut := maxLen
+	for cut > 0 && !utf8.RuneStart(s[cut]) {
+		cut--
+	}
+	return s[:cut] + "…"
+}
+
 // ParseAddressList parses an email address list less strict
 // than the standard net/mail.ParseAddressList function
 // fixing malformed addresses and lower cases the address part.
@@ -280,7 +306,8 @@ func unquoteLocalPart(quoted string) string {
 // addresses in the list can't be parsed. Parsing errors are collected
 // and returned joined via errors.Join, so a non-nil error can accompany
 // a non-empty result slice. Callers that need a strictly valid list
-// should treat any non-nil error as a failure.
+// should treat any non-nil error as a failure. Parsing stops after
+// 100 errors, so addresses after them are not returned.
 //
 // The empty list and the common "undisclosed-recipients" /
 // "withheld-recipients" placeholders, alone or as empty group like
@@ -295,9 +322,13 @@ func ParseAddressList(list string) (addrs []*mail.Address, err error) {
 
 	var errList []error
 	for remaining := list; remaining != ""; {
+		if len(errList) >= maxAddressListErrors {
+			errList = append(errList, errs.Errorf("stopped parsing email address list after %d errors", len(errList)))
+			break
+		}
 		mailAddress, unparsed, parseErr := parseAddress(remaining)
 		if parseErr != nil {
-			errList = append(errList, fmt.Errorf("could not parse email address list '%s', because of: %w", list, parseErr))
+			errList = append(errList, errs.Errorf("could not parse email address list, because of: %w", parseErr))
 			// Recover by skipping past the next separator so the
 			// remaining addresses can still be parsed and returned.
 			_, after, found := strings.Cut(remaining, ",")
@@ -314,7 +345,7 @@ func ParseAddressList(list string) (addrs []*mail.Address, err error) {
 			break
 		}
 		if unparsed[0] != ',' {
-			errList = append(errList, fmt.Errorf("expected ',' after parsing email address in unparsed part: '%s' | full list: '%s'", unparsed, list))
+			errList = append(errList, errs.Errorf("expected ',' after email address %s in email address list: %s", mailAddress.Address, truncateForError(unparsed)))
 			_, after, found := strings.Cut(unparsed, ",")
 			if !found {
 				break

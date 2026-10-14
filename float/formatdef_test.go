@@ -162,3 +162,22 @@ func Test_FormatDef_UnmarshalJSON(t *testing.T) {
 		assert.Error(t, json.Unmarshal([]byte(invalid), &got), "json.Unmarshal(%s)", invalid)
 	}
 }
+
+// TestFormatDef_UnmarshalJSONRejectsSeparatorsFormatPanicsOn protects
+// Format from a panic: a field missing in the JSON keeps its value,
+// so {"decimalSep":"."} into a FormatDef with '.' as thousandsSep gave
+// the same rune for both separators, which Format panics on.
+func TestFormatDef_UnmarshalJSONRejectsSeparatorsFormatPanicsOn(t *testing.T) {
+	german := FormatDef{ThousandsSep: '.', DecimalSep: ',', Precision: 2}
+	for _, j := range []string{`{"decimalSep":"."}`, `{"decimalSep":"x"}`, `{"thousandsSep":"x"}`} {
+		ff := german
+		assert.Error(t, json.Unmarshal([]byte(j), &ff), j)
+		assert.Equal(t, german, ff, "unchanged on error for %s", j)
+	}
+
+	ff := german
+	assert.NoError(t, json.Unmarshal([]byte(`{"thousandsSep":",","decimalSep":"."}`), &ff))
+	assert.Equal(t, "1,234.5", ff.Format(1234.5))
+	var zero FormatDef
+	assert.NoError(t, json.Unmarshal([]byte(`{}`), &zero), "a zero FormatDef stays accepted")
+}
