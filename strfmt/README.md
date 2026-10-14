@@ -181,9 +181,8 @@ The nullable money types `money.NullableAmount`, `money.NullableCentAmount` and
 for null. The types that normalize their `Value` and JSON, like `money.Currency`,
 `bank.IBAN` and `email.Address`, are formatted normalized by their `MarshalText`,
 an invalid value unchanged. The collections `email.AddressList` and
-`email.NullableAddressList` are formatted as stored. `strfmt.Scan` reads the
-types with a `ScanString` method through it, normalized; `language.Code` and the
-email address types have none and are assigned the source string as given, see
+`email.NullableAddressList` are formatted as stored, and `strfmt.Scan` reads the
+normalizing types with their `ScanString` method, normalized, see
 [Reading and writing values](../README.md#reading-and-writing-values).
 
 ## MoneyFormat

@@ -40,7 +40,7 @@ names := language.Code("").EnumStrings() // []string{"aa", "ab", "af", ...}
 | `ISO6393Name(code)`          | English reference name of an ISO 639-3 code (`"deu"` gives `"German"`), `""` if unknown. |
 | `ISO6393Macrolanguage(code)` | ISO 639-3 macrolanguage of an individual language (`"twi"` gives `"aka"`), `""` if none. |
 
-Implements: `fmt.Stringer`, `database/sql.Scanner`, `database/sql/driver.Valuer`, `encoding/json.Marshaler`, `encoding/json.Unmarshaler`, `encoding.TextMarshaler`, `encoding/xml.Unmarshaler`, `encoding/xml.UnmarshalerAttr`, `encoding/xml.MarshalerAttr`, `types.NormalizableValidator[Code]` and `JSONSchema()` (`{"type":"string","pattern":"^[a-z]{2}$"}`). `Code` has no `ScanString` method, so it is not a `strfmt.Scannable`, and no `UnmarshalText`, so `encoding/json` reads the keys of a `map[Code]V` as given.
+Implements: `fmt.Stringer`, `database/sql.Scanner`, `database/sql/driver.Valuer`, `encoding/json.Marshaler`, `encoding/json.Unmarshaler`, `encoding.TextMarshaler`, `encoding/xml.Unmarshaler`, `encoding/xml.UnmarshalerAttr`, `encoding/xml.MarshalerAttr`, `types.NormalizableValidator[Code]` and `JSONSchema()` (`{"type":"string","pattern":"^[a-z]{2}$"}`). `ScanString` makes it a `strfmt.Scannable`, which reads a code like `Scan`. `Code` has no `UnmarshalText`, so `encoding/json` reads the keys of a `map[Code]V` as given.
 
 `Valid` and `Validate` are hand-written and carry a `// #custom` marker, so go-enum keeps them. They normalize first like those of `country.Code` and `money.Currency`, because reading stores and `Value` writes the normalized code. `String` is the one go-enum generates: it returns the stored code.
 

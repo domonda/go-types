@@ -211,6 +211,14 @@ func (c *Code) Scan(value any) error {
 	return internal.ScanNormalized(c, value, Code.Normalized, nil)
 }
 
+// ScanString implements the strfmt.Scannable interface.
+// Without validate it stores source like Scan, with validate it stores
+// the normalized code or returns the error of Normalized,
+// also for a blank source.
+func (c *Code) ScanString(source string, validate bool) error {
+	return internal.ScanStringNormalized(c, source, validate, false, Code.Normalized, nil)
+}
+
 // Value implements the driver database/sql/driver.Valuer interface.
 // It returns the normalized code, SQL NULL for Null or a blank Code,
 // or the error of Normalized for a code that can't be normalized.
