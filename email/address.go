@@ -225,7 +225,11 @@ func (a *Address) UnmarshalXMLAttr(attr xml.Attr) error {
 // the normalized address or returns the error of Normalized,
 // also for a blank source.
 func (a *Address) ScanString(source string, validate bool) error {
-	return internal.ScanStringNormalized(a, source, validate, false, Address.Normalized, nil)
+	if !validate {
+		// Like Scan, without building the error that it drops
+		return internal.ScanStringNormalized(a, source, false, false, normalizeAddressForRead[Address], nil)
+	}
+	return internal.ScanStringNormalized(a, source, true, false, Address.Normalized, nil)
 }
 
 // Validate checks if the Address is a valid email address format.

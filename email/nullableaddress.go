@@ -230,7 +230,11 @@ func (n *NullableAddress) UnmarshalXMLAttr(attr xml.Attr) error {
 // Without validate it stores source like Scan, with validate it stores
 // the normalized address or returns the error of Normalized.
 func (n *NullableAddress) ScanString(source string, validate bool) error {
-	return internal.ScanStringNormalized(n, source, validate, true, NullableAddress.Normalized, nil)
+	if !validate {
+		// Like Scan, without building the error that it drops
+		return internal.ScanStringNormalized(n, source, false, true, normalizeAddressForRead[NullableAddress], nil)
+	}
+	return internal.ScanStringNormalized(n, source, true, true, NullableAddress.Normalized, nil)
 }
 
 // MarshalJSON implements encoding/json.Marshaler by writing the JSON null
