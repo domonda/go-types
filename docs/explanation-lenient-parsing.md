@@ -124,7 +124,7 @@ The error leaves the decision to code that has more context, like the language o
 
 ## Dates
 
-`date.Normalize(str, lang...)` and `Date.Normalized(lang...)` split the input into three parts at spaces, `.`, `/`, `-`, `,`, `'` and the CJK date characters, and decide which part is the day, the month and the year:
+`date.Normalize(str, lang...)`, `Date.Normalized()` and `Date.NormalizedLang(lang)` split the input into three parts at spaces, `.`, `/`, `-`, `,`, `'` and the CJK date characters, and decide which part is the day, the month and the year:
 
 - **Text around the date.** A leading weekday (`Fri, 03 Jul 2015`), the filler `of` (`1st of dec. 2020`), a trailing `00:00:00` and a `T` time after an ISO date are dropped.
 - **Month names.** English and German names and abbreviations are accepted in any case, including common OCR misreadings like `1an` and `apri1`. French, Italian and Spanish month names and their usual abbreviations are accepted too, like `févr.`, `luglio` and `septiembre`.

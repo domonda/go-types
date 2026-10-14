@@ -8,6 +8,7 @@ import (
 
 	"github.com/invopop/jsonschema"
 
+	types "github.com/domonda/go-types"
 	"github.com/domonda/go-types/internal"
 	"github.com/domonda/go-types/language"
 	"github.com/domonda/go-types/nullable"
@@ -30,10 +31,13 @@ type NullableDate string
 // Compile-time check that NullableDate implements nullable.NullSetable[Date]
 var _ nullable.NullSetable[Date] = (*NullableDate)(nil)
 
+// Compile-time check that NullableDate implements types.NormalizableValidator[NullableDate]
+var _ types.NormalizableValidator[NullableDate] = NullableDate("")
+
 // NormalizeNullable returns str as normalized NullableDate or an error.
 // The first given lang argument is used as language hint for parsing.
 func NormalizeNullable(str string, lang ...language.Code) (NullableDate, error) {
-	return NullableDate(str).Normalized(lang...)
+	return NullableDate(str).NormalizedLang(getLangHint(lang))
 }
 
 // MustNullable returns str as normalized NullableDate or panics if str is not
@@ -200,21 +204,28 @@ func (n NullableDate) StringOr(nullString string) string {
 
 // Normalized returns the date in normalized form,
 // or an error if the format can't be detected.
-// The first given lang argument is used as language hint.
 // If n.IsNull() then Null, nil will be returned.
 // Returns the NullableDate unchanged in case of an error.
-func (n NullableDate) Normalized(lang ...language.Code) (NullableDate, error) {
+// Normalized implements types.Normalizable[NullableDate],
+// use NormalizedLang to pass a language hint.
+func (n NullableDate) Normalized() (NullableDate, error) {
+	return n.NormalizedLang("")
+}
+
+// NormalizedLang returns the date in normalized form like Normalized,
+// with lang as hint for the order of day and month like Date.NormalizedLang.
+func (n NullableDate) NormalizedLang(lang language.Code) (NullableDate, error) {
 	if n.IsNull() {
 		return Null, nil
 	}
-	d, err := Date(n).Normalized(lang...)
+	d, err := Date(n).NormalizedLang(lang)
 	return NullableDate(d), err
 }
 
 // NormalizedOrNull returns the normalized date as NullableDate if possible, otherwise returns Null.
 // The first given lang argument is used as language hint for parsing.
 func (n NullableDate) NormalizedOrNull(lang ...language.Code) NullableDate {
-	norm, err := n.Normalized(lang...)
+	norm, err := n.NormalizedLang(getLangHint(lang))
 	if err != nil {
 		return Null
 	}
@@ -224,7 +235,7 @@ func (n NullableDate) NormalizedOrNull(lang ...language.Code) NullableDate {
 // NormalizedOrUnchanged returns the normalized date if possible, otherwise returns the date unchanged.
 // The first given lang argument is used as language hint for parsing.
 func (n NullableDate) NormalizedOrUnchanged(lang ...language.Code) NullableDate {
-	normalized, err := n.Normalized(lang...)
+	normalized, err := n.NormalizedLang(getLangHint(lang))
 	if err != nil {
 		return n
 	}

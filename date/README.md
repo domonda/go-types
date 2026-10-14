@@ -35,7 +35,7 @@ A `Date` holds whatever string you assign. Methods normalize on demand, so `Date
 
 ### Parsing
 
-`Normalize(str, lang...)` and `Date.Normalized(lang...)` accept, case-insensitive and with lenient whitespace:
+`Normalize(str, lang...)`, `Date.Normalized()` and `Date.NormalizedLang(lang)` accept, case-insensitive and with lenient whitespace:
 
 - ISO dates with `-`, `/`, `.` or space as separator: `"2006-01-02"`, `"2006/01/02"`.
 - An ISO date followed by a `T` time (`"2006-01-02T15:04:05Z07:00"`) or a trailing `00:00:00` (`"30.11.2023 00:00:00"`). The time is dropped.
@@ -76,7 +76,8 @@ Rules for numeric dates:
 |------------------------------------|----------------------------------------------------|
 | `Valid()`                          | True if `Normalized()` succeeds. No hint, so any parseable form is valid. |
 | `Validate()`                       | The error of `Normalized()`, or nil.               |
-| `Normalized(lang...)`              | The `YYYY-MM-DD` form, or the date unchanged and an error. The first `lang` is the order hint. |
+| `Normalized()`                     | The `YYYY-MM-DD` form, or the date unchanged and an error. Implements `types.Normalizable[Date]`, so it has no order hint. |
+| `NormalizedLang(lang)`             | Like `Normalized`, with `lang` as order hint.      |
 | `ValidAndNormalized()`             | True only if the date is already a valid `YYYY-MM-DD`. |
 | `NormalizedOrUnchanged(lang...)`   | Normalized form, or the date unchanged if it can't be parsed. |
 | `NormalizedOrNull(lang...)`        | Normalized form as `NullableDate`, or `Null`.      |
@@ -138,7 +139,7 @@ Rules for numeric dates:
 | `LastMonday()`                                     | The Monday on or before the date.                  |
 | `NextSunday()`                                     | The Sunday on or after the date.                   |
 
-Implements: `fmt.Stringer`, `database/sql.Scanner`, `database/sql/driver.Valuer`, `json.Marshaler`, `encoding.TextMarshaler`, `strfmt.Scannable`, `types.Validator`, `types.ValidatErr` and `JSONSchema()` (`{"type":"string","format":"date"}`). `Date` has no `UnmarshalJSON` and no `UnmarshalText`. It is not a `types.NormalizableValidator` because `Normalized` takes optional language hints.
+Implements: `fmt.Stringer`, `database/sql.Scanner`, `database/sql/driver.Valuer`, `json.Marshaler`, `encoding.TextMarshaler`, `strfmt.Scannable`, `types.Validator`, `types.ValidatErr`, `types.NormalizableValidator[Date]` and `JSONSchema()` (`{"type":"string","format":"date"}`). `Date` has no `UnmarshalJSON` and no `UnmarshalText`.
 
 ## NullableDate
 
@@ -166,7 +167,7 @@ const Null NullableDate = ""
 | `Valid()`, `Validate()`                            | Null is valid, otherwise like `Date`.              |
 | `ValidAndNotNull()`                                | Valid and not null, so false for the zero dates.   |
 | `ValidAndNormalized()`                             | True for `Null` and for a valid `YYYY-MM-DD` that is not a zero date. |
-| `Normalized(lang...)`                              | `Null` for null input, otherwise like `Date`.      |
+| `Normalized()`, `NormalizedLang(lang)`             | `Null` for null input, otherwise like `Date`.      |
 | `NormalizedOrNull(lang...)`, `NormalizedOrUnchanged(lang...)` | As for `Date`.                                     |
 | `String()`                                         | `""` for null, else like `Date`.                   |
 | `StringOr(nullString)`                             | Normalized, or `nullString` if null or invalid.    |
@@ -190,7 +191,7 @@ These methods mirror `Date` and add null rules:
 
 `NullableDate` has no `Time`, `TimeLocal`, `TimeUTC`, `WithinIncl`, `BetweenExcl` or `Nullable`.
 
-Implements: `fmt.Stringer`, `database/sql.Scanner`, `database/sql/driver.Valuer`, `json.Marshaler`, `json.Unmarshaler`, `encoding.TextMarshaler`, `strfmt.Scannable`, `nullable.NullSetable[Date]` and `JSONSchema()` (string with format `date`, or null).
+Implements: `fmt.Stringer`, `database/sql.Scanner`, `database/sql/driver.Valuer`, `json.Marshaler`, `json.Unmarshaler`, `encoding.TextMarshaler`, `strfmt.Scannable`, `types.NormalizableValidator[NullableDate]`, `nullable.NullSetable[Date]` and `JSONSchema()` (string with format `date`, or null).
 
 ## Periods
 

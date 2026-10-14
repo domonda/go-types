@@ -403,23 +403,23 @@ func TestDate_Normalized(t *testing.T) {
 	tests := []struct {
 		name    string
 		date    Date
-		lang    []language.Code
+		lang    language.Code
 		want    Date
 		wantErr bool
 	}{
 		// Valid:
-		{name: "earliest", date: "0001-01-01", lang: nil, want: "0001-01-01"},
-		{name: "3000-01-01", date: "3000-01-01", lang: nil, want: "3000-01-01"},
-		{name: "3000/01/01", date: "3000/01/01", lang: nil, want: "3000-01-01"},
-		{name: "3000.01.01", date: "3000.01.01", lang: nil, want: "3000-01-01"},
+		{name: "earliest", date: "0001-01-01", want: "0001-01-01"},
+		{name: "3000-01-01", date: "3000-01-01", want: "3000-01-01"},
+		{name: "3000/01/01", date: "3000/01/01", want: "3000-01-01"},
+		{name: "3000.01.01", date: "3000.01.01", want: "3000-01-01"},
 		// Invalid, returned unchanged with the error:
-		{name: "empty", date: "", lang: nil, want: "", wantErr: true},
-		{name: "invalid year", date: "0000-01-01", lang: nil, want: "0000-01-01", wantErr: true},
-		{name: "invalid month", date: "2020-00-01", lang: nil, want: "2020-00-01", wantErr: true},
+		{name: "empty", date: "", want: "", wantErr: true},
+		{name: "invalid year", date: "0000-01-01", want: "0000-01-01", wantErr: true},
+		{name: "invalid month", date: "2020-00-01", want: "2020-00-01", wantErr: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := tt.date.Normalized(tt.lang...)
+			got, err := tt.date.NormalizedLang(tt.lang)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Date.Normalized() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -442,7 +442,7 @@ func TestDate_NormalizedErrorReturnsReceiver(t *testing.T) {
 			require.Error(t, err)
 			assert.Equal(t, d, got)
 
-			got, err = d.Normalized(language.EN)
+			got, err = d.NormalizedLang(language.EN)
 			require.Error(t, err)
 			assert.Equal(t, d, got, "with language hint")
 
@@ -1598,4 +1598,38 @@ func TestNormalize_DateTimeNeedsTime(t *testing.T) {
 	got, err := Normalize("2023-12-25T10:00:00Z")
 	require.NoError(t, err)
 	assert.Equal(t, Date("2023-12-25"), got)
+}
+
+// TestDate_NormalizedLang protects the split of the language hint from
+// Normalized: Normalized implements types.Normalizable and reads an
+// ambiguous numeric date day first, NormalizedLang still lets
+// language.EN read it month first, and a hint that can't be
+// normalized gives no hint instead of an error.
+func TestDate_NormalizedLang(t *testing.T) {
+	norm, err := Date("05/06/2024").Normalized()
+	require.NoError(t, err)
+	assert.Equal(t, Date("2024-06-05"), norm)
+
+	for lang, want := range map[language.Code]Date{
+		language.EN: "2024-05-06",
+		"EN-us":     "2024-05-06",
+		language.DE: "2024-06-05",
+		"":          "2024-06-05",
+		"xx":        "2024-06-05",
+	} {
+		norm, err = Date("05/06/2024").NormalizedLang(lang)
+		require.NoError(t, err, "NormalizedLang(%q)", lang)
+		assert.Equal(t, want, norm, "NormalizedLang(%q)", lang)
+
+		nullable, err := NullableDate("05/06/2024").NormalizedLang(lang)
+		require.NoError(t, err, "NullableDate.NormalizedLang(%q)", lang)
+		assert.Equal(t, want.Nullable(), nullable, "NullableDate.NormalizedLang(%q)", lang)
+	}
+
+	nullable, err := NullableDate("05/06/2024").Normalized()
+	require.NoError(t, err)
+	assert.Equal(t, NullableDate("2024-06-05"), nullable)
+	nullable, err = Null.NormalizedLang(language.EN)
+	require.NoError(t, err)
+	assert.Equal(t, Null, nullable)
 }

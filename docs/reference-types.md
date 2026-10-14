@@ -121,7 +121,7 @@ Use `errors.Join(types.DeepValidate(v)...)` to get one error, which is nil if th
 | `Normalizable[T any]`          | `Normalized() (T, error)`: the value in its canonical form, or an error. Should be idempotent. |
 | `NormalizableValidator[T any]` | `Validator`, `Normalizable[T]`, and `ValidAndNormalized() bool`, true if the value is valid and already canonical. |
 
-These types assert `NormalizableValidator` at compile time: `bank.IBAN`, `bank.NullableIBAN`, `bank.BIC`, `country.Code`, `email.Address`, `email.AddressList`, `email.AddressSet`, `language.Code`, `money.Currency` and `vat.ID`. `date.Date` does not, because its `Normalized` method takes optional language hints.
+These types assert `NormalizableValidator` at compile time: `bank.IBAN`, `bank.NullableIBAN`, `bank.BIC`, `country.Code`, `email.Address`, `email.AddressList`, `email.AddressSet`, `language.Code`, `money.Currency`, `vat.ID`, `date.Date` and `date.NullableDate`. The dates take a language hint with `NormalizedLang` instead of `Normalized`.
 
 ## Pointers
 

@@ -11,6 +11,7 @@ import (
 
 	"github.com/invopop/jsonschema"
 
+	types "github.com/domonda/go-types"
 	"github.com/domonda/go-types/language"
 	"github.com/domonda/go-types/strutil"
 )
@@ -63,7 +64,7 @@ import (
 //   - Locale-specific written forms beyond the abbreviations above
 //     (e.g. Arabic numerals, full Russian months)
 func Normalize(str string, lang ...language.Code) (Date, error) {
-	return Date(str).Normalized(lang...)
+	return Date(str).NormalizedLang(getLangHint(lang))
 }
 
 // StringIsDate returns if a string can be parsed as Date.
@@ -94,6 +95,9 @@ const (
 // Date implements the database/sql.Scanner and database/sql/driver.Valuer interfaces,
 // and treats empty string or zero dates ("0000-00-00" and "0001-01-01") as SQL NULL.
 type Date string
+
+// Compile-time check that Date implements types.NormalizableValidator[Date]
+var _ types.NormalizableValidator[Date] = Date("")
 
 // Must returns str as normalized Date or panics if str is not a valid Date.
 func Must(str string) Date {
@@ -498,7 +502,7 @@ func (date Date) Format(layout string) string {
 // NormalizedOrUnchanged returns the normalized date if possible, otherwise returns the date unchanged.
 // The first given lang argument is used as language hint for parsing.
 func (date Date) NormalizedOrUnchanged(lang ...language.Code) Date {
-	normalized, err := date.Normalized(lang...)
+	normalized, err := date.NormalizedLang(getLangHint(lang))
 	if err != nil {
 		return date
 	}
@@ -508,7 +512,7 @@ func (date Date) NormalizedOrUnchanged(lang ...language.Code) Date {
 // NormalizedOrNull returns the normalized date as NullableDate if possible, otherwise returns Null.
 // The first given lang argument is used as language hint for parsing.
 func (date Date) NormalizedOrNull(lang ...language.Code) NullableDate {
-	normalized, err := date.Normalized(lang...)
+	normalized, err := date.NormalizedLang(getLangHint(lang))
 	if err != nil {
 		return Null
 	}
@@ -875,10 +879,20 @@ func isDateTrimRune(r rune) bool {
 
 // Normalized returns the date in normalized form,
 // or an error if the format can't be detected.
-// The first given lang argument is used as language hint.
 // Returns the Date unchanged in case of an error.
-func (date Date) Normalized(lang ...language.Code) (Date, error) {
-	normalized, _, err := normalizeAndCheckDate(string(date), getLangHint(lang))
+// Normalized implements types.Normalizable[Date],
+// use NormalizedLang to pass a language hint.
+func (date Date) Normalized() (Date, error) {
+	return date.NormalizedLang("")
+}
+
+// NormalizedLang returns the date in normalized form like Normalized,
+// with lang as hint for the order of day and month in an ambiguous
+// numeric date: language.EN reads "05/06/2024" month first.
+// An empty lang or one that can't be normalized gives no hint.
+// Returns the Date unchanged in case of an error.
+func (date Date) NormalizedLang(lang language.Code) (Date, error) {
+	normalized, _, err := normalizeAndCheckDate(string(date), langHint(lang))
 	if err != nil {
 		return date, err
 	}
@@ -1101,14 +1115,20 @@ func validDay(day int) bool {
 	return day >= 1 && day <= 31
 }
 
-// getLangHint returns the first hint normalized, or "" if there is none
-// or it can't be normalized. It is normalized instead of cut to two bytes,
-// because language.Code.Validate accepts hints like " en" and "EN-us".
+// getLangHint returns the first hint normalized by langHint,
+// or "" if there is none.
 func getLangHint(lang []language.Code) language.Code {
 	if len(lang) == 0 {
 		return ""
 	}
-	hint, err := lang[0].Normalized()
+	return langHint(lang[0])
+}
+
+// langHint returns lang normalized, or "" if it can't be normalized.
+// It is normalized instead of cut to two bytes,
+// because language.Code.Validate accepts hints like " en" and "EN-us".
+func langHint(lang language.Code) language.Code {
+	hint, err := lang.Normalized()
 	if err != nil {
 		return ""
 	}

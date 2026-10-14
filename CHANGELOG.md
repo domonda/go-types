@@ -78,6 +78,12 @@ picking the semver baseline.
 
 ### Changed
 
+- **Breaking:** `date.Date.Normalized` and `NullableDate.Normalized` take no
+  language hint, so that both implement `types.Normalizable` and
+  `types.NormalizableValidator`. Pass the hint to the new
+  `NormalizedLang(lang language.Code)`: `d.Normalized(language.EN)` becomes
+  `d.NormalizedLang(language.EN)`. `Normalize`, `NormalizeNullable`,
+  `NormalizedOrNull` and `NormalizedOrUnchanged` keep their optional hints.
 - **Breaking:** the types with a `Normalized` method write the normalized
   form in `Value` and `MarshalJSON`, and their `Validate` accepts every value
   that `Normalized` accepts, so a value that passes `types.DeepValidate`
