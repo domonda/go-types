@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/domonda/go-errs"
+
 	"github.com/domonda/go-types/strutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -478,8 +480,22 @@ func TestParseAddressList_LongGarbageList(t *testing.T) {
 	require.Error(t, err)
 	require.Len(t, addrs, 1, "addresses after too many errors are not returned")
 	assert.Equal(t, "a@example.com", addrs[0].Address)
-	assert.Less(t, len(err.Error()), 64*1024, "error text must not grow with the list")
 	assert.Contains(t, err.Error(), "stopped parsing email address list after 100 errors")
+
+	// The error text must not grow with the list: a bounded number of
+	// errors, each holding at most 100 bytes of the list. The messages
+	// are measured without their call stacks, because err.Error() holds
+	// the file paths of the call stacks, which are longer the deeper the
+	// module is checked out, so that a bound on err.Error() failed
+	// in a long checkout path.
+	joined, ok := err.(interface{ Unwrap() []error })
+	require.True(t, ok, "errors.Join error")
+	errList := joined.Unwrap()
+	assert.Len(t, errList, maxAddressListErrors+1, "the errors and the one saying that parsing stopped")
+	for _, e := range errList {
+		msg := errs.UnwrapCallStack(e).Error()
+		assert.LessOrEqual(t, len(msg), 200, "error message: %s", msg)
+	}
 }
 
 // TestParseAddress_NoSecondUnbracketedAddress protects the sender of a

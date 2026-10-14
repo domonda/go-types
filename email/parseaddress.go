@@ -121,9 +121,9 @@ func ParseAddress(addr string) (mailAddress *mail.Address, err error) {
 		return nil, errors.New("empty email address")
 	}
 
-	mailAddress, unparsed, err := parseAddress(addr)
-	if err != nil {
-		return nil, err
+	mailAddress, unparsed, ok := parseAddress(addr)
+	if !ok {
+		return nil, errs.Errorf("could not parse email address: %s", truncateForError(addr))
 	}
 
 	if strutil.TrimSpace(unparsed) != "" {
@@ -133,11 +133,15 @@ func ParseAddress(addr string) (mailAddress *mail.Address, err error) {
 	return mailAddress, nil
 }
 
-func parseAddress(addr string) (mailAddress *mail.Address, unparsed string, err error) {
+// parseAddress parses the address at the start of the sanitized addr
+// and returns it with the rest of addr after it, or ok false if addr
+// doesn't start with an address. It builds no error, so that a caller
+// that drops the error doesn't pay for its call stack.
+func parseAddress(addr string) (mailAddress *mail.Address, unparsed string, ok bool) {
 	i := nameAddressRegexp.FindStringSubmatchIndex(addr)
 	if len(i) != 12 {
 		// fmt.Println("REGEX:", nameAddressRegex)
-		return nil, "", errs.Errorf("could not parse email address: %s", truncateForError(addr))
+		return nil, "", false
 	}
 
 	var name string
@@ -185,8 +189,8 @@ func parseAddress(addr string) (mailAddress *mail.Address, unparsed string, err 
 	// the address of a name, so that "attacker@evil.com ceo@corp.com"
 	// is not read as ceo@corp.com, which net/mail rejects.
 	if strings.HasPrefix(strings.TrimLeft(unparsed, ` "`), "<") {
-		right, unp, err := parseAddress(unparsed)
-		if err == nil && right.Name == "" {
+		right, unp, ok := parseAddress(unparsed)
+		if ok && right.Name == "" {
 			mailAddress.Address = right.Address
 			unparsed = unp
 		}
@@ -196,7 +200,7 @@ func parseAddress(addr string) (mailAddress *mail.Address, unparsed string, err 
 		mailAddress.Name = ""
 	}
 
-	return mailAddress, unparsed, nil
+	return mailAddress, unparsed, true
 }
 
 // decodeName returns the display name with its RFC 2047 encoded-words
@@ -326,9 +330,9 @@ func ParseAddressList(list string) (addrs []*mail.Address, err error) {
 			errList = append(errList, errs.Errorf("stopped parsing email address list after %d errors", len(errList)))
 			break
 		}
-		mailAddress, unparsed, parseErr := parseAddress(remaining)
-		if parseErr != nil {
-			errList = append(errList, errs.Errorf("could not parse email address list, because of: %w", parseErr))
+		mailAddress, unparsed, ok := parseAddress(remaining)
+		if !ok {
+			errList = append(errList, errs.Errorf("could not parse email address list, because of: could not parse email address: %s", truncateForError(remaining)))
 			// Recover by skipping past the next separator so the
 			// remaining addresses can still be parsed and returned.
 			_, after, found := strings.Cut(remaining, ",")
