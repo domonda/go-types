@@ -11,7 +11,9 @@ import (
 
 // NewFinder returns a Finder that uses the first element of lang as a language
 // hint when parsing date candidates. The hint is used to disambiguate ambiguous
-// dd/mm vs mm/dd orderings (e.g. pass language.EN to prefer US ordering).
+// dd/mm vs mm/dd orderings like Normalize: language.EN reads them month first,
+// every other language day first. Without a hint "05/06/2024" with slashes
+// is read month first and "05.06.2024" with dots day first.
 func NewFinder(lang ...language.Code) *Finder {
 	return &Finder{LangHint: getLangHint(lang)}
 }

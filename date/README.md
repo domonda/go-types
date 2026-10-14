@@ -51,10 +51,10 @@ Not supported: year-only or year-month strings (`"2014"`, `"2014-04"`), compact 
 
 Rules for numeric dates:
 
-- **Day first by default.** `"05/06/2024"` is 2024-06-05.
-- **Language hint.** The first `lang` argument is a hint, normalized with `language.Code.Normalized`, so `language.EN`, `"EN"`, `" en"`, `"en-US"` and `"eng"` all mean English. A hint that can't be normalized, like `"english"`, is ignored. Only English changes the result: it reads month first.
-- **The hint only decides ambiguous dates.** It applies only when both numbers are 1 to 12. `"15.06.2024"` and `"06/15/2024"` both give 2024-06-15 with any hint. The separator never matters.
-- **Ordinal suffix.** A suffix like `"1st"` marks the day for ambiguous dates and wins over the hint: `"02 1st 2003"` and `"1st 02 2003"` are 2003-02-01, also with `language.EN`. A number with a suffix is never the month, so `"13 1st 2024"` is an error.
+- **Separators decide without a hint.** An ambiguous date with slashes is month first like in the US: `"05/06/2024"` and `"05/06/24"` are 2024-05-06. With dots it is day first like in Germany: `"05.06.2024"` is 2024-06-05. Other separators are day first too: `"05-06-2024"` and `"05 06 2024"` are 2024-06-05, and so is a mix like `"05/06.2024"`. `Scan`, JSON, XML and `ScanString` have no hint and read this way.
+- **Language hint.** The first `lang` argument is a hint, normalized with `language.Code.Normalized`, so `language.EN`, `"EN"`, `" en"`, `"en-US"` and `"eng"` all mean English. A hint that can't be normalized, like `"english"`, is ignored like no hint. A hint decides instead of the separators: English reads month first, every other language day first, so `"05/06/2024"` with `language.DE` is 2024-06-05. `"en-GB"` is English too and reads month first.
+- **Only ambiguous dates.** The separators and the hint apply only when both numbers are 1 to 12. `"15.06.2024"`, `"15/06/2024"` and `"06/15/2024"` all give 2024-06-15 with any hint.
+- **Ordinal suffix.** A suffix like `"1st"` marks the day for ambiguous dates and wins over the hint and the separators: `"02 1st 2003"` and `"1st 02 2003"` are 2003-02-01, also with `language.EN`, and `"3rd/04/2024"` is 2024-04-03. A number with a suffix is never the month, so `"13 1st 2024"` is an error.
 - **Two-digit years.** 00 to 44 become 2000 to 2044, 45 to 99 become 1945 to 1999. A single digit is never the year, so `"12.12.5"` is an error, and the year 0 is an error in every order, like `"0000 25 may"`.
 - **Date-times.** A `T` after the date is only cut off with the time if a digit follows, so `"2023-12-25T10:00:00Z"` is 2023-12-25 and `"2023-12-25TOTAL"` is an error.
 
@@ -89,7 +89,7 @@ Rules for numeric dates:
 | `ScanString(source, validate)`     | Without `validate` like `Scan`. With `validate` assigns the normalized `source` or returns the error of `Normalized`, also for a blank or zero `source`. |
 | `ScanStringWithLang(source, lang)` | Assigns the normalized `source` using the hint `lang`, `""` for a zero date. Returns `wasNormalized` (source was already `YYYY-MM-DD`), `monthMustBeFirst` (only month first is valid, like `"12/25/2023"`) and an error. Unchanged on error. |
 
-`monthMustBeFirst` lets you detect the date order of a whole document from one unambiguous date, then pass `language.EN` for the rest.
+`monthMustBeFirst` lets you detect the date order of a whole document from one unambiguous date, then pass `language.EN` for the rest. It is false for an ambiguous date like `"05/06/2024"`, also when that is read month first because of its slashes.
 
 ### Conversion to time.Time and strings
 
@@ -343,7 +343,7 @@ An invalid date is read without error, so one bad row doesn't fail a whole query
 - **Valid, Validate, Normalized, ValidAndNormalized.** `Valid` and `Validate` accept any parseable form: `Date("25.12.2023").Valid()` is true. `Normalized` returns the canonical form. `ValidAndNormalized` is true only for an exact `YYYY-MM-DD`. `Date("")` is invalid, `NullableDate("")` is valid.
 - **`==` compares raw strings.** `Date("25.12.2023") != Date("2023-12-25")`. Use `NormalizedEqual` or `Compare`, or normalize on input. Dates read with `Scan`, JSON or XML are already normalized.
 - **Zero dates are no dates.** `"0001-01-01"` and `"0000-00-00"`, also in another spelling like `"01.01.0001"`, are `IsZero()` and not valid. Reading stores them as `""`, `Value` writes SQL NULL, `Date` encodes them in JSON as `""` and `NullableDate` as `null`, and the comparisons treat them like an invalid date.
-- **Day first.** `"05/06/2024"` is June 5 unless the hint is English. The hint never changes a date that has only one valid reading. Only the first `lang` argument is used.
+- **Slashes month first, dots day first.** Without a hint `"05/06/2024"` is May 6 and `"05.06.2024"` is June 5, other separators are day first. A hint decides instead: English month first, every other language day first. Neither changes a date that has only one valid reading. Only the first `lang` argument is used.
 - **Two-digit years** pivot at 45: `"25.12.44"` is 2044-12-25, `"25.12.45"` is 1945-12-25.
 - **Invalid and zero dates become the zero time in arithmetic.** `Date("").AddDays(1)` and `Date("bad").AddDays(1)` return `"0001-01-02"`. Check `Valid` (or `IsZero`) before doing arithmetic. `Format` returns an invalid date unchanged with every layout: `Date("bad").Format("02.01.2006")` is `"bad"`. Comparisons don't use the zero time: `After`, `Before`, `WithinIncl`, `BetweenExcl`, `AfterTime` and `BeforeTime` are false for an invalid date, so `Date("bad").Before("2024-01-01")` and `Date("2024-01-01").EqualOrAfter("bad")` are false.
 - **Reading doesn't validate.** `Scan`, JSON and XML decoding store a valid date as `YYYY-MM-DD` and an invalid one as is, without an error. An invalid date is an error for `Value` and written unchanged by `MarshalJSON`.
@@ -372,9 +372,12 @@ func main() {
 		fmt.Println(d, err)
 	}
 
-	// Both orders are valid: day first by default, month first for English
+	// Both orders are valid: without a hint slashes are month first and
+	// dots day first, a hint decides instead, English month first
 	fmt.Println(date.Normalize("05/06/2024"))
-	fmt.Println(date.Normalize("05/06/2024", language.EN))
+	fmt.Println(date.Normalize("05.06.2024"))
+	fmt.Println(date.Normalize("05/06/2024", language.DE))
+	fmt.Println(date.Normalize("05.06.2024", language.EN))
 
 	// Only one order is valid, so the hint changes nothing
 	fmt.Println(date.Normalize("15.06.2024", language.EN))
@@ -384,6 +387,8 @@ func main() {
 	// 2023-12-25 <nil>
 	// 2016-12-01 <nil>
 	// 2023-12-25 <nil>
+	// 2024-05-06 <nil>
+	// 2024-06-05 <nil>
 	// 2024-06-05 <nil>
 	// 2024-05-06 <nil>
 	// 2024-06-15 <nil>
@@ -468,7 +473,7 @@ func main() {
 - [`language`](../language/README.md): the language codes used as parsing hints.
 - [`strfmt`](../strfmt/README.md): uses `Parser`, `Formatter` and `Format`, and formats `Date` and `NullableDate` with its `FormatConfig.Date` layout.
 - [`nullable`](../nullable/README.md): `nullable.Time` returned by the `NullableDate` midnight methods.
-- [Lenient parsing](../docs/explanation-lenient-parsing.md): why dates are parsed day first and how hints work.
+- [Lenient parsing](../docs/explanation-lenient-parsing.md): how separators and hints decide the order of day and month.
 - [Validation and normalization](../docs/explanation-validation-and-normalization.md): `Valid` vs `Validate` vs `Normalized` across the module.
 - [Null conventions](../docs/explanation-null-conventions.md): `Date` vs `NullableDate` and the zero dates.
 - [Store optional values](../docs/howto-store-optional-values.md)

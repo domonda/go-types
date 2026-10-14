@@ -1513,6 +1513,13 @@ func TestDate_ScanStringWithLang(t *testing.T) {
 		// The EN hint must not reinterpret a day that can't be a month
 		{name: "unambiguous day first with EN hint", source: "15.06.2024", lang: language.EN, want: "2024-06-15"},
 		{name: "unambiguous US order with EN hint", source: "06/15/2024", lang: language.EN, want: "2024-06-15", wantMonthMustBeFirst: true},
+		// Without a hint slashes read an ambiguous date month first, but
+		// monthMustBeFirst stays false: the date could be read day first,
+		// so it can't prove the order of a whole document.
+		{name: "ambiguous slashes without hint", source: "05/06/2024", want: "2024-05-06"},
+		{name: "ambiguous dots without hint", source: "05.06.2024", want: "2024-06-05"},
+		{name: "unambiguous US order without hint", source: "12/25/2023", want: "2023-12-25", wantMonthMustBeFirst: true},
+		{name: "unambiguous US order with dots", source: "12.25.2023", want: "2023-12-25", wantMonthMustBeFirst: true},
 		{name: "empty", source: "", wantErr: true},
 		{name: "invalid", source: "invalid", wantErr: true},
 		// Every spelling of a zero date is assigned as "" like Scan does,
@@ -1560,7 +1567,10 @@ func TestNormalize_HintOnlyDecidesAmbiguousOrder(t *testing.T) {
 		{name: "DE hint, unambiguous day first", str: "15.06.2024", lang: []language.Code{language.DE}, want: "2024-06-15"},
 		{name: "DE hint, unambiguous month first", str: "06/15/2024", lang: []language.Code{language.DE}, want: "2024-06-15"},
 		{name: "DE hint, ambiguous", str: "05/06/2024", lang: []language.Code{language.DE}, want: "2024-06-05"},
-		{name: "no hint, ambiguous", str: "05/06/2024", want: "2024-06-05"},
+		// Without a hint the separators decide: slashes are US style and
+		// read month first, dots German style and read day first
+		{name: "no hint, ambiguous", str: "05/06/2024", want: "2024-05-06"},
+		{name: "no hint, ambiguous, dots", str: "05.06.2024", want: "2024-06-05"},
 		// language.Code.Validate accepts these spellings of English,
 		// so they must work as hint too: a padded hint must not be
 		// cut to " e", and a BCP-47 tag selects its language
@@ -1593,6 +1603,143 @@ func TestNormalize_HintOnlyDecidesAmbiguousOrder(t *testing.T) {
 			}
 			require.NoError(t, err)
 			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+// TestNormalize_AmbiguousOrderFollowsSeparators protects the order of an
+// ambiguous numeric date read without a language hint, which is how
+// JSON, XML, SQL and strfmt read every date: "03/04/2024" with slashes
+// is US style and was stored as 3 April, a silently wrong date. Slashes
+// are read month first and dots day first, the German style. Other
+// separators keep the day first default, because no convention marks
+// them as US style. A language hint still decides instead of the
+// separators, and an ordinal suffix before the hint.
+func TestNormalize_AmbiguousOrderFollowsSeparators(t *testing.T) {
+	const (
+		march4 Date = "2024-03-04"
+		april3 Date = "2024-04-03"
+	)
+	tests := []struct {
+		str  string
+		lang language.Code
+		want Date
+	}{
+		// No hint: the separators decide
+		{str: "03/04/2024", want: march4},
+		{str: "03/04/24", want: march4},
+		{str: "3/4/2024", want: march4},
+		{str: "03 / 04 / 2024", want: march4},
+		{str: "03/04/'24", want: march4},
+		{str: "Mon, 03/04/2024", want: march4},
+		{str: "03/04/2024 00:00:00", want: march4},
+		{str: "03.04.2024", want: april3},
+		{str: "03.04.24", want: april3},
+		{str: "3.4.2024", want: april3},
+		{str: "03-04-2024", want: april3},
+		{str: "03-04-24", want: april3},
+		{str: "03 04 2024", want: april3},
+		// Only both separators as slashes are US style
+		{str: "03/04.2024", want: april3},
+		{str: "03.04/2024", want: april3},
+		{str: "03/04-2024", want: april3},
+		// A hint that can't be normalized is no hint
+		{str: "03/04/2024", lang: "xx", want: march4},
+		{str: "03.04.2024", lang: "xx", want: april3},
+		// A hint decides instead of the separators
+		{str: "03/04/2024", lang: language.EN, want: march4},
+		{str: "03/04/24", lang: language.EN, want: march4},
+		{str: "03.04.2024", lang: language.EN, want: march4},
+		{str: "03-04-2024", lang: language.EN, want: march4},
+		{str: "03/04/2024", lang: language.DE, want: april3},
+		{str: "03/04/24", lang: language.DE, want: april3},
+		{str: "03/04/2024", lang: language.FR, want: april3},
+		{str: "03.04.2024", lang: language.DE, want: april3},
+		// An ordinal suffix marks the day before slashes decide
+		{str: "3rd/04/2024", want: april3},
+		{str: "03/4th/2024", want: march4},
+		// An unambiguous date has one reading with every separator and hint
+		{str: "13/04/2024", want: "2024-04-13"},
+		{str: "04/13/2024", want: "2024-04-13"},
+		{str: "13.04.2024", want: "2024-04-13"},
+		{str: "04.13.2024", want: "2024-04-13"},
+		{str: "04/13/24", lang: language.DE, want: "2024-04-13"},
+		{str: "13/04/24", lang: language.EN, want: "2024-04-13"},
+	}
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("%s %s", tt.str, tt.lang), func(t *testing.T) {
+			got, err := Normalize(tt.str, tt.lang)
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+
+			// NullableDate and NormalizedLang parse the same way
+			gotNullable, err := NormalizeNullable(tt.str, tt.lang)
+			require.NoError(t, err)
+			assert.Equal(t, tt.want.Nullable(), gotNullable, "NormalizeNullable")
+			gotLang, err := Date(tt.str).NormalizedLang(tt.lang)
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, gotLang, "NormalizedLang")
+		})
+	}
+}
+
+// TestDate_ReadingWithoutHintFollowsSeparators protects the reading paths
+// that can't pass a language hint from the wrong order of a US date: a
+// JSON or XML document, a database row or a strfmt cell with
+// "03/04/2024" was stored as 2024-04-03. Every path must read it like
+// Normalize without a hint, and "03.04.2024" day first.
+func TestDate_ReadingWithoutHintFollowsSeparators(t *testing.T) {
+	for source, want := range map[string]Date{
+		"03/04/2024": "2024-03-04",
+		"03.04.2024": "2024-04-03",
+	} {
+		t.Run(source, func(t *testing.T) {
+			var d Date
+			require.NoError(t, d.Scan(source))
+			assert.Equal(t, want, d, "Scan")
+
+			d = ""
+			require.NoError(t, d.Scan([]byte(source)))
+			assert.Equal(t, want, d, "Scan []byte")
+
+			var doc struct {
+				Date     Date         `json:"date" xml:"date"`
+				Nullable NullableDate `json:"nullable" xml:"nullable,attr"`
+			}
+			jsonDoc := fmt.Sprintf(`{"date":%q,"nullable":%q}`, source, source)
+			require.NoError(t, json.Unmarshal([]byte(jsonDoc), &doc))
+			assert.Equal(t, want, doc.Date, "UnmarshalJSON")
+			assert.Equal(t, want.Nullable(), doc.Nullable, "NullableDate.UnmarshalJSON")
+
+			doc.Date, doc.Nullable = "", ""
+			xmlDoc := fmt.Sprintf(`<doc nullable=%q><date>%s</date></doc>`, source, source)
+			require.NoError(t, xml.Unmarshal([]byte(xmlDoc), &doc))
+			assert.Equal(t, want, doc.Date, "UnmarshalXML")
+			assert.Equal(t, want.Nullable(), doc.Nullable, "NullableDate.UnmarshalXMLAttr")
+
+			for _, validate := range []bool{false, true} {
+				d = ""
+				require.NoError(t, d.ScanString(source, validate))
+				assert.Equal(t, want, d, "ScanString(validate=%t)", validate)
+			}
+
+			var n NullableDate
+			require.NoError(t, n.Scan(source))
+			assert.Equal(t, want.Nullable(), n, "NullableDate.Scan")
+
+			norm, err := Date(source).Normalized()
+			require.NoError(t, err)
+			assert.Equal(t, want, norm, "Normalized")
+
+			// The Finder finds the date, and Normalize with the hint of the
+			// Finder, which is none, reads the found text the same way
+			text := "Invoice of " + source + ", thank you"
+			finder := NewFinder()
+			found := finder.FindAllIndex([]byte(text), -1)
+			require.Len(t, found, 1, "Finder")
+			got, err := Normalize(text[found[0][0]:found[0][1]], finder.LangHint)
+			require.NoError(t, err)
+			assert.Equal(t, want, got, "Normalize of the found text")
 		})
 	}
 }
@@ -1690,20 +1837,21 @@ func TestNormalize_DateTimeNeedsTime(t *testing.T) {
 
 // TestDate_NormalizedLang protects the split of the language hint from
 // Normalized: Normalized implements types.Normalizable and reads an
-// ambiguous numeric date day first, NormalizedLang still lets
-// language.EN read it month first, and a hint that can't be
-// normalized gives no hint instead of an error.
+// ambiguous numeric date with slashes month first, like JSON and SQL
+// reading do, NormalizedLang still lets language.DE read it day first,
+// and a hint that can't be normalized gives no hint instead of an
+// error, so "xx" reads like "".
 func TestDate_NormalizedLang(t *testing.T) {
 	norm, err := Date("05/06/2024").Normalized()
 	require.NoError(t, err)
-	assert.Equal(t, Date("2024-06-05"), norm)
+	assert.Equal(t, Date("2024-05-06"), norm)
 
 	for lang, want := range map[language.Code]Date{
 		language.EN: "2024-05-06",
 		"EN-us":     "2024-05-06",
 		language.DE: "2024-06-05",
-		"":          "2024-06-05",
-		"xx":        "2024-06-05",
+		"":          "2024-05-06",
+		"xx":        "2024-05-06",
 	} {
 		norm, err = Date("05/06/2024").NormalizedLang(lang)
 		require.NoError(t, err, "NormalizedLang(%q)", lang)
@@ -1716,7 +1864,7 @@ func TestDate_NormalizedLang(t *testing.T) {
 
 	nullable, err := NullableDate("05/06/2024").Normalized()
 	require.NoError(t, err)
-	assert.Equal(t, NullableDate("2024-06-05"), nullable)
+	assert.Equal(t, NullableDate("2024-05-06"), nullable)
 	nullable, err = Null.NormalizedLang(language.EN)
 	require.NoError(t, err)
 	assert.Equal(t, Null, nullable)

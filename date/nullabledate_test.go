@@ -694,6 +694,10 @@ func TestNullableDate_ScanStringWithLang(t *testing.T) {
 		{name: "unambiguous US order", source: "12/25/2023", lang: language.DE, want: "2023-12-25", wantMonthMustBeFirst: true},
 		{name: "ambiguous with EN hint", source: "05/06/2024", lang: language.EN, want: "2024-05-06"},
 		{name: "ambiguous with DE hint", source: "05/06/2024", lang: language.DE, want: "2024-06-05"},
+		// Like Date: without a hint the separators decide the order of an
+		// ambiguous date, which still doesn't prove month first
+		{name: "ambiguous slashes without hint", source: "05/06/2024", want: "2024-05-06"},
+		{name: "ambiguous dots without hint", source: "05.06.2024", want: "2024-06-05"},
 		{name: "invalid", source: "invalid", wantErr: true},
 	}
 	for _, tt := range tests {

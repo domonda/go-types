@@ -32,8 +32,12 @@ func TestParser_Parse(t *testing.T) {
 		{input: "Fri, 03 Jul 2015", want: "2015-07-03"},
 		{input: "30.11.2023 00:00:00", want: "2023-11-30"},
 		{input: "2 janv. 2019", want: "2019-01-02"},
-		// The language hint only matters for ambiguous numeric day/month order
-		{input: "05/06/2024", want: "2024-06-05"},
+		// The language hint only matters for ambiguous numeric day/month order.
+		// Without one, slashes are read month first like in the US, because
+		// JSON, XML and SQL have no hint and read US dates day first otherwise,
+		// and dots day first like in Germany.
+		{input: "05/06/2024", want: "2024-05-06"},
+		{input: "05.06.2024", want: "2024-06-05"},
 		{input: "05/06/2024", lang: []language.Code{language.EN}, want: "2024-05-06"},
 		{input: "05/06/2024", lang: []language.Code{"en-US"}, want: "2024-05-06"},
 		{input: "05/06/2024", lang: []language.Code{language.DE}, want: "2024-06-05"},

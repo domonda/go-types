@@ -125,7 +125,7 @@ func main() {
 }
 ```
 
-`date.Normalize` also reads `Dec 25, 2023` and `12/25/2023`. A date like `05/06/2024` could be either order and is read day first, unless you pass a language hint. [Lenient parsing](explanation-lenient-parsing.md#dates) explains the rules.
+`date.Normalize` also reads `Dec 25, 2023` and `12/25/2023`. A date like `05/06/2024` could be either order: without a language hint it is read month first because of its slashes, while `05.06.2024` with dots is read day first. [Lenient parsing](explanation-lenient-parsing.md#dates) explains the rules.
 
 ## Step 4: Parse the total and the currency
 

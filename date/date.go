@@ -22,12 +22,16 @@ import (
 // Normalize returns str as a Date in the canonical YYYY-MM-DD form,
 // or an error if the input cannot be parsed.
 //
-// The first lang argument, if present, is used as a hint to
-// disambiguate dd/mm vs mm/dd ordering when both parts are numeric and
-// both are valid day and month values (e.g. "05/06/2024"). Pass
-// language.EN to bias toward US ordering. An English ordinal suffix
-// marks the day and wins over the hint: "1st 02 2003" is 2003-02-01
-// also with language.EN.
+// A numeric date with the year last is ambiguous when both of its first
+// numbers are valid months, like "05/06/2024". Without a language hint
+// the separators decide: slashes are read month first like in the US,
+// "05/06/2024" is 2024-05-06, and dots day first like in Germany,
+// "05.06.2024" is 2024-06-05. Other separators, like "05-06-2024", are
+// read day first. The first lang argument, if present, is a hint that
+// decides instead of the separators: language.EN reads month first,
+// every other language day first, so "05/06/2024" with language.DE
+// is 2024-06-05. An English ordinal suffix marks the day and wins over
+// the hint: "1st 02 2003" is 2003-02-01 also with language.EN.
 //
 // Accepted input shapes (case-insensitive, lenient whitespace):
 //
@@ -342,6 +346,9 @@ func (date *Date) ScanString(source string, validate bool) error {
 // monthMustBeFirst to indicate if the date format requires month-first ordering,
 // and an error if parsing fails, also for a blank source. A zero date in
 // any spelling, see IsZero, is assigned as "" like by Scan.
+// monthMustBeFirst is only true if month first is the only valid reading,
+// like for "12/25/2023", not for an ambiguous date like "05/06/2024"
+// that is read month first because of its slashes or the hint.
 func (date *Date) ScanStringWithLang(source string, lang language.Code) (wasNormalized bool, monthMustBeFirst bool, err error) {
 	if strutil.TrimSpace(source) != "" && Date(source).IsZero() {
 		*date = ""
@@ -945,8 +952,10 @@ func (date Date) Normalized() (Date, error) {
 
 // NormalizedLang returns the date in normalized form like Normalized,
 // with lang as hint for the order of day and month in an ambiguous
-// numeric date: language.EN reads "05/06/2024" month first.
-// An empty lang or one that can't be normalized gives no hint.
+// numeric date: language.EN reads "05.06.2024" month first and every
+// other language reads "05/06/2024" day first.
+// An empty lang or one that can't be normalized gives no hint,
+// then the separators decide, see Normalize.
 // Returns the Date unchanged in case of an error.
 func (date Date) NormalizedLang(lang language.Code) (Date, error) {
 	if date.ValidAndNormalized() {
@@ -995,18 +1004,13 @@ func datePart(str string) string {
 	return strings.TrimFunc(trimmed, isDateTrimRune)
 }
 
-func normalizeDate(str string, langHint language.Code) (string, bool, error) {
+func normalizeDate(str string, lang language.Code) (string, bool, error) {
 	trimmed := datePart(str)
 	if len(trimmed) < MinLength {
 		return "", false, fmt.Errorf("too short for a date: %q", str)
 	}
 
 	trimmed = strings.ToLower(trimmed)
-
-	if langHint != "" {
-		// An empty hint would only build a discarded error
-		langHint, _ = langHint.Normalized()
-	}
 
 	parts := strings.FieldsFunc(trimmed, isDateSeparatorRune)
 	if len(parts) == 4 {
@@ -1152,12 +1156,10 @@ func normalizeDate(str string, langHint language.Code) (string, bool, error) {
 
 	case len0 == 2 && len1 == 2 && len2 == 4:
 		monthMustBeFirst := validMonth(val0) && !validMonth(val1)
-		// The ordinal day hint and the language hint only decide
-		// the order if both numbers could be the month.
-		// An ordinal suffix in the input marks the day explicitly,
-		// so the language hint only applies without one.
+		// The ordinal day hint, the language hint and the separators
+		// only decide the order if both numbers could be the month
 		ambiguous := validMonth(val0) && validMonth(val1)
-		monthFirst := monthMustBeFirst || (ambiguous && (dayHint == 1 || (dayHint == -1 && langHint == "en")))
+		monthFirst := monthMustBeFirst || (ambiguous && ambiguousMonthFirst(trimmed, dayHint, lang))
 		// A number with an ordinal suffix can't be the month
 		if (monthFirst && dayHint == 0) || (!monthFirst && dayHint == 1) {
 			return "", false, fmt.Errorf("invalid date: %q", str)
@@ -1178,6 +1180,48 @@ func normalizeDate(str string, langHint language.Code) (string, bool, error) {
 	}
 
 	return "", false, fmt.Errorf("invalid date: %q", str)
+}
+
+// ambiguousMonthFirst reports if a numeric date with the year last,
+// whose first two numbers can both be the month, is read month first.
+// str is the date part of the date, see datePart, and dayHint the index
+// of the number with an ordinal suffix, or -1.
+//
+// An ordinal suffix marks the day explicitly, so it decides first.
+// Then a language hint decides, because it knows the convention of the
+// whole document: English reads month first, every other language day
+// first. Without a hint the separators decide: "03/04/2024" with
+// slashes is US style and read month first, because JSON, XML and SQL
+// can't pass a hint and read it day first as 3 April otherwise.
+// "03.04.2024" with dots is German style and read day first, and so are
+// other separators like "03-04-2024", which have no clear convention.
+func ambiguousMonthFirst(str string, dayHint int, lang language.Code) bool {
+	if dayHint != -1 {
+		return dayHint == 1
+	}
+	if hint := langHint(lang); hint != "" {
+		return hint == language.EN
+	}
+	return slashSeparated(str)
+}
+
+// slashSeparated reports if both separators between the last three
+// parts of the date str have a '/', like in "03/04/2024", "3 / 4 / 24",
+// "03/04/'24" and "Mon, 03/04/2024", but not "03/04.2024".
+func slashSeparated(str string) bool {
+	for range 2 {
+		// Cut the last part, then the separators before it
+		withSeparators := strings.TrimRightFunc(str, isNoDateSeparatorRune)
+		str = strings.TrimRightFunc(withSeparators, isDateSeparatorRune)
+		if !strings.Contains(withSeparators[len(str):], "/") {
+			return false
+		}
+	}
+	return true
+}
+
+func isNoDateSeparatorRune(r rune) bool {
+	return !isDateSeparatorRune(r)
 }
 
 func validYear(year int) bool {

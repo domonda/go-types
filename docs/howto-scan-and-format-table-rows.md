@@ -227,7 +227,7 @@ The messages below are the errors `strfmt.Scan` returns, after `errs.UnwrapCallS
 
 **`can't scan "1.000" as int because strconv.ParseInt: parsing "1.000": invalid syntax`.** Integer fields are parsed as plain base 10 numbers, without separators. Use a `float64` or money field for numbers with thousands separators.
 
-**A German amount `1.000` scans as 1, or a US date `05/06/2024` scans as 2024-06-05, without an error.** A single separator is a decimal separator, see [The "1,000" ambiguity](explanation-lenient-parsing.md#the-1000-ambiguity), and `strfmt.Scan` doesn't apply `AcceptedMoneyAmountDecimals`. `date.Date.ScanString` has no language hint, so ambiguous dates are read day first. For both, register a scanner for the type. A registered scanner owns its type completely, also for empty cells, so it has to handle those itself:
+**A German amount `1.000` scans as 1, or a British date `05/06/2024` scans as 2024-05-06, without an error.** A single separator is a decimal separator, see [The "1,000" ambiguity](explanation-lenient-parsing.md#the-1000-ambiguity), and `strfmt.Scan` doesn't apply `AcceptedMoneyAmountDecimals`. `date.Date.ScanString` has no language hint, so ambiguous dates with slashes are read month first like US dates. For both, register a scanner for the type. A registered scanner owns its type completely, also for empty cells, so it has to handle those itself:
 
 ```go
 package main
@@ -246,10 +246,10 @@ import (
 func main() {
 	scanConfig := strfmt.NewScanConfig()
 
-	// Read dates month first
+	// Read dates day first, every language but English does
 	scanConfig.SetTypeScanner(reflect.TypeFor[date.Date](), strfmt.ScannerFunc(
 		func(dest reflect.Value, str string, config *strfmt.ScanConfig) error {
-			d, err := date.Normalize(str, language.EN)
+			d, err := date.Normalize(str, language.DE)
 			if err != nil {
 				return err
 			}
@@ -279,7 +279,7 @@ func main() {
 	fmt.Println(a, errs.UnwrapCallStack(err))
 
 	// Output:
-	// 2024-05-06 <nil>
+	// 2024-06-05 <nil>
 	// 0.00 parsing "1.000" returned 3 decimals which is not in accepted list of [0 2 4]
 }
 ```

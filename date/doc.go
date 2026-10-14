@@ -3,10 +3,13 @@
 //
 // [Normalize] and [Date.Normalized] turn input like "25.12.2023",
 // "Dec 25, 2023" or "1. Dezember 2016" into "2023-12-25".
-// Numeric dates are read day first. An English language hint
-// (language.EN, "en-US") switches to month first, but only for dates
-// like "05/06/2024" where both orders are valid and no ordinal suffix
-// like "1st" marks the day.
+// A numeric date like "05/06/2024", where both orders are valid and no
+// ordinal suffix like "1st" marks the day, is read by its separators:
+// month first with slashes like in the US, day first with dots like
+// in Germany ("05.06.2024") and with any other separator. A language
+// hint decides instead: English (language.EN, "en-US") reads month
+// first, every other language day first. JSON, XML and SQL reading
+// has no hint, so it follows the separators.
 // Two-digit years below 45 are read as 20xx, all others as 19xx.
 //
 // The package includes:

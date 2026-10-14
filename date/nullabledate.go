@@ -148,8 +148,9 @@ func (n *NullableDate) ScanString(source string, validate bool) error {
 
 // ScanStringWithLang parses and assigns the source string as a NullableDate using the given language hint.
 // Returns wasNormalized to indicate if the source was already in normalized form,
-// monthMustBeFirst to indicate if the date format requires month-first ordering,
-// and an error if parsing fails. Null values (empty, whitespace only or zero) are treated as Null.
+// monthMustBeFirst to indicate if the date format requires month-first ordering
+// like Date.ScanStringWithLang, and an error if parsing fails.
+// Null values (empty, whitespace only or zero) are treated as Null.
 func (n *NullableDate) ScanStringWithLang(source string, lang language.Code) (wasNormalized bool, monthMustBeFirst bool, err error) {
 	if NullableDate(source).IsNull() {
 		*n = Null
