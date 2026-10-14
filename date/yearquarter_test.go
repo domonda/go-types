@@ -2,6 +2,9 @@ package date
 
 import (
 	"encoding/json"
+	"fmt"
+	"math"
+	"math/big"
 	"testing"
 	"time"
 
@@ -327,6 +330,7 @@ func TestYearQuarter_AddQuarters(t *testing.T) {
 		// Past the years of Date the result is invalid, so that Value refuses it
 		{name: "after the last quarter", yq: "9999-Q4", quarters: 1, want: "10000-Q1"},
 		{name: "before the year 1", yq: "0001-Q2", quarters: -2, want: "0000-Q4"},
+		{name: "before the year 0", yq: "0001-Q4", quarters: -8, want: "-001-Q4"},
 		// Invalid stays unchanged like in AddYears, not "0000-Q1"
 		{name: "invalid unchanged", yq: "bad", quarters: 1, want: "bad"},
 		{name: "invalid quarter unchanged", yq: "2023-Q5", quarters: 1, want: "2023-Q5"},
@@ -336,6 +340,76 @@ func TestYearQuarter_AddQuarters(t *testing.T) {
 			got := tt.yq.AddQuarters(tt.quarters)
 			assert.Equal(t, tt.want, got)
 		})
+	}
+}
+
+// TestYearQuarter_AddQuartersLikeTime protects the quarter arithmetic
+// that replaced a loop per year: for every valid year-quarter of the
+// years 1 to 9999 and up to two years back and forward, AddQuarters
+// must give the quarter of time.Time arithmetic on its first month,
+// also past the years 1 and 9999, where the result is invalid.
+func TestYearQuarter_AddQuartersLikeTime(t *testing.T) {
+	for year := 1; year <= 9999; year++ {
+		for quarter := 1; quarter <= 4; quarter++ {
+			yq := YearQuarterFrom(year, quarter)
+			if yq.IsZero() {
+				continue // "0001-Q1" is not valid and returned unchanged
+			}
+			for n := -9; n <= 9; n++ {
+				tm := time.Date(year, time.Month(3*(quarter-1)+1+3*n), 1, 0, 0, 0, 0, time.UTC)
+				want := YearQuarterFrom(tm.Year(), (int(tm.Month())-1)/3+1)
+				if got := yq.AddQuarters(n); got != want {
+					t.Fatalf("%s.AddQuarters(%d) = %s, want %s", yq, n, got, want)
+				}
+			}
+		}
+	}
+}
+
+// TestYearQuarter_AddQuartersExtremes protects against a denial of
+// service from a quarter count read from input: AddQuarters looped once
+// per year, which took 400ms for 1<<32 quarters and never returned for
+// math.MaxInt, whose sum with the quarter overflowed. The result must
+// come at once, match exact big.Int arithmetic and be invalid, so that
+// Value refuses it instead of writing a wrapped around year-quarter.
+func TestYearQuarter_AddQuartersExtremes(t *testing.T) {
+	type call struct {
+		yq       YearQuarter
+		quarters int
+	}
+	var calls []call
+	for _, yq := range []YearQuarter{"0001-Q2", "2023-Q2", "9999-Q4"} {
+		// Every remainder of the division by 4 at both ends of int
+		for i := range 4 {
+			calls = append(calls, call{yq, math.MaxInt - i}, call{yq, math.MinInt + i})
+		}
+	}
+
+	results := make(chan []YearQuarter, 1)
+	go func() {
+		var got []YearQuarter
+		for _, c := range calls {
+			got = append(got, c.yq.AddQuarters(c.quarters))
+		}
+		results <- got
+	}()
+	var got []YearQuarter
+	select {
+	case got = <-results:
+	case <-time.After(10 * time.Second):
+		t.Fatal("AddQuarters didn't return for math.MaxInt or math.MinInt")
+	}
+
+	for i, c := range calls {
+		// Quarters since Q1 of the year 0, floored by the Euclidean DivMod
+		total := big.NewInt(int64(c.yq.Year())*4 + int64(c.yq.Quarter()) - 1)
+		total.Add(total, big.NewInt(int64(c.quarters)))
+		year, quarter := new(big.Int).DivMod(total, big.NewInt(4), new(big.Int))
+		want := YearQuarter(fmt.Sprintf("%04d-Q%d", year, quarter.Int64()+1))
+		assert.Equal(t, want, got[i], "%s.AddQuarters(%d)", c.yq, c.quarters)
+		_, err := got[i].Value()
+		assert.Error(t, err, "Value of %s.AddQuarters(%d)", c.yq, c.quarters)
+		assert.Equal(t, got[i].Nullable(), c.yq.Nullable().AddQuarters(c.quarters), "NullableYearQuarter")
 	}
 }
 
@@ -858,6 +932,8 @@ func TestNullableYearQuarter_AddQuarters(t *testing.T) {
 		{name: "add 4 quarters", yq: "2023-Q2", quarters: 4, want: "2024-Q2"},
 		{name: "quarter overflow", yq: "2023-Q4", quarters: 1, want: "2024-Q1"},
 		{name: "subtract 1 quarter", yq: "2023-Q2", quarters: -1, want: "2023-Q1"},
+		// Past the years of Date the result is invalid like for YearQuarter
+		{name: "after the last quarter", yq: "9999-Q4", quarters: 1, want: "10000-Q1"},
 		{name: "null", yq: YearQuarterNull, quarters: 1, want: YearQuarterNull},
 	}
 	for _, tt := range tests {

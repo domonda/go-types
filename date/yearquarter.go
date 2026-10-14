@@ -289,24 +289,19 @@ func (yq YearQuarter) AddQuarters(quarters int) YearQuarter {
 	if !yq.Valid() {
 		return yq
 	}
-	year := yq.Year()
-	quarter := yq.Quarter()
-
-	totalQuarters := quarter + quarters
-
-	// Handle positive overflow
-	for totalQuarters > 4 {
-		year++
-		totalQuarters -= 4
-	}
-
-	// Handle negative overflow
-	for totalQuarters < 1 {
+	// Split quarters into years and quarters before adding them,
+	// because a loop per year never ends in practice for a large value
+	// from input, and adding quarters whole would overflow for math.MaxInt
+	year := yq.Year() + quarters/4
+	quarter := yq.Quarter() - 1 + quarters%4 // 0 based, from -3 to 6
+	if quarter < 0 {
 		year--
-		totalQuarters += 4
+		quarter += 4
+	} else if quarter > 3 {
+		year++
+		quarter -= 4
 	}
-
-	return YearQuarterFrom(year, totalQuarters)
+	return YearQuarterFrom(year, quarter+1)
 }
 
 // ContainsTime returns true if the given time falls within this year-quarter.
