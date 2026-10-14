@@ -441,6 +441,80 @@ func TestParseAddressList_Comments(t *testing.T) {
 	}
 }
 
+// TestParseAddressList_UnclosedQuoteOrAngle protects that ParseAddressList
+// reads quotes and angle brackets like SplitAddressList, like comments in
+// TestParseAddressList_Comments: a comma after an unclosed quote or angle
+// bracket is in it and separates no addresses. `"Doe <a@b.cc>, z@y.zz`
+// parsed as two addresses without an error, while SplitAddressList and
+// so AddressSet.Scan read one entry and net/mail rejects the list.
+// A leading or doubled comma is an empty entry, which became the display
+// name "," of the next address.
+func TestParseAddressList_UnclosedQuoteOrAngle(t *testing.T) {
+	tests := []struct {
+		list    string
+		want    []string // the addresses parts of the parsed addresses
+		wantErr bool
+	}{
+		{list: `"Doe <a@b.cc>, z@y.zz`, want: []string{"a@b.cc"}, wantErr: true},
+		{list: `x <a@b.cc, z@y.zz`, want: []string{"a@b.cc"}, wantErr: true},
+		{list: `Jo"hn <a@example.com>, b@example.com`, want: []string{"a@example.com"}, wantErr: true},
+		// The comma trimmed from the end of the list is in the bracket
+		{list: `<a@b.cc,`, want: []string{"a@b.cc"}, wantErr: true},
+		// Without a comma after them they hold no other entry,
+		// so the address is valid like for ParseAddress
+		{list: `"Doe <a@b.cc>`, want: []string{"a@b.cc"}},
+		{list: `x <a@b.cc`, want: []string{"a@b.cc"}},
+		{list: `a@b.cc, Jo"hn <c@d.ee>`, want: []string{"a@b.cc", "c@d.ee"}},
+		// An empty entry is no display name
+		{list: `,<a@example.com>`, want: []string{"a@example.com"}, wantErr: true},
+		{list: `a@example.com,, <b@example.com>`, want: []string{"a@example.com", "b@example.com"}, wantErr: true},
+		// After an earlier error, parsing recovers at every comma that
+		// separates entries, up to the entry with the unclosed quote or
+		// angle bracket, which holds the rest of the list
+		{list: `bad, a@b.cc, x <c@d.ee, e@f.gg`, want: []string{"a@b.cc", "c@d.ee"}, wantErr: true},
+		{list: `bad, a@b.cc, "e <e@f.com>, g@h.com`, want: []string{"a@b.cc", "e@f.com"}, wantErr: true},
+		{list: `bad (x, y), a@b.cc, Jo"hn <c@d.ee>, e@f.gg`, want: []string{"a@b.cc", "c@d.ee"}, wantErr: true},
+		// A comma that separates entries for SplitAddressList within what
+		// the address pattern reads as one address, here between the
+		// quotes of the second address in angle brackets after the first,
+		// see the special case in parseAddress. Neither entry is valid.
+		{list: `x@y.com "<"a,b"@x.com>`, want: nil, wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.list, func(t *testing.T) {
+			addrs, err := ParseAddressList(tt.list)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+			var got []string
+			for _, addr := range addrs {
+				got = append(got, addr.Address)
+			}
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+// TestParseAddressList_EscapedDroppedRune protects that a backslash in a
+// quoted name escapes the rune after it also when the parser drops that
+// rune, like a zero width joiner: it escaped the next rune instead, so
+// that the parser read the quote after it as part of the name, while
+// net/mail reads it as the end of the name and other recipients after it.
+func TestParseAddressList_EscapedDroppedRune(t *testing.T) {
+	const list = "\"x\\\u200d\" <ok@example.com>, b@example.com"
+	parsed, err := ParseAddressList(list)
+	require.NoError(t, err)
+	stdlib, err := mail.ParseAddressList(list)
+	require.NoError(t, err)
+	require.Len(t, parsed, len(stdlib))
+	for i := range parsed {
+		assert.Equal(t, stdlib[i].Address, parsed[i].Address)
+	}
+	assert.Equal(t, "x", parsed[0].Name)
+}
+
 func TestFindAllAddresses(t *testing.T) {
 	tests := []struct {
 		text string

@@ -56,27 +56,59 @@ var (
 	// RFC 2047 encoded-words separated by whitespace
 	encodedWordsRegexp = regexp.MustCompile(`^(?:\s*` + encodedWord + `)+\s*$`)
 
+	// encodedNameRegexp matches the display name of only RFC 2047
+	// encoded-words at the start of an address list entry, which
+	// rfc2047EncodedNamePart reads, up to and including its '<'
+	encodedNameRegexp = regexp.MustCompile(`^ *` + rfc2047EncodedNamePart)
+
 	// placeholderListRegexp matches a whole lower case list that is only
 	// a placeholder for hidden recipients, like "undisclosed-recipients:;",
 	// but not an address or a list that only starts with such a word
 	placeholderListRegexp = regexp.MustCompile(`^(?:undisclosed|withheld)[- ]recipients(?: *: *;?)?$`)
 )
 
+// sanitizeAddr returns s trimmed, with whitespace mapped to spaces and
+// without runes that are not graphic, the replacement character and
+// invalid UTF-8. A backslash that escapes a removed rune in a quoted
+// string or a comment is removed with it, so that it doesn't escape the
+// next rune instead: the sanitized text has its quotes, comments and
+// commas where net/mail finds them in s, and so the same recipients.
 func sanitizeAddr(s string) string {
-	return strutil.TrimSpace(
-		strings.Map(
-			func(r rune) rune {
-				if strutil.IsSpace(r) {
-					return ' '
-				}
-				if !unicode.IsGraphic(r) || r == unicode.ReplacementChar {
-					return -1
-				}
-				return r
-			},
-			s,
-		),
-	)
+	if strings.IndexByte(s, '\\') < 0 {
+		return strutil.TrimSpace(strings.Map(sanitizeRune, s))
+	}
+	sanitized := make([]byte, 0, len(s))
+	var state listState
+	for i := 0; i < len(s); {
+		r, size := utf8.DecodeRuneInString(s[i:])
+		escaped := state.escaped
+		for j := i; j < i+size; j++ {
+			state.read(s[j])
+		}
+		switch mapped := sanitizeRune(r); {
+		case mapped == ' ':
+			sanitized = append(sanitized, ' ')
+		case mapped < 0 && escaped:
+			// The escaping backslash is the last byte written
+			sanitized = sanitized[:len(sanitized)-1]
+		case mapped >= 0:
+			sanitized = append(sanitized, s[i:i+size]...)
+		}
+		i += size
+	}
+	return strutil.TrimSpace(string(sanitized))
+}
+
+// sanitizeRune maps whitespace to a space and runes that are not graphic
+// and the replacement character to -1 for sanitizeAddr.
+func sanitizeRune(r rune) rune {
+	if strutil.IsSpace(r) {
+		return ' '
+	}
+	if !unicode.IsGraphic(r) || r == unicode.ReplacementChar {
+		return -1
+	}
+	return r
 }
 
 // FindAllAddresses uses the AddressRegexp to find all
@@ -270,31 +302,6 @@ func readComment(s string) (comment, rest string, ok bool) {
 	return "", s, false
 }
 
-// endsInComment reports if a comment opened in s is still open at the
-// end of s, reading s like SplitAddressList: a parenthesis within double
-// quotes opens no comment, a double quote within a comment opens no
-// quoted string, and within both a backslash escapes the next character.
-func endsInComment(s string) bool {
-	quoted, depth := false, 0
-	for i := 0; i < len(s); i++ {
-		// All delimiters are ASCII, so iterating bytes is safe for UTF-8
-		c := s[i]
-		switch {
-		case (quoted || depth > 0) && c == '\\':
-			i++
-		case quoted:
-			quoted = c != '"'
-		case c == '(':
-			depth++
-		case c == ')' && depth > 0:
-			depth--
-		case c == '"' && depth == 0:
-			quoted = true
-		}
-	}
-	return depth > 0
-}
-
 // decodeName returns the display name with its RFC 2047 encoded-words
 // decoded and cleaned by cleanName. Cleaned after decoding, because an
 // encoded-word can hold runes that sanitizeAddr removed from the input.
@@ -436,21 +443,25 @@ func truncateForError(s string) string {
 // error. Text after a placeholder is parsed like any other list.
 // Group syntax like "Team: a@example.com;" is not supported.
 //
-// Comments are read with nesting like by ParseAddress and
-// SplitAddressList: a comma in a comment doesn't separate addresses,
-// so a comment that the unquoted name of an address opens and doesn't
-// close before the next comma is an error. A comment that isn't closed
-// at all holds the rest of the list, like for SplitAddressList, so
-// parsing stops at it with an error instead of continuing after the
-// next comma like after other errors.
+// Quotes, angle brackets and comments are read like by SplitAddressList,
+// so that a list without an error has the entries that SplitAddressList
+// returns: a comma in them doesn't separate addresses, so a quote, angle
+// bracket or comment that an address opens and doesn't close before the
+// next comma is an error, like in `"Doe <doe@example.com>, b@example.com`.
+// One that isn't closed at all holds the rest of the list, like for
+// SplitAddressList, so parsing stops at it with an error instead of
+// continuing after the next comma like after other errors. An address
+// that SplitAddressList reads as more than one entry is an error too,
+// like the one with the display name "," in `,<a@example.com>`.
 func ParseAddressList(list string) (addrs []*mail.Address, err error) {
 	sanitized := sanitizeAddr(list)
 	list = strings.TrimRight(sanitized, ", ")
-	if list == "" || placeholderListRegexp.MatchString(strings.ToLower(list)) {
+	if list == "" || isPlaceholderList(list) {
 		return nil, nil
 	}
 	// A comma trimmed from the end of the list still follows the last
-	// entry, which SplitAddressList reads as part of an unclosed comment
+	// entry, which SplitAddressList reads as part of an unclosed quote,
+	// angle bracket or comment
 	trailingComma := strings.Contains(sanitized[len(list):], ",")
 
 	var errList []error
@@ -460,17 +471,22 @@ func ParseAddressList(list string) (addrs []*mail.Address, err error) {
 			break
 		}
 		mailAddress, unparsed, ok := parseAddress(remaining)
+		unparsed = strings.TrimLeft(unparsed, " ")
+		entry := remaining[:len(remaining)-len(unparsed)]
 		if !ok {
 			errList = append(errList, errs.Errorf("could not parse email address list, because of: could not parse email address: %s", truncateForError(remaining)))
-			unparsed = remaining
+		} else if !isSingleListEntry(entry) {
+			// Like the leading comma of `,<a@example.com>`, which the
+			// address pattern reads as display name, while
+			// SplitAddressList skips the empty entry before it
+			errList = append(errList, errs.Errorf("',' within email address %s separates entries of email address list: %s", mailAddress.Address, truncateForError(remaining)))
 		} else {
 			addrs = append(addrs, mailAddress)
-			unparsed = strings.TrimLeft(unparsed, " ")
 			if unparsed != "" && unparsed[0] != ',' {
 				errList = append(errList, errs.Errorf("expected ',' after email address %s in email address list: %s", mailAddress.Address, truncateForError(unparsed)))
-			} else if (unparsed != "" || trailingComma) && endsInComment(remaining[:len(remaining)-len(unparsed)]) {
+			} else if open := openAtEnd(entry); open != "" && (unparsed != "" || trailingComma) {
 				// Like `Doe (Sales <doe@example.com>, b@example.com`
-				errList = append(errList, errs.Errorf("comment not closed before ',' after email address %s in email address list: %s", mailAddress.Address, truncateForError(remaining)))
+				errList = append(errList, errs.Errorf("%s not closed before ',' after email address %s in email address list: %s", open, mailAddress.Address, truncateForError(remaining)))
 			} else if unparsed == "" {
 				break
 			} else {
@@ -481,7 +497,7 @@ func ParseAddressList(list string) (addrs []*mail.Address, err error) {
 		// Recover at the comma where SplitAddressList ends this entry,
 		// so the remaining addresses can still be parsed and returned.
 		// Without one the rest of the list is part of this entry,
-		// like after a comment that isn't closed.
+		// like after a quote, angle bracket or comment that isn't closed.
 		i := nextListSeparator(remaining)
 		if i < 0 {
 			break

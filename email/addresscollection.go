@@ -21,8 +21,14 @@ import (
 // entry. Neither do the commas of an unquoted display name, which are
 // followed by an address in angle brackets, so `Doe, John <john@example.com>`
 // is one entry too, like for ParseAddressList: entries without an @ are
-// joined with a following entry that has angle brackets.
+// joined with a following entry that has angle brackets. The commas of a
+// display name of only RFC 2047 encoded-words, like in
+// `=?utf-8?q?a@b,?= <c@example.com>`, don't split either.
 // Empty entries are skipped.
+//
+// The commas are found in the list as ParseAddressList reads it, without
+// the runes that it drops, so that a list that ParseAddressList parses
+// without an error has the entries that it parses.
 //
 // An empty or whitespace only list and the placeholders for hidden
 // recipients like "undisclosed-recipients:;" return nil, like for
@@ -35,7 +41,7 @@ import (
 // entries parsed and normalized.
 func SplitAddressList(list string) []Address {
 	trimmed := strutil.TrimSpace(list)
-	if trimmed == "" || placeholderListRegexp.MatchString(strings.ToLower(trimmed)) {
+	if trimmed == "" || isPlaceholderList(trimmed) {
 		return nil
 	}
 	var parts []listPart
@@ -46,15 +52,28 @@ func SplitAddressList(list string) []Address {
 			parts = append(parts, listPart{begin, begin + len(entry)})
 		}
 	}
-	start := 0
+	// The separators are found in the list as ParseAddressList reads it.
+	// sanitizeAddr keeps every comma, so the n-th comma of sanitized
+	// is the n-th comma of trimmed.
+	sanitized := sanitizeAddr(trimmed)
+	unchanged := sanitized == trimmed
+	start := 0 // of the entry in trimmed
 	for {
-		i := nextListSeparator(trimmed[start:])
+		i := nextListSeparator(sanitized)
 		if i < 0 {
 			add(start, len(trimmed))
 			break
 		}
-		add(start, start+i)
-		start += i + 1
+		end := start + i + 1
+		if !unchanged {
+			end = start
+			for n := strings.Count(sanitized[:i], ",") + 1; n > 0; n-- {
+				end += strings.IndexByte(trimmed[end:], ',') + 1
+			}
+		}
+		add(start, end-1)
+		start = end
+		sanitized = sanitized[i+1:]
 	}
 	return joinDisplayNameParts(trimmed, parts)
 }
@@ -62,51 +81,127 @@ func SplitAddressList(list string) []Address {
 // nextListSeparator returns the index of the first comma in list that
 // separates two entries of an address list, outside quotes, angle
 // brackets and nested comments, with backslash escapes in quotes and
-// comments, or -1 if there is none. SplitAddressList splits at these
-// commas, and ParseAddressList skips to them after an invalid entry, so
-// that both find the same entries.
+// comments, and outside a display name of only RFC 2047 encoded-words
+// at the start of list, see encodedNameEnd, or -1 if there is none.
+// SplitAddressList splits at these commas, and ParseAddressList skips to
+// them after an invalid entry, so that both find the same entries.
+// list starts at the start of an entry and is sanitized by sanitizeAddr.
 func nextListSeparator(list string) int {
-	var (
-		quoted  bool
-		escaped bool
-		comment int
-		angle   int
-	)
-	for i := 0; i < len(list); i++ {
+	var state listState
+	for i := encodedNameEnd(list); i < len(list); i++ {
 		// All delimiters are ASCII, so iterating bytes is safe for UTF-8
-		c := list[i]
-		switch {
-		case escaped:
-			escaped = false
-		case quoted:
-			switch c {
-			case '\\':
-				escaped = true
-			case '"':
-				quoted = false
-			}
-		case comment > 0:
-			switch c {
-			case '\\':
-				escaped = true
-			case '(':
-				comment++
-			case ')':
-				comment--
-			}
-		case c == '"':
-			quoted = true
-		case c == '(':
-			comment++
-		case c == '<':
-			angle++
-		case c == '>' && angle > 0:
-			angle--
-		case c == ',' && angle == 0:
+		if state.read(list[i]) {
 			return i
 		}
 	}
 	return -1
+}
+
+// encodedNameEnd returns the index of the '<' after a display name of
+// only RFC 2047 encoded-words at the start of the address list entry,
+// or 0 if entry doesn't start with one. The address pattern reads such
+// a name as one name, also with commas, quotes or parentheses in its
+// encoded-words, like =?utf-8?q?a@b,?= <c@example.com>, so they don't
+// separate entries or open a quote or comment.
+func encodedNameEnd(entry string) int {
+	if !strings.HasPrefix(strings.TrimLeft(entry, " "), "=?") {
+		return 0
+	}
+	if loc := encodedNameRegexp.FindStringIndex(entry); loc != nil {
+		return loc[1] - 1
+	}
+	return 0
+}
+
+// listState is the state of reading an address list byte by byte
+// like nextListSeparator. The zero value is the state at the start
+// of the list and after every separator.
+type listState struct {
+	quoted  bool
+	escaped bool
+	comment int
+	angle   int
+}
+
+// read reads the next byte c of an address list and reports whether
+// it is a comma that separates two entries.
+func (s *listState) read(c byte) (separator bool) {
+	switch {
+	case s.escaped:
+		s.escaped = false
+	case s.quoted:
+		switch c {
+		case '\\':
+			s.escaped = true
+		case '"':
+			s.quoted = false
+		}
+	case s.comment > 0:
+		switch c {
+		case '\\':
+			s.escaped = true
+		case '(':
+			s.comment++
+		case ')':
+			s.comment--
+		}
+	case c == '"':
+		s.quoted = true
+	case c == '(':
+		s.comment++
+	case c == '<':
+		s.angle++
+	case c == '>' && s.angle > 0:
+		s.angle--
+	case c == ',' && s.angle == 0:
+		return true
+	}
+	return false
+}
+
+// openAtEnd returns what is still open at the end of entry, read like
+// nextListSeparator reads an address list: "quote", "comment" or
+// "angle bracket", or "" if nothing is open, so that a comma after entry
+// separates it from the next entry for SplitAddressList.
+func openAtEnd(entry string) string {
+	var state listState
+	for i := encodedNameEnd(entry); i < len(entry); i++ {
+		state.read(entry[i])
+	}
+	switch {
+	case state.quoted:
+		return "quote"
+	case state.comment > 0:
+		return "comment"
+	case state.angle > 0:
+		return "angle bracket"
+	}
+	return ""
+}
+
+// isSingleListEntry reports whether SplitAddressList reads the address
+// list entry as one entry: entry has no separator, or only the commas of
+// an unquoted display name, which SplitAddressList joins with the address
+// after them.
+func isSingleListEntry(entry string) bool {
+	if nextListSeparator(entry) < 0 {
+		return true
+	}
+	entries := SplitAddressList(entry)
+	return len(entries) == 1 && string(entries[0]) == strutil.TrimSpace(entry)
+}
+
+// isPlaceholderList reports whether list is only a placeholder for hidden
+// recipients like "undisclosed-recipients:;", read like ParseAddressList
+// reads it: sanitized and without trailing commas, so that SplitAddressList
+// returns no entries for every list that ParseAddressList parses as empty.
+// A placeholder has no @, so a list with one is not sanitized to check it.
+func isPlaceholderList(list string) bool {
+	if strings.Contains(list, "@") {
+		return false
+	}
+	list = strings.TrimRight(sanitizeAddr(list), ", ")
+	return placeholderListRegexp.MatchString(strings.ToLower(list))
 }
 
 // hasUnsafeRune reports whether text has a rune that the address

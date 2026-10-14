@@ -61,6 +61,14 @@ func TestSplitAddressList(t *testing.T) {
 		{list: "Undisclosed recipients", want: nil},
 		// Non-ASCII names are kept
 		{list: "Jürgen Müller <j@example.com>, Zoë <z@example.com>", want: []Address{"Jürgen Müller <j@example.com>", "Zoë <z@example.com>"}},
+		// The commas of a display name of only encoded-words don't split,
+		// like ParseAddressList reads it as one name
+		{list: `=?utf-8?q?a@b,?= <a@example.com>, b@example.com`, want: []Address{`=?utf-8?q?a@b,?= <a@example.com>`, "b@example.com"}},
+		// A backslash escapes the next rune that ParseAddressList reads,
+		// not the zero width joiner that it drops, so the quote closes
+		{list: "\"x\\\u200d\" <a@example.com>, b@example.com", want: []Address{"\"x\\\u200d\" <a@example.com>", "b@example.com"}},
+		// A placeholder followed by commas, like ParseAddressList reads it
+		{list: "undisclosed-recipients:;, ", want: nil},
 	}
 	for _, tt := range tests {
 		t.Run(tt.list, func(t *testing.T) {
@@ -85,6 +93,24 @@ func TestAddressList_SplitRawMatchesSplitNormalized(t *testing.T) {
 		`a@example.com (x \), y), <b@example.com> (B (C, D)), c@example.com`,
 		`John (Sales, EU) <a@example.com>, b@example.com`,
 		`b@example.com, Doe (Sales <doe@example.com>`,
+		// Escaped quotes in quoted names, which ParseAddressList read as
+		// the end of the name, see TestParseAddressList_EscapedQuoteInName
+		`"x\" <ok@example.com>, ok2@example.com (," <other@example.net>, "z)" <ok3@example.com>`,
+		`"Say \"Hi\"" <a@example.com>, "back\\slash" <b@example.com>`,
+		// A backslash escapes a rune that the parser drops, here a zero
+		// width joiner, so it doesn't escape the quote after it
+		"\"x\\\u200d\" <a@example.com>, b@example.com",
+		// The commas in an encoded-word name don't separate entries,
+		// also when the name is one only without the runes that the
+		// parser drops, so SplitRaw reads the list like the parser
+		`=?utf-8?q?a@b,?= <hidden@example.com>, =?utf-8?q?c?= <shown@example.com>`,
+		"=\u200d?utf-8?q?a@b,?= <hidden@example.com>, shown@example.com",
+		// Nor does a parenthesis in it open a comment
+		`=?utf-8?q?(Sales?= <a@example.com>, b@example.com`,
+		// The no-break space in the unquoted name is read as space
+		"Müller,\u00a0Hans <hans@example.com>, b@example.com",
+		// A placeholder with a trailing comma is the empty list
+		"undisclosed-recipients:;, ",
 	} {
 		t.Run(string(list), func(t *testing.T) {
 			require.True(t, list.Valid())
@@ -97,6 +123,27 @@ func TestAddressList_SplitRawMatchesSplitNormalized(t *testing.T) {
 				require.NoError(t, err)
 				assert.Equal(t, normalized[i], norm, "entry %d", i)
 			}
+		})
+	}
+
+	// ParseAddressList parsed these lists without an error as more
+	// addresses or other ones than SplitRaw finds entries: an unclosed
+	// quote or angle bracket holds the rest of the list for SplitRaw,
+	// and a leading or doubled comma became the display name ",".
+	// They are invalid now, so that no validated list reads back as
+	// other entries.
+	for _, list := range []AddressList{
+		`"Doe <a@b.cc>, z@y.zz`,
+		`x <a@b.cc, z@y.zz`,
+		`Jo"hn <a@example.com>, b@example.com`,
+		`<a@b.cc,`,
+		`,<a@example.com>`,
+		`a@example.com,, <b@example.com>`,
+	} {
+		t.Run(string(list), func(t *testing.T) {
+			assert.False(t, list.Valid())
+			_, err := list.SplitNormalized()
+			assert.Error(t, err)
 		})
 	}
 }
@@ -137,6 +184,53 @@ func TestAddressList_UnclosedCommentHoldsRestOfList(t *testing.T) {
 			assert.False(t, tt.list.Valid())
 		})
 	}
+}
+
+// FuzzSplitRawMatchesParse checks that SplitAddressList finds the entries
+// that ParseAddressList parses, for every list that ParseAddressList
+// parses without an error: as many entries as addresses, and every entry
+// normalizes to its address. AddressSet.Scan and the SplitRaw methods read
+// a stored list with SplitAddressList, so where the two disagreed, a list
+// that validated was read back as other recipients.
+func FuzzSplitRawMatchesParse(f *testing.F) {
+	for _, list := range []string{
+		`a@example.com, b@example.com`,
+		`"Doe, John" <john@example.com>, Doe, Jr., John <j@example.com>`,
+		`a@example.com (outer (inner, x)), <b@example.com> (B \) C)`,
+		`"x\" <ok@example.com>, ok2@example.com (," <other@example.net>, "z)" <ok3@example.com>`,
+		`"Doe <a@b.cc>, z@y.zz`,
+		`x <a@b.cc, z@y.zz`,
+		`Jo"hn <a@example.com>, b@example.com`,
+		`,<a@example.com>`,
+		`=?utf-8?q?J=C3=BCrgen?= <j@example.com>, "a b"@example.com`,
+		"undisclosed-recipients:;, ",
+		// Found by fuzzing: a backslash escaped invalid UTF-8, which the
+		// parser drops, so that it escaped the quote after it instead
+		"\"\\\xa0\"\"@0.AA,",
+		// Found by fuzzing: a comma in an encoded-word name
+		`=?@?B?,?=<"0"@0.AA`,
+	} {
+		f.Add(list)
+	}
+	f.Fuzz(func(t *testing.T, list string) {
+		parsed, err := ParseAddressList(list)
+		if err != nil {
+			return
+		}
+		raw := SplitAddressList(list)
+		if len(raw) != len(parsed) {
+			t.Fatalf("SplitAddressList(%q) = %q, but ParseAddressList parsed %d addresses: %q", list, raw, len(parsed), parsed)
+		}
+		for i, entry := range raw {
+			norm, err := entry.Normalized()
+			if err != nil {
+				t.Fatalf("entry %q of %q: %v", entry, list, err)
+			}
+			if want := AddressFrom(parsed[i]); norm != want {
+				t.Fatalf("entry %q of %q normalizes to %q, but ParseAddressList parsed %q", entry, list, norm, want)
+			}
+		}
+	})
 }
 
 func TestReadAddressCollection(t *testing.T) {
