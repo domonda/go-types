@@ -12,8 +12,8 @@
 // and [MOSSSchemaVATCountryCode] (EU).
 //
 // The package includes:
-//   - [ID] and [NullableID]; only [NullableID] reads and writes SQL NULL
-//     and encodes null as JSON null
+//   - [ID] and [NullableID]; both write an empty value as SQL NULL,
+//     only [NullableID] encodes null as JSON null
 //   - [ID.CountryCode], [ID.Number] and [ID.IsMOSS] to inspect a VAT ID
 //   - [IDFinder] to find VAT IDs in text
 //   - [IDParser] for the strfmt package

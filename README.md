@@ -199,9 +199,11 @@ unchanged, so a response or log that contains one still renders. `fmt`,
 templates and `String` show the value as it is stored, without normalizing.
 
 XML writes `<country>DE</country>` for an element and `country="DE"` for an
-attribute field. A nil `*country.Code` attribute field without `omitempty`
-makes `encoding/xml` panic, like a nil `*time.Time`; tag such fields
-`omitempty`.
+attribute field. A nil `*country.Code` attribute field is left out, with or
+without `omitempty`. A nil pointer `,chardata` field still makes
+`encoding/xml` panic, like a nil `*time.Time`, because `encoding/xml` calls
+`MarshalText` through the nil pointer and has no hook to skip it; use a
+non-pointer `,chardata` field.
 
 ### Differences between types
 

@@ -163,11 +163,10 @@ time.
       `GetEncoding("UTF-16")`, which writes a BOM. Delete the field, or set
       it for UTF-16.
 - [ ] **Error constructors.** Decided: go-errs, see Design decisions in
-      the [README](README.md). The module still calls `errors.New` and
-      `fmt.Errorf` about 340 times and go-errs `errs.New` four times, in
-      `email/message.go`, `email/parsetnef.go`, and the whitespace-only
-      errors of `AddressList.Scan` and `AddressSet.Scan`. Convert the
-      standard library calls to `errs.New` and `errs.Errorf`.
+      the [README](README.md). Code new in PR #28 uses `errs.New` and
+      `errs.Errorf`, but the older code still calls `errors.New` and
+      `fmt.Errorf` in most places. Convert the standard library calls to
+      `errs.New` and `errs.Errorf`.
 - [ ] **Commented-out code.** An old implementation after the `return` in
       `money.Amount.String`, old `From`/`ReplyTo` assignments in
       `email/parsemime.go`, `email/utils.go`, a debug print in
@@ -188,8 +187,9 @@ time.
         and `undisclosed-recipients: a@b.com;` is an error, while
         `net/mail` reads both addresses.
       - `ParseMIMEMessage` turns `To: undisclosed-recipients:;` into an
-        empty `To`, whose `Value` `""` `AddressList.Scan` rejects; set the
-        placeholder when a To header was present without addresses.
+        empty `To`, so a stored message can't tell it from a message
+        without a To header; set the placeholder when a To header was
+        present without addresses.
       - `date` language hints are languages only, so `"en-GB"` reads
         ambiguous dates month first like US English.
       - `types.DeepValidate` calls a `Validate` method that a struct
@@ -201,21 +201,13 @@ time.
         float64 difference loses the cents beyond 2^53.
       - `vat` accepts `" No.974760673"` but rejects `"No.974760673"`: the
         Norwegian "No." guard depends on the spacing.
-- [ ] **Fast paths for the exact money and date math.** The exact
-      rewrites made hot paths slower, measured against master in the
-      2026-10-12 review: `CentAmount.MultipliedByRate`, `DividedByRate` and
-      `Percentage` 2.4 ns to about 630 ns with about 20 allocations
-      (`big.Rat`), `float.RoundToDecimals` and so `Amount.RoundToCents`,
-      `Cents` and `WithinOneCent` 2.5 ns to about 185 ns (a
-      `FormatFloat`/`ParseFloat` round trip). Keep the exact results:
-      int128 arithmetic with `math/bits` for the rates like
-      `DecimalAmount.Mul`, and `math.Round(f*pow)/pow` for rounding unless
-      the scaled value is within a few ulps of a tie.
-      The /ship review of 2026-10-13 measured more:
+- [ ] **Fast paths for the remaining exact math and parsing.** The
+      `CentAmount` rate methods, `float.RoundToDecimals` and `float.Format`
+      have float64 fast paths, and `internal.UnmarshalJSONNormalized`
+      decodes a plain string without `json.Unmarshal`. Still slower than
+      on master, measured in the /ship review of 2026-10-13:
       `Amount.DecimalAmount` 9 ns to 95 ns (a string round trip),
-      `internal.UnmarshalJSONNormalized` about twice as slow as decoding a
-      plain string (a nested `json.Unmarshal`, a fast path for unescaped
-      strings would do), `CurrencyAmount.ScanString` parses twice,
+      `CurrencyAmount.ScanString` parses twice,
       `types.DeepValidate` formats a path label for every slice element
       (about 4 allocations per byte of a `[]byte` field, skip element types
       that can't hold a validator), uncached reflection per value in

@@ -146,7 +146,9 @@ See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut.
     `Currency *money.Currency` with the tag `xml:"currency,attr"`, with or
     without `omitempty`. Without it `encoding/xml` would call `MarshalText`
     through the nil pointer and panic, as it does for a `*time.Time`
-    attribute.
+    attribute. A nil pointer `,chardata` field still panics, because
+    `encoding/xml` has no such hook for it; use a non-pointer `,chardata`
+    field.
 - **Breaking:** the `String` method of the normalizing types is removed, so
   `fmt`, templates and logs show a value as stored instead of a normalized
   form that hid a non-canonical or invalid value. `country.Code`,
@@ -190,8 +192,12 @@ See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut.
     invalid one. `database/sql` wrote the four types as the stored string
     by their kind, so null was written as `''` instead of NULL, and NULL
     could not be scanned into them. `MarshalJSON` writes the normalized
-    value, and JSON `null` for a null `NullableYearMonth` and
-    `NullableYearQuarter`, which were written as `""`.
+    value, `""` for a zero `YearMonth` or `YearQuarter` like `"0001-01"`,
+    and JSON `null` for a null `NullableYearMonth` and
+    `NullableYearQuarter`, which were written as `""`. `MarshalText`, used
+    by `encoding/xml`, `strfmt` and the slog text handler, writes the
+    normalized value or `""` for a zero one instead of the stored string,
+    so `YearQuarter("2023-q1")` is written as `2023-Q1`.
 - **Breaking:** the zero dates are empty in every spelling: `"0001-01-01"`,
   `"0000-00-00"`, `"01.01.0001"`, Go's zero time `"0001-01-01T00:00:00Z"`
   and the MySQL zero date-time `"0000-00-00 00:00:00"` are
