@@ -225,6 +225,14 @@ func (n *NullableAddress) UnmarshalXMLAttr(attr xml.Attr) error {
 	return internal.UnmarshalXMLAttrNormalized(n, attr, NullableAddress.Normalized, nil)
 }
 
+// ScanString implements the strfmt.Scannable interface.
+// The strings "NULL", "null" and "nil" set the NullableAddress to null.
+// Without validate it stores source like Scan, with validate it stores
+// the normalized address or returns the error of Normalized.
+func (n *NullableAddress) ScanString(source string, validate bool) error {
+	return internal.ScanStringNormalized(n, source, validate, true, NullableAddress.Normalized, nil)
+}
+
 // MarshalJSON implements encoding/json.Marshaler by writing the JSON null
 // value if the NullableAddress is null, else the normalized address,
 // or the address unchanged if it can't be normalized.

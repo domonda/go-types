@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/mail"
+	"reflect"
 	"testing"
 
 	"github.com/domonda/go-types/internal/normtest"
+	"github.com/domonda/go-types/strfmt"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -369,4 +371,19 @@ func TestNullableAddress_ReadingAndWriting(t *testing.T) {
 		Invalid:   []NullableAddress{"not an address", "john@"},
 		Nullable:  true,
 	})
+}
+
+// strfmt.Scan stores a NullableAddress normalized like an Address,
+// see TestAddress_StrfmtScan, and a null word or an empty cell as null.
+func TestNullableAddress_StrfmtScan(t *testing.T) {
+	config := strfmt.NewScanConfig()
+	var addr NullableAddress
+	require.NoError(t, strfmt.Scan(reflect.ValueOf(&addr).Elem(), "John Doe <John@Example.com>", config))
+	assert.Equal(t, NullableAddress(`"John Doe" <john@example.com>`), addr)
+
+	for _, null := range []string{"", "NULL", "null", "nil"} {
+		addr := NullableAddress("a@example.com")
+		require.NoError(t, strfmt.Scan(reflect.ValueOf(&addr).Elem(), null, config))
+		assert.True(t, addr.IsNull(), "strfmt.Scan of %q", null)
+	}
 }

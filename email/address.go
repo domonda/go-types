@@ -22,9 +22,9 @@ var _ types.NormalizableValidator[Address] = Address("")
 // an optional display name part before the mandatory email address part.
 // Examples: "user@example.com", "John Doe <john@example.com>"
 //
-// Scan, UnmarshalJSON and UnmarshalXML store a valid address normalized,
-// a blank one as "" and an invalid one unchanged. Value writes the
-// normalized address, SQL NULL for a blank one, and returns an error for
+// Scan, UnmarshalJSON, UnmarshalXML and ScanString store a valid address
+// normalized, a blank one as "" and an invalid one unchanged. Value writes
+// the normalized address, SQL NULL for a blank one, and returns an error for
 // an invalid one. MarshalJSON and MarshalText write the normalized address
 // or an invalid one unchanged, and fmt prints the address as stored.
 // Address has no UnmarshalText, so encoding/json reads and writes the keys
@@ -218,6 +218,14 @@ func (a *Address) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 // by storing the attribute value like Scan stores it.
 func (a *Address) UnmarshalXMLAttr(attr xml.Attr) error {
 	return internal.UnmarshalXMLAttrNormalized(a, attr, Address.Normalized, nil)
+}
+
+// ScanString implements the strfmt.Scannable interface.
+// Without validate it stores source like Scan, with validate it stores
+// the normalized address or returns the error of Normalized,
+// also for a blank source.
+func (a *Address) ScanString(source string, validate bool) error {
+	return internal.ScanStringNormalized(a, source, validate, false, Address.Normalized, nil)
 }
 
 // Validate checks if the Address is a valid email address format.

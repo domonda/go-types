@@ -4,10 +4,12 @@ import (
 	"encoding"
 	"encoding/json"
 	"net/mail"
+	"reflect"
 	"testing"
 	"unicode"
 
 	"github.com/domonda/go-types/internal/normtest"
+	"github.com/domonda/go-types/strfmt"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -411,4 +413,25 @@ func TestAddress_ReadingAndWriting(t *testing.T) {
 		Variants:  []Address{`John Doe <John@Example.com>`, ` "John Doe" <JOHN@example.com> `},
 		Invalid:   []Address{"not an address", "john@"},
 	})
+}
+
+// strfmt.Scan, which reads CSV files and other text tables, stores an
+// address normalized through ScanString, like Scan and UnmarshalJSON do,
+// instead of with the spelling of the cell, so that an address read from
+// a table compares equal to the same address read from a database.
+// Without validation an invalid address is kept, with it it's an error.
+func TestAddress_StrfmtScan(t *testing.T) {
+	validating := strfmt.NewScanConfig()
+	lenient := strfmt.NewScanConfig()
+	lenient.ValidateFunc = nil
+	for _, config := range []*strfmt.ScanConfig{validating, lenient} {
+		var addr Address
+		require.NoError(t, strfmt.Scan(reflect.ValueOf(&addr).Elem(), "John Doe <John@Example.com>", config))
+		assert.Equal(t, Address(`"John Doe" <john@example.com>`), addr)
+	}
+
+	var addr Address
+	require.NoError(t, strfmt.Scan(reflect.ValueOf(&addr).Elem(), "not an address", lenient))
+	assert.Equal(t, Address("not an address"), addr)
+	assert.Error(t, strfmt.Scan(reflect.ValueOf(&addr).Elem(), "not an address", validating))
 }
