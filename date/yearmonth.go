@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/domonda/go-errs"
 	"github.com/invopop/jsonschema"
 
 	types "github.com/domonda/go-types"
@@ -79,7 +78,7 @@ func (ym YearMonth) Normalized() (YearMonth, error) {
 	}
 	if norm == "0001-01" {
 		// The year-month of the zero time.Time has no practical use, like the zero Date
-		return ym, errs.Errorf("zero year month: %q", ym)
+		return ym, fmt.Errorf("zero year month: %q", ym)
 	}
 	return norm, nil
 }

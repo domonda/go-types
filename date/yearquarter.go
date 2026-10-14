@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/domonda/go-errs"
 	"github.com/invopop/jsonschema"
 
 	types "github.com/domonda/go-types"
@@ -81,7 +80,7 @@ func (yq YearQuarter) Normalized() (YearQuarter, error) {
 	}
 	if norm == "0001-Q1" {
 		// The year-quarter of the zero time.Time has no practical use, like the zero Date
-		return yq, errs.Errorf("zero year quarter: %q", yq)
+		return yq, fmt.Errorf("zero year quarter: %q", yq)
 	}
 	return norm, nil
 }
