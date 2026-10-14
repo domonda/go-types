@@ -6,6 +6,7 @@ import (
 	"errors"
 	"slices"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/domonda/go-errs"
 
@@ -108,21 +109,55 @@ func nextListSeparator(list string) int {
 	return -1
 }
 
-// checkSanitized returns an error naming text as name if sanitizeAddr
-// changes text, which is trimmed like by strutil.TrimSpace, because text
-// has whitespace other than the space, like a line break, a control or
-// format character, like a NUL or a bidi override, or invalid UTF-8.
-// Validate parses the sanitized text, which doesn't have these runes,
-// while the Value methods of the address collections and
-// AddressSet.MarshalText write the text as stored. They call
-// checkSanitized so that they only write text that was validated as it
-// is written, else a valid display name could carry a line break that
-// injects a header into a message, or a NUL that PostgreSQL rejects.
-func checkSanitized(text, name string) error {
-	if sanitizeAddr(text) == text {
+// hasUnsafeRune reports whether text has a rune that the address
+// collections refuse in Validate and in the methods that write their text
+// as stored, because the address parser ignores it while a message header
+// or a database written from the stored text would not: a control
+// character other than the tab, like a line break that injects a header
+// or a NUL that PostgreSQL rejects, a bidi embedding, override or isolate
+// that shows the text in another order than the parser reads it,
+// or invalid UTF-8. All other runes are written as stored, like the
+// no-break space, the ideographic space, the zero width non-joiner and
+// joiner and the soft hyphen in names, and the left-to-right and
+// right-to-left marks.
+func hasUnsafeRune(text string) bool {
+	for i := 0; i < len(text); {
+		c := text[i]
+		if c < utf8.RuneSelf {
+			if (c < ' ' && c != '\t') || c == 0x7f {
+				return true
+			}
+			i++
+			continue
+		}
+		r, size := utf8.DecodeRuneInString(text[i:])
+		switch {
+		case r == utf8.RuneError && size == 1, // invalid UTF-8
+			r <= 0x9f,                      // C1 control character
+			r >= '\u202a' && r <= '\u202e', // bidi embedding or override
+			r >= '\u2066' && r <= '\u2069': // bidi isolate
+			return true
+		}
+		i += size
+	}
+	return false
+}
+
+// checkSafeRunes returns an error naming text as name if text, trimmed
+// like by strutil.TrimSpace, has a rune that hasUnsafeRune reports.
+// The surrounding runes that strutil.TrimSpace removes are not checked,
+// because the Value methods trim them and don't write them.
+// The Validate methods of the address collections call it, so that their
+// Value methods and AddressSet.MarshalText, which write the text as
+// stored, write every text that Validate accepts and nothing else:
+// a display name with a line break must not pass Validate and inject
+// a header into a message built from the stored text.
+func checkSafeRunes(text, name string) error {
+	text = strutil.TrimSpace(text)
+	if !hasUnsafeRune(text) {
 		return nil
 	}
-	return errs.Errorf("%s %q has whitespace other than spaces, a control or format character or invalid UTF-8, which the address parser ignores", name, truncateForError(text))
+	return errs.Errorf("%s %q has a control character, a bidi embedding, override or isolate, or invalid UTF-8", name, truncateForError(text))
 }
 
 // listPart is the byte range of an entry of an address list,

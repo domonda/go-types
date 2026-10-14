@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"unicode"
 
+	"github.com/domonda/go-errs"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -211,21 +213,42 @@ func writeCollections(addr Address) map[string]error {
 	return errOf
 }
 
-// Validate parses an address sanitized, without the line breaks, control
-// characters and invalid UTF-8 that the parser ignores, while the
-// collections write their text as stored. A display name with a line
-// break passed Validate and was written with it, so that a message header
-// built from the stored list got another header injected, and a NUL
-// passed and failed the write to PostgreSQL. So writing refuses them.
+// validateCollections returns the errors of the Validate methods
+// of AddressList, NullableAddressList and AddressSet for addr.
+func validateCollections(addr Address) map[string]error {
+	return map[string]error{
+		"AddressList.Validate":         AddressList(addr).Validate(),
+		"NullableAddressList.Validate": NullableAddressList(addr).Validate(),
+		"AddressSet.Validate":          MakeAddressSet(addr).Validate(),
+	}
+}
+
+// The parser reads an address sanitized, without the line breaks, control
+// characters and invalid UTF-8 that it ignores, while the collections
+// write their text as stored. A display name with a line break passed
+// Validate and was written with it, so that a message header built from
+// the stored list got another header injected, and a NUL passed and failed
+// the write to PostgreSQL. So the Validate methods of the collections
+// refuse them, and with them the methods that write the text as stored.
+// Address.Validate still accepts them, because Address.Value writes the
+// normalized address, which doesn't have them.
 func TestCollectionsRefuseRunesTheParserIgnores(t *testing.T) {
 	for _, addr := range []Address{
 		"\"x\r\nBcc: evil@evil.com\" <a@example.com>",
+		"\"x\rBcc: evil@evil.com\" <a@example.com>",
+		"\"x\nBcc: evil@evil.com\" <a@example.com>",
 		"a\x00b@example.com",
-		// A bidi override that makes the name read differently
+		"\"x\x7f\" <a@example.com>",
+		"\"x\u0085\" <a@example.com>",
+		// Bidi controls that make the name read differently
 		"\"\u202eexample.com\" <a@example.com>",
+		"\"\u2067example.com\u2069\" <a@example.com>",
 		"\"x\xff\" <a@example.com>",
 	} {
 		require.NoError(t, addr.Validate(), "the parser ignores the runes of %q", addr)
+		for method, err := range validateCollections(addr) {
+			assert.Error(t, err, "%s of %q", method, addr)
+		}
 		for method, err := range writeCollections(addr) {
 			assert.Error(t, err, "%s of %q", method, addr)
 		}
@@ -251,10 +274,16 @@ func TestCollectionsRefuseRunesTheParserIgnores(t *testing.T) {
 	}
 }
 
-// The collections refuse exactly the runes that sanitizeAddr changes or
-// drops, so that they write every text that Validate saw as written,
-// and nothing that it didn't.
-func TestCollectionsRefuseWhatSanitizeAddrChanges(t *testing.T) {
+// The collections refuse only the runes that inject a header, break the
+// storage or reorder the displayed text: the control characters other
+// than the tab, and the bidi embeddings, overrides and isolates. Refusing
+// every rune that the parser changes or drops refused legitimate names,
+// like the no-break space or the zero width non-joiner of Persian names,
+// which Validate accepted, so that a validated row could not be saved.
+// Validate and the methods that write the text as stored must agree for
+// every rune, else a validated list fails to write or an unvalidated
+// one is written.
+func TestCollectionsRefuseOnlyUnsafeRunes(t *testing.T) {
 	var runes []rune
 	for r := rune(0); r < 0x300; r++ {
 		runes = append(runes, r)
@@ -270,14 +299,95 @@ func TestCollectionsRefuseWhatSanitizeAddrChanges(t *testing.T) {
 			continue
 		}
 		addr := Address(`"a` + string(r) + `b" <a@example.com>`)
-		changed := sanitizeAddr(string(addr)) != string(addr)
-		for method, err := range writeCollections(addr) {
-			if changed {
+		unsafe := (unicode.Is(unicode.Cc, r) && r != '\t') ||
+			(r >= '\u202a' && r <= '\u202e') || (r >= '\u2066' && r <= '\u2069')
+		for method, err := range validateCollections(addr) {
+			if unsafe {
 				assert.Error(t, err, "%s of %q", method, addr)
 			} else {
 				assert.NoError(t, err, "%s of %q", method, addr)
 			}
 		}
+		for method, err := range writeCollections(addr) {
+			if unsafe {
+				assert.Error(t, err, "%s of %q", method, addr)
+			} else {
+				assert.NoError(t, err, "%s of %q", method, addr)
+			}
+		}
+	}
+}
+
+// Names in many languages need runes that the parser reads as spaces or
+// drops: the no-break space, the ideographic space between Japanese
+// given and family names, the zero width non-joiner of Persian, the zero
+// width joiner of emoji sequences and the soft hyphen of long German
+// words. A list with such a name passed Validate, but Value refused it,
+// so that a validated row could not be saved. They are written as stored.
+func TestCollectionsWriteNamesWithSpecialSpacesAndJoiners(t *testing.T) {
+	for _, addr := range []Address{
+		"Müller,\u00a0Hans <hans@example.com>",
+		"\"Müller,\u00a0Hans\" <hans@example.com>",
+		"\"山田\u3000太郎\" <taro@example.jp>",
+		"\"علی\u200cرضا\" <alireza@example.ir>",
+		"\"Familie 👨\u200d👩\u200d👧\" <familie@example.com>",
+		"\"Donau\u00addampf\u00adschiff\" <kapitaen@example.at>",
+		"\"\u200fمحمد\u200e\" <m@example.com>",
+		"\"Doe,\tJohn\" <john@example.com>",
+	} {
+		t.Run(string(addr), func(t *testing.T) {
+			for method, err := range validateCollections(addr) {
+				assert.NoError(t, err, method)
+			}
+			for method, err := range writeCollections(addr) {
+				assert.NoError(t, err, method)
+			}
+			v, err := AddressList(addr).Value()
+			require.NoError(t, err)
+			assert.Equal(t, string(addr), v, "written as stored")
+			v, err = NullableAddressList(addr).Value()
+			require.NoError(t, err)
+			assert.Equal(t, string(addr), v, "written as stored")
+			text, err := MakeAddressSet(addr).MarshalText()
+			require.NoError(t, err)
+			assert.Equal(t, string(addr), string(text), "written as stored")
+		})
+	}
+}
+
+// Validate refuses the unsafe runes with the same error that Value
+// returns, so that a caller that validates first sees why the write
+// would fail, and both name the same text.
+func TestCollectionsValidateAndValueRefuseWithSameError(t *testing.T) {
+	for _, addr := range []Address{
+		"\"x\r\nBcc: evil@evil.com\" <a@example.com>",
+		"a\x00b@example.com",
+		"\"\u202eexample.com\" <a@example.com>",
+		"\"x\xff\" <a@example.com>",
+	} {
+		_, valueErr := AddressList(addr).Value()
+		require.Error(t, valueErr)
+		assert.Equal(t, errs.UnwrapCallStack(AddressList(addr).Validate()).Error(), errs.UnwrapCallStack(valueErr).Error(), "AddressList %q", addr)
+
+		_, valueErr = NullableAddressList(addr).Value()
+		require.Error(t, valueErr)
+		assert.Equal(t, errs.UnwrapCallStack(NullableAddressList(addr).Validate()).Error(), errs.UnwrapCallStack(valueErr).Error(), "NullableAddressList %q", addr)
+
+		set := MakeAddressSet(addr)
+		_, valueErr = set.Value()
+		require.Error(t, valueErr)
+		assert.Equal(t, errs.UnwrapCallStack(set.Validate()).Error(), errs.UnwrapCallStack(valueErr).Error(), "AddressSet %q", addr)
+		_, textErr := set.MarshalText()
+		require.Error(t, textErr)
+		assert.Equal(t, errs.UnwrapCallStack(set.Validate()).Error(), errs.UnwrapCallStack(textErr).Error(), "AddressSet.MarshalText %q", addr)
+	}
+
+	// Surrounding runes that Value trims and doesn't write are not refused
+	for _, list := range []AddressList{"a@example.com\r\n", "\x00a@example.com", "\u202ea@example.com"} {
+		assert.NoError(t, list.Validate(), "%q", list)
+		v, err := list.Value()
+		require.NoError(t, err)
+		assert.Equal(t, "a@example.com", v)
 	}
 }
 

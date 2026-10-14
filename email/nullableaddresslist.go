@@ -84,7 +84,7 @@ func (n NullableAddressList) SplitRaw() []Address {
 }
 
 // Validate returns an error if the NullableAddressList is not null
-// and not a valid list of email addresses.
+// and not a valid list of email addresses, see AddressList.Validate.
 func (n NullableAddressList) Validate() error {
 	if n.IsNull() {
 		return nil
@@ -185,8 +185,7 @@ func (n *NullableAddressList) Scan(value any) error {
 // Value implements the driver database/sql/driver.Valuer interface.
 // It returns SQL NULL if the NullableAddressList is null, else the list as
 // stored with the surrounding whitespace trimmed, or the error of Validate
-// for an invalid list. Like for AddressList.Value, a list with runes that
-// Validate ignores, like a line break or a NUL, is an error too.
+// for an invalid list, like AddressList.Value.
 func (n NullableAddressList) Value() (driver.Value, error) {
 	return AddressList(n).Value()
 }

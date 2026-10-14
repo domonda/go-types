@@ -377,10 +377,16 @@ func (set AddressSet) Normalized() (AddressSet, error) {
 
 // Validate returns the first error encountered
 // validating the addresses of the set.
+// Like for AddressList.Validate, an address with a control character
+// other than the tab, like a line break or a NUL, a bidi embedding,
+// override or isolate, or invalid UTF-8 within its text is an error too,
+// because Value and MarshalText write the addresses as stored.
 func (set AddressSet) Validate() error {
 	for addr := range set {
-		err := addr.Validate()
-		if err != nil {
+		if err := checkSafeRunes(string(addr), "email.AddressSet address"); err != nil {
+			return err
+		}
+		if err := addr.Validate(); err != nil {
 			return err
 		}
 	}
@@ -476,8 +482,8 @@ func (set *AddressSet) UnmarshalText(text []byte) error {
 // Value implements the driver database/sql/driver.Valuer interface
 // by writing the addresses as stored in sorted order as PostgreSQL array,
 // with the surrounding whitespace of valid addresses trimmed and duplicates
-// that this creates removed, or an error if an address is invalid or has
-// runes that Validate ignores, like a line break or a NUL.
+// that this creates removed, or an error if an address is invalid,
+// also for a line break, a NUL or a bidi override within it, see Validate.
 // A nil set is written as SQL NULL, an empty set as "{}".
 func (set AddressSet) Value() (driver.Value, error) {
 	if set == nil {
@@ -492,19 +498,19 @@ func (set AddressSet) Value() (driver.Value, error) {
 
 // writableAddresses returns the addresses of the set for Value and
 // MarshalText: sorted, with the surrounding whitespace trimmed and the
-// duplicates that this creates removed, or an error for an address that is
-// invalid, has runes that Validate ignores, see checkSanitized, or if
-// asListEntry is true, would not read back as one entry of an address list
-// with SplitAddressList.
+// duplicates that this creates removed, or an error for an address that
+// Validate refuses, or if asListEntry is true, that would not read back
+// as one entry of an address list with SplitAddressList.
 func (set AddressSet) writableAddresses(asListEntry bool) ([]string, error) {
 	addrs := make([]string, 0, len(set))
 	for _, addr := range set.Sorted() {
 		trimmed := strutil.TrimSpace(addr)
+		// The same check and error as in Validate
+		if err := checkSafeRunes(string(trimmed), "email.AddressSet address"); err != nil {
+			return nil, err
+		}
 		if err := trimmed.Validate(); err != nil {
 			return nil, errs.Errorf("invalid address %q in email.AddressSet: %w", string(addr), err)
-		}
-		if err := checkSanitized(string(trimmed), "email.AddressSet address"); err != nil {
-			return nil, err
 		}
 		if asListEntry {
 			if entries := SplitAddressList(string(trimmed)); len(entries) != 1 || entries[0] != trimmed {
@@ -531,8 +537,8 @@ func (set AddressSet) MarshalJSON() ([]byte, error) {
 // MarshalText implements encoding.TextMarshaler, used by encoding/xml, by
 // writing the addresses as stored in sorted order as address list, with
 // the surrounding whitespace of valid addresses trimmed, or an error if an
-// address is invalid, has runes that Validate ignores, like a line break
-// or a NUL, or would not read back as one entry of the list.
+// address is invalid, also for a line break or a NUL within it, see
+// Validate, or would not read back as one entry of the list.
 // A nil or empty set is written as "".
 func (set AddressSet) MarshalText() ([]byte, error) {
 	addrs, err := set.writableAddresses(true)

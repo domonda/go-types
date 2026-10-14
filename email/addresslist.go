@@ -158,7 +158,15 @@ func (l AddressList) UniqueAddressParts() (AddressSet, error) {
 
 // Validate returns an error if the AddressList
 // is not a valid list of email addresses.
+// A list with a control character other than the tab, like a line break
+// or a NUL, a bidi embedding, override or isolate, or invalid UTF-8 within
+// the text is an error too, because Value writes the list as stored and
+// the parser ignores these runes. Surrounding whitespace is not checked,
+// because Value trims it.
 func (l AddressList) Validate() error {
+	if err := checkSafeRunes(string(l), "email address list"); err != nil {
+		return err
+	}
 	_, err := l.Parse()
 	return err
 }
@@ -235,19 +243,15 @@ func headerAddresses(addrs ...*mail.Address) string {
 
 // Value implements the driver database/sql/driver.Valuer interface.
 // It returns the list as stored with the surrounding whitespace trimmed,
-// SQL NULL for a blank list, or the error of Validate for an invalid list.
-// A list with whitespace other than spaces, like a line break, a control
-// or format character, like a NUL, or invalid UTF-8 is an error too,
-// because Validate ignores these runes and Value would write them.
+// SQL NULL for a blank list, or the error of Validate for an invalid list,
+// also for a line break, a NUL or a bidi override within the list,
+// see Validate.
 func (l AddressList) Value() (driver.Value, error) {
 	list := strutil.TrimSpace(l)
 	if list == "" {
 		return nil, nil
 	}
 	if err := list.Validate(); err != nil {
-		return nil, err
-	}
-	if err := checkSanitized(string(list), "email address list"); err != nil {
 		return nil, err
 	}
 	return string(list), nil
