@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/domonda/go-types/internal/xmlattrtest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -329,5 +330,5 @@ func TestNullableAddressList_UnmarshalText(t *testing.T) {
 }
 
 func TestNullableAddressList_MarshalXMLAttr(t *testing.T) {
-	testMarshalXMLAttr(t, NullableAddressList(""), NullableAddressList(`A@Example.com, "Doe, John" <john@example.com>`))
+	xmlattrtest.NilPointer(t, NullableAddressList(""), NullableAddressList(`A@Example.com, "Doe, John" <john@example.com>`))
 }

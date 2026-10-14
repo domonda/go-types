@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/domonda/go-types/internal/xmlattrtest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -393,5 +394,5 @@ func TestAddressList_XML(t *testing.T) {
 }
 
 func TestAddressList_MarshalXMLAttr(t *testing.T) {
-	testMarshalXMLAttr(t, AddressList(""), AddressList(`A@Example.com, "Doe, John" <john@example.com>`))
+	xmlattrtest.NilPointer(t, AddressList(""), AddressList(`A@Example.com, "Doe, John" <john@example.com>`))
 }

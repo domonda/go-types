@@ -10,6 +10,7 @@ import (
 
 	"github.com/domonda/go-types/internal/collections"
 	"github.com/domonda/go-types/internal/collections/settest"
+	"github.com/domonda/go-types/internal/xmlattrtest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -717,6 +718,12 @@ func TestAddressSet_MarshalText(t *testing.T) {
 	require.NoError(t, back.UnmarshalText(text))
 	assert.Equal(t, MakeAddressSet("a@example.com", "Doe, John <john@example.com>"), back)
 
+	// A valid address with an unclosed comment reads back alone, but in
+	// the joined list the comment swallows the entries after it, so the
+	// set is refused instead of reading back with one entry
+	_, err = MakeAddressSet("a@example.com (x, (y)", "b@example.com").MarshalText()
+	assert.Error(t, err)
+
 	text, err = AddressSet(nil).MarshalText()
 	require.NoError(t, err)
 	assert.Equal(t, "", string(text))
@@ -729,10 +736,16 @@ func TestAddressSet_MarshalText(t *testing.T) {
 	assert.Equal(t, MakeAddressSet(`"Doe, John" <john@example.com>`, "a@example.com"), set)
 	require.NoError(t, set.UnmarshalText(nil))
 	assert.Nil(t, set, "empty text is the nil set")
+	// A list of only separators has no entries, so it is the nil set too,
+	// which Value writes as NULL instead of the empty array
+	require.NoError(t, set.UnmarshalText([]byte(" , ,")))
+	assert.Nil(t, set, "text of only separators is the nil set")
+	require.NoError(t, set.Scan(","))
+	assert.Nil(t, set, "Scan of only separators is the nil set")
 }
 
 func TestAddressSet_MarshalXMLAttr(t *testing.T) {
-	testMarshalXMLAttr(t, AddressSet(nil), MakeAddressSet(), MakeAddressSet("b@example.com", `"Doe, John" <john@example.com>`))
+	xmlattrtest.NilPointer(t, AddressSet(nil), MakeAddressSet(), MakeAddressSet("b@example.com", `"Doe, John" <john@example.com>`))
 }
 
 // UnmarshalJSON reads the JSON array that MarshalJSON writes, the object

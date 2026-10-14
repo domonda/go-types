@@ -6,13 +6,13 @@
 //     parsed more leniently than [net/mail.ParseAddress] by [ParseAddress]
 //   - [AddressList]: a comma separated list of addresses
 //   - [AddressSet]: a set of addresses, stored in SQL as PostgreSQL text array
+//   - [NullableAddress] and [NullableAddressList]: the empty string
+//     is the null value and is written as SQL NULL and JSON null
 //
 // Address and NullableAddress are normalized when read and written, the
 // collections AddressList, NullableAddressList and AddressSet are read and
 // written as stored, because normalizing rewrites their entries and could
 // merge two elements of a set. Value refuses an invalid address or list.
-//   - [NullableAddress] and [NullableAddressList]: the empty string
-//     is the null value and is written as SQL NULL and JSON null
 //
 // Normalization lowercases the address part and formats the display name
 // like [net/mail.Address.String], but keeps a non-ASCII name as UTF-8,

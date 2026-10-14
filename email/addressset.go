@@ -342,10 +342,9 @@ func (set AddressSet) NormalizedAddressList() (AddressList, error) {
 // the sorted addresses joined as a comma separated list,
 // or "<nil>" for a nil set like [types.Set.String] does.
 //
-// Unlike the String methods of the address types, String does not
-// normalize, because normalizing can merge addresses, and the string
-// has to list every element of the set, like the String methods
-// of the other set types.
+// String does not normalize, because normalizing can merge addresses,
+// and the string has to list every element of the set, like the String
+// methods of the other set types.
 //
 // An allocated empty set renders as the empty string, which is what the
 // empty address list is, so the nil rendering is what distinguishes the
@@ -534,7 +533,19 @@ func (set AddressSet) MarshalText() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return []byte(strings.Join(addrs, ", ")), nil
+	text := strings.Join(addrs, ", ")
+	// Each address reads back alone, but an unclosed comment like in
+	// "a@example.com (x, (y)" also swallows the entries after it
+	entries := SplitAddressList(text)
+	if len(entries) != len(addrs) {
+		return nil, errs.Errorf("email.AddressSet %q would not read back as the same address list", text)
+	}
+	for i, entry := range entries {
+		if string(entry) != addrs[i] {
+			return nil, errs.Errorf("email.AddressSet %q would not read back as the same address list", text)
+		}
+	}
+	return []byte(text), nil
 }
 
 // MarshalXMLAttr implements encoding/xml.MarshalerAttr by writing the

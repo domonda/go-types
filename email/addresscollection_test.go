@@ -1,7 +1,6 @@
 package email
 
 import (
-	"encoding/xml"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -37,6 +36,17 @@ func TestSplitAddressList(t *testing.T) {
 		{list: `foo, bar@example.com`, want: []Address{"foo", "bar@example.com"}},
 		{list: `foo, bar`, want: []Address{"foo", "bar"}},
 		{list: `foo, bar@example.com, Doe, John <john@example.com>, baz`, want: []Address{"foo", "bar@example.com", `Doe, John <john@example.com>`, "baz"}},
+		// An escaped quote doesn't end the quoted name, also when an odd
+		// number of them leaves no closing quote for the display name join
+		{list: `"a \" b, c" <x@example.com>, y@example.com`, want: []Address{`"a \" b, c" <x@example.com>`, "y@example.com"}},
+		// A stray '>' doesn't keep the later commas from splitting
+		{list: `a@example.com>, b@example.com`, want: []Address{`a@example.com>`, "b@example.com"}},
+		// A list of only separators has no entries
+		{list: ",", want: nil},
+		{list: " , ,", want: nil},
+		{list: ",,,", want: nil},
+		// Angle brackets without an @ still end the display name run
+		{list: `Doe, John <invalid>, b@example.com`, want: []Address{`Doe, John <invalid>`, "b@example.com"}},
 		// After an unbalanced quote the rest is one entry, no error
 		{list: `"unbalanced, a@example.com, b@example.com`, want: []Address{`"unbalanced, a@example.com, b@example.com`}},
 		// Placeholders for hidden recipients are no entries
@@ -111,36 +121,5 @@ func TestReadAddressCollection(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, tt.want, got)
 		})
-	}
-}
-
-type xmlPtrAttrDoc[T any] struct {
-	XMLName xml.Name `xml:"doc"`
-	Attr    *T       `xml:"attr,attr"`
-}
-
-type xmlValueAttrDoc[T any] struct {
-	XMLName xml.Name `xml:"doc"`
-	Attr    T        `xml:"attr,attr"`
-}
-
-// testMarshalXMLAttr checks that a nil *T attribute is left out without
-// omitempty, because encoding/xml would call the value receiver
-// MarshalText through the nil pointer and panic, and that a *T attribute
-// is written exactly like a T attribute, with "" for an empty value.
-func testMarshalXMLAttr[T any](t *testing.T, values ...T) {
-	t.Helper()
-	var data []byte
-	var err error
-	require.NotPanics(t, func() { data, err = xml.Marshal(xmlPtrAttrDoc[T]{}) })
-	require.NoError(t, err)
-	assert.Equal(t, `<doc></doc>`, string(data))
-
-	for _, v := range values {
-		want, err := xml.Marshal(xmlValueAttrDoc[T]{Attr: v})
-		require.NoError(t, err)
-		got, err := xml.Marshal(xmlPtrAttrDoc[T]{Attr: &v})
-		require.NoError(t, err)
-		assert.Equal(t, string(want), string(got))
 	}
 }
