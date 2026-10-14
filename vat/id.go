@@ -210,7 +210,7 @@ func (id ID) Number() string {
 // the normalized ID or returns the error of Normalized,
 // also for a blank source.
 func (id *ID) ScanString(source string, validate bool) error {
-	return internal.ScanStringNormalized(id, source, validate, ID.Normalized, nil)
+	return internal.ScanStringNormalized(id, source, validate, false, ID.Normalized, nil)
 }
 
 // Scan implements the database/sql.Scanner interface.
@@ -233,7 +233,7 @@ func (id ID) Value() (driver.Value, error) {
 // normalized ID, "" for a blank ID, or the ID unchanged
 // if it can't be normalized.
 func (id ID) MarshalJSON() ([]byte, error) {
-	return internal.MarshalJSONNormalized(id, ID.Normalized, nil)
+	return internal.MarshalJSONNormalized(id, false, ID.Normalized, nil)
 }
 
 // UnmarshalJSON implements encoding/json.Unmarshaler.

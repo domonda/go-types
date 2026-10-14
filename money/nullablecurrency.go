@@ -141,12 +141,7 @@ func (n NullableCurrency) NormalizedOrNull() NullableCurrency {
 // Without validate it stores source like Scan, with validate it stores
 // the normalized currency or returns the error of Normalized.
 func (n *NullableCurrency) ScanString(source string, validate bool) error {
-	switch source {
-	case "NULL", "null", "nil":
-		n.SetNull()
-		return nil
-	}
-	return internal.ScanStringNormalized(n, source, validate, NullableCurrency.Normalized, nil)
+	return internal.ScanStringNormalized(n, source, validate, true, NullableCurrency.Normalized, nil)
 }
 
 // Scan implements the database/sql.Scanner interface.
@@ -189,10 +184,7 @@ func (n NullableCurrency) Currency() Currency {
 // value if the NullableCurrency is null, else the normalized currency,
 // or the currency unchanged if it can't be normalized.
 func (n NullableCurrency) MarshalJSON() ([]byte, error) {
-	if n.IsNull() {
-		return []byte(`null`), nil
-	}
-	return internal.MarshalJSONNormalized(n, NullableCurrency.Normalized, nil)
+	return internal.MarshalJSONNormalized(n, true, NullableCurrency.Normalized, nil)
 }
 
 // UnmarshalJSON implements encoding/json.Unmarshaler.

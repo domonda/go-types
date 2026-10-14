@@ -30,12 +30,7 @@ var _ nullable.NullSetable[BIC] = (*NullableBIC)(nil)
 // Without validate it stores source like Scan, with validate it stores
 // the normalized BIC or returns the error of Normalized.
 func (bic *NullableBIC) ScanString(source string, validate bool) error {
-	switch source {
-	case "NULL", "null", "nil":
-		bic.SetNull()
-		return nil
-	}
-	return internal.ScanStringNormalized(bic, source, validate, NullableBIC.Normalized, nil)
+	return internal.ScanStringNormalized(bic, source, validate, true, NullableBIC.Normalized, nil)
 }
 
 // Valid returns true if bic is null or a valid SWIFT Business Identifier Code
@@ -101,10 +96,7 @@ func (bic *NullableBIC) Scan(value any) error {
 // value if the NullableBIC is null, else the normalized BIC,
 // or the BIC unchanged if it can't be normalized.
 func (bic NullableBIC) MarshalJSON() ([]byte, error) {
-	if bic.IsNull() {
-		return []byte(`null`), nil
-	}
-	return internal.MarshalJSONNormalized(bic, NullableBIC.Normalized, nil)
+	return internal.MarshalJSONNormalized(bic, true, NullableBIC.Normalized, nil)
 }
 
 // UnmarshalJSON implements encoding/json.Unmarshaler.

@@ -181,7 +181,7 @@ func (a Address) Value() (driver.Value, error) {
 // normalized address, "" for a blank Address, or the address unchanged
 // if it can't be normalized.
 func (a Address) MarshalJSON() ([]byte, error) {
-	return internal.MarshalJSONNormalized(a, Address.Normalized, nil)
+	return internal.MarshalJSONNormalized(a, false, Address.Normalized, nil)
 }
 
 // UnmarshalJSON implements encoding/json.Unmarshaler.

@@ -35,12 +35,7 @@ var _ types.NormalizableValidator[NullableIBAN] = NullableIBAN("")
 // Without validate it stores source like Scan, with validate it stores
 // the normalized IBAN or returns the error of Normalized.
 func (iban *NullableIBAN) ScanString(source string, validate bool) error {
-	switch source {
-	case "NULL", "null", "nil":
-		iban.SetNull()
-		return nil
-	}
-	return internal.ScanStringNormalized(iban, source, validate, NullableIBAN.Normalized, nil)
+	return internal.ScanStringNormalized(iban, source, validate, true, NullableIBAN.Normalized, nil)
 }
 
 // Valid returns true if iban is null or a valid International Bank Account Number
@@ -129,10 +124,7 @@ func (iban *NullableIBAN) Scan(value any) error {
 // value if the NullableIBAN is null, else the normalized IBAN,
 // or the IBAN unchanged if it can't be normalized.
 func (iban NullableIBAN) MarshalJSON() ([]byte, error) {
-	if iban.IsNull() {
-		return []byte(`null`), nil
-	}
-	return internal.MarshalJSONNormalized(iban, NullableIBAN.Normalized, nil)
+	return internal.MarshalJSONNormalized(iban, true, NullableIBAN.Normalized, nil)
 }
 
 // UnmarshalJSON implements encoding/json.Unmarshaler.

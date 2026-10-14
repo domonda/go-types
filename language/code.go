@@ -222,7 +222,7 @@ func (c Code) Value() (driver.Value, error) {
 // normalized code, "" for a blank Code, or the code unchanged
 // if it can't be normalized.
 func (c Code) MarshalJSON() ([]byte, error) {
-	return internal.MarshalJSONNormalized(c, Code.Normalized, nil)
+	return internal.MarshalJSONNormalized(c, false, Code.Normalized, nil)
 }
 
 // UnmarshalJSON implements encoding/json.Unmarshaler.

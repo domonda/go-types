@@ -143,12 +143,7 @@ func (n NullableDate) Validate() error {
 // Without validate it stores source like Scan, with validate it stores
 // the normalized date or returns the error of Normalized.
 func (n *NullableDate) ScanString(source string, validate bool) error {
-	switch source {
-	case "NULL", "null", "nil":
-		n.SetNull()
-		return nil
-	}
-	return internal.ScanStringNormalized(n, source, validate, NullableDate.Normalized, NullableDate.IsNull)
+	return internal.ScanStringNormalized(n, source, validate, true, NullableDate.Normalized, NullableDate.IsNull)
 }
 
 // ScanStringWithLang parses and assigns the source string as a NullableDate using the given language hint.
@@ -600,10 +595,7 @@ func (n NullableDate) Value() (driver.Value, error) {
 // value if the NullableDate is null, else the normalized date,
 // or the date unchanged if it can't be normalized.
 func (n NullableDate) MarshalJSON() ([]byte, error) {
-	if n.IsNull() {
-		return []byte(`null`), nil
-	}
-	return internal.MarshalJSONNormalized(n, NullableDate.Normalized, NullableDate.IsNull)
+	return internal.MarshalJSONNormalized(n, true, NullableDate.Normalized, NullableDate.IsNull)
 }
 
 // MarshalText implements encoding.TextMarshaler like MarshalJSON,

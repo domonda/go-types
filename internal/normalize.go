@@ -32,7 +32,8 @@ import (
 // Each helper takes the Normalized method of the type as normalize,
 // which must return its receiver unchanged together with an error
 // for a value that can't be normalized. isBlank reports values that
-// mean "no value", a nil isBlank uses IsBlank.
+// mean "no value", a nil isBlank uses IsBlank. nullable is true for
+// a nullable type, whose blank value is null.
 
 // IsBlank reports whether s is empty after strutil.TrimSpace.
 func IsBlank[S ~string](s S) bool {
@@ -72,11 +73,19 @@ func ScanNormalized[S ~string](dst *S, value any, normalize func(S) (S, error), 
 }
 
 // ScanStringNormalized implements the ScanString method of a normalizing
-// string type used by the strfmt package. Without validate it stores
-// like NormalizedOrRaw, with validate it stores the normalized value or
+// string type used by the strfmt package. The strings "NULL", "null" and
+// "nil" set a nullable type to null. Without validate it stores like
+// NormalizedOrRaw, with validate it stores the normalized value or
 // returns the error of normalize, also for a blank value of a type
 // whose normalize rejects blank values.
-func ScanStringNormalized[S ~string](dst *S, source string, validate bool, normalize func(S) (S, error), isBlank func(S) bool) error {
+func ScanStringNormalized[S ~string](dst *S, source string, validate, nullable bool, normalize func(S) (S, error), isBlank func(S) bool) error {
+	if nullable {
+		switch source {
+		case "NULL", "null", "nil":
+			*dst = ""
+			return nil
+		}
+	}
 	if !validate {
 		*dst = NormalizedOrRaw(S(source), normalize, isBlank)
 		return nil
@@ -107,9 +116,14 @@ func ValueNormalized[S ~string](s S, normalize func(S) (S, error), isBlank func(
 }
 
 // MarshalJSONNormalized implements encoding/json.Marshaler for a normalizing
-// string type by writing NormalizedOrRaw as JSON string.
-func MarshalJSONNormalized[S ~string](s S, normalize func(S) (S, error), isBlank func(S) bool) ([]byte, error) {
-	return json.Marshal(string(NormalizedOrRaw(s, normalize, isBlank)))
+// string type by writing NormalizedOrRaw as JSON string, or JSON null
+// instead of "" for a blank value if nullable is true.
+func MarshalJSONNormalized[S ~string](s S, nullable bool, normalize func(S) (S, error), isBlank func(S) bool) ([]byte, error) {
+	str := NormalizedOrRaw(s, normalize, isBlank)
+	if str == "" && nullable {
+		return []byte(`null`), nil
+	}
+	return json.Marshal(string(str))
 }
 
 // MarshalTextNormalized implements encoding.TextMarshaler for a normalizing
@@ -136,13 +150,13 @@ func MarshalXMLAttrText[T encoding.TextMarshaler](v *T, name xml.Name) (xml.Attr
 
 // UnmarshalJSONNormalized implements encoding/json.Unmarshaler for a
 // normalizing string type by storing a JSON string with NormalizedOrRaw.
-// JSON null sets "" if nullResets is true, which a nullable type needs to
+// JSON null sets "" if nullable is true, which a nullable type needs to
 // reset a field that holds a value, else it is a no-op like encoding/json
 // does for null and a non-pointer value. Any other JSON value is an error
 // that names the type S.
-func UnmarshalJSONNormalized[S ~string](dst *S, data []byte, nullResets bool, normalize func(S) (S, error), isBlank func(S) bool) error {
+func UnmarshalJSONNormalized[S ~string](dst *S, data []byte, nullable bool, normalize func(S) (S, error), isBlank func(S) bool) error {
 	if bytes.Equal(data, []byte(`null`)) {
-		if nullResets {
+		if nullable {
 			*dst = ""
 		}
 		return nil

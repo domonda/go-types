@@ -167,10 +167,7 @@ func (n NullableCode) Value() (driver.Value, error) {
 // value if the NullableCode is null, else the normalized code,
 // or the code unchanged if it can't be normalized.
 func (n NullableCode) MarshalJSON() ([]byte, error) {
-	if n.IsNull() {
-		return []byte(`null`), nil
-	}
-	return internal.MarshalJSONNormalized(n, NullableCode.Normalized, nil)
+	return internal.MarshalJSONNormalized(n, true, NullableCode.Normalized, nil)
 }
 
 // UnmarshalJSON implements encoding/json.Unmarshaler.
@@ -229,10 +226,5 @@ func (NullableCode) JSONSchema() *jsonschema.Schema {
 // Without validate it stores source like Scan, with validate it stores
 // the normalized code or returns the error of Normalized.
 func (n *NullableCode) ScanString(source string, validate bool) error {
-	switch source {
-	case "NULL", "null", "nil":
-		n.SetNull()
-		return nil
-	}
-	return internal.ScanStringNormalized(n, source, validate, NullableCode.Normalized, nil)
+	return internal.ScanStringNormalized(n, source, validate, true, NullableCode.Normalized, nil)
 }

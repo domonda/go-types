@@ -48,7 +48,7 @@ func NormalizeCurrency(str string) (Currency, error) {
 // the normalized currency or returns the error of Normalized,
 // also for a blank source.
 func (c *Currency) ScanString(source string, validate bool) error {
-	return internal.ScanStringNormalized(c, source, validate, Currency.Normalized, nil)
+	return internal.ScanStringNormalized(c, source, validate, false, Currency.Normalized, nil)
 }
 
 // GetOrDefault returns the value c references if it is valid and c is not nil.
@@ -222,7 +222,7 @@ func (c Currency) Value() (driver.Value, error) {
 // normalized currency, "" for a blank Currency, or the currency
 // unchanged if it can't be normalized.
 func (c Currency) MarshalJSON() ([]byte, error) {
-	return internal.MarshalJSONNormalized(c, Currency.Normalized, nil)
+	return internal.MarshalJSONNormalized(c, false, Currency.Normalized, nil)
 }
 
 // UnmarshalJSON implements encoding/json.Unmarshaler.

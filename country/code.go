@@ -201,7 +201,7 @@ func (c Code) Value() (driver.Value, error) {
 // normalized code, "" for a blank Code, or the code unchanged
 // if it can't be normalized.
 func (c Code) MarshalJSON() ([]byte, error) {
-	return internal.MarshalJSONNormalized(c, Code.Normalized, nil)
+	return internal.MarshalJSONNormalized(c, false, Code.Normalized, nil)
 }
 
 // UnmarshalJSON implements encoding/json.Unmarshaler.
@@ -254,7 +254,7 @@ func (Code) JSONSchema() *jsonschema.Schema {
 // the normalized code or returns the error of Normalized,
 // also for a blank source.
 func (c *Code) ScanString(source string, validate bool) error {
-	return internal.ScanStringNormalized(c, source, validate, Code.Normalized, nil)
+	return internal.ScanStringNormalized(c, source, validate, false, Code.Normalized, nil)
 }
 
 // Nullable returns the Code as NullableCode.

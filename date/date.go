@@ -334,7 +334,7 @@ func FromUntilFromYearAndMonths(year, months string) (fromDate, untilDate Date, 
 // the normalized date or returns the error of Normalized,
 // also for a blank source.
 func (date *Date) ScanString(source string, validate bool) error {
-	return internal.ScanStringNormalized(date, source, validate, Date.Normalized, Date.IsZero)
+	return internal.ScanStringNormalized(date, source, validate, false, Date.Normalized, Date.IsZero)
 }
 
 // ScanStringWithLang parses and assigns the source string as a Date using the given language hint.
@@ -871,7 +871,7 @@ func (date Date) Value() (driver.Value, error) {
 // normalized date, "" for a zero date (see IsZero),
 // or the date unchanged if it can't be normalized.
 func (date Date) MarshalJSON() ([]byte, error) {
-	return internal.MarshalJSONNormalized(date, Date.Normalized, Date.IsZero)
+	return internal.MarshalJSONNormalized(date, false, Date.Normalized, Date.IsZero)
 }
 
 // UnmarshalJSON implements encoding/json.Unmarshaler.

@@ -48,7 +48,7 @@ type BIC string
 // the normalized BIC or returns the error of Normalized,
 // also for a blank source.
 func (bic *BIC) ScanString(source string, validate bool) error {
-	return internal.ScanStringNormalized(bic, source, validate, BIC.Normalized, nil)
+	return internal.ScanStringNormalized(bic, source, validate, false, BIC.Normalized, nil)
 }
 
 // Valid returns true if this is a valid SWIFT Business Identifier Code.
@@ -250,7 +250,7 @@ func (bic *BIC) Scan(value any) error {
 // normalized BIC, "" for a blank BIC, or the BIC unchanged
 // if it can't be normalized.
 func (bic BIC) MarshalJSON() ([]byte, error) {
-	return internal.MarshalJSONNormalized(bic, BIC.Normalized, nil)
+	return internal.MarshalJSONNormalized(bic, false, BIC.Normalized, nil)
 }
 
 // UnmarshalJSON implements encoding/json.Unmarshaler.

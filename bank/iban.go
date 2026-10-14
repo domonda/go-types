@@ -61,7 +61,7 @@ type IBAN string
 // the normalized IBAN or returns the error of Normalized,
 // also for a blank source.
 func (iban *IBAN) ScanString(source string, validate bool) error {
-	return internal.ScanStringNormalized(iban, source, validate, IBAN.Normalized, nil)
+	return internal.ScanStringNormalized(iban, source, validate, false, IBAN.Normalized, nil)
 }
 
 // Valid returns if this is a valid International Bank Account Number
@@ -198,7 +198,7 @@ func (iban *IBAN) Scan(value any) error {
 // normalized IBAN, "" for a blank IBAN, or the IBAN unchanged
 // if it can't be normalized.
 func (iban IBAN) MarshalJSON() ([]byte, error) {
-	return internal.MarshalJSONNormalized(iban, IBAN.Normalized, nil)
+	return internal.MarshalJSONNormalized(iban, false, IBAN.Normalized, nil)
 }
 
 // UnmarshalJSON implements encoding/json.Unmarshaler.

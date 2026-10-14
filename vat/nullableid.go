@@ -183,12 +183,7 @@ func (n NullableID) Number() string {
 // Without validate it stores source like Scan, with validate it stores
 // the normalized ID or returns the error of Normalized.
 func (n *NullableID) ScanString(source string, validate bool) error {
-	switch source {
-	case "NULL", "null", "nil":
-		n.SetNull()
-		return nil
-	}
-	return internal.ScanStringNormalized(n, source, validate, NullableID.Normalized, nil)
+	return internal.ScanStringNormalized(n, source, validate, true, NullableID.Normalized, nil)
 }
 
 // Scan implements the database/sql.Scanner interface.
@@ -211,10 +206,7 @@ func (n NullableID) Value() (driver.Value, error) {
 // value if the NullableID is null, else the normalized ID,
 // or the ID unchanged if it can't be normalized.
 func (n NullableID) MarshalJSON() ([]byte, error) {
-	if n.IsNull() {
-		return []byte(`null`), nil
-	}
-	return internal.MarshalJSONNormalized(n, NullableID.Normalized, nil)
+	return internal.MarshalJSONNormalized(n, true, NullableID.Normalized, nil)
 }
 
 // UnmarshalJSON implements encoding/json.Unmarshaler.

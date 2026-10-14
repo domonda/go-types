@@ -229,10 +229,7 @@ func (n *NullableAddress) UnmarshalXMLAttr(attr xml.Attr) error {
 // value if the NullableAddress is null, else the normalized address,
 // or the address unchanged if it can't be normalized.
 func (n NullableAddress) MarshalJSON() ([]byte, error) {
-	if n.IsNull() {
-		return []byte(`null`), nil
-	}
-	return internal.MarshalJSONNormalized(n, NullableAddress.Normalized, nil)
+	return internal.MarshalJSONNormalized(n, true, NullableAddress.Normalized, nil)
 }
 
 // MarshalText implements encoding.TextMarshaler like MarshalJSON,

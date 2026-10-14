@@ -36,7 +36,7 @@ func (c refCode) Value() (driver.Value, error) {
 }
 
 func (c refCode) MarshalJSON() ([]byte, error) {
-	return internal.MarshalJSONNormalized(c, refCode.Normalized, nil)
+	return internal.MarshalJSONNormalized(c, false, refCode.Normalized, nil)
 }
 
 func (c *refCode) UnmarshalJSON(data []byte) error {
@@ -60,7 +60,7 @@ func (c *refCode) UnmarshalXMLAttr(attr xml.Attr) error {
 }
 
 func (c *refCode) ScanString(source string, validate bool) error {
-	return internal.ScanStringNormalized(c, source, validate, refCode.Normalized, nil)
+	return internal.ScanStringNormalized(c, source, validate, false, refCode.Normalized, nil)
 }
 
 func TestRun(t *testing.T) {

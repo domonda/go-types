@@ -62,13 +62,23 @@ func TestScanNormalized(t *testing.T) {
 // an invalid or, for a non-nullable type, blank value is an error.
 func TestScanStringNormalized(t *testing.T) {
 	var c upperCode
-	require.NoError(t, ScanStringNormalized(&c, "xx", false, upperCode.Normalized, nil))
+	require.NoError(t, ScanStringNormalized(&c, "xx", false, false, upperCode.Normalized, nil))
 	assert.Equal(t, upperCode("xx"), c)
-	require.NoError(t, ScanStringNormalized(&c, "de", true, upperCode.Normalized, nil))
+	require.NoError(t, ScanStringNormalized(&c, "de", true, false, upperCode.Normalized, nil))
 	assert.Equal(t, upperCode("DE"), c)
-	assert.Error(t, ScanStringNormalized(&c, "xx", true, upperCode.Normalized, nil))
-	assert.Error(t, ScanStringNormalized(&c, "", true, upperCode.Normalized, nil))
+	assert.Error(t, ScanStringNormalized(&c, "xx", true, false, upperCode.Normalized, nil))
+	assert.Error(t, ScanStringNormalized(&c, "", true, false, upperCode.Normalized, nil))
 	assert.Equal(t, upperCode("DE"), c, "unchanged on error")
+
+	// strfmt writes null as one of these words, which only a nullable
+	// type reads as null; for another type they are just text
+	for _, null := range []string{"NULL", "null", "nil"} {
+		c = "DE"
+		require.NoError(t, ScanStringNormalized(&c, null, true, true, upperCode.Normalized, nil))
+		assert.Equal(t, upperCode(""), c, "nullable %q", null)
+	}
+	require.NoError(t, ScanStringNormalized(&c, "nil", true, false, upperCode.Normalized, nil))
+	assert.Equal(t, upperCode("NIL"), c, "not nullable")
 }
 
 // Value is the one writing method that refuses an invalid value,
@@ -91,12 +101,23 @@ func TestValueNormalized(t *testing.T) {
 }
 
 func TestMarshalNormalized(t *testing.T) {
-	data, err := MarshalJSONNormalized(upperCode("de"), upperCode.Normalized, nil)
+	data, err := MarshalJSONNormalized(upperCode("de"), false, upperCode.Normalized, nil)
 	require.NoError(t, err)
 	assert.Equal(t, `"DE"`, string(data))
-	data, err = MarshalJSONNormalized(upperCode("xx"), upperCode.Normalized, nil)
+	data, err = MarshalJSONNormalized(upperCode("xx"), false, upperCode.Normalized, nil)
 	require.NoError(t, err)
 	assert.Equal(t, `"xx"`, string(data), "an invalid value is written unchanged")
+	// A nullable type writes its blank value as JSON null, which reads
+	// back as null, another type writes it as "" like a string
+	data, err = MarshalJSONNormalized(upperCode(" "), true, upperCode.Normalized, nil)
+	require.NoError(t, err)
+	assert.Equal(t, `null`, string(data))
+	data, err = MarshalJSONNormalized(upperCode(" "), false, upperCode.Normalized, nil)
+	require.NoError(t, err)
+	assert.Equal(t, `""`, string(data))
+	data, err = MarshalJSONNormalized(upperCode("xx"), true, upperCode.Normalized, nil)
+	require.NoError(t, err)
+	assert.Equal(t, `"xx"`, string(data), "only a blank value is null")
 	text, err := MarshalTextNormalized(upperCode(" "), upperCode.Normalized, nil)
 	require.NoError(t, err)
 	assert.Equal(t, "", string(text))
