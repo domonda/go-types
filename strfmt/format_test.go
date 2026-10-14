@@ -23,7 +23,7 @@ import (
 )
 
 var caseSet = map[*FormatConfig]map[any]string{
-	NewEnglishFormatConfig(): {
+	NewUSFormatConfig(): {
 		// nil and zero
 		"":                           "",
 		(*string)(nil):               "",
@@ -49,10 +49,10 @@ var caseSet = map[*FormatConfig]map[any]string{
 		ptrMoneyAmount(1789101.789):    "1,789,101.79",
 		ptrPtrMoneyAmount(1891011.789): "1,891,011.79",
 		// date / time
-		date.Date("2020-12-01"):                          "01/12/2020",
-		ptrDateDate("2021-12-01"):                        "01/12/2021",
-		ptrPtrDateDate("2022-12-01"):                     "01/12/2022",
-		time.Date(2022, 02, 10, 14, 15, 59, 0, time.UTC): "10/02/2022 14:15:59 UTC",
+		date.Date("2020-12-01"):                          "12/01/2020",
+		ptrDateDate("2021-12-01"):                        "12/01/2021",
+		ptrPtrDateDate("2022-12-01"):                     "12/01/2022",
+		time.Date(2022, 02, 10, 14, 15, 59, 0, time.UTC): "02/10/2022 14:15:59 UTC",
 	},
 	NewGermanFormatConfig(): {
 		// nil and zero
@@ -197,7 +197,7 @@ func TestFormatTextMarshaler(t *testing.T) {
 // that is read back or compared with the database. The collection types
 // write their MarshalText as stored.
 func TestFormatNormalizingTypes(t *testing.T) {
-	config := NewEnglishFormatConfig()
+	config := NewUSFormatConfig()
 	tests := []struct {
 		value any
 		want  string
@@ -423,7 +423,7 @@ func TestFormatValueStringerThroughPointers(t *testing.T) {
 // got the struct internals "{1234 true}" instead of the number, which can't
 // be read or scanned back.
 func TestFormatValueNullableType(t *testing.T) {
-	for _, config := range []*FormatConfig{NewGermanFormatConfig(), NewEnglishFormatConfig()} {
+	for _, config := range []*FormatConfig{NewGermanFormatConfig(), NewUSFormatConfig()} {
 		config.Nil = "N/A"
 
 		n := nullable.TypeFrom(1234)

@@ -88,7 +88,7 @@ var DefaultScanConfig = NewScanConfig()
 | `TrueStrings`                 | `true`, `True`, `TRUE`, `yes`, `Yes`, `YES`, `ja`, `Ja`, `JA`, `1` |
 | `FalseStrings`                | `false`, `False`, `FALSE`, `no`, `No`, `NO`, `nein`, `Nein`, `NEIN`, `0` |
 | `NilStrings`                  | `""`, `nil`, `<nil>`, `null`, `NULL`               |
-| `TimeFormats`                 | In this order: `time.RFC3339Nano`, `time.RFC3339`, `"2006-01-02 15:04:05.999999999 -0700 MST"` (`time.Time.String`), `time.DateTime`, `"2006-01-02 15:04"`, `"2006-01-02T15:04"` (browser `datetime-local`), `"02/01/2006 15:04:05 MST"` (English preset, day first like `date.Date`, so US month first times are read with day and month swapped; replace it with `"01/02/2006 15:04:05 MST"` for US input), `"02.01.2006 15:04:05 MST"` (German preset), `time.DateOnly` |
+| `TimeFormats`                 | In this order: `time.RFC3339Nano`, `time.RFC3339`, `"2006-01-02 15:04:05.999999999 -0700 MST"` (`time.Time.String`), `time.DateTime`, `"2006-01-02 15:04"`, `"2006-01-02T15:04"` (browser `datetime-local`), `"01/02/2006 15:04:05 MST"` (US preset, month first like `date.Date` reads slashes without a hint, so British day first times are read with day and month swapped; replace it with `"02/01/2006 15:04:05 MST"` for British input), `"02.01.2006 15:04:05 MST"` (German preset), `time.DateOnly` |
 | `AcceptedMoneyAmountDecimals` | `0, 2, 4`. Not used by `Scan`, it's there to pass on to `money.ParseAmount` or `money.NewAmountParser`. |
 | `StrictEmptyStringParsing`    | `false`: a nil string scans as the zero value of a type that can't be nil or null. |
 | `TypeScanners`                | Scanners for `time.Time`, `nullable.Time`, and `time.Duration`, see below. |
@@ -152,12 +152,12 @@ type FormatConfig struct {
 
 `FormatConfig` has no JSON tags. The presets:
 
-| Field         | `NewFormatConfig()`        | `NewEnglishFormatConfig()`  | `NewGermanFormatConfig()`   |
+| Field         | `NewFormatConfig()`        | `NewUSFormatConfig()`       | `NewGermanFormatConfig()`   |
 |---------------|----------------------------|-----------------------------|-----------------------------|
 | `Float`       | `EnglishFloatFormat(-1)`   | `EnglishFloatFormat(-1)`    | `GermanFloatFormat(-1)`     |
 | `MoneyAmount` | `EnglishMoneyFormat(true)` | `EnglishMoneyFormat(true)`  | `GermanMoneyFormat(true)`   |
-| `Time`        | `time.RFC3339`             | `"02/01/2006 15:04:05 MST"` | `"02.01.2006 15:04:05 MST"` |
-| `Date`        | `date.Layout` (2006-01-02) | `"02/01/2006"` (DD/MM/YYYY) | `"02.01.2006"`              |
+| `Time`        | `time.RFC3339`             | `"01/02/2006 15:04:05 MST"` | `"02.01.2006 15:04:05 MST"` |
+| `Date`        | `date.Layout` (2006-01-02) | `"01/02/2006"` (MM/DD/YYYY) | `"02.01.2006"`              |
 | `Nil`         | `""`                       | `""`                        | `""`                        |
 | `True`        | `"true"`                   | `"yes"`                     | `"ja"`                      |
 | `False`       | `"false"`                  | `"no"`                      | `"nein"`                    |
@@ -212,7 +212,7 @@ type MoneyFormat struct {
 
 What the presets write, and whether `Scan` with the default `ScanConfig` reads it back:
 
-| Value                                           | `NewFormatConfig`      | English                   | German                    | Scans back               |
+| Value                                           | `NewFormatConfig`      | US                        | German                    | Scans back               |
 |-------------------------------------------------|------------------------|---------------------------|---------------------------|--------------------------|
 | `true`                                          | `true`                 | `yes`                     | `ja`                      | yes                      |
 | `1234.5` (`float64`)                            | `1234.5`               | `1234.5`                  | `1234,5`                  | yes                      |
@@ -221,8 +221,8 @@ What the presets write, and whether `Scan` with the default `ScanConfig` reads i
 | `money.CurrencyAmountEUR(1234.5)`               | `EUR 1,234.50`         | `EUR 1,234.50`            | `EUR 1.234,50`            | yes                      |
 | `money.CurrencyAmountJPY(1234.5)`               | `JPY 1,234.50`         | `JPY 1,234.50`            | `JPY 1.234,50`            | yes                      |
 | `money.CurrencyAmount{"KWD", 1.234}`            | `KWD 1.234`            | `KWD 1.234`               | `KWD 1,234`               | yes                      |
-| `date.Date("2024-01-31")`                       | `2024-01-31`           | `31/01/2024`              | `31.01.2024`              | yes                      |
-| `time.Date(2024, 1, 31, 10, 0, 0, 0, time.UTC)` | `2024-01-31T10:00:00Z` | `31/01/2024 10:00:00 UTC` | `31.01.2024 10:00:00 UTC` | yes, see the zone gotcha |
+| `date.Date("2024-01-31")`                       | `2024-01-31`           | `01/31/2024`              | `31.01.2024`              | yes                      |
+| `time.Date(2024, 1, 31, 10, 0, 0, 0, time.UTC)` | `2024-01-31T10:00:00Z` | `01/31/2024 10:00:00 UTC` | `31.01.2024 10:00:00 UTC` | yes, see the zone gotcha |
 | `90 * time.Minute`                              | `1h30m0s`              | `1h30m0s`                 | `1h30m0s`                 | yes                      |
 | zero `time.Time`, null nullable types           | `config.Nil`           | `config.Nil`              | `config.Nil`              | yes                      |
 
@@ -233,9 +233,9 @@ What the presets write, and whether `Scan` with the default `ScanConfig` reads i
 - **A nil string into a `string` field is kept.** `"NULL"` and `"nil"` scan as the strings `"NULL"` and `"nil"`. Use `nullable.TrimmedString` or a `*string` to get null.
 - **Strings are not trimmed.** A `string` destination and `Scannable.ScanString` get the source with its whitespace, bools and integers are compared and parsed trimmed.
 - **Bool strings are an exact list.** `y`, `on`, and `X` are errors with the defaults.
-- **The English preset writes dates as DD/MM/YYYY**, the British order: `31/01/2024`, not the US `01/31/2024`.
+- **The US preset writes dates as MM/DD/YYYY**, `01/31/2024`, which reads back month first because `date` reads a date with slashes month first without a language hint. A British DD/MM/YYYY date needs a hint or a custom layout with dots.
 - **Zone abbreviations need a known offset.** The preset time layouts end with `MST`. `time.Parse` knows the offset of an abbreviation only if it is `UTC`, `GMT` or one of the local time zone, and silently uses offset 0 for any other. So `ParseTime` and `Scan` reject `31.01.2024 10:00:00 CET` on a server in UTC instead of returning 10:00 UTC, but accept it on a server in Europe/Vienna. Times without a zone scan as UTC. Use `NewFormatConfig` with RFC 3339 for lossless times.
-- **The English preset time layout is day first.** `"02/01/2006 15:04:05 MST"` reads the US month-first `01/02/2024 10:00:00 EST` as the 1st of February when `EST` is known locally.
+- **The US preset time layout is month first.** `"01/02/2006 15:04:05 MST"` reads the British day-first `01/02/2024 10:00:00 GMT` as January 2nd.
 - **The currency amount formats keep the decimals of the currency.** A `Precision` of 2 or more is raised to `Currency.MinorUnits()`, so a KWD amount of 1.234 formats as `KWD 1,234` with the German preset. It is only raised, so `CurrencyAmountJPY(1234.5)` keeps the 2 decimals of the presets, `JPY 1,234.50`, like `CurrencyAmount.String`. A `Precision` of 0 or 1 rounds below the cents on purpose and is kept for every currency, so `EUR 1,235` and `KWD 1,235`, and so is the `Precision` of an amount without currency. `FormatAmount` and the other amount types without currency use `Precision` as it is. A `Precision` of -1 writes the shortest form, which doesn't scan back as `money.CurrencyAmount` if it has 1 decimal like `EUR 1.234,5`.
 - **Registered formatters run before the null check.** A zero `money.Amount` formats as `0.00`, not as `config.Nil`.
 - **Kinds win over `String` methods.** A type with a `string` or number kind and no registered formatter or `MarshalText` method is formatted by its kind: `money.RoundHalfToEven` formats as `1` although its `String` returns `RoundHalfToEven`, and `money.Rate(0.19)` as `0.19`.
@@ -282,7 +282,7 @@ func main() {
 	}
 	fmt.Printf("%+v\n", inv)
 
-	for _, config := range []*strfmt.FormatConfig{strfmt.NewEnglishFormatConfig(), strfmt.NewGermanFormatConfig()} {
+	for _, config := range []*strfmt.FormatConfig{strfmt.NewUSFormatConfig(), strfmt.NewGermanFormatConfig()} {
 		var out []string
 		for i := range row.NumField() {
 			out = append(out, strfmt.FormatValue(row.Field(i), config))
@@ -292,7 +292,7 @@ func main() {
 
 	// Output:
 	// {Number:INV-1 Amount:1234.50 Paid:true Due:2024-01-31 Items:0}
-	// INV-1;1,234.50;yes;31/01/2024;0
+	// INV-1;1,234.50;yes;01/31/2024;0
 	// INV-1;1.234,50;ja;31.01.2024;0
 }
 ```

@@ -899,7 +899,7 @@ func TestScanNullableType_roundTripsFormatPresets(t *testing.T) {
 		config *FormatConfig
 	}{
 		{name: "NewGermanFormatConfig", config: NewGermanFormatConfig()},
-		{name: "NewEnglishFormatConfig", config: NewEnglishFormatConfig()},
+		{name: "NewUSFormatConfig", config: NewUSFormatConfig()},
 	}
 	scanConfig := NewScanConfig()
 	for _, preset := range presets {

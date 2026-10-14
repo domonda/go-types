@@ -9,7 +9,7 @@
 //   - [Format] and [FormatValue]: format a value as string, controlled by a
 //     [FormatConfig] with float, money, date, and time formats, bool labels,
 //     a nil placeholder, and per-type [Formatter] functions
-//   - [NewFormatConfig], [NewEnglishFormatConfig], and [NewGermanFormatConfig]:
+//   - [NewFormatConfig], [NewUSFormatConfig], and [NewGermanFormatConfig]:
 //     locale presets, and [MoneyFormat] for the money types
 //   - [Scannable]: the ScanString method that most types of this module
 //     implement to parse themselves

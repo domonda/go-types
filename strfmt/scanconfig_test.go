@@ -104,7 +104,7 @@ func TestScanConfig_SetTypeScannerWithoutNewScanConfig(t *testing.T) {
 
 // TestScanConfig_roundTripsFormatPresets protects that the default ScanConfig
 // reads back what the FormatConfig presets write, so a CSV file or spreadsheet
-// exported with NewFormatConfig, NewEnglishFormatConfig or NewGermanFormatConfig
+// exported with NewFormatConfig, NewUSFormatConfig or NewGermanFormatConfig
 // can be imported again with NewScanConfig. The German preset writes bools as
 // "ja" and "nein" and both locale presets write times in layouts that the
 // default TimeFormats did not contain, so those values failed to scan.
@@ -129,7 +129,7 @@ func TestScanConfig_roundTripsFormatPresets(t *testing.T) {
 		config *FormatConfig
 	}{
 		{name: "NewFormatConfig", config: NewFormatConfig()},
-		{name: "NewEnglishFormatConfig", config: NewEnglishFormatConfig()},
+		{name: "NewUSFormatConfig", config: NewUSFormatConfig()},
 		{name: "NewGermanFormatConfig", config: NewGermanFormatConfig()},
 	}
 	scanConfig := NewScanConfig()

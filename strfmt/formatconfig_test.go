@@ -31,7 +31,7 @@ func TestFormatConfig_TypeFormatters(t *testing.T) {
 			name:   "date.NullableDate uses the configured date layout",
 			value:  date.NullableDate("2024-03-05"),
 			german: "05.03.2024",
-			en:     "05/03/2024",
+			en:     "03/05/2024",
 		},
 		{
 			name:   "date.NullableDate null",
@@ -43,7 +43,7 @@ func TestFormatConfig_TypeFormatters(t *testing.T) {
 			name:   "nullable.Time uses the configured time layout",
 			value:  nullable.TimeFrom(someTime),
 			german: "05.03.2024 06:07:08 UTC",
-			en:     "05/03/2024 06:07:08 UTC",
+			en:     "03/05/2024 06:07:08 UTC",
 		},
 		{
 			name:   "time.Duration uses Go duration syntax independent of locale",
@@ -73,7 +73,7 @@ func TestFormatConfig_TypeFormatters(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			assert.Equal(t, tt.german, Format(tt.value, NewGermanFormatConfig()), "German")
-			assert.Equal(t, tt.en, Format(tt.value, NewEnglishFormatConfig()), "English")
+			assert.Equal(t, tt.en, Format(tt.value, NewUSFormatConfig()), "English")
 		})
 	}
 }
@@ -101,14 +101,14 @@ func TestFormatConfig_MoneyTypesFormatAlike(t *testing.T) {
 		decimal := tt.amount.DecimalAmount(2, money.RoundHalfAwayFromZero)
 		for _, value := range []any{tt.amount, cents, &cents, decimal, &decimal} {
 			assert.Equal(t, tt.german, Format(value, NewGermanFormatConfig()), "German %T(%v)", value, value)
-			assert.Equal(t, tt.en, Format(value, NewEnglishFormatConfig()), "English %T(%v)", value, value)
+			assert.Equal(t, tt.en, Format(value, NewUSFormatConfig()), "English %T(%v)", value, value)
 		}
 	}
 
 	// A DecimalAmount is rounded or padded to the precision like an Amount
 	assert.Equal(t, "12,35", Format(money.NewDecimalAmount(12345, 3), NewGermanFormatConfig()), "12.345 rounds half away from zero")
-	assert.Equal(t, "5.00", Format(money.NewDecimalAmount(5, 0), NewEnglishFormatConfig()), "padded to two decimals")
-	assert.Equal(t, "0.00", Format(money.DecimalAmount{}, NewEnglishFormatConfig()), "zero value is zero, not Nil")
+	assert.Equal(t, "5.00", Format(money.NewDecimalAmount(5, 0), NewUSFormatConfig()), "padded to two decimals")
+	assert.Equal(t, "0.00", Format(money.DecimalAmount{}, NewUSFormatConfig()), "zero value is zero, not Nil")
 	assert.Equal(t, "NaN", Format(money.DecimalAmountNaN(), NewGermanFormatConfig()))
 }
 
@@ -130,7 +130,7 @@ func TestFormatConfig_CurrencyDecimalAmount(t *testing.T) {
 	}
 	for _, tt := range tests {
 		assert.Equal(t, tt.german, Format(tt.value, NewGermanFormatConfig()), "German %v", tt.value)
-		assert.Equal(t, tt.en, Format(tt.value, NewEnglishFormatConfig()), "English %v", tt.value)
+		assert.Equal(t, tt.en, Format(tt.value, NewUSFormatConfig()), "English %v", tt.value)
 		assert.Equal(t, tt.german, Format(&tt.value, NewGermanFormatConfig()), "German pointer %v", tt.value)
 
 		// Formatted exactly like the CurrencyAmount of the same value
@@ -146,7 +146,7 @@ func TestFormatConfig_CurrencyDecimalAmount(t *testing.T) {
 // money.NullableAmount would be written as the raw struct "{1234.5 true}".
 func TestFormatConfig_NullableMoneyTypes(t *testing.T) {
 	decimal := money.NewDecimalAmount(123450, 2)
-	for _, config := range []*FormatConfig{NewGermanFormatConfig(), NewEnglishFormatConfig()} {
+	for _, config := range []*FormatConfig{NewGermanFormatConfig(), NewUSFormatConfig()} {
 		config.Nil = "N/A"
 		want := Format(money.Amount(1234.5), config)
 
@@ -182,7 +182,7 @@ func TestFormatConfig_NilPlaceholder(t *testing.T) {
 // and a Nil placeholder that the ScanConfig reads as nil string, like
 // "NULL", has to scan back as null.
 func TestFormatConfig_NilPlaceholderForDates(t *testing.T) {
-	for _, config := range []*FormatConfig{NewFormatConfig(), NewGermanFormatConfig(), NewEnglishFormatConfig()} {
+	for _, config := range []*FormatConfig{NewFormatConfig(), NewGermanFormatConfig(), NewUSFormatConfig()} {
 		config.Nil = "NULL"
 		for _, value := range []any{date.Null, date.NullableDate("0001-01-01"), date.Date(""), date.Date("0001-01-01"), date.Date("0000-00-00")} {
 			assert.Equal(t, "NULL", Format(value, config), "Format(%T(%q))", value, value)

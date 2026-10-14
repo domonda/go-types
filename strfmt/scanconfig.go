@@ -104,15 +104,15 @@ type ScanConfig struct {
 // and time.Duration are pre-registered.
 //
 // The defaults accept the bool and time strings written by
-// NewFormatConfig, NewEnglishFormatConfig and NewGermanFormatConfig,
+// NewFormatConfig, NewUSFormatConfig and NewGermanFormatConfig,
 // like "ja" and "nein", so that what those presets format can be
 // scanned back.
 //
-// The time layout "02/01/2006 15:04:05 MST" of NewEnglishFormatConfig is
-// day first, like date.Date reads "03/04/2024" as 3 April, so a US month
-// first time like "03/04/2024 10:00:00 UTC" is read as 3 April without an
-// error. Replace it in TimeFormats with "01/02/2006 15:04:05 MST" to scan
-// US times.
+// The time layout "01/02/2006 15:04:05 MST" of NewUSFormatConfig is
+// month first, like date.Date reads "03/04/2024" as 4 March without a
+// language hint, so a British day first time like "03/04/2024 10:00:00
+// UTC" is read as 4 March without an error. Replace it in TimeFormats with
+// "02/01/2006 15:04:05 MST" to scan British times.
 func NewScanConfig() *ScanConfig {
 	c := &ScanConfig{
 		TrueStrings:  []string{"true", "True", "TRUE", "yes", "Yes", "YES", "ja", "Ja", "JA", "1"},
@@ -125,7 +125,7 @@ func NewScanConfig() *ScanConfig {
 			time.DateTime,
 			time.DateOnly + " 15:04",
 			time.DateOnly + "T15:04",  // Used by browser datetime-local input type
-			"02/01/2006 15:04:05 MST", // Used by NewEnglishFormatConfig
+			"01/02/2006 15:04:05 MST", // Used by NewUSFormatConfig
 			"02.01.2006 15:04:05 MST", // Used by NewGermanFormatConfig
 			time.DateOnly,
 		},

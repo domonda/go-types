@@ -58,13 +58,15 @@ func NewFormatConfig() *FormatConfig {
 	}
 }
 
-// NewEnglishFormatConfig returns a FormatConfig based on NewFormatConfig
-// adjusted for English locale conventions: DD/MM/YYYY date layout,
-// a long-form time layout, and "yes"/"no" boolean labels.
-func NewEnglishFormatConfig() *FormatConfig {
+// NewUSFormatConfig returns a FormatConfig based on NewFormatConfig
+// adjusted for US conventions: MM/DD/YYYY date layout, a long-form time
+// layout, and "yes"/"no" boolean labels. A date with slashes is read
+// month first without a language hint, see date.Normalize, so the dates
+// written by this config read back unchanged.
+func NewUSFormatConfig() *FormatConfig {
 	config := NewFormatConfig()
-	config.Date = "02/01/2006"
-	config.Time = "02/01/2006 15:04:05 MST"
+	config.Date = "01/02/2006"
+	config.Time = "01/02/2006 15:04:05 MST"
 	config.True = "yes"
 	config.False = "no"
 	return config

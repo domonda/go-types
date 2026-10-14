@@ -25,12 +25,12 @@ The steps build one program. Step 6 shows it complete, with its output.
    }
    ```
 
-2. Pick a format preset and a placeholder for null values. `strfmt.NewEnglishFormatConfig()` and `strfmt.NewGermanFormatConfig()` set the money separators, the date layout and the bool labels. `Nil` is the text written for nil pointers, null values of nullable types, a zero `time.Time` and an empty or null `date.Date` or `date.NullableDate`, and it scans back as null:
+2. Pick a format preset and a placeholder for null values. `strfmt.NewUSFormatConfig()` and `strfmt.NewGermanFormatConfig()` set the money separators, the date layout and the bool labels. `Nil` is the text written for nil pointers, null values of nullable types, a zero `time.Time` and an empty or null `date.Date` or `date.NullableDate`, and it scans back as null:
 
    | Preset                     | Money      | Date         | Bool           | Float    |
    |----------------------------|------------|--------------|----------------|----------|
    | `NewFormatConfig()`        | `1,234.50` | `2023-12-25` | `true`/`false` | `1234.5` |
-   | `NewEnglishFormatConfig()` | `1,234.50` | `25/12/2023` | `yes`/`no`     | `1234.5` |
+   | `NewUSFormatConfig()`      | `1,234.50` | `12/25/2023` | `yes`/`no`     | `1234.5` |
    | `NewGermanFormatConfig()`  | `1.234,50` | `25.12.2023` | `ja`/`nein`    | `1234,5` |
 
    ```go
@@ -176,15 +176,15 @@ The steps build one program. Step 6 shows it complete, with its output.
    	scanConfig.NilStrings = append(scanConfig.NilStrings, "-")
    	scanConfig.StrictEmptyStringParsing = true
 
-   	english := strfmt.NewEnglishFormatConfig()
-   	english.Nil = "-"
+   	us := strfmt.NewUSFormatConfig()
+   	us.Nil = "-"
    	german := strfmt.NewGermanFormatConfig()
    	german.Nil = "-"
 
    	for _, f := range []struct {
    		config *strfmt.FormatConfig
    		comma  rune
-   	}{{english, ','}, {german, ';'}} {
+   	}{{us, ','}, {german, ';'}} {
    		data := writeCSV(payments, f.config, f.comma)
    		fmt.Print(string(data))
    		scanned := readCSV(data, scanConfig, f.comma)
@@ -195,8 +195,8 @@ The steps build one program. Step 6 shows it complete, with its output.
    	readCSV([]byte("Muster GmbH;1.234,50;30.02.2023;ja;;-\nACME Ltd.;;08.01.2024;nein;;-\n"), scanConfig, ';')
 
    	// Output:
-   	// Muster GmbH,"1,234.50",25/12/2023,yes,-,-
-   	// ACME Ltd.,99.00,08/01/2024,no,01/02/2024,second reminder
+   	// Muster GmbH,"1,234.50",12/25/2023,yes,-,-
+   	// ACME Ltd.,99.00,01/08/2024,no,02/01/2024,second reminder
    	// round trip equal: true
    	// Muster GmbH;1.234,50;25.12.2023;ja;-;-
    	// ACME Ltd.;99,00;08.01.2024;nein;01.02.2024;second reminder
@@ -209,7 +209,7 @@ The steps build one program. Step 6 shows it complete, with its output.
 ## Verification
 
 - Both files print `round trip equal: true`: every field was written and read back to the same Go value.
-- The amounts have the separators of the preset, `1,234.50` and `1.234,50`. The CSV writer quotes the English amount because it contains the field separator.
+- The amounts have the separators of the preset, `1,234.50` and `1.234,50`. The CSV writer quotes the US amount because it contains the field separator.
 - The null `DueDate` and the null `Note` are written as the placeholder `-`, which is in `NilStrings`, so both scan back as null.
 - The two broken rows report the column and the reason, and are left out of the result.
 

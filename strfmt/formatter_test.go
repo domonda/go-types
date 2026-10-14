@@ -138,7 +138,7 @@ func TestMoneyFormat_CurrencyAmountRoundTrip(t *testing.T) {
 		amounts []money.CurrencyAmount
 	}{
 		{name: "default", config: NewFormatConfig(), amounts: amounts},
-		{name: "English", config: NewEnglishFormatConfig(), amounts: amounts},
+		{name: "English", config: NewUSFormatConfig(), amounts: amounts},
 		{name: "German", config: NewGermanFormatConfig(), amounts: amounts},
 		// The shortest form of 1234.5 has one decimal, which no currency accepts
 		{name: "German precision -1", config: germanShortest, amounts: []money.CurrencyAmount{{Currency: money.KWD, Amount: 1.234}, {Currency: money.EUR, Amount: 1234.56}}},
