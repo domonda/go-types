@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/domonda/go-types/internal/normtest"
 	"github.com/domonda/go-types/language"
 )
 
@@ -57,15 +58,15 @@ func TestNullableDate_UnmarshalJSONResetsAndRejects(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(`{"paid":null}`), &d))
 	assert.Equal(t, Null, d.Paid)
 
-	// A JSON string is assigned unchanged, without normalization or
-	// validation, like encoding/json did before NullableDate had
-	// UnmarshalJSON (see Test_NullableDate_UnmarshalJSON).
-	for _, str := range []string{"2023-12-25", "25.12.2023", "bad", ""} {
+	// A JSON string is stored normalized if it is a valid date and
+	// unchanged without an error if not, so Validate can report it.
+	// A zero date is null.
+	for str, want := range map[string]NullableDate{"2023-12-25": "2023-12-25", "25.12.2023": "2023-12-25", "bad": "bad", "": Null, "0001-01-01T00:00:00Z": Null} {
 		d := doc{Paid: "2024-01-02"}
 		data, err := json.Marshal(map[string]string{"paid": str})
 		require.NoError(t, err)
 		require.NoError(t, json.Unmarshal(data, &d))
-		assert.Equal(t, NullableDate(str), d.Paid, "json.Unmarshal(%s)", data)
+		assert.Equal(t, want, d.Paid, "json.Unmarshal(%s)", data)
 	}
 
 	// Any other JSON value is an error and leaves the value unchanged.
@@ -101,7 +102,6 @@ func TestNullableDate_WhitespaceIsNull(t *testing.T) {
 			assert.Equal(t, Null, n.NormalizedOrNull())
 			assert.True(t, n.NormalizedEqual(Null))
 
-			assert.Equal(t, "", n.String())
 			assert.Equal(t, "N/A", n.StringOr("N/A"))
 			assert.Equal(t, Date("2020-01-01"), n.GetOr("2020-01-01"))
 			assert.Equal(t, Date("2020-01-01"), n.DateOr("2020-01-01"))
@@ -192,21 +192,17 @@ func TestNullableDate_DateOr(t *testing.T) {
 	assert.Equal(t, Date("2020-01-01"), Null.DateOr("2020-01-01"))
 }
 
-func TestNullableDate_String(t *testing.T) {
-	assert.Equal(t, "2023-12-25", NullableDate("2023-12-25").String())
-	assert.Equal(t, "", Null.String())
-}
-
-// StringOr returns the normalized value like String, but the alternative
-// instead of a value that can't be normalized, so a caller printing
-// StringOr never shows a misspelled or invalid value as if it were valid.
+// StringOr returns the alternative only for null, which includes the zero
+// dates. Any other value comes back as stored, so a caller printing
+// StringOr shows an invalid value as what it is instead of hiding it
+// like a missing one.
 func TestNullableDate_StringOr(t *testing.T) {
 	d := NullableDate("2023-12-25")
 	assert.Equal(t, "2023-12-25", d.StringOr("N/A"))
 	assert.Equal(t, "N/A", Null.StringOr("N/A"))
-	assert.Equal(t, "2023-12-25", NullableDate("25.12.2023").StringOr("N/A"))
-	assert.Equal(t, "N/A", NullableDate("bad").StringOr("N/A"))
-	assert.Equal(t, "bad", NullableDate("bad").String(), "String returns the original")
+	assert.Equal(t, "N/A", NullableDate("0001-01-01").StringOr("N/A"))
+	assert.Equal(t, "25.12.2023", NullableDate("25.12.2023").StringOr("N/A"))
+	assert.Equal(t, "bad", NullableDate("bad").StringOr("N/A"))
 }
 
 func TestNullableDate_Year(t *testing.T) {
@@ -717,11 +713,11 @@ func TestNullableDate_ScanStringWithLang(t *testing.T) {
 	}
 }
 
-func TestNullableDate_String_Invalid(t *testing.T) {
-	// Invalid dates are returned unchanged so that the
-	// original input is visible in logs and error messages.
-	assert.Equal(t, "invalid", NullableDate("invalid").String())
-	assert.Equal(t, "2023-12-25", NullableDate("25.12.2023").String())
+func TestNullableDate_FormatsAsStored(t *testing.T) {
+	// fmt prints a date as stored, so that the original
+	// input is visible in logs and error messages.
+	assert.Equal(t, "invalid", fmt.Sprint(NullableDate("invalid")))
+	assert.Equal(t, "25.12.2023", fmt.Sprint(NullableDate("25.12.2023")))
 }
 
 func TestNullableDate_AfterTime(t *testing.T) {
@@ -824,10 +820,12 @@ func TestNullableDate_Scan(t *testing.T) {
 		{name: "[]byte is normalized", value: []byte("25.12.2023"), want: "2023-12-25"},
 		{name: "empty []byte", value: []byte{}, want: Null},
 		{name: "zero date []byte", value: []byte("0001-01-01"), want: Null},
-		{name: "invalid []byte", value: []byte("invalid"), wantErr: true},
+		// Scan never fails on content, so one invalid value doesn't
+		// fail a whole query; it is kept for Validate to report
+		{name: "invalid []byte", value: []byte("invalid"), want: "invalid"},
 		{name: "time.Time", value: time.Date(2023, 12, 25, 23, 59, 0, 0, time.UTC), want: "2023-12-25"},
 		{name: "zero time.Time", value: time.Time{}, want: Null},
-		{name: "invalid string", value: "invalid", wantErr: true},
+		{name: "invalid string", value: "invalid", want: "invalid"},
 		{name: "unsupported type", value: 20231225, wantErr: true},
 	}
 	for _, tt := range tests {
@@ -951,4 +949,16 @@ func TestNullableDate_ZeroDateInOtherFormatIsNull(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, `null`, string(j))
 	assert.False(t, NullableDate("02.01.0001").IsNull())
+}
+
+// TestNullableDate_ReadingAndWriting checks the reading and writing contract
+// shared by the normalizing types, with a blank or zero NullableDate as null.
+func TestNullableDate_ReadingAndWriting(t *testing.T) {
+	normtest.Run(t, normtest.Spec[NullableDate]{
+		Canonical: "2023-12-25",
+		Variants:  []NullableDate{"25.12.2023", "December 25, 2023", " 2023-12-25 ", "2023-12-25T10:00:00"},
+		Invalid:   []NullableDate{"invalid", "2023-02-30"},
+		Blank:     []NullableDate{"0001-01-01", "0000-00-00", "01.01.0001", "0001-01-01T00:00:00Z"},
+		Nullable:  true,
+	})
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/domonda/go-types/internal/normtest"
 	"github.com/domonda/go-types/language"
 )
 
@@ -408,7 +409,7 @@ func TestDate_Normalized(t *testing.T) {
 		wantErr bool
 	}{
 		// Valid:
-		{name: "earliest", date: "0001-01-01", want: "0001-01-01"},
+		{name: "earliest", date: "0001-01-02", want: "0001-01-02"},
 		{name: "3000-01-01", date: "3000-01-01", want: "3000-01-01"},
 		{name: "3000/01/01", date: "3000/01/01", want: "3000-01-01"},
 		{name: "3000.01.01", date: "3000.01.01", want: "3000-01-01"},
@@ -702,7 +703,7 @@ func TestDate_Compare(t *testing.T) {
 		// consistently: like the empty string, before every valid date and
 		// equal to each other. Compare must not use the invalid input that
 		// Normalized returns with its error.
-		{name: "invalid before valid", date1: "bad", date2: "0001-01-01", want: -1},
+		{name: "invalid before valid", date1: "bad", date2: "0001-01-02", want: -1},
 		{name: "valid after invalid", date1: "2023-12-25", date2: "bad", want: 1},
 		{name: "invalid equals invalid", date1: "bad", date2: "worse", want: 0},
 		{name: "invalid equals empty", date1: "zzz", date2: "", want: 0},
@@ -798,10 +799,13 @@ func TestDate_ComparisonWithInvalidDate(t *testing.T) {
 			assert.False(t, invalid.BeforeToday(), "BeforeToday")
 		})
 	}
-	// The zero time.Time date "0001-01-01" is valid and stays comparable
-	assert.True(t, Date("0001-01-01").Before(valid))
-	assert.True(t, valid.After("0001-01-01"))
-	assert.True(t, Date("0001-01-01").BeforeTime(tm))
+	// The zero date "0001-01-01" is no date, like the empty Date,
+	// while the day after it is the earliest comparable date
+	assert.False(t, Date("0001-01-01").Before(valid))
+	assert.False(t, valid.After("0001-01-01"))
+	assert.False(t, Date("0001-01-01").BeforeTime(tm))
+	assert.True(t, Date("0001-01-02").Before(valid))
+	assert.True(t, valid.After("0001-01-02"))
 }
 
 // Arithmetic tests
@@ -876,8 +880,16 @@ func TestDate_Scan(t *testing.T) {
 		// which must scan exactly like the same string.
 		{name: "[]byte", value: []byte("2023-12-25"), want: "2023-12-25"},
 		{name: "[]byte is normalized", value: []byte("25.12.2023"), want: "2023-12-25"},
-		{name: "invalid []byte", value: []byte("invalid"), wantErr: true},
+		// Scan never fails on content, so one invalid value doesn't
+		// fail a whole query; it is kept for Validate to report
+		{name: "invalid []byte", value: []byte("invalid"), want: "invalid"},
+		{name: "invalid string", value: "invalid", want: "invalid"},
+		// Zero dates written by other systems are read as the empty Date
+		{name: "zero date 0001-01-01", value: "0001-01-01", want: ""},
+		{name: "zero date 0000-00-00", value: []byte("0000-00-00"), want: ""},
+		{name: "zero date in another format", value: "01.01.0001", want: ""},
 		{name: "time.Time", value: time.Date(2023, 12, 25, 0, 0, 0, 0, time.UTC), want: "2023-12-25"},
+		{name: "zero time.Time", value: time.Time{}, want: ""},
 		{name: "nil", value: nil, want: ""},
 		{name: "invalid type", value: 123, wantErr: true},
 	}
@@ -903,7 +915,9 @@ func TestDate_Value(t *testing.T) {
 		wantErr bool
 	}{
 		{name: "valid date", date: "2023-12-25", want: "2023-12-25"},
-		{name: "zero date", date: "", want: nil},
+		{name: "empty date", date: "", want: nil},
+		{name: "zero date", date: "0001-01-01", want: nil},
+		{name: "zero date in another format", date: "01.01.0001", want: nil},
 		{name: "invalid date", date: "invalid", wantErr: true},
 	}
 	for _, tt := range tests {
@@ -923,7 +937,7 @@ func TestDate_Value(t *testing.T) {
 // other formats like "25.12.2023": without normalization API consumers
 // would get dates that are not in the "date" format of the JSON schema.
 // A date that can't be normalized is written unchanged instead of failing
-// the write.
+// the write, and a zero date as "".
 func TestDate_MarshalJSON(t *testing.T) {
 	tests := []struct {
 		date Date
@@ -1077,11 +1091,13 @@ func TestFromUntilFromYearAndMonths(t *testing.T) {
 	}
 }
 
-// String and conversion tests
-func TestDate_String(t *testing.T) {
-	assert.Equal(t, "2023-12-25", Date("2023-12-25").String())
-	assert.Equal(t, "2023-12-25", Date("25.12.2023").String())
-	assert.Equal(t, "invalid", Date("invalid").String())
+// Date has no String method, so fmt prints the date as stored: a valid
+// date in another spelling is not shown as if it were normalized, and
+// invalid input is shown exactly as given so it can be corrected.
+func TestDate_FormatsAsStored(t *testing.T) {
+	assert.Equal(t, "2023-12-25", fmt.Sprint(Date("2023-12-25")))
+	assert.Equal(t, "25.12.2023", fmt.Sprint(Date("25.12.2023")))
+	assert.Equal(t, "invalid", fmt.Sprint(Date("invalid")))
 }
 
 func TestDate_Nullable(t *testing.T) {
@@ -1652,14 +1668,30 @@ func TestDate_FormatInvalid(t *testing.T) {
 	assert.Equal(t, "garbage", Date("garbage").Format("02.01.2006"))
 	assert.Equal(t, "garbage", NullableDate("garbage").Format("02.01.2006"))
 	assert.Equal(t, "25.12.2023", Date("2023-12-25").Format("02.01.2006"))
-	assert.Equal(t, "01.01.0001", Date("0001-01-01").Format("02.01.2006"), "the zero date is valid")
+	assert.Equal(t, "", Date("0001-01-01").Format("02.01.2006"), "the zero date is no date")
 	assert.Equal(t, "", NullableDate("0001-01-01").Format("02.01.2006"), "and null as NullableDate")
 }
 
 // TestDate_ValidAndNormalizedYearZero protects that ValidAndNormalized never
-// claims more than Valid: time.Parse accepts "0000-01-01", which Valid rejects.
+// claims more than Valid: time.Parse accepts "0000-01-01", which Valid
+// rejects, and "0001-01-01", which is the zero date and no valid Date.
 func TestDate_ValidAndNormalizedYearZero(t *testing.T) {
 	assert.False(t, Date("0000-01-01").Valid())
 	assert.False(t, Date("0000-01-01").ValidAndNormalized())
-	assert.True(t, Date("0001-01-01").ValidAndNormalized())
+	assert.False(t, Date("0001-01-01").Valid())
+	assert.False(t, Date("0001-01-01").ValidAndNormalized())
+	assert.True(t, Date("0001-01-02").ValidAndNormalized())
+}
+
+// TestDate_ReadingAndWriting checks the reading and writing contract shared
+// by the normalizing types: every reading path stores a valid date
+// normalized, a zero date as "" and an invalid date unchanged, Value
+// refuses an invalid date, and fmt prints the stored date.
+func TestDate_ReadingAndWriting(t *testing.T) {
+	normtest.Run(t, normtest.Spec[Date]{
+		Canonical: "2023-12-25",
+		Variants:  []Date{"25.12.2023", "December 25, 2023", " 2023-12-25 ", "2023-12-25T10:00:00"},
+		Invalid:   []Date{"invalid", "2023-02-30"},
+		Blank:     []Date{"0001-01-01", "0000-00-00", "01.01.0001", "0001-01-01T00:00:00Z"},
+	})
 }

@@ -2,7 +2,7 @@ package date
 
 import (
 	"database/sql/driver"
-	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"strconv"
 	"strings"
@@ -14,6 +14,7 @@ import (
 	"github.com/domonda/go-errs"
 
 	types "github.com/domonda/go-types"
+	"github.com/domonda/go-types/internal"
 	"github.com/domonda/go-types/language"
 	"github.com/domonda/go-types/strutil"
 )
@@ -90,8 +91,20 @@ const (
 )
 
 // Date represents a calendar date in ISO 8601 format (YYYY-MM-DD).
-// Date implements the database/sql.Scanner and database/sql/driver.Valuer interfaces,
-// and treats empty string or zero dates ("0000-00-00" and "0001-01-01") as SQL NULL.
+// See NullableDate for a nullable version of this type.
+//
+// A Date is zero, see IsZero, if it is empty, whitespace only, or one of
+// the zero dates "0000-00-00" and "0001-01-01" in any spelling, which have
+// no practical use as a date. A zero Date is not valid.
+//
+// Scan, UnmarshalJSON, UnmarshalXML and ScanString store a valid date
+// normalized, a zero one as "" and an invalid one unchanged. Value writes
+// the normalized date, SQL NULL for a zero one, and returns an error for
+// an invalid one. MarshalJSON and MarshalText write the normalized date,
+// "" for a zero one, or an invalid one unchanged, and fmt prints the date
+// as stored. Date has no UnmarshalText, so encoding/json reads and writes
+// the keys of a map[Date]V as given. See "Reading and writing values"
+// in the README of the module.
 type Date string
 
 // Compile-time check that Date implements types.NormalizableValidator[Date]
@@ -316,46 +329,29 @@ func FromUntilFromYearAndMonths(year, months string) (fromDate, untilDate Date, 
 	return fromDate, untilDate, nil
 }
 
-// ScanString tries to parse and assign the passed source string as value of the Date.
-//
-// If validate is true, the source string is checked for validity before it is assigned.
-// If validate is false and the source string can still be assigned in some non-normalized way,
-// it will be assigned without returning an error.
-//
-// This method is part of the strfmt.Scannable interface.
+// ScanString implements the strfmt.Scannable interface.
+// Without validate it stores source like Scan, with validate it stores
+// the normalized date or returns the error of Normalized,
+// also for a blank source.
 func (date *Date) ScanString(source string, validate bool) error {
-	newDate, err := Date(source).Normalized()
-	if err != nil {
-		if validate {
-			return err
-		}
-		newDate = Date(source)
-	}
-	*date = newDate
-	return nil
+	return internal.ScanStringNormalized(date, source, validate, Date.Normalized, Date.IsZero)
 }
 
 // ScanStringWithLang parses and assigns the source string as a Date using the given language hint.
 // Returns wasNormalized to indicate if the source was already in normalized form,
 // monthMustBeFirst to indicate if the date format requires month-first ordering,
-// and an error if parsing fails.
+// and an error if parsing fails. A zero date is assigned as "".
 func (date *Date) ScanStringWithLang(source string, lang language.Code) (wasNormalized bool, monthMustBeFirst bool, err error) {
 	newDate, monthMustBeFirst, err := normalizeAndCheckDate(source, lang)
 	if err != nil {
 		return false, false, err
 	}
+	if newDate == zeroDate {
+		// A zero date is stored as "" like by Scan
+		newDate = ""
+	}
 	*date = newDate
 	return newDate == Date(source), monthMustBeFirst, nil
-}
-
-// String returns the normalized date if possible, otherwise returns the unchanged string.
-// String implements the fmt.Stringer interface.
-func (date Date) String() string {
-	norm, err := date.Normalized()
-	if err != nil {
-		return string(date)
-	}
-	return string(norm)
 }
 
 // WithinIncl returns true if the date is within the inclusive range [from, until].
@@ -391,11 +387,30 @@ func (date Date) Nullable() NullableDate {
 	return NullableDate(date)
 }
 
-// IsZero returns true when the date is any of ["", "0000-00-00", "0001-01-01"].
-// "0001-01-01" is treated as zero because it's the zero value of time.Time.
+// zeroDate is the normalized form of the zero value of time.Time
+const zeroDate Date = "0001-01-01"
+
+// IsZero returns true if the date is empty or whitespace only, or one of the
+// zero dates "0000-00-00" and "0001-01-01" in any spelling, like "01.01.0001"
+// or "0001-01-01T00:00:00Z". "0001-01-01" is the zero value of time.Time,
 // "0000-00-00" may be the zero value of other date implementations.
+// A zero date has no practical use as a date: reading stores it as "",
+// Value writes it as SQL NULL, and it is not a valid Date.
 func (date Date) IsZero() bool {
-	return date == "" || date == "0001-01-01" || date == "0000-00-00"
+	switch date {
+	case "", zeroDate, "0000-00-00":
+		return true
+	}
+	if len(date) == 10 && date[4] == '-' && date[7] == '-' {
+		// Already in the normalized form, but not one of the zero dates
+		return false
+	}
+	switch strutil.TrimSpace(date) {
+	case "", zeroDate, "0000-00-00":
+		return true
+	}
+	norm, _, err := normalizeAndCheckDate(string(date), "")
+	return err == nil && norm == zeroDate
 }
 
 // Validate returns an error if the date is not in a valid, normalizable format.
@@ -411,6 +426,9 @@ func (date Date) Valid() bool {
 
 // ValidAndNormalized returns true if the date is both valid and already in normalized form (YYYY-MM-DD).
 func (date Date) ValidAndNormalized() bool {
+	if date == zeroDate {
+		return false
+	}
 	t, err := time.Parse(Layout, string(date))
 	// time.Parse accepts the year 0, which Valid rejects
 	return err == nil && validYear(t.Year())
@@ -464,6 +482,10 @@ func (date Date) MidnightInLocation(loc *time.Location) time.Time {
 // midnightInLocation returns MidnightInLocation(loc) and Valid()
 // with a single parse for a date in the normalized form.
 func (date Date) midnightInLocation(loc *time.Location) (t time.Time, valid bool) {
+	if date.IsZero() {
+		// A zero date is no date, so it is not valid
+		return time.Time{}, false
+	}
 	t, err := time.ParseInLocation(Layout, string(date), loc)
 	if err != nil {
 		// Not in the normalized YYYY-MM-DD form, but might still be valid
@@ -477,25 +499,21 @@ func (date Date) midnightInLocation(loc *time.Location) (t time.Time, valid bool
 	if !validYear(t.Year()) {
 		return time.Time{}, false
 	}
-	if date.IsZero() {
-		// "0001-01-01" is valid but zero
-		return time.Time{}, true
-	}
 	return t, true
 }
 
 // Format formats the date using the given layout string (see time.Time.Format).
-// Returns an empty string if date or layout are empty.
+// Returns an empty string if the date is zero (see IsZero) or layout is empty.
 // If layout equals Layout constant, returns the normalized date
 // without a time conversion.
 // A date that is not valid is returned unchanged for every layout
 // instead of formatting the zero time.Time like "01.01.0001".
 func (date Date) Format(layout string) string {
-	if date == "" || layout == "" {
+	if date.IsZero() || layout == "" {
 		return ""
 	}
 	if layout == Layout {
-		return date.String()
+		return string(internal.NormalizedOrRaw(date, Date.Normalized, Date.IsZero))
 	}
 	t, ok := date.midnightInLocation(time.UTC)
 	if !ok {
@@ -801,65 +819,58 @@ func (date Date) BeforeTodayInUTC() bool {
 }
 
 // Scan implements the database/sql.Scanner interface.
-// Accepts string, []byte, time.Time, or nil values.
-// Empty strings and zero dates ("0000-00-00", "0001-01-01") are treated as empty Date.
-func (date *Date) Scan(value any) (err error) {
-	switch x := value.(type) {
-	case string:
-		d := Date(x)
-		if !d.IsZero() {
-			d, err = d.Normalized()
-			if err != nil {
-				return err
-			}
-		}
-		*date = d
-		return nil
-
-	case []byte:
-		return date.Scan(string(x))
-
-	case time.Time:
-		*date = OfTime(x)
-		return nil
-
-	case nil:
-		*date = ""
+// A valid date from a string or []byte is stored normalized, a time.Time
+// as its date, SQL NULL and a zero date (see IsZero) as "", and a date
+// that can't be normalized unchanged without an error, so that one
+// invalid value doesn't fail a whole query; Validate reports it.
+func (date *Date) Scan(value any) error {
+	if t, ok := value.(time.Time); ok {
+		*date = internal.NormalizedOrRaw(OfTime(t), Date.Normalized, Date.IsZero)
 		return nil
 	}
-
-	return fmt.Errorf("can't scan value '%#v' of type %T as date.Date", value, value)
+	return internal.ScanNormalized(date, value, Date.Normalized, Date.IsZero)
 }
 
 // Value implements the database/sql/driver.Valuer interface.
-// Returns nil for zero dates, otherwise returns the normalized date string.
+// It returns the normalized date, SQL NULL for a zero date (see IsZero),
+// or the error of Normalized for a date that can't be normalized.
 func (date Date) Value() (driver.Value, error) {
-	if date.IsZero() {
-		return nil, nil
-	}
-	normalized, err := date.Normalized()
-	if err != nil {
-		return nil, err
-	}
-	return string(normalized), nil
+	return internal.ValueNormalized(date, Date.Normalized, Date.IsZero)
 }
 
-// MarshalJSON implements encoding/json.Marshaler.
-// Returns the normalized date as JSON string,
-// or the unchanged string if the date can't be normalized,
-// so an empty Date is written as empty string.
+// MarshalJSON implements encoding/json.Marshaler by writing the
+// normalized date, "" for a zero date (see IsZero),
+// or the date unchanged if it can't be normalized.
 func (date Date) MarshalJSON() ([]byte, error) {
-	norm, _ := date.Normalized()
-	return json.Marshal(string(norm))
+	return internal.MarshalJSONNormalized(date, Date.Normalized, Date.IsZero)
 }
 
-// MarshalText implements encoding.TextMarshaler by returning String,
-// the normalized value or the unchanged string if it can't be
-// normalized, so that strfmt and encoding/xml write the canonical form
-// like Value and MarshalJSON. encoding/json writes map keys of string
-// types as they are and doesn't call MarshalText for them.
+// UnmarshalJSON implements encoding/json.Unmarshaler.
+// A JSON string is stored like Scan stores it, JSON null leaves the Date
+// unchanged like encoding/json does for a string type, and any other
+// JSON value is an error.
+func (date *Date) UnmarshalJSON(data []byte) error {
+	return internal.UnmarshalJSONNormalized(date, data, false, Date.Normalized, Date.IsZero)
+}
+
+// MarshalText implements encoding.TextMarshaler like MarshalJSON,
+// so that encoding/xml and strfmt write the normalized date.
+// encoding/json writes map keys of string types as they are
+// and doesn't call MarshalText for them.
 func (date Date) MarshalText() ([]byte, error) {
-	return []byte(date.String()), nil
+	return internal.MarshalTextNormalized(date, Date.Normalized, Date.IsZero)
+}
+
+// UnmarshalXML implements encoding/xml.Unmarshaler
+// by storing the text of the element like Scan stores it.
+func (date *Date) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	return internal.UnmarshalXMLNormalized(date, d, start, Date.Normalized, Date.IsZero)
+}
+
+// UnmarshalXMLAttr implements encoding/xml.UnmarshalerAttr
+// by storing the attribute value like Scan stores it.
+func (date *Date) UnmarshalXMLAttr(attr xml.Attr) error {
+	return internal.UnmarshalXMLAttrNormalized(date, attr, Date.Normalized, Date.IsZero)
 }
 
 // JSONSchema returns the JSON schema definition for the Date type.
@@ -883,8 +894,8 @@ func isDateTrimRune(r rune) bool {
 }
 
 // Normalized returns the date in normalized form,
-// or an error if the format can't be detected.
-// Returns the Date unchanged in case of an error.
+// or an error if the format can't be detected or the date is zero,
+// see IsZero. Returns the Date unchanged in case of an error.
 // Normalized implements types.Normalizable[Date],
 // use NormalizedLang to pass a language hint.
 func (date Date) Normalized() (Date, error) {
@@ -900,6 +911,9 @@ func (date Date) NormalizedLang(lang language.Code) (Date, error) {
 	normalized, _, err := normalizeAndCheckDate(string(date), langHint(lang))
 	if err != nil {
 		return date, err
+	}
+	if normalized == zeroDate {
+		return date, errs.Errorf("zero date: %q", string(date))
 	}
 	return normalized, nil
 }

@@ -2,7 +2,7 @@ package date
 
 import (
 	"database/sql/driver"
-	"fmt"
+	"encoding/xml"
 	"strings"
 	"time"
 
@@ -12,20 +12,20 @@ import (
 	"github.com/domonda/go-types/internal"
 	"github.com/domonda/go-types/language"
 	"github.com/domonda/go-types/nullable"
-	"github.com/domonda/go-types/strutil"
 )
 
 // Null is an empty string and will be treated as SQL NULL.
 // date.Null.IsZero() == true
 const Null NullableDate = ""
 
-// NullableDate is identical to Date, except that IsZero() is considered valid
-// by the Valid() and Validate() methods.
-// NullableDate implements the database/sql.Scanner and database/sql/driver.Valuer interfaces,
-// and treats an empty, whitespace only or zero Date string as SQL NULL value.
+// NullableDate is identical to Date, except that a zero date (see Date.IsZero)
+// is null and considered valid by the Valid() and Validate() methods.
 // The main difference between Date and NullableDate is:
 // Date("").Valid() == false
 // NullableDate("").Valid() == true
+//
+// NullableDate reads and writes like Date, except that null is SQL NULL
+// and JSON null. See "Reading and writing values" in the README of the module.
 type NullableDate string
 
 // Compile-time check that NullableDate implements nullable.NullSetable[Date]
@@ -65,24 +65,19 @@ func (n NullableDate) DateOr(useIfNull Date) Date {
 	return Date(n)
 }
 
-// IsZero returns true when the date is any of ["", "0000-00-00", "0001-01-01"].
-// "0001-01-01" is treated as zero because it's the zero value of time.Time.
+// IsZero returns true if the date is zero like Date.IsZero,
+// which is the same as IsNull.
 func (n NullableDate) IsZero() bool {
 	return Date(n).IsZero()
 }
 
-// IsNull returns true if the NullableDate is null or zero,
+// IsNull returns true if the NullableDate is null or zero, see Date.IsZero,
 // which includes a string of only the runes strutil.TrimSpace removes
-// like for country.NullableCode,
-// and a zero date in another format like "01.01.0001",
-// which would else be written as "0001-01-01" that reads back as null.
+// like for country.NullableCode, and a zero date in another format
+// like "01.01.0001".
 // IsNull implements the nullable.Nullable interface.
 func (n NullableDate) IsNull() bool {
-	if n.IsZero() || strutil.TrimSpace(n) == Null {
-		return true
-	}
-	norm, err := Date(n).Normalized()
-	return err == nil && norm.IsZero()
+	return Date(n).IsZero()
 }
 
 // IsNotNull returns true if the NullableDate is not null.
@@ -143,25 +138,17 @@ func (n NullableDate) Validate() error {
 	return Date(n).Validate()
 }
 
-// ScanString tries to parse and assign the passed source string as value of the implementing type.
-// If validate is true, the source string is checked for validity before assignment.
-// If validate is false and the source string can still be assigned in some non-normalized way,
-// it will be assigned without returning an error.
+// ScanString implements the strfmt.Scannable interface.
+// The strings "NULL", "null" and "nil" set the NullableDate to null.
+// Without validate it stores source like Scan, with validate it stores
+// the normalized date or returns the error of Normalized.
 func (n *NullableDate) ScanString(source string, validate bool) error {
 	switch source {
-	case "", "NULL", "null", "nil":
+	case "NULL", "null", "nil":
 		n.SetNull()
 		return nil
 	}
-	newDate, err := NullableDate(source).Normalized()
-	if err != nil {
-		if validate {
-			return err
-		}
-		newDate = NullableDate(source)
-	}
-	*n = newDate
-	return nil
+	return internal.ScanStringNormalized(n, source, validate, NullableDate.Normalized, NullableDate.IsNull)
 }
 
 // ScanStringWithLang parses and assigns the source string as a NullableDate using the given language hint.
@@ -181,26 +168,13 @@ func (n *NullableDate) ScanStringWithLang(source string, lang language.Code) (wa
 	return newDate == Date(source), monthMustBeFirst, nil
 }
 
-// String returns the normalized date if possible,
-// else it will be returned unchanged as string.
-// String implements the fmt.Stringer interface.
-func (n NullableDate) String() string {
-	norm, err := n.Normalized()
-	if err != nil {
-		return string(n)
-	}
-	return string(norm)
-}
-
-// StringOr returns the normalized NullableDate as string,
-// or the passed nullString if the NullableDate is null
-// or can't be normalized.
+// StringOr returns the NullableDate as stored,
+// or the passed nullString if the NullableDate is null.
 func (n NullableDate) StringOr(nullString string) string {
-	norm, err := n.Normalized()
-	if err != nil || norm.IsNull() {
+	if n.IsNull() {
 		return nullString
 	}
-	return string(norm)
+	return string(n)
 }
 
 // Normalized returns the date in normalized form,
@@ -604,78 +578,61 @@ func (n NullableDate) Format(layout string) string {
 }
 
 // Scan implements the database/sql.Scanner interface.
-// Accepts string, []byte, time.Time, or nil values.
-// Empty and whitespace only strings and zero dates ("0000-00-00", "0001-01-01")
-// are treated as Null, see IsNull.
-func (n *NullableDate) Scan(value any) (err error) {
-	switch x := value.(type) {
-	case string:
-		d := Date(x)
-		if NullableDate(x).IsNull() {
-			*n = Null
-			return nil
-		}
-		d, err = d.Normalized()
-		if err != nil {
-			return err
-		}
-		*n = d.Nullable()
-		return nil
-
-	case []byte:
-		return n.Scan(string(x))
-
-	case time.Time:
-		*n = OfTime(x).Nullable()
-		return nil
-
-	case nil:
-		*n = Null
+// A valid date from a string or []byte is stored normalized, a time.Time
+// as its date, SQL NULL and a zero date (see IsNull) as Null, and a date
+// that can't be normalized unchanged without an error, so that one
+// invalid value doesn't fail a whole query; Validate reports it.
+func (n *NullableDate) Scan(value any) error {
+	if t, ok := value.(time.Time); ok {
+		*n = internal.NormalizedOrRaw(OfTime(t).Nullable(), NullableDate.Normalized, NullableDate.IsNull)
 		return nil
 	}
-
-	return fmt.Errorf("can't scan value '%#v' of type %T as date.NullableDate", value, value)
+	return internal.ScanNormalized(n, value, NullableDate.Normalized, NullableDate.IsNull)
 }
 
 // Value implements the database/sql/driver.Valuer interface.
-// Returns nil for null dates (see IsNull), otherwise returns the normalized date string.
+// It returns the normalized date, SQL NULL if the NullableDate is null,
+// or the error of Normalized for a date that can't be normalized.
 func (n NullableDate) Value() (driver.Value, error) {
-	if n.IsNull() {
-		return nil, nil
-	}
-	normalized, err := Date(n).Normalized()
-	if err != nil {
-		return nil, err
-	}
-	return string(normalized), nil
+	return internal.ValueNormalized(n, NullableDate.Normalized, NullableDate.IsNull)
 }
 
-// MarshalJSON implements encoding/json.Marshaler.
-// Returns the JSON null value for null dates (see IsNull),
-// otherwise the normalized date like Date.MarshalJSON.
+// MarshalJSON implements encoding/json.Marshaler by writing the JSON null
+// value if the NullableDate is null, else the normalized date,
+// or the date unchanged if it can't be normalized.
 func (n NullableDate) MarshalJSON() ([]byte, error) {
 	if n.IsNull() {
 		return []byte(`null`), nil
 	}
-	return Date(n).MarshalJSON()
+	return internal.MarshalJSONNormalized(n, NullableDate.Normalized, NullableDate.IsNull)
 }
 
-// MarshalText implements encoding.TextMarshaler by returning String,
-// the normalized value, "" for null, or the unchanged string if it can't be
-// normalized, so that strfmt and encoding/xml write the canonical form
-// like Value and MarshalJSON. encoding/json writes map keys of string
-// types as they are and doesn't call MarshalText for them.
+// MarshalText implements encoding.TextMarshaler like MarshalJSON,
+// but with "" for null, so that encoding/xml and strfmt write the
+// normalized date. encoding/json writes map keys of string types
+// as they are and doesn't call MarshalText for them.
 func (n NullableDate) MarshalText() ([]byte, error) {
-	return []byte(n.String()), nil
+	return internal.MarshalTextNormalized(n, NullableDate.Normalized, NullableDate.IsNull)
 }
 
-// UnmarshalJSON implements encoding/json.Unmarshaler
-// by setting the NullableDate to null for the JSON null value,
-// so that decoding null into a field that holds a value resets it.
-// A JSON string is assigned unchanged, without normalization or validation,
-// like encoding/json does for a string type, any other JSON value is an error.
+// UnmarshalJSON implements encoding/json.Unmarshaler.
+// A JSON string is stored like Scan stores it, JSON null sets the
+// NullableDate to null, so that decoding null into a field that holds
+// a value resets it, and any other JSON value is an error.
 func (n *NullableDate) UnmarshalJSON(data []byte) error {
-	return internal.UnmarshalJSONStringOrNull(n, data)
+	return internal.UnmarshalJSONNormalized(n, data, true, NullableDate.Normalized, NullableDate.IsNull)
+}
+
+// UnmarshalXML implements encoding/xml.Unmarshaler
+// by storing the text of the element like Scan stores it.
+func (n *NullableDate) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	return internal.UnmarshalXMLNormalized(n, d, start, NullableDate.Normalized, NullableDate.IsNull)
+}
+
+// UnmarshalXMLAttr implements encoding/xml.UnmarshalerAttr
+// by storing the attribute value like Scan stores it.
+func (n *NullableDate) UnmarshalXMLAttr(attr xml.Attr) error {
+	return internal.UnmarshalXMLAttrNormalized(n, attr, NullableDate.Normalized, NullableDate.IsNull)
 }
 
 // JSONSchema returns the JSON schema definition for the NullableDate type.
