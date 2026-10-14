@@ -64,7 +64,7 @@ func (a *Account) Normalize() error {
 func (a *Account) String() string {
 	var b strings.Builder
 	b.WriteString("bank.Account{")
-	b.WriteString(a.IBAN.String())
+	b.WriteString(string(a.IBAN))
 	if a.BIC.IsNotNull() {
 		fmt.Fprintf(&b, ", BIC: %s", a.BIC)
 	}

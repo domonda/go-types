@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/domonda/go-types/country"
+	"github.com/domonda/go-types/internal/normtest"
 )
 
 func TestNullableIBAN_Null(t *testing.T) {
@@ -31,7 +32,7 @@ func TestNullableIBAN_Null(t *testing.T) {
 	assert.Equal(t, IBANNull, spaced)
 	assert.Equal(t, IBANNull, iban.NormalizedOrNull())
 
-	assert.Equal(t, "", iban.String())
+	assert.Equal(t, "", marshalText(t, iban))
 	assert.Equal(t, "default", iban.StringOr("default"))
 	assert.Equal(t, IBAN("DE89370400440532013000"), iban.GetOr("DE89370400440532013000"))
 	assert.Panics(t, func() { iban.Get() }, "Get on NULL must panic instead of returning an invalid IBAN")
@@ -59,7 +60,7 @@ func TestNullableIBAN_Valid(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, normIBAN, norm)
 	assert.Equal(t, normIBAN, spacedIBAN.NormalizedOrNull())
-	assert.Equal(t, string(normIBAN), spacedIBAN.String())
+	assert.Equal(t, string(normIBAN), marshalText(t, spacedIBAN))
 
 	spaced, err := normIBAN.NormalizedWithSpaces()
 	require.NoError(t, err)
@@ -88,7 +89,7 @@ func TestNullableIBAN_WhitespaceIsNull(t *testing.T) {
 			assert.Equal(t, IBANNull, spaced)
 			assert.Equal(t, IBANNull, iban.NormalizedOrNull())
 
-			assert.Equal(t, "", iban.String())
+			assert.Equal(t, "", marshalText(t, iban))
 			assert.Equal(t, "default", iban.StringOr("default"))
 			assert.Equal(t, IBAN("DE89370400440532013000"), iban.GetOr("DE89370400440532013000"))
 			assert.Panics(t, func() { iban.Get() })
@@ -122,7 +123,7 @@ func TestNullableIBAN_Invalid(t *testing.T) {
 			assert.Error(t, err)
 			assert.Equal(t, iban, spaced, "invalid IBAN must be returned unchanged")
 			assert.Equal(t, IBANNull, iban.NormalizedOrNull())
-			assert.Equal(t, string(iban), iban.String())
+			assert.Equal(t, string(iban), marshalText(t, iban))
 		})
 	}
 }
@@ -172,13 +173,14 @@ func TestNullableIBAN_ScanString(t *testing.T) {
 	})
 }
 
-// StringOr returns the normalized value like String, but the alternative
-// instead of a value that can't be normalized, so a caller printing
-// StringOr never shows a misspelled or invalid value as if it were valid.
+// StringOr returns the alternative only for null. Any other value comes
+// back as stored, so a caller printing StringOr shows an invalid value as
+// what it is instead of hiding it like a missing one.
 func TestNullableIBAN_StringOr(t *testing.T) {
 	assert.Equal(t, "none", IBANNull.StringOr("none"))
-	assert.Equal(t, "DE89370400440532013000", NullableIBAN("DE89 3704 0044 0532 0130 00").StringOr("none"))
-	assert.Equal(t, "none", NullableIBAN("DE00 1234").StringOr("none"))
+	assert.Equal(t, "none", NullableIBAN("  ").StringOr("none"))
+	assert.Equal(t, "DE89 3704 0044 0532 0130 00", NullableIBAN("DE89 3704 0044 0532 0130 00").StringOr("none"))
+	assert.Equal(t, "DE00 1234", NullableIBAN("DE00 1234").StringOr("none"))
 }
 
 func TestNullableIBAN_SQL(t *testing.T) {
@@ -250,7 +252,8 @@ func TestNullableIBAN_JSON(t *testing.T) {
 
 // A non-null NullableIBAN is written normalized like IBAN, see
 // TestIBAN_ValueAndMarshalJSONNormalize, and null stays SQL NULL and
-// JSON null, including the whitespace-only null.
+// JSON null, including the whitespace-only null. Value refuses an invalid
+// IBAN, JSON writes it unchanged.
 func TestNullableIBAN_ValueAndMarshalJSONNormalize(t *testing.T) {
 	tests := []struct {
 		iban     NullableIBAN
@@ -260,7 +263,6 @@ func TestNullableIBAN_ValueAndMarshalJSONNormalize(t *testing.T) {
 		{iban: IBANNull, wantSQL: nil, wantJSON: `null`},
 		{iban: "  ", wantSQL: nil, wantJSON: `null`},
 		{iban: "DE89 3704 0044 0532 0130 00", wantSQL: "DE89370400440532013000", wantJSON: `"DE89370400440532013000"`},
-		{iban: "DE00 1234", wantSQL: "DE00 1234", wantJSON: `"DE00 1234"`},
 	}
 	for _, tt := range tests {
 		v, err := tt.iban.Value()
@@ -271,6 +273,12 @@ func TestNullableIBAN_ValueAndMarshalJSONNormalize(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, tt.wantJSON, string(j), "json.Marshal(NullableIBAN(%q))", string(tt.iban))
 	}
+
+	_, err := NullableIBAN("DE00 1234").Value()
+	assert.Error(t, err, "Value() of an invalid IBAN")
+	j, err := json.Marshal(NullableIBAN("DE00 1234"))
+	require.NoError(t, err)
+	assert.Equal(t, `"DE00 1234"`, string(j))
 }
 
 func TestNullableIBAN_UnmarshalJSON(t *testing.T) {
@@ -284,15 +292,14 @@ func TestNullableIBAN_UnmarshalJSON(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(`{"iban":null}`), &o))
 	assert.Equal(t, IBANNull, o.IBAN)
 
-	// A JSON string is assigned unchanged, without normalization or
-	// validation, like encoding/json did before NullableIBAN had
-	// UnmarshalJSON.
-	for _, str := range []string{"DE89370400440532013000", "DE89 3704 0044 0532 0130 00", "invalid", ""} {
+	// A JSON string is stored normalized if it is a valid IBAN and
+	// unchanged without an error if not, so Validate can report it.
+	for str, want := range map[string]NullableIBAN{"DE89370400440532013000": "DE89370400440532013000", "DE89 3704 0044 0532 0130 00": "DE89370400440532013000", "invalid": "invalid", "": IBANNull} {
 		o := obj{IBAN: "AT611904300234573201"}
 		data, err := json.Marshal(map[string]string{"iban": str})
 		require.NoError(t, err)
 		require.NoError(t, json.Unmarshal(data, &o))
-		assert.Equal(t, NullableIBAN(str), o.IBAN, "json.Unmarshal(%s)", data)
+		assert.Equal(t, want, o.IBAN, "json.Unmarshal(%s)", data)
 	}
 
 	// Any other JSON value is an error and leaves the value unchanged.
@@ -310,4 +317,16 @@ func TestNullableIBAN_JSONSchema(t *testing.T) {
 	assert.Equal(t, "string", s.OneOf[0].Type)
 	assert.Equal(t, IBANRegex, s.OneOf[0].Pattern)
 	assert.Equal(t, "null", s.OneOf[1].Type)
+}
+
+// TestNullableIBAN_ReadingAndWriting checks the reading and writing
+// contract shared by the normalizing types, with a blank NullableIBAN
+// as null.
+func TestNullableIBAN_ReadingAndWriting(t *testing.T) {
+	normtest.Run(t, normtest.Spec[NullableIBAN]{
+		Canonical: "DE89370400440532013000",
+		Variants:  []NullableIBAN{"DE89 3704 0044 0532 0130 00", " DE89370400440532013000\n"},
+		Invalid:   []NullableIBAN{"DE00 1234", "de89370400440532013000"},
+		Nullable:  true,
+	})
 }

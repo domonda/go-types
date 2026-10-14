@@ -1,6 +1,7 @@
 package bank
 
 import (
+	"encoding"
 	"encoding/json"
 	"regexp"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/domonda/go-types/country"
+	"github.com/domonda/go-types/internal/normtest"
 )
 
 var validBICs = []BIC{
@@ -85,8 +87,9 @@ func TestBIC_ValidateNormalizes(t *testing.T) {
 // Value and MarshalJSON write a BIC normalized to 11 characters, because
 // Validate accepts the 8 character form and whitespace: without
 // normalization "BKAU AT WW", "BKAUATWW" and "BKAUATWWXXX" would reach SQL
-// and JSON as three different strings for the same bank. A BIC that can't
-// be normalized is written unchanged instead of failing the write.
+// and JSON as three different strings for the same bank. A BIC that can't be normalized is refused by Value, because the
+// database is where an invalid value would stay, and written unchanged
+// by MarshalJSON, so a response that holds one still renders.
 func TestBIC_ValueAndMarshalJSONNormalize(t *testing.T) {
 	tests := []struct {
 		bic  BIC
@@ -96,8 +99,6 @@ func TestBIC_ValueAndMarshalJSONNormalize(t *testing.T) {
 		{bic: "BKAUATWW", want: "BKAUATWWXXX"},
 		{bic: "BKAU AT WW", want: "BKAUATWWXXX"},
 		{bic: " GENODEF1JEV ", want: "GENODEF1JEV"},
-		{bic: "DEUTZZFF", want: "DEUTZZFF"},
-		{bic: "", want: ""},
 	}
 	for _, tt := range tests {
 		v, err := tt.bic.Value()
@@ -108,6 +109,16 @@ func TestBIC_ValueAndMarshalJSONNormalize(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, `"`+tt.want+`"`, string(j), "json.Marshal(BIC(%q))", string(tt.bic))
 	}
+
+	_, err := BIC("DEUTZZFF").Value()
+	assert.Error(t, err, "Value() of an invalid BIC")
+	j, err := json.Marshal(BIC("DEUTZZFF"))
+	require.NoError(t, err)
+	assert.Equal(t, `"DEUTZZFF"`, string(j))
+
+	v, err := BIC("").Value()
+	require.NoError(t, err)
+	assert.Nil(t, v, "an empty BIC is written as SQL NULL")
 }
 
 func TestBIC_Normalized(t *testing.T) {
@@ -260,7 +271,7 @@ func TestBIC_Normalize(t *testing.T) {
 				long, err := NormalizeBIC(string(tt.bic))
 				require.NoError(t, err)
 				assert.Equal(t, tt.wantLong, long)
-				assert.Equal(t, string(tt.wantLong), tt.bic.String())
+				assert.Equal(t, string(tt.wantLong), marshalText(t, tt.bic))
 				assert.Equal(t, NullableBIC(tt.wantLong), tt.bic.NormalizedOrNull())
 				assert.Equal(t, tt.bic == tt.wantLong, tt.bic.ValidAndNormalized())
 
@@ -279,7 +290,7 @@ func TestBIC_Normalize(t *testing.T) {
 			assert.Error(t, err)
 			assert.Equal(t, bic, short, "invalid BIC must be returned unchanged")
 			assert.Equal(t, BICNull, bic.NormalizedOrNull())
-			assert.Equal(t, string(bic), bic.String(), "String of invalid BIC must return it unchanged")
+			assert.Equal(t, string(bic), marshalText(t, bic), "MarshalText of an invalid BIC must write it unchanged")
 			assert.False(t, bic.ValidAndNormalized())
 			assert.False(t, StringIsBIC(string(bic)))
 		}
@@ -419,4 +430,25 @@ func TestBIC_FalseBICWithBranchCode(t *testing.T) {
 	}
 	assert.Empty(t, BICFinder.FindAllIndex([]byte("Kontakt: AUTOBANKXXX"), -1))
 	assert.True(t, BIC("DEUTDEFFXXX").Valid())
+}
+
+// marshalText returns the text that MarshalText writes for v,
+// which is what encoding/xml and strfmt write.
+func marshalText(t *testing.T, v encoding.TextMarshaler) string {
+	t.Helper()
+	text, err := v.MarshalText()
+	require.NoError(t, err)
+	return string(text)
+}
+
+// TestBIC_ReadingAndWriting checks the reading and writing contract shared
+// by the normalizing types: every reading path stores a valid BIC
+// normalized to 11 characters and an invalid one unchanged, Value refuses
+// an invalid BIC, and fmt prints the stored BIC.
+func TestBIC_ReadingAndWriting(t *testing.T) {
+	normtest.Run(t, normtest.Spec[BIC]{
+		Canonical: "BKAUATWWXXX",
+		Variants:  []BIC{"BKAUATWW", "BKAU AT WW", " BKAUATWWXXX "},
+		Invalid:   []BIC{"DEUTZZFF", "ABC"},
+	})
 }

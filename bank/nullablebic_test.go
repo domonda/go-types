@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/domonda/go-types/internal/normtest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -25,7 +26,7 @@ func TestNullableBIC_Null(t *testing.T) {
 	assert.Equal(t, BICNull, norm)
 	assert.Equal(t, BICNull, bic.NormalizedOrNull())
 
-	assert.Equal(t, "", bic.String())
+	assert.Equal(t, "", marshalText(t, bic))
 	assert.Equal(t, "default", bic.StringOr("default"))
 	assert.Equal(t, BIC("BELADEBEXXX"), bic.GetOr("BELADEBEXXX"))
 	assert.Panics(t, func() { bic.Get() }, "Get on NULL must panic instead of returning an invalid BIC")
@@ -45,7 +46,7 @@ func TestNullableBIC_Valid(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, normBIC, norm)
 	assert.Equal(t, normBIC, shortBIC.NormalizedOrNull())
-	assert.Equal(t, string(normBIC), shortBIC.String())
+	assert.Equal(t, string(normBIC), marshalText(t, shortBIC))
 	assert.Equal(t, string(normBIC), normBIC.StringOr("default"))
 }
 
@@ -67,7 +68,7 @@ func TestNullableBIC_WhitespaceIsNull(t *testing.T) {
 			assert.Equal(t, BICNull, norm)
 			assert.Equal(t, BICNull, bic.NormalizedOrNull())
 
-			assert.Equal(t, "", bic.String())
+			assert.Equal(t, "", marshalText(t, bic))
 			assert.Equal(t, "default", bic.StringOr("default"))
 			assert.Equal(t, BIC("BELADEBEXXX"), bic.GetOr("BELADEBEXXX"))
 			assert.Panics(t, func() { bic.Get() })
@@ -97,7 +98,7 @@ func TestNullableBIC_Invalid(t *testing.T) {
 			assert.Error(t, err)
 			assert.Equal(t, bic, norm, "invalid BIC must be returned unchanged")
 			assert.Equal(t, BICNull, bic.NormalizedOrNull())
-			assert.Equal(t, string(bic), bic.String())
+			assert.Equal(t, string(bic), marshalText(t, bic))
 		})
 	}
 }
@@ -144,13 +145,14 @@ func TestNullableBIC_ScanString(t *testing.T) {
 	})
 }
 
-// StringOr returns the normalized value like String, but the alternative
-// instead of a value that can't be normalized, so a caller printing
-// StringOr never shows a misspelled or invalid value as if it were valid.
+// StringOr returns the alternative only for null. Any other value comes
+// back as stored, so a caller printing StringOr shows an invalid value as
+// what it is instead of hiding it like a missing one.
 func TestNullableBIC_StringOr(t *testing.T) {
 	assert.Equal(t, "none", BICNull.StringOr("none"))
-	assert.Equal(t, "BKAUATWWXXX", NullableBIC("BKAU AT WW").StringOr("none"))
-	assert.Equal(t, "none", NullableBIC("DEUTZZFF").StringOr("none"))
+	assert.Equal(t, "none", NullableBIC("  ").StringOr("none"))
+	assert.Equal(t, "BKAU AT WW", NullableBIC("BKAU AT WW").StringOr("none"))
+	assert.Equal(t, "DEUTZZFF", NullableBIC("DEUTZZFF").StringOr("none"))
 }
 
 func TestNullableBIC_SQL(t *testing.T) {
@@ -222,7 +224,8 @@ func TestNullableBIC_JSON(t *testing.T) {
 
 // A non-null NullableBIC is written normalized like BIC, see
 // TestBIC_ValueAndMarshalJSONNormalize, and null stays SQL NULL and
-// JSON null, including the whitespace-only null.
+// JSON null, including the whitespace-only null. Value refuses an invalid
+// BIC, JSON writes it unchanged.
 func TestNullableBIC_ValueAndMarshalJSONNormalize(t *testing.T) {
 	tests := []struct {
 		bic      NullableBIC
@@ -232,7 +235,6 @@ func TestNullableBIC_ValueAndMarshalJSONNormalize(t *testing.T) {
 		{bic: BICNull, wantSQL: nil, wantJSON: `null`},
 		{bic: "  ", wantSQL: nil, wantJSON: `null`},
 		{bic: "BKAU AT WW", wantSQL: "BKAUATWWXXX", wantJSON: `"BKAUATWWXXX"`},
-		{bic: "DEUTZZFF", wantSQL: "DEUTZZFF", wantJSON: `"DEUTZZFF"`},
 	}
 	for _, tt := range tests {
 		v, err := tt.bic.Value()
@@ -243,6 +245,12 @@ func TestNullableBIC_ValueAndMarshalJSONNormalize(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, tt.wantJSON, string(j), "json.Marshal(NullableBIC(%q))", string(tt.bic))
 	}
+
+	_, err := NullableBIC("DEUTZZFF").Value()
+	assert.Error(t, err, "Value() of an invalid BIC")
+	j, err := json.Marshal(NullableBIC("DEUTZZFF"))
+	require.NoError(t, err)
+	assert.Equal(t, `"DEUTZZFF"`, string(j))
 }
 
 func TestNullableBIC_UnmarshalJSON(t *testing.T) {
@@ -256,15 +264,14 @@ func TestNullableBIC_UnmarshalJSON(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(`{"bic":null}`), &o))
 	assert.Equal(t, BICNull, o.BIC)
 
-	// A JSON string is assigned unchanged, without normalization or
-	// validation, like encoding/json did before NullableBIC had
-	// UnmarshalJSON.
-	for _, str := range []string{"BELADEBEXXX", "BELADEBE", "nope", ""} {
+	// A JSON string is stored normalized if it is a valid BIC and
+	// unchanged without an error if not, so Validate can report it.
+	for str, want := range map[string]NullableBIC{"BELADEBEXXX": "BELADEBEXXX", "BELADEBE": "BELADEBEXXX", "nope": "nope", "": BICNull} {
 		o := obj{BIC: "GENODEF1JEV"}
 		data, err := json.Marshal(map[string]string{"bic": str})
 		require.NoError(t, err)
 		require.NoError(t, json.Unmarshal(data, &o))
-		assert.Equal(t, NullableBIC(str), o.BIC, "json.Unmarshal(%s)", data)
+		assert.Equal(t, want, o.BIC, "json.Unmarshal(%s)", data)
 	}
 
 	// Any other JSON value is an error and leaves the value unchanged.
@@ -282,4 +289,15 @@ func TestNullableBIC_JSONSchema(t *testing.T) {
 	assert.Equal(t, "string", s.OneOf[0].Type)
 	assert.Equal(t, BICRegex, s.OneOf[0].Pattern)
 	assert.Equal(t, "null", s.OneOf[1].Type)
+}
+
+// TestNullableBIC_ReadingAndWriting checks the reading and writing contract
+// shared by the normalizing types, with a blank NullableBIC as null.
+func TestNullableBIC_ReadingAndWriting(t *testing.T) {
+	normtest.Run(t, normtest.Spec[NullableBIC]{
+		Canonical: "BKAUATWWXXX",
+		Variants:  []NullableBIC{"BKAUATWW", "BKAU AT WW", " BKAUATWWXXX "},
+		Invalid:   []NullableBIC{"DEUTZZFF", "ABC"},
+		Nullable:  true,
+	})
 }

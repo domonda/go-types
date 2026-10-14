@@ -97,12 +97,14 @@ func TestAccount_Normalize(t *testing.T) {
 	assert.Equal(t, &Account{IBAN: "DE89 3704 0044 0532 0130 01", BIC: "DEUTZZFF", Currency: "XYZ"}, a)
 }
 
+// String is for debugging and shows the fields as stored,
+// so a non-normalized field is not shown as if it were normalized.
 func TestAccount_String(t *testing.T) {
 	a := &Account{IBAN: "DE89 3704 0044 0532 0130 00"}
-	assert.Equal(t, "bank.Account{DE89370400440532013000}", a.String(), "NULL fields are omitted")
+	assert.Equal(t, "bank.Account{DE89 3704 0044 0532 0130 00}", a.String(), "NULL fields are omitted")
 
 	a = &Account{IBAN: "DE89370400440532013000", BIC: "COBADEFF", Currency: "EUR", Holder: "John Doe"}
-	assert.Equal(t, `bank.Account{DE89370400440532013000, BIC: COBADEFFXXX, EUR, "John Doe"}`, a.String())
+	assert.Equal(t, `bank.Account{DE89370400440532013000, BIC: COBADEFF, EUR, "John Doe"}`, a.String())
 }
 
 func TestAccount_JSONRoundTrip(t *testing.T) {

@@ -2,6 +2,7 @@ package bank
 
 import (
 	"database/sql/driver"
+	"encoding/xml"
 	"fmt"
 
 	"github.com/invopop/jsonschema"
@@ -16,31 +17,25 @@ const BICNull NullableBIC = ""
 
 // NullableBIC is a BIC value which can hold an empty string ("") as the null value.
 // A whitespace only NullableBIC is also null, like for country.NullableCode.
+//
+// NullableBIC reads and writes like BIC, except that null is SQL NULL
+// and JSON null. See "Reading and writing values" in the README of the module.
 type NullableBIC string
 
 // Compile-time check that NullableBIC implements nullable.NullSetable[BIC]
 var _ nullable.NullSetable[BIC] = (*NullableBIC)(nil)
 
-// ScanString tries to parse and assign the passed
-// source string as value of the implementing type.
-//
-// If validate is true, the source string is checked
-// for validity before it is assigned to the type.
-//
-// If validate is false and the source string
-// can still be assigned in some non-normalized way
-// it will be assigned without returning an error.
+// ScanString implements the strfmt.Scannable interface.
+// The strings "NULL", "null" and "nil" set the NullableBIC to null.
+// Without validate it stores source like Scan, with validate it stores
+// the normalized BIC or returns the error of Normalized.
 func (bic *NullableBIC) ScanString(source string, validate bool) error {
 	switch source {
-	case "", "NULL", "null", "nil":
+	case "NULL", "null", "nil":
 		bic.SetNull()
 		return nil
 	}
-	if validate && NullableBIC(source).Validate() != nil {
-		return NullableBIC(source).Validate()
-	}
-	*bic = NullableBIC(source)
-	return nil
+	return internal.ScanStringNormalized(bic, source, validate, NullableBIC.Normalized, nil)
 }
 
 // Valid returns true if bic is null or a valid SWIFT Business Identifier Code
@@ -95,28 +90,56 @@ func (bic NullableBIC) NormalizedOrNull() NullableBIC {
 }
 
 // Scan implements the database/sql.Scanner interface.
+// A valid BIC is stored normalized, SQL NULL and a blank string as BICNull,
+// and a BIC that can't be normalized unchanged without an error,
+// so that one invalid value doesn't fail a whole query; Validate reports it.
 func (bic *NullableBIC) Scan(value any) error {
-	switch x := value.(type) {
-	case string:
-		*bic = NullableBIC(x)
-	case []byte:
-		*bic = NullableBIC(x)
-	case nil:
-		*bic = BICNull
-	default:
-		return fmt.Errorf("can't scan SQL value of type %T as BIC", value)
+	return internal.ScanNormalized(bic, value, NullableBIC.Normalized, nil)
+}
+
+// MarshalJSON implements encoding/json.Marshaler by writing the JSON null
+// value if the NullableBIC is null, else the normalized BIC,
+// or the BIC unchanged if it can't be normalized.
+func (bic NullableBIC) MarshalJSON() ([]byte, error) {
+	if bic.IsNull() {
+		return []byte(`null`), nil
 	}
-	return nil
+	return internal.MarshalJSONNormalized(bic, NullableBIC.Normalized, nil)
+}
+
+// UnmarshalJSON implements encoding/json.Unmarshaler.
+// A JSON string is stored like Scan stores it, JSON null sets the
+// NullableBIC to null, so that decoding null into a field that holds
+// a value resets it, and any other JSON value is an error.
+func (bic *NullableBIC) UnmarshalJSON(data []byte) error {
+	return internal.UnmarshalJSONNormalized(bic, data, true, NullableBIC.Normalized, nil)
+}
+
+// MarshalText implements encoding.TextMarshaler like MarshalJSON,
+// but with "" for null, so that encoding/xml and strfmt write the
+// normalized BIC. encoding/json writes map keys of string types
+// as they are and doesn't call MarshalText for them.
+func (bic NullableBIC) MarshalText() ([]byte, error) {
+	return internal.MarshalTextNormalized(bic, NullableBIC.Normalized, nil)
+}
+
+// UnmarshalXML implements encoding/xml.Unmarshaler
+// by storing the text of the element like Scan stores it.
+func (bic *NullableBIC) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	return internal.UnmarshalXMLNormalized(bic, d, start, NullableBIC.Normalized, nil)
+}
+
+// UnmarshalXMLAttr implements encoding/xml.UnmarshalerAttr
+// by storing the attribute value like Scan stores it.
+func (bic *NullableBIC) UnmarshalXMLAttr(attr xml.Attr) error {
+	return internal.UnmarshalXMLAttrNormalized(bic, attr, NullableBIC.Normalized, nil)
 }
 
 // Value implements the driver database/sql/driver.Valuer interface.
-// Returns nil for SQL NULL if the NullableBIC is null, see IsNull,
-// else the normalized BIC like BIC.Value.
+// It returns the normalized BIC, SQL NULL if the NullableBIC is null,
+// or the error of Normalized for a BIC that can't be normalized.
 func (bic NullableBIC) Value() (driver.Value, error) {
-	if bic.IsNull() {
-		return nil, nil
-	}
-	return BIC(bic).Value()
+	return internal.ValueNormalized(bic, NullableBIC.Normalized, nil)
 }
 
 // Set sets an BIC for this NullableBIC
@@ -148,26 +171,13 @@ func (bic NullableBIC) GetOr(defaultBIC BIC) BIC {
 	return BIC(bic)
 }
 
-// String returns the normalized NullableBIC string if possible,
-// else it will be returned unchanged as string.
-// String implements the fmt.Stringer interface.
-func (bic NullableBIC) String() string {
-	norm, err := bic.Normalized()
-	if err != nil {
-		return string(bic)
-	}
-	return string(norm)
-}
-
-// StringOr returns the normalized NullableBIC as string,
-// or the passed defaultString if the NullableBIC is null
-// or can't be normalized.
+// StringOr returns the NullableBIC as stored,
+// or the passed defaultString if the NullableBIC is null.
 func (bic NullableBIC) StringOr(defaultString string) string {
-	norm, err := bic.Normalized()
-	if err != nil || norm.IsNull() {
+	if bic.IsNull() {
 		return defaultString
 	}
-	return string(norm)
+	return string(bic)
 }
 
 // IsNull returns true if the NullableBIC is null,
@@ -183,34 +193,6 @@ func (bic NullableBIC) IsNull() bool {
 // see IsNull.
 func (bic NullableBIC) IsNotNull() bool {
 	return !bic.IsNull()
-}
-
-// MarshalJSON implements encoding/json.Marshaler
-// by returning the JSON null value if the NullableBIC is null, see IsNull,
-// else the normalized BIC like BIC.MarshalJSON.
-func (bic NullableBIC) MarshalJSON() ([]byte, error) {
-	if bic.IsNull() {
-		return []byte(`null`), nil
-	}
-	return BIC(bic).MarshalJSON()
-}
-
-// MarshalText implements encoding.TextMarshaler by returning String,
-// the normalized value, "" for null, or the unchanged string if it can't be
-// normalized, so that strfmt and encoding/xml write the canonical form
-// like Value and MarshalJSON. encoding/json writes map keys of string
-// types as they are and doesn't call MarshalText for them.
-func (bic NullableBIC) MarshalText() ([]byte, error) {
-	return []byte(bic.String()), nil
-}
-
-// UnmarshalJSON implements encoding/json.Unmarshaler
-// by setting the NullableBIC to null for the JSON null value,
-// so that decoding null into a field that holds a value resets it.
-// A JSON string is assigned unchanged, without normalization or validation,
-// like encoding/json does for a string type, any other JSON value is an error.
-func (bic *NullableBIC) UnmarshalJSON(data []byte) error {
-	return internal.UnmarshalJSONStringOrNull(bic, data)
 }
 
 // JSONSchema returns the JSON schema definition for the NullableBIC type,

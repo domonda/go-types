@@ -2,7 +2,7 @@ package bank
 
 import (
 	"database/sql/driver"
-	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"strings"
 
@@ -10,6 +10,7 @@ import (
 
 	"github.com/domonda/go-types"
 	"github.com/domonda/go-types/country"
+	"github.com/domonda/go-types/internal"
 	"github.com/domonda/go-types/strutil"
 )
 
@@ -30,21 +31,24 @@ func StringIsBIC(str string) bool {
 }
 
 // BIC represents a SWIFT Business Identifier Code (also known as SWIFT-Code).
-// BIC implements the database/sql.Scanner and database/sql/driver.Valuer interfaces.
-// Scan assigns an empty BIC for SQL NULL, but Value writes an empty BIC
-// as empty string, use NullableBIC to write SQL NULL.
+// See NullableBIC for a nullable version of this type.
+//
+// Scan, UnmarshalJSON, UnmarshalXML and ScanString store a valid BIC
+// normalized with 11 characters, a blank one as "" and an invalid one
+// unchanged. Value writes the normalized BIC, SQL NULL for a blank one,
+// and returns an error for an invalid one. MarshalJSON and MarshalText
+// write the normalized BIC or an invalid one unchanged, and fmt prints
+// the BIC as stored. BIC has no UnmarshalText, so encoding/json reads
+// and writes the keys of a map[BIC]V as given. See "Reading and writing
+// values" in the README of the module.
 type BIC string
 
-// ScanString tries to parse and assign the passed source string as value of the implementing type.
-// If validate is true, the source string is checked for validity before assignment.
-// If validate is false and the source string can still be assigned in some non-normalized way,
-// it will be assigned without returning an error.
+// ScanString implements the strfmt.Scannable interface.
+// Without validate it stores source like Scan, with validate it stores
+// the normalized BIC or returns the error of Normalized,
+// also for a blank source.
 func (bic *BIC) ScanString(source string, validate bool) error {
-	if validate && BIC(source).Validate() != nil {
-		return BIC(source).Validate()
-	}
-	*bic = BIC(source)
-	return nil
+	return internal.ScanStringNormalized(bic, source, validate, BIC.Normalized, nil)
 }
 
 // Valid returns true if this is a valid SWIFT Business Identifier Code.
@@ -121,17 +125,6 @@ func (bic BIC) NormalizedOrNull() NullableBIC {
 		return BICNull
 	}
 	return NullableBIC(normalized)
-}
-
-// String returns the normalized BIC string if possible,
-// else it will be returned unchanged as string.
-// String implements the fmt.Stringer interface.
-func (bic BIC) String() string {
-	norm, err := bic.Normalized()
-	if err != nil {
-		return string(bic)
-	}
-	return string(norm)
 }
 
 // Nullable returns the BIC as NullableBIC.
@@ -246,43 +239,53 @@ func (bic BIC) ReceiverPaysFees() bool {
 }
 
 // Scan implements the database/sql.Scanner interface.
+// A valid BIC is stored normalized, SQL NULL and a blank string as "",
+// and a BIC that can't be normalized unchanged without an error,
+// so that one invalid value doesn't fail a whole query; Validate reports it.
 func (bic *BIC) Scan(value any) error {
-	switch x := value.(type) {
-	case string:
-		*bic = BIC(x)
-	case []byte:
-		*bic = BIC(x)
-	case nil:
-		*bic = BIC(BICNull)
-	default:
-		return fmt.Errorf("can't scan SQL value of type %T as BIC", value)
-	}
-	return nil
+	return internal.ScanNormalized(bic, value, BIC.Normalized, nil)
+}
+
+// MarshalJSON implements encoding/json.Marshaler by writing the
+// normalized BIC, "" for a blank BIC, or the BIC unchanged
+// if it can't be normalized.
+func (bic BIC) MarshalJSON() ([]byte, error) {
+	return internal.MarshalJSONNormalized(bic, BIC.Normalized, nil)
+}
+
+// UnmarshalJSON implements encoding/json.Unmarshaler.
+// A JSON string is stored like Scan stores it, JSON null leaves the BIC
+// unchanged like encoding/json does for a string type, and any other
+// JSON value is an error.
+func (bic *BIC) UnmarshalJSON(data []byte) error {
+	return internal.UnmarshalJSONNormalized(bic, data, false, BIC.Normalized, nil)
+}
+
+// MarshalText implements encoding.TextMarshaler like MarshalJSON,
+// so that encoding/xml and strfmt write the normalized BIC.
+// encoding/json writes map keys of string types as they are
+// and doesn't call MarshalText for them.
+func (bic BIC) MarshalText() ([]byte, error) {
+	return internal.MarshalTextNormalized(bic, BIC.Normalized, nil)
+}
+
+// UnmarshalXML implements encoding/xml.Unmarshaler
+// by storing the text of the element like Scan stores it.
+func (bic *BIC) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	return internal.UnmarshalXMLNormalized(bic, d, start, BIC.Normalized, nil)
+}
+
+// UnmarshalXMLAttr implements encoding/xml.UnmarshalerAttr
+// by storing the attribute value like Scan stores it.
+func (bic *BIC) UnmarshalXMLAttr(attr xml.Attr) error {
+	return internal.UnmarshalXMLAttrNormalized(bic, attr, BIC.Normalized, nil)
 }
 
 // Value implements the driver database/sql/driver.Valuer interface.
-// Returns the normalized BIC, or the unchanged string
-// if it can't be normalized, so an empty BIC is written as empty string.
+// It returns the normalized BIC, SQL NULL for a blank BIC,
+// or the error of Normalized for a BIC that can't be normalized.
 func (bic BIC) Value() (driver.Value, error) {
-	norm, _ := bic.Normalized()
-	return string(norm), nil
-}
-
-// MarshalJSON implements encoding/json.Marshaler.
-// Returns the normalized BIC as JSON string,
-// or the unchanged string if it can't be normalized.
-func (bic BIC) MarshalJSON() ([]byte, error) {
-	norm, _ := bic.Normalized()
-	return json.Marshal(string(norm))
-}
-
-// MarshalText implements encoding.TextMarshaler by returning String,
-// the normalized value or the unchanged string if it can't be
-// normalized, so that strfmt and encoding/xml write the canonical form
-// like Value and MarshalJSON. encoding/json writes map keys of string
-// types as they are and doesn't call MarshalText for them.
-func (bic BIC) MarshalText() ([]byte, error) {
-	return []byte(bic.String()), nil
+	return internal.ValueNormalized(bic, BIC.Normalized, nil)
 }
 
 // JSONSchema returns the JSON schema definition for the BIC type.
