@@ -13,6 +13,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/domonda/go-types/float"
+	"github.com/domonda/go-types/internal"
 	"github.com/domonda/go-types/nullable"
 	"github.com/domonda/go-types/strutil"
 )
@@ -618,24 +619,15 @@ func centAmountFromFloat(f float64) CentAmount {
 // lies within half an ulp of the float64 rate, so within a factor of 1±2^-53,
 // and each of the at most two float64 operations rounds by at most another
 // such factor. So result differs from the exact value by less than
-// |result|·2^-51, and if its distance to the nearest half-integer exceeds the
-// four times larger |result|·2^-49, both lie strictly between the same two
-// half-integers and round to the same integer. The relative bounds don't hold
-// for subnormal floats, but those make the result either far below 1/2,
-// rounding to zero either way, or too large for the condition to hold.
-// The distance result-rounded is exact (Sterbenz lemma), and 0.5 minus it is
-// either exact or above 1/4, which exceeds the error below 2^48, the only
-// range where the condition can hold. It never holds for NaN and ±Inf.
-// If Go fuses a final multiplication into the distance, the distance is
-// computed from the exact product and rounded once by at most 2^-54 instead,
-// which is far below the bound for a nonzero rounded and changes nothing
-// for a zero one.
+// |result|·2^-51, the bound under which internal.FastRound proves its
+// rounding. The relative bounds don't hold for subnormal floats, but those
+// make the result either far below 1/2, rounding to zero either way, or too
+// large for internal.FastRound to report ok.
 func roundCentsFast(c CentAmount, result float64) (CentAmount, bool) {
 	if c < -1<<53 || c > 1<<53 {
 		return 0, false
 	}
-	rounded := math.Round(result)
-	if 0.5-math.Abs(result-rounded) > math.Abs(result)*0x1p-49 {
+	if rounded, ok := internal.FastRound(result); ok {
 		return CentAmount(rounded), true
 	}
 	return 0, false

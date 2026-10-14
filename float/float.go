@@ -5,6 +5,8 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+
+	"github.com/domonda/go-types/internal"
 )
 
 // RoundToDecimals returns f rounded half away from zero
@@ -64,17 +66,10 @@ func roundToDecimalsExact(f float64, bitSize, decimals int) float64 {
 // The shortest decimal of f lies within half an ulp of f, so within a factor
 // of 1±2^-53, and scaling by the exactly representable 10^|decimals| ≤ 10^22
 // rounds by at most another such factor. The scaled float64 therefore differs
-// from the scaled shortest decimal by less than |scaled|·2^-51, and if its
-// distance to the nearest half-integer exceeds the four times larger
-// |scaled|·2^-49, both lie strictly between the same two half-integers and
-// round to the same integer. The relative bounds don't hold for subnormal
-// floats, but those scale to far below 1/2 and round to zero either way.
-// The distance scaled-rounded is exact (Sterbenz lemma), and 0.5 minus it is
-// either exact or above 1/4, which exceeds the error below 2^48, the only
-// range where the condition can hold. It never holds for NaN and ±Inf.
-// If Go fuses the scaling into the distance, the distance is computed from
-// the exact product and rounded once by at most 2^-54 instead, which is far
-// below the bound for a nonzero rounded and changes nothing for a zero one.
+// from the scaled shortest decimal by less than |scaled|·2^-51, the bound
+// under which internal.FastRound proves its rounding. The relative bounds
+// don't hold for subnormal floats, but those scale to far below 1/2 and
+// round to zero either way.
 func roundScaledFast(f float64, decimals int) (rounded float64, ok bool) {
 	var scaled float64
 	switch {
@@ -85,8 +80,7 @@ func roundScaledFast(f float64, decimals int) (rounded float64, ok bool) {
 	default:
 		return 0, false
 	}
-	rounded = math.Round(scaled)
-	return rounded, 0.5-math.Abs(scaled-rounded) > math.Abs(scaled)*0x1p-49
+	return internal.FastRound(scaled)
 }
 
 // unscale returns the integer rounded from roundScaledFast divided by
