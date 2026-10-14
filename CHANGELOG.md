@@ -46,6 +46,8 @@ See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut.
   `NullableAddressList.SplitRaw`, which split an address list at the commas
   between its entries, outside quotes, angle brackets and comments, and
   return the entries unchanged, without parsing or normalizing them.
+  Like `ParseAddressList`, they keep the unquoted display name of
+  `Doe, John <john@example.com>` in one entry.
 - `email.AddressSet.NormalizedAddressList`, which returns the normalized
   addresses of a set, merged and sorted, as `AddressList`, and
   `AddressSet.MarshalText`, `UnmarshalText` and `UnmarshalJSON`, so an

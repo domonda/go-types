@@ -16,7 +16,11 @@ import (
 // whitespace trimmed: they are not parsed, normalized or validated.
 // Commas inside double quoted strings, angle brackets and comments
 // in parentheses don't split, so `"Doe, John" <john@example.com>` is one
-// entry. Empty entries are skipped.
+// entry. Neither do the commas of an unquoted display name, which are
+// followed by an address in angle brackets, so `Doe, John <john@example.com>`
+// is one entry too, like for ParseAddressList: entries without an @ are
+// joined with a following entry that has angle brackets.
+// Empty entries are skipped.
 //
 // An empty or whitespace only list and the placeholders for hidden
 // recipients like "undisclosed-recipients:;" return nil, like for
@@ -33,16 +37,18 @@ func SplitAddressList(list string) []Address {
 		return nil
 	}
 	var (
-		entries []Address
+		parts   []listPart
 		start   int
 		quoted  bool
 		escaped bool
 		comment int
 		angle   int
 	)
-	add := func(entry string) {
-		if entry = strutil.TrimSpace(entry); entry != "" {
-			entries = append(entries, Address(entry))
+	add := func(begin, end int) {
+		entry := strutil.TrimSpace(trimmed[begin:end])
+		if entry != "" {
+			begin += strings.Index(trimmed[begin:end], entry)
+			parts = append(parts, listPart{begin, begin + len(entry)})
 		}
 	}
 	for i := 0; i < len(trimmed); i++ {
@@ -76,11 +82,47 @@ func SplitAddressList(list string) []Address {
 		case c == '>' && angle > 0:
 			angle--
 		case c == ',' && angle == 0:
-			add(trimmed[start:i])
+			add(start, i)
 			start = i + 1
 		}
 	}
-	add(trimmed[start:])
+	add(start, len(trimmed))
+	return joinDisplayNameParts(trimmed, parts)
+}
+
+// listPart is the byte range of an entry of an address list,
+// without its surrounding whitespace.
+type listPart struct{ begin, end int }
+
+// joinDisplayNameParts returns the parts of list split by SplitAddressList
+// at all top level commas, with every run of parts without an @ or angle
+// brackets joined with the following part if that has angle brackets,
+// because their commas are part of an unquoted display name, like in
+// `Doe, Jr., John <john@example.com>`. Other parts are kept separate.
+// A joined entry is the text of list from the first to the last part.
+func joinDisplayNameParts(list string, parts []listPart) []Address {
+	if len(parts) == 0 {
+		return nil
+	}
+	text := func(p listPart) string { return list[p.begin:p.end] }
+	entries := make([]Address, 0, len(parts))
+	for i := 0; i < len(parts); i++ {
+		// next is the first part from i on with an @ or angle brackets
+		next := i
+		for next < len(parts) && !strings.ContainsAny(text(parts[next]), "@<") {
+			next++
+		}
+		if next > i && next < len(parts) && strings.Contains(text(parts[next]), "<") {
+			entries = append(entries, Address(list[parts[i].begin:parts[next].end]))
+		} else {
+			// Every part up to and including next is an entry,
+			// so the parts are scanned only once
+			for _, part := range parts[i:min(next+1, len(parts))] {
+				entries = append(entries, Address(text(part)))
+			}
+		}
+		i = next
+	}
 	return entries
 }
 

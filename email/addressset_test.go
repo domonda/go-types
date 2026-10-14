@@ -343,6 +343,10 @@ func TestAddressSet_ScanNonArray(t *testing.T) {
 		// so that a non-array SQL column can be scanned too.
 		{name: "plain string", value: "a@example.com", want: MakeAddressSet("a@example.com")},
 		{name: "plain address list", value: `"Doe, John" <john@example.com>, b@example.com`, want: MakeAddressSet(`"Doe, John" <john@example.com>`, "b@example.com")},
+		// One address with an unquoted comma in its display name, which
+		// ParseAddress accepts, must stay one valid element that Value can
+		// write, not become the invalid element "Doe" and another one.
+		{name: "unquoted comma in display name", value: `Doe, John <john@example.com>`, want: MakeAddressSet(`Doe, John <john@example.com>`)},
 		// The addresses are not normalized, so that two spellings of the
 		// same address stay two elements like they were written
 		{name: "plain list not normalized", value: "A@Example.com, a@example.com", want: MakeAddressSet("A@Example.com", "a@example.com")},
@@ -398,6 +402,12 @@ func TestAddressSet_ScanNonArray(t *testing.T) {
 			}
 		})
 	}
+
+	// The scanned address with an unquoted comma in its name writes back
+	var set AddressSet
+	require.NoError(t, set.Scan(`Doe, John <john@example.com>`))
+	_, err := set.Value()
+	assert.NoError(t, err)
 }
 
 func TestAddressSet_Value(t *testing.T) {
@@ -695,10 +705,17 @@ func TestAddressSet_MarshalText(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "a@example.com, b@example.com", string(text))
 
-	for _, addr := range []Address{"not an address", "", "Doe, John <john@example.com>"} {
+	for _, addr := range []Address{"not an address", ""} {
 		_, err := MakeAddressSet("a@example.com", addr).MarshalText()
 		assert.Error(t, err, "MarshalText of a set with %q", addr)
 	}
+
+	// The commas of an unquoted display name read back as one entry
+	text, err = MakeAddressSet("a@example.com", "Doe, John <john@example.com>").MarshalText()
+	require.NoError(t, err)
+	var back AddressSet
+	require.NoError(t, back.UnmarshalText(text))
+	assert.Equal(t, MakeAddressSet("a@example.com", "Doe, John <john@example.com>"), back)
 
 	text, err = AddressSet(nil).MarshalText()
 	require.NoError(t, err)

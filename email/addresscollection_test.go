@@ -27,8 +27,15 @@ func TestSplitAddressList(t *testing.T) {
 		{list: `<"a,b"@example.com>, c@example.com`, want: []Address{`<"a,b"@example.com>`, "c@example.com"}},
 		{list: `a@example.com (Doe, John), b@example.com`, want: []Address{`a@example.com (Doe, John)`, "b@example.com"}},
 		{list: `a@example.com (outer (inner, x)), b@example.com`, want: []Address{`a@example.com (outer (inner, x))`, "b@example.com"}},
-		// An unquoted comma in a name splits, like for every list parser
-		{list: `Doe, John <john@example.com>`, want: []Address{"Doe", "John <john@example.com>"}},
+		// The commas of an unquoted display name don't split,
+		// like ParseAddressList reads it as one address
+		{list: `Doe, John <john@example.com>`, want: []Address{`Doe, John <john@example.com>`}},
+		{list: `Doe,Jr. ,  John <john@example.com>, b@example.com`, want: []Address{`Doe,Jr. ,  John <john@example.com>`, "b@example.com"}},
+		{list: `a@example.com, Doe, John <john@example.com>`, want: []Address{"a@example.com", `Doe, John <john@example.com>`}},
+		// Without angle brackets after them the parts are no display name
+		{list: `foo, bar@example.com`, want: []Address{"foo", "bar@example.com"}},
+		{list: `foo, bar`, want: []Address{"foo", "bar"}},
+		{list: `foo, bar@example.com, Doe, John <john@example.com>, baz`, want: []Address{"foo", "bar@example.com", `Doe, John <john@example.com>`, "baz"}},
 		// After an unbalanced quote the rest is one entry, no error
 		{list: `"unbalanced, a@example.com, b@example.com`, want: []Address{`"unbalanced, a@example.com, b@example.com`}},
 		// Placeholders for hidden recipients are no entries
