@@ -146,6 +146,34 @@ func TestUnmarshalJSONNormalized(t *testing.T) {
 	assert.Equal(t, upperCode("DE"), c, "unchanged on error")
 }
 
+// plainJSONString skips json.Unmarshal for the common value, so it must
+// accept only what decodes to itself and leave everything else, escapes,
+// control and non-ASCII bytes and other JSON values, to json.Unmarshal.
+func TestPlainJSONString(t *testing.T) {
+	for _, data := range []string{
+		`""`, `"DE"`, `" a b "`, `"2024-Q1"`, `"~!@#$%^&*()_+{}|:<>?"`,
+		`"a\"b"`, `"a\\b"`, `"aA"`, `"a\nb"`, `"tab	in"`, `"ü"`, "\"\x7f\"", "\"\xff\"",
+		`"`, `"unterminated`, `x"`, `1`, `null`, `["DE"]`, ` "DE"`, `"DE" `,
+	} {
+		got, ok := plainJSONString([]byte(data))
+		var want string
+		err := json.Unmarshal([]byte(data), &want)
+		if !ok {
+			continue
+		}
+		require.NoError(t, err, "plainJSONString accepted %q, which json.Unmarshal rejects", data)
+		assert.Equal(t, want, got, "plainJSONString(%q)", data)
+		assert.NotContains(t, data[1:len(data)-1], `\`, "plainJSONString accepted an escape in %q", data)
+	}
+	got, ok := plainJSONString([]byte(`"a b"`))
+	require.True(t, ok)
+	assert.Equal(t, "a b", got)
+	for _, data := range []string{`"a\"b"`, `"ü"`, "\"\x7f\"", `1`, `null`} {
+		_, ok := plainJSONString([]byte(data))
+		assert.False(t, ok, "plainJSONString(%q) must leave it to json.Unmarshal", data)
+	}
+}
+
 type xmlCode upperCode
 
 func (c *xmlCode) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {

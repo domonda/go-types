@@ -161,12 +161,37 @@ func UnmarshalJSONNormalized[S ~string](dst *S, data []byte, nullable bool, norm
 		}
 		return nil
 	}
-	str, err := unmarshalJSONString[S](data)
-	if err != nil {
-		return err
+	str, ok := plainJSONString(data)
+	if !ok {
+		err := json.Unmarshal(data, &str)
+		if err != nil {
+			var typeErr *json.UnmarshalTypeError
+			if errors.As(err, &typeErr) {
+				// Name S instead of string, like encoding/json does
+				// for a string type without UnmarshalJSON
+				return &json.UnmarshalTypeError{Value: typeErr.Value, Type: reflect.TypeFor[S](), Offset: typeErr.Offset}
+			}
+			return err
+		}
 	}
 	*dst = NormalizedOrRaw(S(str), normalize, isBlank)
 	return nil
+}
+
+// plainJSONString returns the content of data if data is a JSON string
+// of printable ASCII without escapes, which decodes to itself, so that
+// the common value doesn't pay for json.Unmarshal, which validates and
+// decodes data again after encoding/json has scanned it.
+func plainJSONString(data []byte) (string, bool) {
+	if len(data) < 2 || data[0] != '"' || data[len(data)-1] != '"' {
+		return "", false
+	}
+	for _, c := range data[1 : len(data)-1] {
+		if c < 0x20 || c > 0x7E || c == '"' || c == '\\' {
+			return "", false
+		}
+	}
+	return string(data[1 : len(data)-1]), true
 }
 
 // UnmarshalXMLNormalized implements encoding/xml.Unmarshaler for a
@@ -188,20 +213,4 @@ func UnmarshalXMLNormalized[S ~string](dst *S, d *xml.Decoder, start xml.StartEl
 func UnmarshalXMLAttrNormalized[S ~string](dst *S, attr xml.Attr, normalize func(S) (S, error), isBlank func(S) bool) error {
 	*dst = NormalizedOrRaw(S(attr.Value), normalize, isBlank)
 	return nil
-}
-
-// unmarshalJSONString decodes a JSON string, reporting any other JSON value
-// with the type S instead of string like encoding/json does for a string
-// type without UnmarshalJSON.
-func unmarshalJSONString[S ~string](data []byte) (string, error) {
-	var str string
-	err := json.Unmarshal(data, &str)
-	if err != nil {
-		var typeErr *json.UnmarshalTypeError
-		if errors.As(err, &typeErr) {
-			return "", &json.UnmarshalTypeError{Value: typeErr.Value, Type: reflect.TypeFor[S](), Offset: typeErr.Offset}
-		}
-		return "", err
-	}
-	return str, nil
 }
