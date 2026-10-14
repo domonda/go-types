@@ -4,7 +4,11 @@ import (
 	"encoding/json"
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/domonda/go-types/internal/collections"
 	"github.com/domonda/go-types/internal/collections/settest"
@@ -358,4 +362,36 @@ func TestSet_UnmarshalJSON_DoesNotMutateSharedMap(t *testing.T) {
 	if cfg.Perms.Contains("write") {
 		t.Error("the unmarshalled field still aliases the default map")
 	}
+}
+
+// upperString normalizes in MarshalJSON and UnmarshalJSON
+// like money.Currency, for TestSet_JSONKeepsStringValues.
+type upperString string
+
+func (s upperString) MarshalJSON() ([]byte, error) {
+	return json.Marshal(strings.ToUpper(string(s)))
+}
+
+func (s *upperString) UnmarshalJSON(data []byte) error {
+	var str string
+	if err := json.Unmarshal(data, &str); err != nil {
+		return err
+	}
+	*s = upperString(strings.ToUpper(str))
+	return nil
+}
+
+// A Set of a string type with a normalizing MarshalJSON, like
+// Set[money.Currency], is written and read with its values as stored:
+// written normalized, "eur" and "EUR" would be the same JSON value and the
+// set would read back with fewer values than it was written with.
+func TestSet_JSONKeepsStringValues(t *testing.T) {
+	set := NewSet[upperString]("eur", "EUR", "usd")
+	data, err := json.Marshal(set)
+	require.NoError(t, err)
+	assert.Equal(t, `["EUR","eur","usd"]`, string(data))
+
+	var back Set[upperString]
+	require.NoError(t, json.Unmarshal(data, &back))
+	assert.Equal(t, set, back)
 }

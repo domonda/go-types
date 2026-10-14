@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"iter"
 	"maps"
+	"reflect"
 	"slices"
 	"strings"
 
@@ -237,9 +238,10 @@ func (set Set[T]) String() string { //#nosec
 // MarshalJSON implements encoding/json.Marshaler.
 // A nil set is encoded as null, an empty set as [],
 // and any other set as an array of its values in ascending order.
-// Values whose MarshalJSON normalizes, like money.Currency,
-// are written normalized, so different values of the set can be
-// written as the same JSON value, like "eur" and "EUR" as "EUR".
+// Values of a string kind are written as stored, without a MarshalJSON
+// method of T that normalizes, like that of money.Currency, because
+// two values like "eur" and "EUR" would be written as the same value
+// and the set would read back with fewer values than it was written with.
 func (set Set[T]) MarshalJSON() ([]byte, error) {
 	if set.IsNull() {
 		return []byte(`null`), nil
@@ -250,11 +252,22 @@ func (set Set[T]) MarshalJSON() ([]byte, error) {
 	if len(set) == 0 {
 		return []byte(`[]`), nil
 	}
-	return json.Marshal(set.Sorted())
+	sorted := set.Sorted()
+	if reflect.TypeFor[T]().Kind() == reflect.String {
+		strs := make([]string, len(sorted))
+		for i, val := range sorted {
+			strs[i] = reflect.ValueOf(val).String()
+		}
+		return json.Marshal(strs)
+	}
+	return json.Marshal(sorted)
 }
 
 // UnmarshalJSON implements encoding/json.Unmarshaler.
 // It unmarshals a JSON array into the set, removing any duplicates.
+// Values of a string kind are stored as given, without an UnmarshalJSON
+// method of T that normalizes, so that MarshalJSON and UnmarshalJSON
+// round-trip every set.
 // It assigns a new set rather than modifying the existing map, so a map
 // shared with another variable is never rewritten.
 // JSON null assigns a nil set and the empty array an allocated empty
@@ -270,9 +283,21 @@ func (set *Set[T]) UnmarshalJSON(j []byte) error {
 		return nil
 	}
 	var slice []T
-	err := json.Unmarshal(j, &slice)
-	if err != nil {
-		return fmt.Errorf("can't unmarshall %T from JSON: %w", *set, err)
+	if reflect.TypeFor[T]().Kind() == reflect.String {
+		var strs []string
+		err := json.Unmarshal(j, &strs)
+		if err != nil {
+			return fmt.Errorf("can't unmarshall %T from JSON: %w", *set, err)
+		}
+		slice = make([]T, len(strs))
+		for i, str := range strs {
+			reflect.ValueOf(&slice[i]).Elem().SetString(str)
+		}
+	} else {
+		err := json.Unmarshal(j, &slice)
+		if err != nil {
+			return fmt.Errorf("can't unmarshall %T from JSON: %w", *set, err)
+		}
 	}
 	// Always a new set, never the caller's existing map. Clearing and
 	// refilling in place rewrote any other variable sharing that map:
