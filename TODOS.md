@@ -232,13 +232,13 @@ time.
 - [ ] **Multi-word currency names in `money.ParseCurrencyAmount`.** Only a
       single word is passed to `Currency.Normalized`, so
       `"100 Canadian Dollar"` does not parse.
-- [ ] **Time zones in the `strfmt` presets.** The English and German
-      presets' time layouts end in `MST` without a numeric offset, so a
-      formatted time only scans back where its zone abbreviation is known
-      (`UTC`, `GMT` or one of `time.Local`); elsewhere `ParseTime` rejects
-      it. The English layout is also day first and reads US month-first
-      input with a known zone as another date. A numeric offset in the
-      layouts would make the round trip lossless.
+- [ ] **Time zones in the `strfmt` presets.** The US and German presets'
+      time layouts end in `MST` without a numeric offset, so a formatted
+      time only scans back where its zone abbreviation is known (`UTC`,
+      `GMT` or one of `time.Local`); elsewhere `ParseTime` rejects it. The
+      US layout is month first and reads British day-first input with a
+      known zone as another date. A numeric offset in the layouts would make
+      the round trip lossless.
 - [ ] **`email` dates.** A `Date` header with a named zone other than
       UT/GMT, like `EST`, gets a zero offset.
 - [ ] **`bank.IBANFinder`** only finds IBANs written compact and upper case.

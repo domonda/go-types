@@ -170,7 +170,7 @@ func Test_FormatDef_UnmarshalJSON(t *testing.T) {
 // panics on a precision below -1.
 func TestFormatDef_UnmarshalJSONRejectsSeparatorsFormatPanicsOn(t *testing.T) {
 	german := FormatDef{ThousandsSep: '.', DecimalSep: ',', Precision: 2}
-	for _, j := range []string{`{"decimalSep":"."}`, `{"decimalSep":"x"}`, `{"thousandsSep":"x"}`, `{"precision":-5}`} {
+	for _, j := range []string{`{"decimalSep":"."}`, `{"decimalSep":"x"}`, `{"thousandsSep":"x"}`, `{"precision":-2}`, `{"precision":-5}`} {
 		ff := german
 		assert.Error(t, json.Unmarshal([]byte(j), &ff), j)
 		assert.Equal(t, german, ff, "unchanged on error for %s", j)

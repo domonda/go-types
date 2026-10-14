@@ -29,7 +29,7 @@ func (f FormatterFunc) FormatValue(val reflect.Value, config *FormatConfig) stri
 // MoneyFormat specifies how monetary amounts are serialized to strings,
 // including digit grouping, decimal notation, precision, and whether
 // the currency symbol appears before or after the numeric value.
-// For the currency amount types a Precision of zero or more is raised to
+// For the currency amount types a Precision of 2 or more is raised to
 // the decimals of the minor unit of the currency, see FormatCurrencyAmount.
 type MoneyFormat struct {
 	CurrencyFirst bool
