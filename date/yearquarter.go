@@ -334,7 +334,22 @@ func (yq YearQuarter) ContainsYearMonth(ym YearMonth) bool {
 // and an invalid one as it is.
 // Returns -1 if yq is before other, +1 if after, 0 if equal.
 func (yq YearQuarter) Compare(other YearQuarter) int {
-	yq = internal.NormalizedOrRaw(yq, YearQuarter.Normalized, YearQuarter.IsZero)
-	other = internal.NormalizedOrRaw(other, YearQuarter.Normalized, YearQuarter.IsZero)
+	// Compare is a comparator of slices.SortFunc, mostly called with
+	// year-quarters read normalized from SQL or JSON, which are compared
+	// without normalizing them again
+	if !yq.isNormalized() {
+		yq = internal.NormalizedOrRaw(yq, YearQuarter.Normalized, YearQuarter.IsZero)
+	}
+	if !other.isNormalized() {
+		other = internal.NormalizedOrRaw(other, YearQuarter.Normalized, YearQuarter.IsZero)
+	}
 	return strings.Compare(string(yq), string(other))
+}
+
+// isNormalized reports if yq is valid and normalized like ValidAndNormalized,
+// with an upper case "Q", checked byte by byte without the error that
+// Normalized builds for an invalid year-quarter.
+func (yq YearQuarter) isNormalized() bool {
+	return len(yq) == 7 && isYear(string(yq[:4])) && yq[4] == '-' && yq[5] == 'Q' &&
+		yq[6] >= '1' && yq[6] <= '4' && yq != "0001-Q1"
 }

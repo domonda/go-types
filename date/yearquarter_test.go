@@ -456,6 +456,51 @@ func TestYearQuarter_Compare(t *testing.T) {
 	}
 }
 
+// TestYearQuarter_CompareFastPath protects the order of Compare: it skips
+// normalizing a year-quarter that isNormalized reports as normalized, so
+// isNormalized must agree with ValidAndNormalized for every year-quarter,
+// or Compare would order an invalid, zero, lower case or padded one as
+// it is instead of like Normalized and IsZero do.
+func TestYearQuarter_CompareFastPath(t *testing.T) {
+	const chars = "0123456789-Qq :"
+	for _, year := range []string{"0000", "0001", "2023", "9999", "20a3", " 202", "202 "} {
+		for _, q0 := range chars {
+			for _, q1 := range chars {
+				for _, sep := range []string{"-", "/"} {
+					yq := YearQuarter(year + sep + string(q0) + string(q1))
+					assert.Equal(t, yq.ValidAndNormalized(), yq.isNormalized(), "%q", yq)
+				}
+			}
+		}
+	}
+	for _, yq := range []YearQuarter{"", "2023-Q", "10000-Q1", " 2023-Q3", "2023-Q3 "} {
+		assert.False(t, yq.isNormalized(), "%q", yq)
+	}
+
+	// The fast path and the normalizing path order alike
+	assert.Equal(t, -1, YearQuarter("2023-Q3").Compare("2023-Q4"))
+	assert.Equal(t, 0, YearQuarter("2023-Q3").Compare("2023-q3"))
+	assert.Equal(t, -1, YearQuarter("0001-Q1").Compare("0001-Q2"), "the zero year-quarter compares as \"\"")
+	assert.Equal(t, 1, YearQuarter("2023-Q5").Compare("2023-Q4"), "an invalid year-quarter compares as it is")
+}
+
+// BenchmarkYearQuarter_Compare measures Compare as a comparator of
+// slices.SortFunc, which calls it about n*log(n) times, mostly with
+// year-quarters that were read normalized from SQL or JSON.
+func BenchmarkYearQuarter_Compare(b *testing.B) {
+	for name, operands := range map[string][2]YearQuarter{
+		"normalized":     {"2023-Q3", "2023-Q4"},
+		"not normalized": {"2023-q3", "2023-Q4"},
+		"invalid":        {"2023-Q5", "2023-Q4"},
+	} {
+		b.Run(name, func(b *testing.B) {
+			for b.Loop() {
+				_ = operands[0].Compare(operands[1])
+			}
+		})
+	}
+}
+
 // NullableYearQuarter tests
 
 func TestNullableYearQuarter_Validate(t *testing.T) {

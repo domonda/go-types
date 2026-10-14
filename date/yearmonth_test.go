@@ -423,6 +423,51 @@ func TestYearMonth_Compare(t *testing.T) {
 	}
 }
 
+// TestYearMonth_CompareFastPath protects the order of Compare: it skips
+// normalizing a year-month that isNormalized reports as normalized, so
+// isNormalized must agree with ValidAndNormalized for every year-month,
+// or Compare would order an invalid, zero or padded one as it is
+// instead of like Normalized and IsZero do.
+func TestYearMonth_CompareFastPath(t *testing.T) {
+	const chars = "0123456789-Q :"
+	for _, year := range []string{"0000", "0001", "2023", "9999", "20a3", " 202", "202 "} {
+		for _, m0 := range chars {
+			for _, m1 := range chars {
+				for _, sep := range []string{"-", "/"} {
+					ym := YearMonth(year + sep + string(m0) + string(m1))
+					require.Equal(t, ym.ValidAndNormalized(), ym.isNormalized(), "%q", ym)
+				}
+			}
+		}
+	}
+	for _, ym := range []YearMonth{"", "2023-7", "10000-01", " 2023-07", "2023-07 "} {
+		require.False(t, ym.isNormalized(), "%q", ym)
+	}
+
+	// The fast path and the normalizing path order alike
+	require.Equal(t, -1, YearMonth("2023-07").Compare("2023-08"))
+	require.Equal(t, 0, YearMonth("2023-07").Compare(" 2023-07"))
+	require.Equal(t, -1, YearMonth("0001-01").Compare("0001-02"), "the zero year-month compares as \"\"")
+	require.Equal(t, 1, YearMonth("2023-13").Compare("2023-12"), "an invalid year-month compares as it is")
+}
+
+// BenchmarkYearMonth_Compare measures Compare as a comparator of
+// slices.SortFunc, which calls it about n*log(n) times, mostly with
+// year-months that were read normalized from SQL or JSON.
+func BenchmarkYearMonth_Compare(b *testing.B) {
+	for name, operands := range map[string][2]YearMonth{
+		"normalized":     {"2023-07", "2023-08"},
+		"not normalized": {" 2023-07", "2023-08"},
+		"invalid":        {"2023-13", "2023-08"},
+	} {
+		b.Run(name, func(b *testing.B) {
+			for b.Loop() {
+				_ = operands[0].Compare(operands[1])
+			}
+		})
+	}
+}
+
 // TestYearMonth_ValidateRejectsYearZero protects that a YearMonth is only
 // valid if its dates are: Date has no year 0, so "0000-05" would add months
 // through an invalid date and give "0001-02" for AddMonths(1).

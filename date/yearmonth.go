@@ -326,7 +326,36 @@ func (ym YearMonth) ContainsDate(date Date) bool {
 // and an invalid one as it is.
 // Returns -1 if ym is before other, +1 if after, 0 if equal.
 func (ym YearMonth) Compare(other YearMonth) int {
-	ym = internal.NormalizedOrRaw(ym, YearMonth.Normalized, YearMonth.IsZero)
-	other = internal.NormalizedOrRaw(other, YearMonth.Normalized, YearMonth.IsZero)
+	// Compare is a comparator of slices.SortFunc, mostly called with
+	// year-months read normalized from SQL or JSON, which are compared
+	// without normalizing them again
+	if !ym.isNormalized() {
+		ym = internal.NormalizedOrRaw(ym, YearMonth.Normalized, YearMonth.IsZero)
+	}
+	if !other.isNormalized() {
+		other = internal.NormalizedOrRaw(other, YearMonth.Normalized, YearMonth.IsZero)
+	}
 	return strings.Compare(string(ym), string(other))
+}
+
+// isNormalized reports if ym is valid and normalized like ValidAndNormalized,
+// checked byte by byte without the error that Normalized builds for an
+// invalid year-month.
+func (ym YearMonth) isNormalized() bool {
+	return len(ym) == 7 && isYear(string(ym[:4])) && ym[4] == '-' &&
+		(ym[5] == '0' && ym[6] >= '1' && ym[6] <= '9' || ym[5] == '1' && ym[6] >= '0' && ym[6] <= '2') &&
+		ym != "0001-01"
+}
+
+// isYear reports if s is a year from 1 to 9999 written with 4 digits.
+func isYear(s string) bool {
+	if len(s) != 4 || s == "0000" {
+		return false
+	}
+	for i := range len(s) {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+	}
+	return true
 }
