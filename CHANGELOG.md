@@ -290,10 +290,15 @@ See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut.
   quote such a local part like `net/mail` does, and also where this
   package can't read it unquoted, like `"'abc"@example.com` and
   `"дмитрий"@example.com`. Escaped quotes and backslashes in a quoted local
-  part, like `"a\"b"@example.com`, are read. Display names lose quotes,
-  backslashes and runes that are not graphic, like bidi overrides decoded
-  from RFC 2047, instead of being written with escapes that the parser
-  can't read, which split one address into two. A local part with
+  part, like `"a\"b"@example.com`, are read. Quoted display names are read
+  with their escapes like `net/mail` reads them, and written with escaped
+  quotes and backslashes like `mail.Address.String`, so
+  `"Say \"Hi\"" <a@b.com>` stays as it is, and a list like
+  `"x\" <ok@example.com>, ok2@example.com (," <other@example.net>` parses
+  as the recipients that `net/mail` and a mail server read. Display names
+  lose the runes that are not graphic, like bidi overrides decoded from
+  RFC 2047. Names of RFC 2047 encoded-words keep the quotes and backslashes
+  of their text, and `ASCII` B-encodes a non-ASCII name with a backslash. A local part with
   consecutive, leading or trailing dots, like the `doe..john@example.com`
   that earlier versions made of `"Doe, John"@example.com`, is now written
   quoted as `"doe..john"@example.com`: normalize stored columns again
@@ -810,13 +815,16 @@ See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut.
 
 - `email.AddressList.Value`, `NullableAddressList.Value`,
   `AddressSet.Value` and `AddressSet.MarshalText` wrote text with runes
-  that the address parser ignores when it validates: CR/LF and other
-  whitespace than spaces inside the text, control and format characters
-  like NUL or a bidi override, and invalid UTF-8. A display name like
-  `"x\r\nBcc: evil@example.com" <a@example.com>` was written with its line
-  break, which a header built from the stored list would turn into a header
-  injection, and a NUL failed in PostgreSQL. They return an error now;
-  store `Normalized()` instead. `AddressSet.MarshalText` also refuses a set
+  that the address parser ignores when it validates: control characters
+  other than the tab, like CR, LF and NUL, bidi embeddings, overrides and
+  isolates (U+202A to U+202E, U+2066 to U+2069), and invalid UTF-8. A
+  display name like `"x\r\nBcc: evil@example.com" <a@example.com>` was
+  written with its line break, which a header built from the stored list
+  would turn into a header injection, and a NUL failed in PostgreSQL. They
+  return an error now, and `Validate` and `Valid` of the three types refuse
+  the same runes, so a validated list can be saved; store `Normalized()`
+  instead. Names with a no-break space, ideographic space, zero width
+  (non-)joiner, soft hyphen or directional mark are written as stored. `AddressSet.MarshalText` also refuses a set
   whose joined list would read back as other entries, like a valid address
   with an unclosed comment that swallowed the entries after it.
 - `float.FormatDef.Format` and `Parse` panicked for a zero `DecimalSep`,
@@ -828,6 +836,16 @@ See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut.
   and memory for a list of unparsable entries: every error held the whole
   list, so 10,000 entries took seconds and hundreds of megabytes. Errors
   hold at most 100 bytes of the input, and parsing stops after 100 errors.
+- `email.ParseAddressList` parsed lists without an error as other entries
+  than `SplitAddressList` found, so a validated list read back as other
+  recipients through `AddressSet.Scan` and `SplitRaw`: an unclosed quote or
+  angle bracket before a comma, like `"Doe <a@b.cc>, z@y.zz`, a stray quote
+  in an unquoted name, and a leading or doubled comma, which became the
+  display name `","`. These are errors now. `SplitAddressList` reads the
+  placeholder `undisclosed-recipients:;,` as the empty list, keeps an
+  encoded-word name with a comma together, and splits the list as the
+  parser reads it, so a backslash that escapes a rune the parser drops
+  can't escape the next quote.
 - `date.YearQuarter.AddQuarters` and `NullableYearQuarter.AddQuarters`
   looped once per year, so a large count from input took about 400 ms for
   `1<<32` and never returned for `math.MaxInt`. They compute the year by
