@@ -945,6 +945,11 @@ func (date Date) Normalized() (Date, error) {
 // An empty lang or one that can't be normalized gives no hint.
 // Returns the Date unchanged in case of an error.
 func (date Date) NormalizedLang(lang language.Code) (Date, error) {
+	if date.ValidAndNormalized() {
+		// Every reading and writing method normalizes, mostly a date
+		// that already is, which this checks without normalizeDate
+		return date, nil
+	}
 	normalized, _, err := normalizeAndCheckDate(string(date), langHint(lang))
 	if err != nil {
 		return date, err
