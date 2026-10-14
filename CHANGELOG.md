@@ -183,9 +183,11 @@ See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut.
 - **Breaking:** `email.AddressList.Split` and `NullableAddressList.Split`
   are renamed to `SplitNormalized`, which says what they return, next to
   the new `SplitRaw`.
-- **Breaking:** `types.Set[T]` of a string kind writes and reads its values
-  as stored in JSON, instead of through a normalizing `MarshalJSON` of `T`
-  that wrote `Set[money.Currency]{"eur", "EUR"}` as `["EUR","EUR"]`.
+- **Breaking:** `types.Set[T]` of a normalizing string type, one that
+  implements `types.Normalizable[T]`, writes and reads its values as stored
+  in JSON, instead of through the normalizing `MarshalJSON` of `T` that wrote
+  `Set[money.Currency]{"eur", "EUR"}` as `["EUR","EUR"]`. The JSON methods
+  of other types are still used.
 - **Breaking:** `email.Address.Normalized`, `email.AddressFrom` and so the
   normalization of every `email` type keep a non-ASCII display name as
   quoted UTF-8 (RFC 6532) instead of encoding it with RFC 2047:

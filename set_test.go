@@ -2,6 +2,7 @@ package types
 
 import (
 	"encoding/json"
+	"fmt"
 	"reflect"
 	"slices"
 	"strings"
@@ -365,8 +366,13 @@ func TestSet_UnmarshalJSON_DoesNotMutateSharedMap(t *testing.T) {
 }
 
 // upperString normalizes in MarshalJSON and UnmarshalJSON
-// like money.Currency, for TestSet_JSONKeepsStringValues.
+// and implements Normalizable like money.Currency,
+// for TestSet_JSONKeepsStringValues.
 type upperString string
+
+func (s upperString) Normalized() (upperString, error) {
+	return upperString(strings.ToUpper(string(s))), nil
+}
 
 func (s upperString) MarshalJSON() ([]byte, error) {
 	return json.Marshal(strings.ToUpper(string(s)))
@@ -394,4 +400,41 @@ func TestSet_JSONKeepsStringValues(t *testing.T) {
 	var back Set[upperString]
 	require.NoError(t, json.Unmarshal(data, &back))
 	assert.Equal(t, set, back)
+}
+
+// lowerStatus is not normalizing: its JSON methods define the encoding
+// and reject unknown values, for TestSet_JSONUsesMethodsOfOtherStrings.
+type lowerStatus string
+
+func (s lowerStatus) MarshalJSON() ([]byte, error) {
+	return json.Marshal(strings.ToLower(string(s)))
+}
+
+func (s *lowerStatus) UnmarshalJSON(data []byte) error {
+	var str string
+	if err := json.Unmarshal(data, &str); err != nil {
+		return err
+	}
+	if str != "open" && str != "closed" {
+		return fmt.Errorf("invalid status %s", str)
+	}
+	*s = lowerStatus(strings.ToUpper(str))
+	return nil
+}
+
+// Only the values of a normalizing type are written and read as stored.
+// A Set of another string type must use the JSON methods of the type,
+// so that their validation still rejects bad input and the JSON
+// keeps the encoding that the type defines for its consumers.
+func TestSet_JSONUsesMethodsOfOtherStrings(t *testing.T) {
+	data, err := json.Marshal(NewSet[lowerStatus]("OPEN"))
+	require.NoError(t, err)
+	assert.Equal(t, `["open"]`, string(data), "MarshalJSON of the type")
+
+	var back Set[lowerStatus]
+	require.NoError(t, json.Unmarshal(data, &back))
+	assert.Equal(t, NewSet[lowerStatus]("OPEN"), back, "UnmarshalJSON of the type")
+
+	err = json.Unmarshal([]byte(`["open","bogus"]`), &back)
+	assert.ErrorContains(t, err, "invalid status bogus")
 }

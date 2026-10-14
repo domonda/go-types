@@ -238,10 +238,12 @@ func (set Set[T]) String() string { //#nosec
 // MarshalJSON implements encoding/json.Marshaler.
 // A nil set is encoded as null, an empty set as [],
 // and any other set as an array of its values in ascending order.
-// Values of a string kind are written as stored, without a MarshalJSON
-// method of T that normalizes, like that of money.Currency, because
-// two values like "eur" and "EUR" would be written as the same value
-// and the set would read back with fewer values than it was written with.
+// Values of a normalizing string type, which implements [Normalizable],
+// like money.Currency, are written as stored, without the MarshalJSON
+// method of T that normalizes, because two values like "eur" and "EUR"
+// would be written as the same value and the set would read back with
+// fewer values than it was written with. Other values are written with
+// their own MarshalJSON method.
 func (set Set[T]) MarshalJSON() ([]byte, error) {
 	if set.IsNull() {
 		return []byte(`null`), nil
@@ -253,7 +255,7 @@ func (set Set[T]) MarshalJSON() ([]byte, error) {
 		return []byte(`[]`), nil
 	}
 	sorted := set.Sorted()
-	if reflect.TypeFor[T]().Kind() == reflect.String {
+	if isNormalizingString[T]() {
 		strs := make([]string, len(sorted))
 		for i, val := range sorted {
 			strs[i] = reflect.ValueOf(val).String()
@@ -265,9 +267,10 @@ func (set Set[T]) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON implements encoding/json.Unmarshaler.
 // It unmarshals a JSON array into the set, removing any duplicates.
-// Values of a string kind are stored as given, without an UnmarshalJSON
-// method of T that normalizes, so that MarshalJSON and UnmarshalJSON
-// round-trip every set.
+// Values of a normalizing string type, which implements [Normalizable],
+// are stored as given, without the UnmarshalJSON method of T that
+// normalizes, so that MarshalJSON and UnmarshalJSON round-trip every set.
+// Other values are read with their own UnmarshalJSON method.
 // It assigns a new set rather than modifying the existing map, so a map
 // shared with another variable is never rewritten.
 // JSON null assigns a nil set and the empty array an allocated empty
@@ -283,7 +286,7 @@ func (set *Set[T]) UnmarshalJSON(j []byte) error {
 		return nil
 	}
 	var slice []T
-	if reflect.TypeFor[T]().Kind() == reflect.String {
+	if isNormalizingString[T]() {
 		var strs []string
 		err := json.Unmarshal(j, &strs)
 		if err != nil {
@@ -306,6 +309,15 @@ func (set *Set[T]) UnmarshalJSON(j []byte) error {
 	// assigned a new map; the two agree now.
 	*set = NewSet(slice...)
 	return nil
+}
+
+// isNormalizingString reports if T is a string kind that implements
+// Normalizable[T], whose JSON methods normalize, like money.Currency.
+// Set writes and reads such values as stored. The JSON methods of other
+// types are used, because they can validate or define their encoding.
+func isNormalizingString[T any]() bool {
+	_, normalizing := any(*new(T)).(Normalizable[T])
+	return normalizing && reflect.TypeFor[T]().Kind() == reflect.String
 }
 
 // ReduceSet applies a reduction function to all values in the set and returns the result.
