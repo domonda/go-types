@@ -2,7 +2,7 @@ package language
 
 import (
 	"database/sql/driver"
-	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"strings"
 	"sync"
@@ -10,12 +10,21 @@ import (
 	"github.com/invopop/jsonschema"
 
 	"github.com/domonda/go-types"
+	"github.com/domonda/go-types/internal"
 	"github.com/domonda/go-types/strutil"
 )
 
 // Code represents a language code in its normalized form as an ISO 639-1 two-character language code.
-// Code implements the database/sql.Scanner and database/sql/driver.Valuer interfaces,
-// and treats an empty Code string as SQL NULL value.
+// The empty Code is Null, there is no separate nullable type.
+//
+// Scan, UnmarshalJSON and UnmarshalXML store a valid code normalized,
+// a blank one as Null and an invalid one unchanged. Value writes the
+// normalized code, SQL NULL for Null, and returns an error for an invalid
+// one. MarshalJSON and MarshalText write the normalized code or an
+// invalid one unchanged, and fmt prints the code as stored. Code has no
+// UnmarshalText, so encoding/json reads and writes the keys of a
+// map[Code]V as given. See "Reading and writing values" in the README
+// of the module.
 type Code string //#enum
 
 // Null is an empty string and will be treated as SQL NULL.
@@ -29,26 +38,26 @@ const Null Code = "" //#exclude
 // Compile-time check that Code implements types.NormalizableValidator[Code]
 var _ types.NormalizableValidator[Code] = Code("")
 
-// Valid returns true if the Code is a valid ISO 639-1 language code.
+// Valid returns true if c can be normalized to a valid
+// ISO 639-1 language code, so it accepts other spellings like
+// "EN", "eng" and "en-US". See Normalized for the accepted input shapes
+// and ValidAndNormalized to require the canonical lower-case code.
 //
-// Hand-written: a map lookup over all ISO 639-1 codes instead of the
-// switch over every enum value that go-enum would generate.
+// Hand-written: normalizes first like country.Code and money.Currency,
+// instead of the exact-match switch over every enum value that go-enum
+// would generate.
 //
 // #custom
 func (c Code) Valid() bool {
-	_, ok := codeNames[c]
-	return ok
+	_, err := c.Normalized()
+	return err == nil
 }
 
 // Validate returns an error if c can not be normalized to a valid
-// ISO 639-1 language code, so it accepts other spellings like
-// "EN", "eng" and "en-US" that the strict Valid rejects.
-// See Normalized for the accepted input shapes.
-// Value and MarshalJSON write the normalized code.
+// ISO 639-1 language code, see Valid.
 //
-// Hand-written: normalizes first like country.Code and money.Currency,
-// and returns the error from Normalized, which names the offending input,
-// instead of the generic error of the strict lookup that go-enum would
+// Hand-written: returns the error from Normalized, which names the
+// offending input, instead of the generic error that go-enum would
 // generate.
 //
 // #custom
@@ -130,7 +139,7 @@ func (c Code) Normalized() (Code, error) {
 // unnormalized value for diagnostics.
 func ParseCode(str string) (Code, error) {
 	// 1. Short path: the input is already a canonical ISO 639-1 code.
-	if c := Code(str); c.Valid() {
+	if c := Code(str); c.ValidAndNormalized() {
 		return c, nil
 	}
 	// 2. Codes and tags: case and whitespace variants, ISO 639-2/3,
@@ -194,62 +203,54 @@ func (c Code) LanguageName() string {
 	return codeNames[norm]
 }
 
-// String returns the normalized code if possible, else it will be returned unchanged as string.
-// String implements the fmt.Stringer interface.
-//
-// Hand-written: normalizes before returning, unlike the plain string
-// conversion that go-enum would generate.
-//
-// #custom
-func (c Code) String() string {
-	norm, err := c.Normalized()
-	if err != nil {
-		return string(c)
-	}
-	return string(norm)
-}
-
 // Scan implements the database/sql.Scanner interface.
+// A valid code is stored normalized, SQL NULL and a blank string as Null,
+// and a code that can't be normalized unchanged without an error,
+// so that one invalid value doesn't fail a whole query; Validate reports it.
 func (c *Code) Scan(value any) error {
-	switch x := value.(type) {
-	case string:
-		*c = Code(x)
-	case []byte:
-		*c = Code(x)
-	case nil:
-		*c = Null
-	default:
-		return fmt.Errorf("can't scan SQL value of type %T as language.Code", value)
-	}
-	return nil
+	return internal.ScanNormalized(c, value, Code.Normalized, nil)
 }
 
 // Value implements the driver database/sql/driver.Valuer interface.
-// Returns nil for SQL NULL if the Code is Null, else the normalized code,
-// or the unchanged string if it can't be normalized.
+// It returns the normalized code, SQL NULL for Null or a blank Code,
+// or the error of Normalized for a code that can't be normalized.
 func (c Code) Value() (driver.Value, error) {
-	if c == Null {
-		return nil, nil
-	}
-	norm, _ := c.Normalized()
-	return string(norm), nil
+	return internal.ValueNormalized(c, Code.Normalized, nil)
 }
 
-// MarshalJSON implements encoding/json.Marshaler.
-// Returns the normalized code as JSON string,
-// or the unchanged string if it can't be normalized.
+// MarshalJSON implements encoding/json.Marshaler by writing the
+// normalized code, "" for a blank Code, or the code unchanged
+// if it can't be normalized.
 func (c Code) MarshalJSON() ([]byte, error) {
-	norm, _ := c.Normalized()
-	return json.Marshal(string(norm))
+	return internal.MarshalJSONNormalized(c, Code.Normalized, nil)
 }
 
-// MarshalText implements encoding.TextMarshaler by returning String,
-// the normalized value or the unchanged string if it can't be
-// normalized, so that strfmt and encoding/xml write the canonical form
-// like Value and MarshalJSON. encoding/json writes map keys of string
-// types as they are and doesn't call MarshalText for them.
+// UnmarshalJSON implements encoding/json.Unmarshaler.
+// A JSON string is stored like Scan stores it, JSON null leaves the Code
+// unchanged like encoding/json does for a string type, and any other
+// JSON value is an error.
+func (c *Code) UnmarshalJSON(data []byte) error {
+	return internal.UnmarshalJSONNormalized(c, data, false, Code.Normalized, nil)
+}
+
+// MarshalText implements encoding.TextMarshaler like MarshalJSON,
+// so that encoding/xml and strfmt write the normalized code.
+// encoding/json writes map keys of string types as they are
+// and doesn't call MarshalText for them.
 func (c Code) MarshalText() ([]byte, error) {
-	return []byte(c.String()), nil
+	return internal.MarshalTextNormalized(c, Code.Normalized, nil)
+}
+
+// UnmarshalXML implements encoding/xml.Unmarshaler
+// by storing the text of the element like Scan stores it.
+func (c *Code) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	return internal.UnmarshalXMLNormalized(c, d, start, Code.Normalized, nil)
+}
+
+// UnmarshalXMLAttr implements encoding/xml.UnmarshalerAttr
+// by storing the attribute value like Scan stores it.
+func (c *Code) UnmarshalXMLAttr(attr xml.Attr) error {
+	return internal.UnmarshalXMLAttrNormalized(c, attr, Code.Normalized, nil)
 }
 
 // JSONSchema returns the JSON schema definition for the Code type.
@@ -831,4 +832,9 @@ func (Code) EnumStrings() []string {
 		"za",
 		"zu",
 	}
+}
+
+// String implements the fmt.Stringer interface for Code
+func (c Code) String() string {
+	return string(c)
 }
