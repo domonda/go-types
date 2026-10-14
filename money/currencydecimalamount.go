@@ -111,14 +111,7 @@ func (ca CurrencyDecimalAmount) FormatSep(currencyFirst bool, thousandsSep, deci
 }
 
 func (ca CurrencyDecimalAmount) format(currency string, currencyFirst bool, thousandsSep, decimalSep rune) string {
-	amountStr := ca.Amount.FormatSep(thousandsSep, decimalSep)
-	if currency == "" {
-		return amountStr
-	}
-	if currencyFirst {
-		return currency + " " + amountStr
-	}
-	return amountStr + " " + currency
+	return internal.JoinCurrencyAmount(currency, ca.Amount.FormatSep(thousandsSep, decimalSep), currencyFirst)
 }
 
 // GoString returns a Go syntax representation of the CurrencyDecimalAmount for
@@ -173,10 +166,9 @@ func (ca *CurrencyDecimalAmount) Scan(value any) (err error) {
 // format of String with the normalized currency, or returning the error of
 // Currency.Normalized for a currency that can't be normalized.
 func (ca CurrencyDecimalAmount) Value() (driver.Value, error) {
-	currency, err := ca.Currency.Value()
+	currency, err := ca.Currency.normalizedForValue()
 	if err != nil {
 		return nil, err
 	}
-	str, _ := currency.(string) // nil for a blank currency
-	return ca.format(str, true, 0, '.'), nil
+	return ca.format(string(currency), true, 0, '.'), nil
 }

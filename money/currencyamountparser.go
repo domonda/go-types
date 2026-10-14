@@ -26,7 +26,7 @@ func (p *CurrencyAmountParser) Parse(str string, langHints ...language.Code) (no
 	if err != nil {
 		return "", err
 	}
-	decimals := max(2, amount.Currency.MinorUnits())
+	decimals := defaultPrecision(amount.Currency.MinorUnits())
 	if len(p.acceptedDecimals) > 0 {
 		decimals = -1
 		for _, accepted := range p.acceptedDecimals {

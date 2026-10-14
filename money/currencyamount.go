@@ -90,7 +90,7 @@ func ParseCurrencyAmount(str string, acceptedDecimals ...int) (result CurrencyAm
 // two decimal places.
 // String implements the fmt.Stringer interface.
 func (ca CurrencyAmount) String() string {
-	return ca.format(string(ca.Currency), true, 0, '.', ca.defaultPrecision())
+	return ca.format(string(ca.Currency), true, 0, '.', defaultPrecision(ca.Currency.MinorUnits()))
 }
 
 // FormatSep formats the CurrencyAmount using the given separators and decimal precision.
@@ -104,18 +104,15 @@ func (ca CurrencyAmount) FormatSep(currencyFirst bool, thousandsSep, decimalSep 
 }
 
 func (ca CurrencyAmount) format(currency string, currencyFirst bool, thousandsSep, decimalSep rune, precision int) string {
-	amountStr := ca.Amount.FormatSep(thousandsSep, decimalSep, precision)
-	if currency == "" {
-		return amountStr
-	}
-	if currencyFirst {
-		return currency + " " + amountStr
-	}
-	return amountStr + " " + currency
+	return internal.JoinCurrencyAmount(currency, ca.Amount.FormatSep(thousandsSep, decimalSep, precision), currencyFirst)
 }
 
-func (ca CurrencyAmount) defaultPrecision() int {
-	return max(2, ca.Currency.MinorUnits())
+// defaultPrecision returns the decimal places that String and Value write
+// for a currency with the passed minor units, see Currency.MinorUnits:
+// those of the minor unit, but never fewer than two, because the amount
+// of a currency without a minor unit, like JPY, can still have a fraction.
+func defaultPrecision(minorUnits int) int {
+	return max(2, minorUnits)
 }
 
 // GoString returns a Go syntax representation of the CurrencyAmount for debugging.
@@ -185,10 +182,10 @@ func (ca *CurrencyAmount) Scan(value any) (err error) {
 // or returning the error of Currency.Normalized for a currency
 // that can't be normalized.
 func (ca CurrencyAmount) Value() (driver.Value, error) {
-	currency, err := ca.Currency.Value()
+	currency, err := ca.Currency.normalizedForValue()
 	if err != nil {
 		return nil, err
 	}
-	str, _ := currency.(string) // nil for a blank currency
-	return ca.format(str, true, 0, '.', ca.defaultPrecision()), nil
+	// MinorUnits would normalize the normalized currency again
+	return ca.format(string(currency), true, 0, '.', defaultPrecision(currency.minorUnitsOfNormalized())), nil
 }

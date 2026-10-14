@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/domonda/go-types/float"
+	"github.com/domonda/go-types/internal"
 	"github.com/domonda/go-types/money"
 )
 
@@ -54,13 +55,7 @@ func (format *MoneyFormat) FormatCurrencyAmount(currencyAmount money.CurrencyAmo
 func (format *MoneyFormat) FormatCurrencyDecimalAmount(currencyAmount money.CurrencyDecimalAmount) string {
 	amountStr := format.FormatDecimalAmount(currencyAmount.Amount)
 	currency, _ := currencyAmount.Currency.MarshalText()
-	if len(currency) == 0 {
-		return amountStr
-	}
-	if format.CurrencyFirst {
-		return string(currency) + " " + amountStr
-	}
-	return amountStr + " " + string(currency)
+	return internal.JoinCurrencyAmount(string(currency), amountStr, format.CurrencyFirst)
 }
 
 // FormatCentAmount formats a cent amount like FormatAmount formats an amount,

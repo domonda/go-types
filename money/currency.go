@@ -218,6 +218,19 @@ func (c Currency) Value() (driver.Value, error) {
 	return internal.ValueNormalized(c, Currency.Normalized, nil)
 }
 
+// normalizedForValue returns the currency that the Value methods of
+// CurrencyAmount and CurrencyDecimalAmount write: the currency of Value,
+// "" for a blank one, for which Value returns SQL NULL, or the error of
+// Normalized for a currency that can't be normalized.
+func (c Currency) normalizedForValue() (Currency, error) {
+	currency, err := c.Value()
+	if err != nil {
+		return "", err
+	}
+	str, _ := currency.(string) // nil for a blank currency
+	return Currency(str), nil
+}
+
 // MarshalJSON implements encoding/json.Marshaler by writing the
 // normalized currency, "" for a blank Currency, or the currency
 // unchanged if it can't be normalized.
@@ -286,6 +299,12 @@ func (c Currency) MinorUnits() int {
 	if err == nil {
 		c = norm
 	}
+	return c.minorUnitsOfNormalized()
+}
+
+// minorUnitsOfNormalized returns MinorUnits of the normalized or blank c
+// without normalizing it again.
+func (c Currency) minorUnitsOfNormalized() int {
 	if minorUnits, ok := currencyCodeToMinorUnits[c]; ok {
 		return minorUnits
 	}
