@@ -54,6 +54,10 @@ See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut.
   `AddressSet` works with `encoding/xml` as an address list.
 - `email.NullableAddress.Valid`, so `NullableAddress` implements
   `types.NormalizableValidator`.
+- `ScanString` on `language.Code`, `email.Address` and
+  `email.NullableAddress`, so `strfmt.Scan` and CSV scanning store them
+  normalized like the other normalizing types instead of as given.
+  `NullableAddress` reads `NULL`, `null` and `nil` as null.
 - `language.Code.Validate()`, which normalizes first like `country.Code` and
   `money.Currency` and returns the error of `Normalized()`, naming the input.
   So `types.Validate`, `types.DeepValidate` and `strfmt` scanning accept
@@ -764,6 +768,21 @@ See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut.
 - `uu.NullableIDMust` panicked for the Nil UUID passed as `uu.ID` instead of
   returning `IDNull` like for the other argument types.
 
+- `email.AddressList.Value`, `NullableAddressList.Value`,
+  `AddressSet.Value` and `AddressSet.MarshalText` wrote text with runes
+  that the address parser ignores when it validates: CR/LF and other
+  whitespace than spaces inside the text, control and format characters
+  like NUL or a bidi override, and invalid UTF-8. A display name like
+  `"x\r\nBcc: evil@example.com" <a@example.com>` was written with its line
+  break, which a header built from the stored list would turn into a header
+  injection, and a NUL failed in PostgreSQL. They return an error now;
+  store `Normalized()` instead. `AddressSet.MarshalText` also refuses a set
+  whose joined list would read back as other entries, like a valid address
+  with an unclosed comment that swallowed the entries after it.
+- `float.FormatDef.Format` and `Parse` panicked for a zero `DecimalSep`,
+  as in the zero `FormatDef` or one decoded from `{"decimalSep":""}`; they
+  use `.` for it. `UnmarshalJSON` rejects a zero `decimalSep` together with
+  `.` as `thousandsSep`.
 - `email.ParseAddressList`, and so the `Validate`, `Normalized` and `Split`
   methods of the address lists and `ParseMIMEMessage`, took quadratic time
   and memory for a list of unparsable entries: every error held the whole
