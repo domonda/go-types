@@ -192,6 +192,10 @@ func TestAddressList_UnclosedCommentHoldsRestOfList(t *testing.T) {
 // normalizes to its address. AddressSet.Scan and the SplitRaw methods read
 // a stored list with SplitAddressList, so where the two disagreed, a list
 // that validated was read back as other recipients.
+//
+// For every list, also an invalid one, Validate and Value of the
+// collections agree, so that no validated list fails to be stored and no
+// list that Validate refuses is stored.
 func FuzzSplitRawMatchesParse(f *testing.F) {
 	for _, list := range []string{
 		`a@example.com, b@example.com`,
@@ -209,10 +213,24 @@ func FuzzSplitRawMatchesParse(f *testing.F) {
 		"\"\\\xa0\"\"@0.AA,",
 		// Found by fuzzing: a comma in an encoded-word name
 		`=?@?B?,?=<"0"@0.AA`,
+		// Found by fuzzing: a backslash before invalid UTF-8 at the end,
+		// which strutil.TrimSpace removes, see
+		// TestCollectionsValidateAgreesWithValueAtTrailingBackslash
+		"\"<0@0.AA\\\x9f",
+		"Jo\"hn <j@x.com>\\\ufeff",
 	} {
 		f.Add(list)
 	}
 	f.Fuzz(func(t *testing.T, list string) {
+		validateErr := AddressList(list).Validate()
+		if _, valueErr := AddressList(list).Value(); (validateErr == nil) != (valueErr == nil) {
+			t.Fatalf("AddressList(%q).Validate() = %v, but Value() = %v", list, validateErr, valueErr)
+		}
+		set := MakeAddressSet(Address(list))
+		setValidateErr := set.Validate()
+		if _, valueErr := set.Value(); (setValidateErr == nil) != (valueErr == nil) {
+			t.Fatalf("AddressSet{%q}.Validate() = %v, but Value() = %v", list, setValidateErr, valueErr)
+		}
 		parsed, err := ParseAddressList(list)
 		if err != nil {
 			return
@@ -482,6 +500,33 @@ func TestCollectionsValidateAndValueRefuseWithSameError(t *testing.T) {
 		v, err := list.Value()
 		require.NoError(t, err)
 		assert.Equal(t, "a@example.com", v)
+	}
+}
+
+// The parser read a list sanitized: a backslash before a rune that it
+// drops was dropped with it, also before the runes at the end that
+// strutil.TrimSpace removes, while Value trims the list first and keeps
+// the backslash with nothing left to escape. So Validate accepted these
+// lists and Value refused them, and FuzzSplitRawMatchesParse failed on the
+// last one. The parser trims first now, so both refuse them.
+func TestCollectionsValidateAgreesWithValueAtTrailingBackslash(t *testing.T) {
+	for _, addr := range []Address{
+		"Jo\"hn <j@x.com>\\\ufeff",
+		"Jo\"hn <j@x.com>\\\u00ad",
+		"Jo\"hn <j@x.com>\\\x00",
+		"\"Doe <doe@example.com>\\\u200d",
+		"\"<0@0.AA\\\x9f",
+	} {
+		t.Run(string(addr), func(t *testing.T) {
+			for method, err := range validateCollections(addr) {
+				assert.Error(t, err, method)
+			}
+			for method, err := range writeCollections(addr) {
+				assert.Error(t, err, method)
+			}
+			_, err := ParseAddressList(string(addr))
+			assert.Error(t, err, "ParseAddressList")
+		})
 	}
 }
 

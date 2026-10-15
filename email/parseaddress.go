@@ -73,7 +73,12 @@ var (
 // string or a comment is removed with it, so that it doesn't escape the
 // next rune instead: the sanitized text has its quotes, comments and
 // commas where net/mail finds them in s, and so the same recipients.
+// s is trimmed first, so that a backslash before the runes that
+// strutil.TrimSpace removes from its end is kept like by the Value methods
+// of the collections, which write the trimmed text: removing it with them
+// accepted a text in Validate that Value refused.
 func sanitizeAddr(s string) string {
+	s = strutil.TrimSpace(s)
 	if strings.IndexByte(s, '\\') < 0 {
 		return strutil.TrimSpace(strings.Map(sanitizeRune, s))
 	}
