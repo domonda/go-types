@@ -480,6 +480,10 @@ func TestParseAddress_EncodedWordThatPythonReadsAsAddress(t *testing.T) {
 		`=?utf-8?q?=3Cx=40evil.com=3E?= <ceo@corp.com>`,
 		`"x@evil.com" =?utf-8?q?=3B?= <ceo@corp.com>`,
 		`"x@evil.com" =?utf-8?q?=29?= <ceo@corp.com>`,
+		`"x@evil.com" =?utf-8?q?=3C?= <ceo@corp.com>`,
+		`"x@evil.com" =?utf-8?q?=5C?= <ceo@corp.com>`,
+		`"x@evil.com" =?utf-8?q?=5B?= <ceo@corp.com>`,
+		`"x@evil.com" =?utf-8?q?=2C?= <ceo@corp.com>`,
 		`=?utf-8?q?a=22?= <ceo@corp.com>`,
 		// Also within quotes next to other runes, which Python encodes
 		// again, but not the encoded-word with ASCII text. Python keeps
@@ -492,6 +496,8 @@ func TestParseAddress_EncodedWordThatPythonReadsAsAddress(t *testing.T) {
 		`"=?utf-8?q?=C3=A4?= =?utf-8?q?x=40evil.com?=" <ceo@corp.com>`,
 		`"=?utf-8?q?x=40evil.com?=" <ceo@corp.com>`,
 		`"John =?utf-8?q?x=40evil.com?=" <ceo@corp.com>`,
+		`"=?x-unknown?q?x=40evil.com?= ä" <ceo@corp.com>`,
+		`"ä =?utf-8?b?eEBldmlsLmNvbQ?=" <ceo@corp.com>`,
 		// Python reads an encoded-word up to its ?= across a quote
 		`"=?utf-8?q?a"b?= <ceo@corp.com>`,
 		// An escaped =? in a quoted string of an unquoted name, which
@@ -519,10 +525,14 @@ func TestParseAddress_EncodedWordThatPythonReadsAsAddress(t *testing.T) {
 			assert.Equal(t, []string{"ceo@corp.com"}, addressParts(parsed))
 		})
 	}
-	// A comma after the name, which SplitAddressList joins with the address
+	// A comma after the name, which SplitAddressList joins with the address.
+	// Python ends the name at it and sends to its first word, decoded, too,
+	// which is x for the last list and would be an address for an
+	// encoded-word that Python decodes otherwise than the parser.
 	for _, list := range []string{
 		`=?utf-8?q?x=40evil.com?=, <ceo@corp.com>`,
 		`"=\?utf-8?q?x=40evil.com?=", <ceo@corp.com>`,
+		`=?utf-8?q?x?=, <ceo@corp.com>`,
 	} {
 		assert.Error(t, AddressList(list).Validate(), list)
 		parsed, err := ParseAddressList(list)
@@ -585,9 +595,11 @@ func TestParseAddress_EncodedWordInLocalPart(t *testing.T) {
 		})
 	}
 	// Python reads an encoded-word at the start of a local part up to the
-	// ?= after it, also after the address: it sends this list to
-	// x@evil.com once it is read again
+	// ?= after it, also after the address: it sends the first list to
+	// x@evil.com once it is read again, the second one to the one address
+	// `x"@evil.com,  <ceo@corp.com>`
 	assert.Error(t, AddressList(`=?utf-8?q?x@evil.com,?= <b@c.com>`).Validate())
+	assert.Error(t, AddressList(`"=?utf-8?q?x"@evil.com, ?= <ceo@corp.com>`).Validate())
 
 	// An =? after the start without ?= after it is no encoded-word
 	parsed, err := ParseAddress(`a=?b@corp.com`)

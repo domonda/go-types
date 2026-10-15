@@ -301,6 +301,10 @@ func TestAddress_MarshalTextAndASCII(t *testing.T) {
 		// The address part is quoted like the parser reads it back,
 		// net/mail would write 'abc@example.com, which is abc@example.com
 		{addr: `"N" <"'abc"@example.com>`, wantStr: `"N" <"'abc"@example.com>`, wantASCII: `"N" <"'abc"@example.com>`},
+		// A quoted local part with an angle bracket without name is written
+		// in angle brackets, so that it doesn't read back as a display name,
+		// see TestAddress_NormalizedIsIdempotent
+		{addr: `<"<a@b.com>"@Example.com>`, wantStr: `<"<a@b.com>"@example.com>`, wantASCII: `<"<a@b.com>"@example.com>`},
 		{addr: `not an address`, wantStr: `not an address`, wantASCII: `not an address`},
 	}
 	for _, tt := range tests {
