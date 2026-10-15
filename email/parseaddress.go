@@ -541,7 +541,7 @@ func unquotedNameProblem(text string) string {
 func encodedNameProblem(decoded string, texts ...string) string {
 	for _, text := range texts {
 		if undecodable, special := readEncodedWords(text); undecodable || special {
-			return `encoded-word that can't be decoded or decodes to ASCII with one of "<\, an @ or ( outside a comment or an encoded-word`
+			return `encoded-word that can't be decoded or decodes to ASCII with one of "<\, an @ or ( outside a comment, a comment and one of ;:)>[], or an encoded-word`
 		}
 	}
 	if hasEncodedWordStart(decoded) {
@@ -663,26 +663,33 @@ func readEncodedWords(text string) (undecodable, special bool) {
 
 // plainTextSpecial reports whether text, written unencoded and unquoted,
 // has a quote, an angle bracket or a backslash, an opening parenthesis
-// that it doesn't close, or an @ outside its comments, see
-// readEncodedWords. A closing parenthesis without an opening one only
-// ends the name, see addressBeforePhraseEnd.
+// that it doesn't close, an @ outside its comments, or a comment and one
+// of ;:)>[], outside of it, where Python ends the name and reads no
+// address after it, like for "(x@evil.com))", see readEncodedWords.
+// Without a comment, such a character only ends the name, see
+// addressBeforePhraseEnd.
 func plainTextSpecial(text string) bool {
-	comment := 0
+	var (
+		comment   int
+		closed    bool // a comment was closed
+		phraseEnd bool // one of phraseEnds outside a comment
+	)
 	for i := 0; i < len(text); i++ {
-		switch text[i] {
-		case '"', '<', '\\':
+		switch c := text[i]; {
+		case c == '"' || c == '<' || c == '\\':
 			return true
-		case '@':
-			if comment == 0 {
-				return true
-			}
-		case '(':
+		case c == '@' && comment == 0:
+			return true
+		case c == '(':
 			comment++
-		case ')':
-			comment = max(comment-1, 0)
+		case c == ')' && comment > 0:
+			comment--
+			closed = true
+		case comment == 0 && strings.IndexByte(phraseEnds, c) >= 0:
+			phraseEnd = true
 		}
 	}
-	return comment > 0
+	return comment > 0 || closed && phraseEnd
 }
 
 // isWordStart reports whether the byte at index i of text starts a word

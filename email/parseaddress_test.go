@@ -485,6 +485,11 @@ func TestParseAddress_EncodedWordThatPythonReadsAsAddress(t *testing.T) {
 		`=?utf-8?q?a?==?utf-8?q?x=40evil.com?= <ceo@corp.com>`,
 		// An @ after a comment that the text closes is outside it
 		`=?utf-8?q?=C3=A4?= =?utf-8?q?(a)_x=40evil.com?= <ceo@corp.com>`,
+		// Python ends the name at a phrase end after a comment and drops
+		// the address after it, also the one in angle brackets
+		`=?utf-8?q?=28x=40evil=2Ecom=29=29?= <ceo@corp.com>`,
+		`=?utf-8?q?=28x=40evil=2Ecom=29=3B?= <ceo@corp.com>`,
+		`=?utf-8?q?=28a_=28x=40evil=2Ecom=29_b=29=29?= <ceo@corp.com>`,
 		`=?utf-8?q?=3Cx=40evil.com=3E?= <ceo@corp.com>`,
 		`"x@evil.com" =?utf-8?q?=3B?= <ceo@corp.com>`,
 		`"x@evil.com" =?utf-8?q?=29?= <ceo@corp.com>`,
