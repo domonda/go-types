@@ -208,7 +208,7 @@ func UniqueNormalizedAddressSlice(addrs []Address) []Address {
 // decoded, as an address, like in `"x@evil.com"; <ceo@corp.com>`,
 // `Team:"x@evil.com":<ceo@corp.com>` and
 // `=?utf-8?q?x=40evil.com?=, <ceo@corp.com>`. An encoded-word in an
-// unquoted name whose text is ASCII with one of the specials @"()<>[]:;\,
+// unquoted name whose text is ASCII with one of the specials @"()<>[];\,
 // is an error too, because Python's email package writes such text
 // unencoded and unquoted when it writes the header, so that a message to
 // `=?utf-8?q?x=40evil.com?= <ceo@corp.com>` holds
@@ -220,9 +220,9 @@ func UniqueNormalizedAddressSlice(addrs []Address) []Address {
 // in a quoted name too. So is an =? in a name that doesn't start an
 // encoded-word that the parser decodes, like one in an unknown charset,
 // with an invalid encoding or with a quote in it, which Python can still
-// decode, also up to a ?= after the name, and a local part with
-// an encoded-word like =?utf-8?q?admin?=@corp.com, which Python decodes
-// and sends to admin@corp.com, or with an =? at its start or after a space.
+// decode, also up to a ?= after the name, and a local part with an =? at
+// its start or after a space, where Python decodes an encoded-word, like
+// =?utf-8?q?admin?=@corp.com, which it sends to admin@corp.com.
 // An address within a quoted string or a comment is an error too, also if
 // it isn't closed, because other parsers read it as part of them: for them
 // `"x@evil.com" "<ceo@corp.com>` has no address in angle brackets.
@@ -313,8 +313,8 @@ type parsedAddress struct {
 	// an unquoted name with an @ outside its quoted strings and comments
 	// that is not the address itself, or with an address that Python's
 	// email package reads in it, see unquotedNameProblem, a quoted name
-	// that is not followed by an angle bracket, or a local part with an
-	// encoded-word
+	// that is not followed by an angle bracket or with such an encoded-word,
+	// or a local part with an encoded-word, see hasEncodedWordStart
 	problem string
 }
 
@@ -396,8 +396,14 @@ func parseNameAddress(addr string) (parsed parsedAddress, ok bool) {
 			// reads, like a soft hyphen. Python reads an =? without ?= after
 			// it in the name up to a ?= after the name, like the one in the
 			// local part of `"=?utf-8?q?x@evil.com" <a?=@b.com>`.
-			if undecodable, asciiSpecial := readEncodedWords(name); undecodable || asciiSpecial {
-				parsed.problem = `encoded-word that can't be decoded or decodes to ASCII with one of @"()<>[]:;\, in quoted display name`
+			undecodable, asciiSpecial := readEncodedWords(name)
+			if !undecodable && !asciiSpecial {
+				// Python reads the encoded-words with their quoted-pairs,
+				// a\b of =?utf-8?q?a\b?= with the backslash
+				undecodable, asciiSpecial = readEncodedWords(quoted)
+			}
+			if undecodable || asciiSpecial {
+				parsed.problem = `encoded-word that can't be decoded or decodes to ASCII with one of @"()<>[];\, in quoted display name`
 			}
 			name = decodeName(name)
 		}
@@ -485,7 +491,7 @@ func hasAtOutsideQuotes(text string) bool {
 //
 //   - An =? that doesn't start an encoded-word that the parser decodes,
 //     which Python can still decode, or an encoded-word whose text is ASCII
-//     with one of the specials @"()<>[]:;\, which Python writes unencoded
+//     with one of the specials @"()<>[];\, which Python writes unencoded
 //     and unquoted when it writes the header, see readEncodedWords.
 //   - A quoted @ or an encoded-word, and one of ;:)>[]\, outside the
 //     quoted strings and comments, where Python's parsers end the name
@@ -497,12 +503,13 @@ func hasAtOutsideQuotes(text string) bool {
 //     encoded-word, the address pattern reads no unquoted name with
 //     a comma and an @.
 //
-// The encoded-words are read in the name as written, because Python reads
-// an encoded-word up to its ?= also across a quote, like the `a"b` of
-// `"=?utf-8?q?a"b?= <x@y.com>`, and without its quotes and backslashes,
-// as the parser decodes it, because Python decodes one in a quoted string
-// within the name too, also with an escaped =? like `=\?`, once it wrote
-// the quoted string again without the backslash.
+// The encoded-words are read in the name without its quotes and
+// backslashes, as the parser decodes it, because Python decodes one in a
+// quoted string within the name too, and in the name without its
+// backslashes, but with its quotes, because Python reads an encoded-word
+// up to its ?= also across a quote, like the `a"b` of
+// `"=?utf-8?q?a"b?= <x@y.com>`, also with an escaped =? like `=\?`, once
+// it wrote the quoted string again without the backslash.
 func unquotedNameProblem(text string) string {
 	var (
 		state     listState
@@ -524,10 +531,10 @@ func unquotedNameProblem(text string) string {
 	if encoded {
 		undecodable, asciiSpecial := readEncodedWords(unquoted)
 		if !undecodable && !asciiSpecial {
-			undecodable, asciiSpecial = readEncodedWords(text)
+			undecodable, asciiSpecial = readEncodedWords(strings.ReplaceAll(text, `\`, ""))
 		}
 		if undecodable || asciiSpecial {
-			return `encoded-word that can't be decoded or decodes to ASCII with one of @"()<>[]:;\, in unquoted display name`
+			return `encoded-word that can't be decoded or decodes to ASCII with one of @"()<>[];\, in unquoted display name`
 		}
 	}
 	if (quotedAt || encoded) && phraseEnd {
@@ -549,8 +556,10 @@ var encodedWordStartRegexp = regexp.MustCompile(`^` + encodedWord)
 // a quote written in it, which Python reads across the quote, while the
 // parser reads the quote as the start or end of a quoted string, like in
 // `"=?utf-8?q?J"=C3=BCrgen?= <a@b.com>`. asciiSpecial reports an
-// encoded-word whose text is ASCII with one of the specials @"()<>[]:;\,
-// of RFC 5322 other than the dot. Python writes such text unencoded and
+// encoded-word whose text is ASCII with one of the specials @"()<>[];\,
+// of RFC 5322 other than the dot and the colon, which Python reads as
+// the start of a group without changing its recipients. Python writes
+// such text unencoded and
 // unquoted when it writes the header, where it is an address, a quoted
 // string, a comment or the end of the name: for
 // `=?utf-8?q?x=40evil.com?= <ceo@corp.com>` it writes
@@ -571,7 +580,7 @@ func readEncodedWords(text string) (undecodable, asciiSpecial bool) {
 		if err != nil {
 			return true, asciiSpecial
 		}
-		if strings.ContainsAny(decoded, `@"()<>[]:;\,`) && isASCII(decoded) {
+		if strings.ContainsAny(decoded, `@"()<>[];\,`) && isASCII(decoded) {
 			asciiSpecial = true
 		}
 		text = text[i+len(word):]
@@ -579,18 +588,14 @@ func readEncodedWords(text string) (undecodable, asciiSpecial bool) {
 }
 
 // hasEncodedWordStart reports whether the local part local, without quotes
-// and quoted-pairs, has an RFC 2047 encoded-word, or the =? of one that
-// Python's email package decodes: at the start of the local part and after
-// a space, like in "a =?utf-8?q?admin?="@corp.com, up to the ?= after it,
+// and quoted-pairs, has the =? of an RFC 2047 encoded-word where Python's
+// email package decodes one: at the start of the local part and after a
+// space, like in "a =?utf-8?q?admin?="@corp.com, up to the ?= after it,
 // also after the address, so that it sends `=?utf-8?q?x@evil.com,?= <b@c.com>`
-// to x@evil.com once it is read again. An =? within a word without ?= after
-// it, like the one of A!#$%&'*+-/=?^_{|}~@example.com, it reads as written.
+// to x@evil.com once it is read again. An =? within a word, like the one
+// of A!#$%&'*+-/=?^_{|}~@example.com, it reads as written.
 func hasEncodedWordStart(local string) bool {
-	if strings.HasPrefix(local, "=?") || strings.Contains(local, " =?") {
-		return true
-	}
-	i := strings.Index(local, "=?")
-	return i >= 0 && strings.Contains(local[i+2:], "?=")
+	return strings.HasPrefix(local, "=?") || strings.Contains(local, " =?")
 }
 
 // lowerAddressPart returns the local part or domain s lower cased like by
