@@ -831,7 +831,7 @@ func TestValidate(t *testing.T) {
 func TestTryValidate(t *testing.T) {
 	for _, tt := range validateTestCases {
 		t.Run(tt.name, func(t *testing.T) {
-			err, implemented := TryValidate(tt.value)
+			implemented, err := TryValidate(tt.value)
 			if !errHasPrefix(err, tt.wantErr) {
 				t.Errorf("TryValidate(%#v) error = %q, want prefix %q", tt.value, errString(err), tt.wantErr)
 			}
@@ -1617,8 +1617,8 @@ func TestValidate_NilEmbeddedInterface(t *testing.T) {
 		if err := Validate(v); err != nil {
 			t.Errorf("Validate(%#v) = %v, want nil", v, err)
 		}
-		if err, implemented := TryValidate(v); err != nil || !implemented {
-			t.Errorf("TryValidate(%#v) = %v, %v, want nil, true", v, err, implemented)
+		if implemented, err := TryValidate(v); !implemented || err != nil {
+			t.Errorf("TryValidate(%#v) = %v, %v, want true, nil", v, implemented, err)
 		}
 		if errs := DeepValidate(v); len(errs) != 0 {
 			t.Errorf("DeepValidate(%#v) = %v, want none", v, errs)

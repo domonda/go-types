@@ -95,7 +95,7 @@ the details.
 
 ## Why `types.Validate` prefers `Validatable`
 
-`types.Validate(v any) error` and `types.TryValidate(v any) (error, bool)`
+`types.Validate(v any) error` and `types.TryValidate(v any) (bool, error)`
 check whether `v` implements `Validatable` or `Validator`. If it implements
 both, only `Validate()` is called. There are two reasons:
 
@@ -167,7 +167,7 @@ What `types.Validate` returns:
   the value out.
 - For a nil pointer whose element type has the method with a value receiver,
   there is no value to call it on. `types.Validate` returns `nil` and
-  `TryValidate` returns `nil, true`, the same way `DeepValidate` skips nil
+  `TryValidate` returns `true, nil`, the same way `DeepValidate` skips nil
   pointers. A method with a pointer receiver is called with the nil pointer and
   can handle it itself.
 

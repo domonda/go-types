@@ -327,6 +327,9 @@ See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut.
   `ValidatableFunc`, `StaticValidatErr` to `StaticValidatable`, `ValidatErrs`
   to `Validatables`, `CombinedValidatErr` to `CombinedValidatable` and
   `ValidatorAsValidatErr` to `ValidatorAsValidatable`.
+- **Breaking:** `types.TryValidate` returns the error last, as
+  `(implemented bool, err error)`, which was `(err error, isValidatable bool)`:
+  `err, ok := types.TryValidate(v)` becomes `ok, err := types.TryValidate(v)`.
 - **Breaking:** `types.Validatables.Validate` and so `types.CombinedValidatable`
   validate every element and return all their errors joined with `errors.Join`,
   instead of stopping at the first error and returning it. A single error is
@@ -974,7 +977,7 @@ See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut.
 - `types.Validate` and `types.TryValidate` panicked for a nil pointer whose
   element type implements `Validator` or `Validatable` with a value receiver.
   Such a pointer is now skipped like in `DeepValidate`: `Validate` returns
-  nil and `TryValidate` returns `nil, true`. Pointer-receiver methods are
+  nil and `TryValidate` returns `true, nil`. Pointer-receiver methods are
   still called with the nil pointer, so they can handle it themselves.
 - The zero values of `types.KeyMutex`, `uu.IDMutex` and `strutil.StrMutex`
   panicked on the first `Lock` because of a nil map. They are now ready to use.

@@ -184,11 +184,11 @@ func (v ValidatorAsValidatable) Validate() error {
 // A panic in a method that v declares itself is passed on,
 // also if v embeds a nil pointer or interface.
 func Validate(v any) error {
-	err, _ := TryValidate(v)
+	_, err := TryValidate(v)
 	return err
 }
 
-// TryValidate returns an error and true if v implements Validatable or Validator
+// TryValidate returns true and an error if v implements Validatable or Validator
 // and the methods Validatable.Validate() or Validator.Valid()
 // indicate an invalid value.
 // If v implements both interfaces, only Validatable.Validate() is called.
@@ -197,34 +197,34 @@ func Validate(v any) error {
 // an error naming the type and value of v is returned,
 // like `invalid main.Status value: "unknown"`.
 // Any non-nil error means v is invalid.
-// If v does not implement Validatable or Validator then nil and false
+// If v does not implement Validatable or Validator then false and nil
 // will be returned.
 // If v is a nil pointer to a type implementing the method with a value
-// receiver, which can't be called without a value, then nil and true are
+// receiver, which can't be called without a value, then true and nil are
 // returned, like [DeepValidate] skips nil pointers. A method with a pointer
 // receiver is called with the nil pointer, so it can handle nil itself.
 // If v is a nil func like ValidatorFunc(nil), whose method would call
-// the nil func, then nil and true are returned, like [DeepValidate]
+// the nil func, then true and nil are returned, like [DeepValidate]
 // skips nil funcs. The same is returned if v embeds a nil pointer
 // or interface that its method is promoted from, see [Validate].
 // The boolean result reports whether v implements Validatable or Validator.
-func TryValidate(v any) (err error, implemented bool) {
+func TryValidate(v any) (implemented bool, err error) {
 	switch x := v.(type) {
 	case Validatable:
 		if isNilFunc(v) || isNilPointerWithValueMethod(v, validatableType) {
-			return nil, true
+			return true, nil
 		}
 		if embedsPointerOrInterface(v) {
-			return validateSkippingNilEmbedded(x), true
+			return true, validateSkippingNilEmbedded(x)
 		}
-		return x.Validate(), true
+		return true, x.Validate()
 	case Validator:
 		if !validOrSkipped(x) {
-			return fmt.Errorf("invalid %T value: %#v", v, v), true
+			return true, fmt.Errorf("invalid %T value: %#v", v, v)
 		}
-		return nil, true
+		return true, nil
 	default:
-		return nil, false
+		return false, nil
 	}
 }
 
@@ -503,7 +503,7 @@ func deepValidate(v reflect.Value, visiting map[visitKey]struct{}, onError func(
 			}
 		}
 		if !validated && v.Kind() != reflect.Interface && v.CanInterface() {
-			err, implemented := TryValidate(validationTarget(v, !isPassedValue))
+			implemented, err := TryValidate(validationTarget(v, !isPassedValue))
 			if err != nil {
 				if len(path) > 0 {
 					err = fmt.Errorf("%s: %w", strings.Join(path, " -> "), err)
