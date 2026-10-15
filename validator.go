@@ -62,6 +62,19 @@ func (v Validators) Valid() bool {
 	return true
 }
 
+// ValidOr returns val if val.Valid() is true, else def,
+// which is returned without being validated.
+// The method is called directly, so unlike [Validate], which skips
+// a value whose method can't be called, ValidOr panics for a nil
+// ValidatorFunc, a nil Validator interface value, or a nil pointer
+// to a type with a value receiver Valid method.
+func ValidOr[T Validator](val, def T) T {
+	if val.Valid() {
+		return val
+	}
+	return def
+}
+
 // CombinedValidator creates a Validator whose Valid method
 // returns false if any of the passed validators Valid methods
 // returned false, else it returns true.
@@ -159,6 +172,20 @@ func (v ValidatorAsValidatable) Validate() error {
 		return nil
 	}
 	return fmt.Errorf("invalid %T value: %#v", v.Validator, v.Validator)
+}
+
+// ValidatedOr returns val if val.Validate() returns nil, else def,
+// which is returned without being validated.
+// The error of val.Validate() is discarded, use [Validate] to get it.
+// The method is called directly, so unlike [Validate], which skips
+// a value whose method can't be called, ValidatedOr panics for a nil
+// ValidatableFunc, a nil Validatable interface value, or a nil pointer
+// to a type with a value receiver Validate method.
+func ValidatedOr[T Validatable](val, def T) T {
+	if val.Validate() == nil {
+		return val
+	}
+	return def
 }
 
 // Validate returns an error if v implements Validatable or Validator

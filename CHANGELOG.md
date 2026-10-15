@@ -94,6 +94,11 @@ See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut.
   the `Nil` placeholder. `money.NullableAmount`, `NullableCentAmount` and
   `NullableDecimalAmount` format like their amount type, and null as the
   `Nil` placeholder.
+- `types.ValidOr(val, def)` and `types.ValidatedOr(val, def)` return `val`
+  if it is valid by its `Valid` or `Validate` method, else `def`, like
+  `types.ValidOr(status, StatusDraft)`. Unlike `types.Validate`, they call
+  the method directly, so a nil func, interface or value receiver pointer
+  panics.
 
 ### Changed
 

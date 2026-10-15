@@ -90,6 +90,10 @@ Entry points:
 | `Validate(v any) error`                            | Validate one value, see the rules below. nil if `v` implements neither interface. |
 | `TryValidate(v any) (implemented bool, err error)` | Like `Validate`, plus whether `v` implements one of the interfaces. |
 | `DeepValidate(v any) []error`                      | Validate `v` and everything reachable from it. Returns nil if nothing is invalid. |
+| `ValidOr[T Validator](val, def T) T`               | `val` if `val.Valid()` is true, else `def`, which is not validated. |
+| `ValidatedOr[T Validatable](val, def T) T`         | `val` if `val.Validate()` returns nil, else `def`, which is not validated. The error is discarded. |
+
+`ValidOr` and `ValidatedOr` call the method directly, so unlike `Validate`, which skips the values of rule 3 below, they panic for a nil func like `ValidatorFunc(nil)`, a nil interface value, or a nil pointer to a type with a value receiver method.
 
 `Validate` and `TryValidate` follow these rules:
 

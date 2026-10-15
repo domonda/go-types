@@ -1782,3 +1782,66 @@ func BenchmarkValidate(b *testing.B) {
 		})
 	}
 }
+
+// ValidOr and ValidatedOr replace an invalid value with a fallback, like
+// a default for an unknown status read from a request. The fallback is
+// returned as is, also if it is invalid itself, so the caller decides
+// what an invalid fallback means.
+func TestValidOr(t *testing.T) {
+	inRange := rangeValue{Value: 5, Min: 1, Max: 10}
+	outOfRange := rangeValue{Value: 0, Min: 1, Max: 10}
+	def := rangeValue{Value: 1, Min: 1, Max: 10}
+	if got := ValidOr(inRange, def); got != inRange {
+		t.Errorf("ValidOr(%#v, def) = %#v, want the valid value", inRange, got)
+	}
+	if got := ValidOr(outOfRange, def); got != def {
+		t.Errorf("ValidOr(%#v, def) = %#v, want def", outOfRange, got)
+	}
+	if got := ValidOr(invalidString("a"), invalidString("def")); got != "def" {
+		t.Errorf(`ValidOr(invalidString("a"), invalidString("def")) = %q, want the invalid def unchanged`, got)
+	}
+}
+
+func TestValidatedOr(t *testing.T) {
+	if got := ValidatedOr(positiveInt(3), positiveInt(1)); got != 3 {
+		t.Errorf("ValidatedOr(3, 1) = %d, want the valid value 3", got)
+	}
+	if got := ValidatedOr(positiveInt(-3), positiveInt(1)); got != 1 {
+		t.Errorf("ValidatedOr(-3, 1) = %d, want def 1", got)
+	}
+	if got := ValidatedOr(positiveInt(0), positiveInt(-1)); got != -1 {
+		t.Errorf("ValidatedOr(0, -1) = %d, want the invalid def -1 unchanged", got)
+	}
+}
+
+// Unlike Validate, which skips a value whose method can't be called and
+// so reports it as valid, ValidOr and ValidatedOr call the method
+// directly: such a value panics instead of being returned as valid.
+// A pointer receiver method is called with the nil pointer, so it can
+// report nil as invalid itself.
+func TestValidOrAndValidatedOr_Nil(t *testing.T) {
+	for name, call := range map[string]func(){
+		"nil ValidatorFunc":   func() { ValidOr(ValidatorFunc(nil), ValidatorFunc(func() bool { return true })) },
+		"nil Validator":       func() { ValidOr[Validator](nil, StaticValidator(true)) },
+		"nil *validString":    func() { ValidOr[*validString](nil, new(validString)) },
+		"nil ValidatableFunc": func() { ValidatedOr(ValidatableFunc(nil), ValidatableFunc(func() error { return nil })) },
+		"nil Validatable":     func() { ValidatedOr[Validatable](nil, StaticValidatable{}) },
+		"nil *positiveInt":    func() { ValidatedOr[*positiveInt](nil, new(positiveInt)) },
+	} {
+		t.Run(name, func(t *testing.T) {
+			defer func() {
+				if recover() == nil {
+					t.Error("no panic, want a panic for a method that can't be called")
+				}
+			}()
+			call()
+		})
+	}
+
+	if got := ValidOr[*nilCheckingValidator](nil, &nilCheckingValidator{}); got == nil {
+		t.Error("ValidOr(nil *nilCheckingValidator, def) = nil, want def")
+	}
+	if got := ValidatedOr[*nilCheckingValidatable](nil, &nilCheckingValidatable{}); got == nil {
+		t.Error("ValidatedOr(nil *nilCheckingValidatable, def) = nil, want def")
+	}
+}
