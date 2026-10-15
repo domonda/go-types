@@ -202,8 +202,8 @@ func Validate(v any) error {
 // the nil func, then nil and true are returned, like [DeepValidate]
 // skips nil funcs. The same is returned if v embeds a nil pointer
 // or interface that its method is promoted from, see [Validate].
-// The boolean return value indicates whether the value was validatable.
-func TryValidate(v any) (err error, isValidatable bool) {
+// The boolean result reports whether v implements Validatable or Validator.
+func TryValidate(v any) (err error, implemented bool) {
 	switch x := v.(type) {
 	case Validatable:
 		if isNilFunc(v) || isNilPointerWithValueMethod(v, validatableType) {
@@ -498,14 +498,14 @@ func deepValidate(v reflect.Value, visiting map[visitKey]struct{}, onError func(
 			}
 		}
 		if !validated && v.Kind() != reflect.Interface && v.CanInterface() {
-			err, isValidatable := TryValidate(validationTarget(v, !isPassedValue))
+			err, implemented := TryValidate(validationTarget(v, !isPassedValue))
 			if err != nil {
 				if len(path) > 0 {
 					err = fmt.Errorf("%s: %w", strings.Join(path, " -> "), err)
 				}
 				onError(err)
 			}
-			validated = isValidatable
+			validated = implemented
 		}
 		// Fully unwrap so the descent below sees the concrete container kind
 		if k := v.Kind(); k != reflect.Pointer && k != reflect.Interface {

@@ -735,43 +735,45 @@ func (v strictValidLenientValidate) Validate() error {
 // A Validator's Valid can't say why a value is invalid, so the error at
 // least has to name the type and value to be diagnosable.
 var validateTestCases = []struct {
-	name              string
-	value             any
-	wantErr           string // expected error message prefix, empty for no error
-	wantUnchanged     error  // if set, the exact error value expected, not a wrapper of it
-	wantIsValidatable bool
+	name            string
+	value           any
+	wantErr         string // expected error message prefix, empty for no error
+	wantUnchanged   error  // if set, the exact error value expected, not a wrapper of it
+	wantImplemented bool
 }{
-	{name: "nil", value: nil, wantIsValidatable: false},
-	{name: "not validatable", value: 1, wantIsValidatable: false},
-	{name: "valid Validator", value: validString("x"), wantIsValidatable: true},
-	{name: "invalid Validator names its type and value", value: invalidString("x"), wantErr: `invalid types.invalidString value: "x"`, wantIsValidatable: true},
+	{name: "nil", value: nil, wantImplemented: false},
+	{name: "implements neither interface", value: 1, wantImplemented: false},
+	{name: "valid Validator", value: validString("x"), wantImplemented: true},
+	{name: "invalid Validator names its type and value", value: invalidString("x"), wantErr: `invalid types.invalidString value: "x"`, wantImplemented: true},
 	// %#v of a pointer is its address, so only the prefix is checked
-	{name: "invalid pointer Validator names its pointer type", value: new(invalidString("x")), wantErr: "invalid *types.invalidString value: (*types.invalidString)(0x", wantIsValidatable: true},
-	{name: "valid Validatable", value: signedInt(1), wantIsValidatable: true},
-	{name: "invalid Validatable returns its error unchanged", value: signedInt(-1), wantErr: "negative number", wantUnchanged: errNegative, wantIsValidatable: true},
+	{name: "invalid pointer Validator names its pointer type", value: new(invalidString("x")), wantErr: "invalid *types.invalidString value: (*types.invalidString)(0x", wantImplemented: true},
+	{name: "valid Validatable", value: signedInt(1), wantImplemented: true},
+	{name: "invalid Validatable returns its error unchanged", value: signedInt(-1), wantErr: "negative number", wantUnchanged: errNegative, wantImplemented: true},
 	// Validate wins over Valid, so a type can offer a lenient Validate
 	// next to a strict Valid without types.Validate rejecting its values.
-	{name: "Validatable takes precedence over valid=false Validator", value: strictValidLenientValidate(1), wantIsValidatable: true},
-	{name: "Validatable error takes precedence over Validator error", value: strictValidLenientValidate(-1), wantErr: "negative number", wantUnchanged: errNegative, wantIsValidatable: true},
+	{name: "Validatable takes precedence over valid=false Validator", value: strictValidLenientValidate(1), wantImplemented: true},
+	{name: "Validatable error takes precedence over Validator error", value: strictValidLenientValidate(-1), wantErr: "negative number", wantUnchanged: errNegative, wantImplemented: true},
 	// A nil pointer has no value that a value receiver method could be
 	// called on, Go panics with a nil pointer dereference instead.
 	// Like DeepValidate skips nil pointers, the absent value is not
-	// validated, but its type implements the interface so it is validatable.
-	{name: "nil pointer to value receiver Validator is not validated", value: (*invalidString)(nil), wantIsValidatable: true},
-	{name: "nil pointer to value receiver Validatable is not validated", value: (*signedInt)(nil), wantIsValidatable: true},
-	{name: "nil pointer to value receiver Validatable and Validator is not validated", value: (*strictValidLenientValidate)(nil), wantIsValidatable: true},
+	// validated, but its type implements the interface,
+	// so TryValidate reports it as implemented.
+	{name: "nil pointer to value receiver Validator is not validated", value: (*invalidString)(nil), wantImplemented: true},
+	{name: "nil pointer to value receiver Validatable is not validated", value: (*signedInt)(nil), wantImplemented: true},
+	{name: "nil pointer to value receiver Validatable and Validator is not validated", value: (*strictValidLenientValidate)(nil), wantImplemented: true},
 	// A pointer receiver method can handle nil itself, so it is still called
-	{name: "nil pointer receiver Validatable is called with nil", value: (*nilCheckingValidatable)(nil), wantErr: "nil pointer", wantUnchanged: errNilPointer, wantIsValidatable: true},
-	{name: "nil pointer receiver Validator is called with nil", value: (*nilCheckingValidator)(nil), wantErr: "invalid *types.nilCheckingValidator value: (*types.nilCheckingValidator)(nil)", wantIsValidatable: true},
+	{name: "nil pointer receiver Validatable is called with nil", value: (*nilCheckingValidatable)(nil), wantErr: "nil pointer", wantUnchanged: errNilPointer, wantImplemented: true},
+	{name: "nil pointer receiver Validator is called with nil", value: (*nilCheckingValidator)(nil), wantErr: "invalid *types.nilCheckingValidator value: (*types.nilCheckingValidator)(nil)", wantImplemented: true},
 	// A nil func has no function that its Valid or Validate method
 	// could call, Go panics with a nil func call instead.
 	// Like DeepValidate skips nil funcs, the absent func is not
-	// validated, but its type implements the interface so it is validatable.
-	{name: "nil ValidatorFunc is not called", value: ValidatorFunc(nil), wantIsValidatable: true},
-	{name: "nil ValidatableFunc is not called", value: ValidatableFunc(nil), wantIsValidatable: true},
+	// validated, but its type implements the interface,
+	// so TryValidate reports it as implemented.
+	{name: "nil ValidatorFunc is not called", value: ValidatorFunc(nil), wantImplemented: true},
+	{name: "nil ValidatableFunc is not called", value: ValidatableFunc(nil), wantImplemented: true},
 	// Only the nil func is skipped, a func is still called
-	{name: "non-nil ValidatorFunc is called", value: ValidatorFunc(func() bool { return false }), wantErr: "invalid types.ValidatorFunc value: (types.ValidatorFunc)(0x", wantIsValidatable: true},
-	{name: "non-nil ValidatableFunc is called", value: ValidatableFunc(func() error { return errNegative }), wantErr: "negative number", wantUnchanged: errNegative, wantIsValidatable: true},
+	{name: "non-nil ValidatorFunc is called", value: ValidatorFunc(func() bool { return false }), wantErr: "invalid types.ValidatorFunc value: (types.ValidatorFunc)(0x", wantImplemented: true},
+	{name: "non-nil ValidatableFunc is called", value: ValidatableFunc(func() error { return errNegative }), wantErr: "negative number", wantUnchanged: errNegative, wantImplemented: true},
 }
 
 // errNilPointer is the specific error of nilCheckingValidatable.Validate.
@@ -828,15 +830,15 @@ func TestValidate(t *testing.T) {
 func TestTryValidate(t *testing.T) {
 	for _, tt := range validateTestCases {
 		t.Run(tt.name, func(t *testing.T) {
-			err, isValidatable := TryValidate(tt.value)
+			err, implemented := TryValidate(tt.value)
 			if !errHasPrefix(err, tt.wantErr) {
 				t.Errorf("TryValidate(%#v) error = %q, want prefix %q", tt.value, errString(err), tt.wantErr)
 			}
 			if tt.wantUnchanged != nil && err != tt.wantUnchanged {
 				t.Errorf("TryValidate(%#v) error = %#v, want the Validatable's error %#v unchanged", tt.value, err, tt.wantUnchanged)
 			}
-			if isValidatable != tt.wantIsValidatable {
-				t.Errorf("TryValidate(%#v) isValidatable = %t, want %t", tt.value, isValidatable, tt.wantIsValidatable)
+			if implemented != tt.wantImplemented {
+				t.Errorf("TryValidate(%#v) implemented = %t, want %t", tt.value, implemented, tt.wantImplemented)
 			}
 		})
 	}
@@ -1605,8 +1607,8 @@ func TestValidate_NilEmbeddedInterface(t *testing.T) {
 		if err := Validate(v); err != nil {
 			t.Errorf("Validate(%#v) = %v, want nil", v, err)
 		}
-		if err, isValidatable := TryValidate(v); err != nil || !isValidatable {
-			t.Errorf("TryValidate(%#v) = %v, %v, want nil, true", v, err, isValidatable)
+		if err, implemented := TryValidate(v); err != nil || !implemented {
+			t.Errorf("TryValidate(%#v) = %v, %v, want nil, true", v, err, implemented)
 		}
 		if errs := DeepValidate(v); len(errs) != 0 {
 			t.Errorf("DeepValidate(%#v) = %v, want none", v, errs)

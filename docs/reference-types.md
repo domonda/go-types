@@ -88,7 +88,7 @@ Entry points:
 | Function                                           | Description                                        |
 |----------------------------------------------------|----------------------------------------------------|
 | `Validate(v any) error`                            | Validate one value, see the rules below. nil if `v` implements neither interface. |
-| `TryValidate(v any) (err error, isValidatable bool)` | Like `Validate`, plus whether `v` implements one of the interfaces. |
+| `TryValidate(v any) (err error, implemented bool)` | Like `Validate`, plus whether `v` implements one of the interfaces. |
 | `DeepValidate(v any) []error`                      | Validate `v` and everything reachable from it. Returns nil if nothing is invalid. |
 
 `Validate` and `TryValidate` follow these rules:
