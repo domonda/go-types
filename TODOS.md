@@ -238,6 +238,13 @@ time.
         name in another entry exposes that name's quoted address.
       - `email`: `Address.AddressPart()` returns a quoted local part that
         holds `<` without angle brackets, which doesn't parse back.
+      - `email`: Python folds a long quoted UTF-8 name that holds an `@`, in
+        a list with more entries, into an ASCII-only encoded-word, which a
+        second Python write turns into a recipient like `"ä x"@evil.com`.
+        The input holds no encoded-word, so the parser's encoded-word rules
+        can't see it. Python's SMTPUTF8 policy also writes a decoded
+        non-ASCII encoded-word with `, x@evil.com` raw, which then reads as
+        another recipient.
       - `email`: Python's lenient `getaddresses` reads a garbled duplicate of
         the same mailbox, like `<_x@x.de ""<_x@X.DE >`, as an extra entry.
         Same mailbox, so not a spoofing path, but `Validate` could refuse it.

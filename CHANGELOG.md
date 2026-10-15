@@ -278,11 +278,17 @@ See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut.
   because MIME headers must be ASCII. ASCII names are formatted as before,
   except names containing `=?`, which are written quoted with every `=?`
   escaped as `=\?`, because the parser and Python's email package would
-  decode them again: `"=?utf-8?q?x?=" <a@b.com>` normalizes to
+  decode them again: the name `=?utf-8?q?x?=` is written
   `"=\?utf-8?q?x?=" <a@b.com>` and stays that way, instead of turning into
   `"x" <a@b.com>` when normalized once more. A quoted name whose every `=?`
-  is escaped is not decoded. `ASCII` writes a non-ASCII name with special
-  characters as a single encoded-word.
+  is escaped is not decoded, but it is refused if Python's email package,
+  which writes it again without the backslash, then reads an encoded-word
+  in it that the parser can't decode or that decodes to an address or
+  another encoded-word, like `"=\? x@evil.com" <ceo@corp.com>`.
+  `"Really=?" <a@b.com>` normalizes to `"Really=\?" <a@b.com>`. `ASCII`
+  writes a non-ASCII name with special characters in B encoded-words of at
+  most 75 characters, or as one longer word where a word would hold only
+  ASCII text with one of `@"(<\` or `=?`.
 - **Breaking:** `email` normalization keeps the content of a quoted local
   part, only lower cased, instead of removing the quotes and turning spaces
   and commas into dots: `"Doe, John"@example.com` normalizes to
@@ -896,20 +902,34 @@ See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut.
     address may repeat;
   - a quoted name without angle brackets after it:
     `"x@evil.com" ceo@corp.com`;
-  - an unquoted name with a quoted `@` that one of `;:)>[]\` ends, which
-    Python's lenient parser and its default header parser, the one
-    `EmailMessage` and `smtplib.send_message` use, also send to the quoted
-    address: `"x@evil.com"; <ceo@corp.com>` and
-    `Team:"x@evil.com":<ceo@corp.com>`;
-  - an RFC 2047 encoded-word whose decoded text is ASCII and contains one
-    of `@"()<>[]:;\,`, also inside a quoted name, because Python writes it
-    back unencoded: `=?utf-8?q?x=40evil.com?= <ceo@corp.com>`; an
-    encoded-word in an unquoted name that one of `;:)>[]\,` follows; an
-    encoded-word the parser can't decode, like one with an unknown charset
-    or invalid encoding, which Python decodes anyway; and `=?` at the
-    start of a local part or after a space in it, which Python decodes:
-    `=?utf-8?q?admin?=@corp.com`. Encoded-words with non-ASCII text stay
-    valid, because Python encodes them again;
+  - a name with a quoted `@`, or an RFC 2047 encoded-word whose text holds
+    an `@` or `=?`, followed by one of `;:)>[]\,`, which Python's lenient
+    parser and its default header parser, the one `EmailMessage` and
+    `smtplib.send_message` use, also send to that address:
+    `"x@evil.com"; <ceo@corp.com>`, `Team:"x@evil.com":<ceo@corp.com>` and
+    `=?utf-8?q?=C3=A4_x=40evil.com?=; <ceo@corp.com>`, and with a backslash
+    also before it: `\"x@evil.com" <ceo@corp.com>`. One of them before
+    such an address only ends the name, so
+    `Doe; =?utf-8?q?J=C3=BCrgen?= <ceo@corp.com>` stays valid;
+  - an RFC 2047 encoded-word at the start of a word whose decoded text is
+    ASCII and contains an `@`, one of `"(<\` or an `=?` at the start of a
+    word, also inside a quoted name, because Python writes it back
+    unencoded: `=?utf-8?q?x=40evil.com?= <ceo@corp.com>`; an `=?` at the
+    start of a word of the decoded name, which Python decodes once it
+    wrote the name: `=?utf-8?b?PT8=?=utf-8?q?x <y?=@corp.com>`; a quoted
+    name with an escaped `=\?` that holds such an encoded-word once Python
+    wrote it again without the backslash:
+    `"=\?utf-8?q?x" <y?=@corp.com>, "<evil@evil.com>" <c@corp.com>` was
+    sent to `evil@evil.com`; an `=?` at the start of a word that the
+    parser can't decode, like one with an unknown charset or invalid
+    encoding, which Python decodes anyway, also up to a `?=` after the
+    name; and `=?` at the start of a local part or after a space or dot in
+    it, which Python decodes: `=?utf-8?q?admin?=@corp.com`. Encoded-words
+    with non-ASCII text stay valid, because Python encodes them again, and
+    so do ASCII words with other specials, which only end the name for
+    Python, like the last of the two words a mail client writes for
+    `Jürgen Müller, Buchhaltung und Finanzen (Abteilung Nord)`, and an `=?`
+    within a word, like in `"Really=?" <a@b.com>`;
   Quote such names: `"x@evil.com" <ceo@corp.com>` is valid.
   `ParseMIMEMessage` reports such an address header as an error and keeps
   the addresses it can parse, so `From: x@evil.com <ceo@corp.com>` leaves
