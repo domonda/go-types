@@ -503,8 +503,7 @@ func trimSpace[T string | []byte](text T) T {
 // that data is no JSON without another pass over data with json.Valid.
 func unmarshalIfJSON(data []byte, v any) (isJSON bool, err error) {
 	err = json.Unmarshal(data, v)
-	var syntaxErr *json.SyntaxError
-	if errors.As(err, &syntaxErr) {
+	if _, ok := errors.AsType[*json.SyntaxError](err); ok {
 		return false, nil
 	}
 	return true, err
