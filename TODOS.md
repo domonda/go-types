@@ -228,6 +228,16 @@ time.
         `getaddresses` and its default header parser ran offline and is not
         committed; commit a golden corpus of lists with the recipients each
         parser reads, so CI keeps checking the agreement.
+      - `email`: after Python writes a message and reads it back, it drops
+        the parentheses of a comment that holds a non-ASCII or dropped rune
+        or a nested comment, which glues the comment to the domain or
+        exposes an address in it: `<o'brien@müller.de ((ne<U+00A0>sted) x)`
+        goes to `o'brien@müller.denested`. Spaces in a quoted local part
+        are normalized away (same domain): `" Kate"@evil.com` goes to
+        `Kate@evil.com`. A bare word with `;` next to a non-ASCII quoted
+        name in another entry exposes that name's quoted address.
+      - `email`: `Address.AddressPart()` returns a quoted local part that
+        holds `<` without angle brackets, which doesn't parse back.
       - `email`: Python's lenient `getaddresses` reads a garbled duplicate of
         the same mailbox, like `<_x@x.de ""<_x@X.DE >`, as an extra entry.
         Same mailbox, so not a spoofing path, but `Validate` could refuse it.
