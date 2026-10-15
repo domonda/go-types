@@ -623,6 +623,31 @@ func TestParseAddressList_EncodedWordNameHoldsNoAddress(t *testing.T) {
 	}
 }
 
+// TestParseAddress_DomainWithoutEmptyLabel protects that the parser reads
+// no domain that net/mail and mail servers reject: `e@f.net..Doe` was valid
+// and normalized to e@f.net..doe, which net/mail rejects, so a validated
+// address could not be sent to. A local part with consecutive dots is still
+// valid, and is quoted when normalized, so that net/mail reads it.
+func TestParseAddress_DomainWithoutEmptyLabel(t *testing.T) {
+	for _, addr := range []string{
+		`e@f.net..Doe`,
+		`a@b..com`,
+		`Doe <a@b..com>`,
+		`a@b.com..`,
+	} {
+		_, err := ParseAddress(addr)
+		assert.Error(t, err, addr)
+		assert.Error(t, AddressList(addr).Validate(), addr)
+	}
+
+	norm, err := Address(`Doe..John@Example.com`).Normalized()
+	require.NoError(t, err)
+	assert.Equal(t, Address(`"doe..john"@example.com`), norm)
+	stdlib, err := mail.ParseAddress(string(norm))
+	require.NoError(t, err, "net/mail reads the normalized address")
+	assert.Equal(t, "doe..john@example.com", stdlib.Address)
+}
+
 // TestParseAddressList_EscapedDroppedRune protects that a backslash in a
 // quoted name escapes the rune after it also when the parser drops that
 // rune, like a zero width joiner: it escaped the next rune instead, so

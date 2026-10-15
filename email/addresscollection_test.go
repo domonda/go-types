@@ -251,6 +251,8 @@ func FuzzSplitRawMatchesParse(f *testing.F) {
 		// two addresses, see TestParseAddressList_EncodedWordNameHoldsNoAddress
 		`=?utf-8?q?spy@evil.example,?= <ceo@corp.example>`,
 		`=?utf-8?q?<a@b.com>,?= <c@x.com>`,
+		// An empty domain label, see TestParseAddress_DomainWithoutEmptyLabel
+		"e@f.net..Doe",
 	} {
 		f.Add(list)
 	}
