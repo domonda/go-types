@@ -500,6 +500,7 @@ func TestParseAddress_EncodedWordThatPythonReadsAsAddress(t *testing.T) {
 		`"ä =?utf-8?b?eEBldmlsLmNvbQ?=" <ceo@corp.com>`,
 		// Python reads an encoded-word up to its ?= across a quote
 		`"=?utf-8?q?a"b?= <ceo@corp.com>`,
+		`"=?utf-8?q?J"=C3=BCrgen?= <ceo@corp.com>`,
 		// An escaped =? in a quoted string of an unquoted name, which
 		// Python writes without the backslash and decodes when it reads
 		// the message again
@@ -542,16 +543,20 @@ func TestParseAddress_EncodedWordThatPythonReadsAsAddress(t *testing.T) {
 	// The decoded quote holds the next entry for Python: it sends this list
 	// to x@evil.com once it is read again, not to b@b.cc and ceo@corp.com
 	assert.Error(t, AddressList(`=?utf-8?q?a=22?= <ceo@corp.com>, "x@evil.com" <b@b.cc>`).Validate())
+	// Python reads an =? in a quoted name up to a ?= after the name, here
+	// the one of the local part, and sends to `x@evil.com" <a@corp.com>`
+	_, err := ParseAddress(`"=?utf-8?q?x@evil.com" <a?=@corp.com>`)
+	assert.Error(t, err)
 
 	// Python writes an encoded-word with other runes than ASCII encoded
 	// again, and the decoded text of a comment in the comment, so it reads
 	// no address in them. An escaped =? in a quoted name starts no
-	// encoded-word for Python, and an =? without ?= after it none either.
+	// encoded-word for Python.
 	for addr, want := range map[string]*mail.Address{
 		`=?utf-8?Q?J=C3=BCrgen_=28juergen=40example.com=29?= <ceo@corp.com>`: {Name: "Jürgen (juergen@example.com)", Address: "ceo@corp.com"},
 		`"=?utf-8?q?J=C3=BCrgen_x=40evil.com?=" <ceo@corp.com>`:              {Name: "Jürgen x@evil.com", Address: "ceo@corp.com"},
 		`"=\?utf-8?q?x=40evil.com?=" <ceo@corp.com>`:                         {Name: "=?utf-8?q?x=40evil.com?=", Address: "ceo@corp.com"},
-		`"=? x@evil.com" <ceo@corp.com>`:                                     {Name: "=? x@evil.com", Address: "ceo@corp.com"},
+		`"=\? x@evil.com" <ceo@corp.com>`:                                    {Name: "=? x@evil.com", Address: "ceo@corp.com"},
 		// A byte that can't be decoded Python writes encoded again too
 		`=?utf-8?q?x=40evil.com=FF?= <ceo@corp.com>`:            {Name: "x@evil.com", Address: "ceo@corp.com"},
 		`ceo@corp.com (=?utf-8?q?x=40evil.com?=)`:               {Name: "x@evil.com", Address: "ceo@corp.com"},
@@ -581,6 +586,9 @@ func TestParseAddress_EncodedWordInLocalPart(t *testing.T) {
 		// Within quotes Python also decodes one after a space,
 		// it sends to "a admin"@corp.com
 		`"a =?utf-8?q?admin?="@corp.com`,
+		// With an escaped =?, which Normalized wrote without quotes
+		// as =?utf-8?q?admin?=@corp.com
+		`John <"=\?utf-8?q?admin?="@corp.com>`,
 	} {
 		t.Run(addr, func(t *testing.T) {
 			_, err := ParseAddress(addr)

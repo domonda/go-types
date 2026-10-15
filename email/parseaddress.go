@@ -217,11 +217,12 @@ func UniqueNormalizedAddressSlice(addrs []Address) []Address {
 // `=?utf-8?q?J=C3=BCrgen_=28j=40x.de=29?= <j@x.de>` is valid, but writes
 // such an encoded-word in a quoted name unquoted too if the name has other
 // runes, like in `"ä =?utf-8?q?x=40y.com?=" <a@b.com>`, so it is an error
-// in a quoted name too. So is an =? that doesn't start an encoded-word
-// that the parser decodes, like one in an unknown charset or with an
-// invalid encoding, which Python can still decode, and a local part with
+// in a quoted name too. So is an =? in a name that doesn't start an
+// encoded-word that the parser decodes, like one in an unknown charset,
+// with an invalid encoding or with a quote in it, which Python can still
+// decode, also up to a ?= after the name, and a local part with
 // an encoded-word like =?utf-8?q?admin?=@corp.com, which Python decodes
-// and sends to admin@corp.com, or that starts with =?.
+// and sends to admin@corp.com, or with an =? at its start or after a space.
 // An address within a quoted string or a comment is an error too, also if
 // it isn't closed, because other parsers read it as part of them: for them
 // `"x@evil.com" "<ceo@corp.com>` has no address in angle brackets.
@@ -392,10 +393,10 @@ func parseNameAddress(addr string) (parsed parsedAddress, ok bool) {
 			// `ä x@y.com` once it is read again. Such an encoded-word is
 			// refused also in a name of ASCII, which Python keeps quoted,
 			// because the stored text can hold other runes than the parser
-			// reads, like a soft hyphen. An =? without ?= after it in the
-			// name is no encoded-word that Python decodes.
-			undecodable, asciiSpecial := readEncodedWords(name)
-			if (undecodable && hasEncodedWordText(name)) || asciiSpecial {
+			// reads, like a soft hyphen. Python reads an =? without ?= after
+			// it in the name up to a ?= after the name, like the one in the
+			// local part of `"=?utf-8?q?x@evil.com" <a?=@b.com>`.
+			if undecodable, asciiSpecial := readEncodedWords(name); undecodable || asciiSpecial {
 				parsed.problem = `encoded-word that can't be decoded or decodes to ASCII with one of @"()<>[]:;\, in quoted display name`
 			}
 			name = decodeName(name)
@@ -422,17 +423,6 @@ func parseNameAddress(addr string) (parsed parsedAddress, ok bool) {
 		}
 	}
 
-	if rawLocal := addr[i[6]:i[7]]; parsed.problem == "" &&
-		(hasEncodedWordText(rawLocal) || strings.HasPrefix(strings.TrimPrefix(rawLocal, `"`), "=?")) {
-		// Like =?utf-8?q?admin?=@corp.com and "=?utf-8?q?admin?="@corp.com,
-		// which net/mail reads as written, but Python's email package
-		// decodes and sends to admin@corp.com. One that starts with =?
-		// Python reads up to the ?= after it, also after the address, so
-		// it sends `=?utf-8?q?x@evil.com,?= <b@c.com>` to x@evil.com
-		// once it is read again.
-		parsed.problem = "encoded-word in local part"
-	}
-
 	local := lowerAddressPart(addr[i[6]:i[7]])
 	if len(local) >= 2 && local[0] == '"' && local[len(local)-1] == '"' {
 		// A quoted local part keeps its content, so the address
@@ -440,6 +430,15 @@ func parseNameAddress(addr string) (parsed parsedAddress, ok bool) {
 		// the quotes are not part of mail.Address.Address,
 		// addrSpec adds them again where needed.
 		local = unescapeQuotedPairs(local[1 : len(local)-1])
+	}
+	if parsed.problem == "" && hasEncodedWordStart(local) {
+		// Like =?utf-8?q?admin?=@corp.com and "=?utf-8?q?admin?="@corp.com,
+		// which net/mail reads as written, but Python's email package
+		// decodes and sends to admin@corp.com. Checked after the
+		// quoted-pairs are unescaped, because AddressFrom writes
+		// `"=\?utf-8?q?admin?="@corp.com unquoted as
+		// =?utf-8?q?admin?=@corp.com.
+		parsed.problem = "encoded-word in local part"
 	}
 
 	domain := lowerAddressPart(addr[i[8]:i[9]])
@@ -546,7 +545,10 @@ var encodedWordStartRegexp = regexp.MustCompile(`^` + encodedWord)
 // decodes the name. undecodable reports an =? that doesn't start an
 // encoded-word that the parser decodes, like one in a charset that the
 // parser doesn't know, with an invalid encoding, or with a space in it,
-// which Python's email package can still decode. asciiSpecial reports an
+// which Python's email package can still decode, and an encoded-word with
+// a quote written in it, which Python reads across the quote, while the
+// parser reads the quote as the start or end of a quoted string, like in
+// `"=?utf-8?q?J"=C3=BCrgen?= <a@b.com>`. asciiSpecial reports an
 // encoded-word whose text is ASCII with one of the specials @"()<>[]:;\,
 // of RFC 5322 other than the dot. Python writes such text unencoded and
 // unquoted when it writes the header, where it is an address, a quoted
@@ -562,7 +564,7 @@ func readEncodedWords(text string) (undecodable, asciiSpecial bool) {
 			return false, asciiSpecial
 		}
 		word := encodedWordStartRegexp.FindString(text[i:])
-		if word == "" {
+		if word == "" || strings.Contains(word, `"`) {
 			return true, asciiSpecial
 		}
 		decoded, err := mimeHeaderDecoder.Decode(word)
@@ -576,11 +578,19 @@ func readEncodedWords(text string) (undecodable, asciiSpecial bool) {
 	}
 }
 
-// hasEncodedWordText reports whether s, a local part or display name
-// as written, has an =? followed by a ?=, like an RFC 2047 encoded-word.
-func hasEncodedWordText(s string) bool {
-	i := strings.Index(s, "=?")
-	return i >= 0 && strings.Contains(s[i+2:], "?=")
+// hasEncodedWordStart reports whether the local part local, without quotes
+// and quoted-pairs, has an RFC 2047 encoded-word, or the =? of one that
+// Python's email package decodes: at the start of the local part and after
+// a space, like in "a =?utf-8?q?admin?="@corp.com, up to the ?= after it,
+// also after the address, so that it sends `=?utf-8?q?x@evil.com,?= <b@c.com>`
+// to x@evil.com once it is read again. An =? within a word without ?= after
+// it, like the one of A!#$%&'*+-/=?^_{|}~@example.com, it reads as written.
+func hasEncodedWordStart(local string) bool {
+	if strings.HasPrefix(local, "=?") || strings.Contains(local, " =?") {
+		return true
+	}
+	i := strings.Index(local, "=?")
+	return i >= 0 && strings.Contains(local[i+2:], "?=")
 }
 
 // lowerAddressPart returns the local part or domain s lower cased like by

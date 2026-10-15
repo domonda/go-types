@@ -128,7 +128,7 @@ func TestAddress_NormalizedIsIdempotent(t *testing.T) {
 		// Names holding "=?", which were written as B encoded-word that
 		// decodes to ASCII with an @, which the parser refuses, see
 		// TestParseAddress_EncodedWordThatPythonReadsAsAddress
-		`"=? x@evil.com" <ceo@corp.com>`,
+		`"=\? x@evil.com" <ceo@corp.com>`,
 		`"=?utf-8?q?=3D=3Futf-8=3Fq=3Fx=3D40evil.com=3F=3D?=" <ceo@corp.com>`,
 		`"=?utf-8?q?=3D=3F_J=C3=BCrgen?=" <j@x.de>`,
 	} {
@@ -153,7 +153,7 @@ func FuzzAddressNormalizedIsIdempotent(f *testing.F) {
 		`John Doe <John.Doe@Example.com>`,
 		`<"<a@b.com>"@EXAMPLE.com>`,
 		`<"x <a@b.com>"@example.com>`,
-		`"=? x@evil.com" <ceo@corp.com>`,
+		`"=\? x@evil.com" <ceo@corp.com>`,
 		`"=?utf-8?q?=3D=3Futf-8=3Fq=3Fx=3D40evil.com=3F=3D?=" <ceo@corp.com>`,
 		"\"\u212Aate\"@Corp.com",
 		`=?utf-8?Q?J=C3=BCrgen_=28juergen=40example.com=29?= <ceo@corp.com>`,
