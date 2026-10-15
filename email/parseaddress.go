@@ -2,7 +2,6 @@ package email
 
 import (
 	"errors"
-	"fmt"
 	"maps"
 	"net/mail"
 	"regexp"
@@ -32,24 +31,15 @@ const (
 	domainPart        = `([` + domainChars + `](?:\.?[\-` + domainChars + `])*\.[a-zA-Z]{2,})` // no empty label like in f.net..doe, which net/mail rejects
 	addressRegex      = atext + `@` + domainPart
 
-	quotedNamePart         = `"((?:[^"\\]|\\.)*)"[ \t]*<?` // with quoted-pairs like \" and \\
-	unquotedNamePart       = `([^<@]*[^<@\s]|[^<,]*[^<,\s])[ \t]*<`
-	rfc2047EncodedNamePart = `((?:` + phraseEncodedWord + `[ \t]*)+)<` // Example: =?utf-8?b?wqFIb2xhLCBzZcOxb3Ih?= <
-	encodedWord            = `=\?[^?\s]+\?[bBqQ]\?[^?\s]*\?=`
-	emptyNamePart          = `<?`
-	namePart               = `(?:` + quotedNamePart + `|` + unquotedNamePart + `|` + rfc2047EncodedNamePart + `|` + emptyNamePart + `)`
-	nameAddressRegex       = `^` + namePart + localPart + `@` + domainPart + `\s?'?>?`
+	quotedNamePart = `"((?:[^"\\]|\\.)*)"[ \t]*<?` // with quoted-pairs like \" and \\
+	// An RFC 2047 encoded-word like =?utf-8?b?wqFIb2xhLCBzZcOxb3Ih?= is read
+	// like any other word of an unquoted name, see ParseAddress
+	unquotedNamePart = `([^<@]*[^<@\s]|[^<,]*[^<,\s])[ \t]*<`
+	encodedWord      = `=\?[^?\s]+\?[bBqQ]\?[^?\s]*\?=`
+	emptyNamePart    = `<?`
+	namePart         = `(?:` + quotedNamePart + `|` + unquotedNamePart + `|` + emptyNamePart + `)`
+	nameAddressRegex = `^` + namePart + localPart + `@` + domainPart + `\s?'?>?`
 )
-
-// phraseEncodedWord is an RFC 2047 encoded-word of a display name, which
-// RFC 2047 section 5 (3) allows to hold only some characters: none that
-// net/mail or SplitAddressList read as part of an address, a separator,
-// a quoted string or a comment. So a display name like the one of
-// `=?utf-8?q?spy@evil.example,?= <ceo@corp.example>` is not read as one
-// encoded name with the address after it, while net/mail and mail
-// servers read the two recipients =?utf-8?q?spy@evil.example and
-// ceo@corp.example. encodedWord of a whole header value is not limited.
-const phraseEncodedWord = `=\?[^?\s,<>@"()\\]+\?[bBqQ]\?[^?\s,<>@"()\\]*\?=`
 
 var (
 	// AddressRegexp is a compiled regular expression for an email address without name part
@@ -190,11 +180,25 @@ func UniqueNormalizedAddressSlice(addrs []Address) []Address {
 // of the name: a stray quote of a malformed name or the backslash of an
 // escaped parenthesis. RFC 2047 encoded-words are decoded after that,
 // their text keeps its quotes and backslashes. Runes that are not graphic
-// are removed from the name. Like for net/mail, a comma, @, quote,
-// parenthesis, angle bracket or backslash written unencoded in an
-// encoded-word is no part of a display name, which RFC 2047 doesn't allow
-// there: `=?utf-8?q?a@b,?= <c@example.com>` starts with the address
-// =?utf-8?q?a@b, so it is no single address.
+// are removed from the name. An encoded-word is read like any other word
+// of an unquoted name, also with characters written unencoded that
+// RFC 2047 doesn't allow there: an angle bracket in it opens the address,
+// and an @ makes the name invalid like in any unquoted name, so
+// `=?utf-8?q?a@b.com?= <c@example.com>` is an error.
+//
+// An @ in an unquoted name, outside its quoted strings and comments, is an
+// error, because other parsers read an address there: Python's
+// email.utils.getaddresses reads `x@evil.com <ceo@corp.com>,` as the two
+// recipients x@evil.com and ceo@corp.com. Only a name that is the address
+// itself, like in `a@example.com <a@example.com>`, is valid, and a quoted
+// name can hold an @: `"x@evil.com" <ceo@corp.com>`. So is a second address
+// in angle brackets after the address that is not the same address, like
+// in `<x@evil.com> <ceo@corp.com>`, and a quoted name that is not followed
+// by an angle bracket, which other parsers read as part of the local part,
+// like in `"x@evil.com" ceo@corp.com`. An address within a quoted string or
+// a comment is an error too, also if it isn't closed, because other parsers
+// read it as part of them: for them `"x@evil.com" "<ceo@corp.com>` has no
+// address in angle brackets.
 //
 // An address without name can be followed by an RFC 5322 comment,
 // which becomes the name, like in "mike@doe.com (Mike Doe)".
@@ -202,7 +206,7 @@ func UniqueNormalizedAddressSlice(addrs []Address) []Address {
 // with their parentheses: "mike@doe.com (Mike (Sales))" has the name
 // "Mike (Sales)". A backslash escapes a parenthesis, so `\)` doesn't
 // end the comment. A comment after the address that isn't closed
-// is an error. Parentheses in an unquoted name stay in the name.
+// is an error. Closed parentheses in an unquoted name stay in the name.
 func ParseAddress(addr string) (mailAddress *mail.Address, err error) {
 	addr = sanitizeAddr(addr)
 
@@ -210,16 +214,28 @@ func ParseAddress(addr string) (mailAddress *mail.Address, err error) {
 		return nil, errors.New("empty email address")
 	}
 
-	mailAddress, unparsed, ok, _ := parseAddress(addr)
-	if !ok {
-		return nil, errs.Errorf("could not parse email address: %s", truncateForError(addr))
+	parsed, ok := parseAddress(addr)
+	if problem := singleAddressProblem(addr, parsed, ok); problem != "" {
+		return nil, errs.Errorf("%s: %s", problem, truncateForError(addr))
 	}
+	return parsed.addr, nil
+}
 
-	if strutil.TrimSpace(unparsed) != "" {
-		return nil, fmt.Errorf("parsed email address %s as %s with unexpected remaining characters: %s", addr, mailAddress, unparsed)
+// singleAddressProblem returns why the sanitized addr, read by parseAddress
+// as parsed with ok, is no single address that ParseAddress accepts,
+// or "" if it is one.
+func singleAddressProblem(addr string, parsed parsedAddress, ok bool) string {
+	switch {
+	case !ok:
+		return "could not parse email address"
+	case strutil.TrimSpace(parsed.unparsed) != "":
+		return "unexpected characters after the address of email address"
+	case parsed.nameProblem != "":
+		return parsed.nameProblem + " of email address"
+	case withinQuoteOrComment(addr, parsed.specs):
+		return "address within a quoted string or comment of email address"
 	}
-
-	return mailAddress, nil
+	return ""
 }
 
 // errInvalidAddress is the error of normalizeAddressForRead.
@@ -236,42 +252,121 @@ var errInvalidAddress = errors.New("invalid email address")
 // NullableAddress it returns errInvalidAddress for a blank address,
 // which the callers handle before.
 func normalizeAddressForRead[S Address | NullableAddress](s S) (S, error) {
-	mailAddress, unparsed, ok, _ := parseAddress(sanitizeAddr(string(s)))
-	if !ok || strutil.TrimSpace(unparsed) != "" {
+	addr := sanitizeAddr(string(s))
+	parsed, ok := parseAddress(addr)
+	if singleAddressProblem(addr, parsed, ok) != "" {
 		return s, errInvalidAddress
 	}
-	return S(AddressFrom(mailAddress)), nil
+	return S(AddressFrom(parsed.addr)), nil
 }
 
 // specRange is the byte range of the address part of a parsed address,
-// from the start of its local part to the end of its domain, in the
-// sanitized text that was parsed.
+// from the start of its local part to the end of its domain, or of other
+// text that other parsers read as part of an address, see
+// parsedAddress.specs, in the sanitized text that was parsed.
 type specRange struct{ start, end int }
+
+// parsedAddress is an address that parseAddress read from a sanitized text.
+type parsedAddress struct {
+	addr *mail.Address
+	// unparsed is the rest of the text after the address
+	unparsed string
+	// spec is the range of the address part in the text
+	spec specRange
+	// specs are the ranges in the text, in increasing order, of spec and
+	// of the other text that other parsers read as part of an address,
+	// where the collections refuse a rune that the parser drops, see
+	// hasHiddenAddrSpecRune: an unquoted name that is the address, the
+	// empty range after a comment after the address, after which Python's
+	// email.utils appends a word to the domain, like the no-break space of
+	// "a@b.com (x)<U+00A0>, c@d.com", and a repeated address.
+	specs []specRange
+	// nameProblem is why the display name makes the address invalid,
+	// because other parsers read another address in it, or "":
+	// an unquoted name with an @ outside its quoted strings and comments
+	// that is not the address itself, or a quoted name that is not
+	// followed by an angle bracket
+	nameProblem string
+}
 
 // parseAddress parses the address at the start of the sanitized addr
 // and returns it with the rest of addr after it, or ok false if addr
 // doesn't start with an address. It builds no error, so that a caller
 // that drops the error doesn't pay for its call stack.
-// spec is the range of the address part in addr.
-func parseAddress(addr string) (mailAddress *mail.Address, unparsed string, ok bool, spec specRange) {
-	i := nameAddressRegexp.FindStringSubmatchIndex(addr)
-	if len(i) != 12 {
-		// fmt.Println("REGEX:", nameAddressRegex)
-		return nil, "", false, specRange{}
+func parseAddress(addr string) (parsed parsedAddress, ok bool) {
+	parsed, ok = parseNameAddress(addr)
+	if !ok {
+		return parsedAddress{}, false
 	}
-	spec = specRange{start: i[8], end: i[11]}
+
+	// Special case where the address is repeated in angle brackets
+	// after it, like in "<a@example.com> <a@example.com>". The second
+	// address must be within angle brackets, which mark the address of
+	// a name, so that "attacker@evil.com ceo@corp.com" is not read as
+	// ceo@corp.com, which net/mail rejects, and it must be the same
+	// address as written, because other parsers read both addresses:
+	// "<attacker@evil.com> <ceo@corp.com>" was read as ceo@corp.com.
+	// A loop instead of a recursion, so that a long chain of addresses
+	// doesn't exhaust the stack. The repeated address has no name: only
+	// spaces and quotes before its angle bracket, and no name in a comment.
+	first := parsed.spec
+	for strings.HasPrefix(strings.TrimLeft(parsed.unparsed, ` "`), "<") {
+		right, ok := parseNameAddress(parsed.unparsed)
+		if !ok || right.addr.Name != "" {
+			break
+		}
+		offset := len(addr) - len(parsed.unparsed)
+		spec := specRange{start: offset + right.spec.start, end: offset + right.spec.end}
+		if !sameAddressSpec(addr[first.start:first.end], addr[spec.start:spec.end]) {
+			break
+		}
+		parsed.specs = append(parsed.specs, spec)
+		parsed.unparsed = right.unparsed
+	}
+
+	if parsed.addr.Name == parsed.addr.Address {
+		parsed.addr.Name = ""
+	}
+	return parsed, true
+}
+
+// parseNameAddress parses the address with its display name or comment
+// at the start of the sanitized addr like parseAddress, but without
+// reading a repeated address after it.
+func parseNameAddress(addr string) (parsed parsedAddress, ok bool) {
+	i := nameAddressRegexp.FindStringSubmatchIndex(addr)
+	if len(i) != 10 {
+		// fmt.Println("REGEX:", nameAddressRegex)
+		return parsedAddress{}, false
+	}
+	spec := specRange{start: i[6], end: i[9]}
+	parsed.spec = spec
+	parsed.specs = []specRange{spec}
 
 	var name string
 	switch {
 	case i[3] != -1:
 		name = decodeName(unescapeQuotedPairs(addr[i[2]:i[3]]))
+		if !strings.Contains(addr[i[3]:spec.start], "<") {
+			// Like `"x@evil.com" ceo@corp.com`, which Python's email.utils
+			// reads as the one address `"x@evil.com" ceo@corp.com`
+			parsed.nameProblem = "quoted display name without angle brackets"
+		}
 	case i[5] != -1:
-		name = decodeName(removeQuotes(addr[i[4]:i[5]]))
-	case i[7] != -1:
-		name = decodeName(addr[i[6]:i[7]])
+		unquoted := addr[i[4]:i[5]]
+		name = decodeName(removeQuotes(unquoted))
+		if hasAtOutsideQuotes(unquoted) {
+			if !sameAddressSpec(unquoted, addr[spec.start:spec.end]) {
+				parsed.nameProblem = "@ in unquoted display name that is not the address"
+				break
+			}
+			// The name is the address, which other parsers read
+			// as address, so its runes are checked like those of one
+			parsed.specs = []specRange{{start: i[4], end: i[5]}, spec}
+		}
 	}
 
-	local := strings.ToLower(addr[i[8]:i[9]])
+	local := strings.ToLower(addr[i[6]:i[7]])
 	if len(local) >= 2 && local[0] == '"' && local[len(local)-1] == '"' {
 		// A quoted local part keeps its content, so the address
 		// stays the same mailbox. Like for net/mail.ParseAddress
@@ -280,9 +375,9 @@ func parseAddress(addr string) (mailAddress *mail.Address, unparsed string, ok b
 		local = unescapeQuotedPairs(local[1 : len(local)-1])
 	}
 
-	domain := strings.ToLower(addr[i[10]:i[11]])
+	domain := strings.ToLower(addr[i[8]:i[9]])
 
-	unparsed = addr[i[1]:]
+	unparsed := addr[i[1]:]
 	unparsed = strings.TrimLeft(unparsed, " ")
 
 	// Handle RFC 2822 comment syntax: address (Name)
@@ -291,36 +386,39 @@ func parseAddress(addr string) (mailAddress *mail.Address, unparsed string, ok b
 	if name == "" {
 		if comment, rest, ok := readComment(unparsed); ok {
 			name = decodeName(removeQuotes(comment))
+			end := len(addr) - len(rest)
+			parsed.specs = append(parsed.specs, specRange{start: end, end: end})
 			unparsed = strings.TrimLeft(rest, " ")
 		}
 	}
 
-	mailAddress = &mail.Address{
+	parsed.addr = &mail.Address{
 		Name:    name,
 		Address: local + "@" + domain,
 	}
+	parsed.unparsed = unparsed
+	return parsed, true
+}
 
-	// Special case where the address is duplicated in the name part.
-	// Example:
-	//   "\"Example\" <ar1@example.com>" <ar@example.com>
-	// The second address must be within angle brackets, which mark
-	// the address of a name, so that "attacker@evil.com ceo@corp.com"
-	// is not read as ceo@corp.com, which net/mail rejects.
-	if strings.HasPrefix(strings.TrimLeft(unparsed, ` "`), "<") {
-		right, unp, ok, rightSpec := parseAddress(unparsed)
-		if ok && right.Name == "" {
-			mailAddress.Address = right.Address
-			offset := len(addr) - len(unparsed)
-			spec = specRange{start: offset + rightSpec.start, end: offset + rightSpec.end}
-			unparsed = unp
+// hasAtOutsideQuotes reports whether text has an @ outside its quoted
+// strings and comments, read like nextListSeparator reads them.
+func hasAtOutsideQuotes(text string) bool {
+	var state listState
+	for i := 0; i < len(text); i++ {
+		if text[i] == '@' && !state.quoted && state.comment == 0 {
+			return true
 		}
+		state.read(text[i])
 	}
+	return false
+}
 
-	if mailAddress.Name == mailAddress.Address {
-		mailAddress.Name = ""
-	}
-
-	return mailAddress, unparsed, true, spec
+// sameAddressSpec reports whether the address parts a and b, as written,
+// are the same address: with the same local part, and the same domain
+// ignoring case.
+func sameAddressSpec(a, b string) bool {
+	i, j := strings.LastIndexByte(a, '@'), strings.LastIndexByte(b, '@')
+	return i >= 0 && j >= 0 && a[:i] == b[:j] && strings.EqualFold(a[i+1:], b[j+1:])
 }
 
 // readComment returns the content of the RFC 5322 comment at the start
@@ -495,27 +593,34 @@ func truncateForError(s string) string {
 //
 // Quotes, angle brackets and comments are read like by SplitAddressList,
 // so that a list without an error has the entries that SplitAddressList
-// returns: a comma in them doesn't separate addresses, so a quote, angle
-// bracket or comment that an address opens and doesn't close before the
-// next comma is an error, like in `"Doe <doe@example.com>, b@example.com`.
-// One that isn't closed at all holds the rest of the list, like for
-// SplitAddressList, so parsing stops at it with an error instead of
-// continuing after the next comma like after other errors. An address
-// that SplitAddressList reads as more than one entry is an error too,
-// like the one with the display name "," in `,<a@example.com>`.
+// returns: a comma in them doesn't separate addresses, so an angle bracket
+// that an address opens and doesn't close before the next comma is an
+// error, like in `Doe <doe@example.com, b@example.com`. One that isn't
+// closed at all holds the rest of the list, like for SplitAddressList, so
+// parsing stops at it with an error instead of continuing after the next
+// comma like after other errors. An address part within a quoted string
+// or a comment is an error, also if it isn't closed, and is not returned,
+// because other parsers read it as part of the quoted string or comment,
+// like in `"Doe <doe@example.com>, b@example.com`, see ParseAddress.
+// An address with an invalid display name, like the unquoted
+// `x@evil.com <ceo@corp.com>`, is returned with an error.
+// An address that SplitAddressList reads as more than one entry is an
+// error too, like the one with the display name "," in `,<a@example.com>`.
 // After an error parsing continues after the entry that SplitAddressList
 // finds there, so every address is returned at most once, also when an
 // unquoted display name with commas is followed by an error, like in
 // `Doe, John <john@example.com>; b@example.com`. Only the last part of an
 // entry with such a name that can't be parsed is parsed once more, so the
-// address of `Doe, John (john@corp) <j@x.com>` is still returned.
+// address of `Doe, John (john@corp) <j@x.com>` is still returned, and the
+// one in angle brackets after a quoted name that the first part opened,
+// like the one of `Support, "x\" <a@b.com>, y" <c@d.com>`.
 func ParseAddressList(list string) (addrs []*mail.Address, err error) {
 	return parseAddressList(sanitizeAddr(list), nil)
 }
 
 // parseAddressList is ParseAddressList for a list sanitized by sanitizeAddr.
-// If specs is not nil, the range of the address part of each returned
-// address in sanitized is appended to it.
+// If specs is not nil, the ranges of the address parts of the returned
+// addresses in sanitized are appended to it, see parsedAddress.specs.
 func parseAddressList(sanitized string, specs *[]specRange) (addrs []*mail.Address, err error) {
 	list := strings.TrimRight(sanitized, ", ")
 	if list == "" || isPlaceholderList(list) {
@@ -532,14 +637,23 @@ func parseAddressList(sanitized string, specs *[]specRange) (addrs []*mail.Addre
 			errList = append(errList, errs.Errorf("stopped parsing email address list after %d errors", len(errList)))
 			break
 		}
-		mailAddress, unparsed, ok, spec := parseAddress(remaining)
-		unparsed = strings.TrimLeft(unparsed, " ")
+		parsed, ok := parseAddress(remaining)
+		unparsed := strings.TrimLeft(parsed.unparsed, " ")
 		entry := remaining[:len(remaining)-len(unparsed)]
+		// An address within a quoted string or a comment that the entry
+		// opened before it, like the one of `"x@evil.com" "<ceo@corp.com>`,
+		// is no address of the entry: other parsers read the rest of the
+		// entry within it, also if it isn't closed
+		within := ok && withinQuoteOrComment(remaining, parsed.specs)
 		// end is the index of the comma after which parsing continues
 		// after an error, -1 if the rest of the list belongs to the entry
 		var end int
-		if !ok {
-			errList = append(errList, errs.Errorf("could not parse email address list, because of: could not parse email address: %s", truncateForError(remaining)))
+		if !ok || within {
+			if within {
+				errList = append(errList, errs.Errorf("email address %s within a quoted string or comment in email address list: %s", parsed.addr.Address, truncateForError(remaining)))
+			} else {
+				errList = append(errList, errs.Errorf("could not parse email address list, because of: could not parse email address: %s", truncateForError(remaining)))
+			}
 			// The comma where SplitAddressList ends the entry that can't
 			// be parsed, so that the parts of its unquoted display name
 			// are not parsed again, each with another error. But the
@@ -547,7 +661,10 @@ func parseAddressList(sanitized string, specs *[]specRange) (addrs []*mail.Addre
 			// is parsed once without the parts before it, so that the
 			// address of a name with a comma and an @, which the address
 			// pattern can't read, is still found, like the one of
-			// `Doe, John (john@corp) <j@x.com>`.
+			// `Doe, John (john@corp) <j@x.com>`, and the address in angle
+			// brackets after a quoted string, which an unquoted name
+			// before it opened for the address pattern, like the one of
+			// `Support, "x\" <a@b.com>, y" <c@d.com>`.
 			var lastPart int
 			lastPart, end = listEntryEnd(remaining)
 			if lastPart > 0 {
@@ -560,19 +677,28 @@ func parseAddressList(sanitized string, specs *[]specRange) (addrs []*mail.Addre
 			// SplitAddressList skips the empty entry before it.
 			// The address was not appended, so parsing continues
 			// at the first comma that separates entries.
-			errList = append(errList, errs.Errorf("',' within email address %s separates entries of email address list: %s", mailAddress.Address, truncateForError(remaining)))
+			errList = append(errList, errs.Errorf("',' within email address %s separates entries of email address list: %s", parsed.addr.Address, truncateForError(remaining)))
 			end = nextListSeparator(remaining)
 		} else {
-			addrs = append(addrs, mailAddress)
+			addrs = append(addrs, parsed.addr)
 			if specs != nil {
 				offset := len(list) - len(remaining)
-				*specs = append(*specs, specRange{start: offset + spec.start, end: offset + spec.end})
+				for _, spec := range parsed.specs {
+					*specs = append(*specs, specRange{start: offset + spec.start, end: offset + spec.end})
+				}
+			}
+			if parsed.nameProblem != "" {
+				// Like `x@evil.com <ceo@corp.com>`, which
+				// other parsers read as two addresses
+				errList = append(errList, errs.Errorf("%s of email address %s in email address list: %s", parsed.nameProblem, parsed.addr.Address, truncateForError(remaining)))
 			}
 			if unparsed != "" && unparsed[0] != ',' {
-				errList = append(errList, errs.Errorf("expected ',' after email address %s in email address list: %s", mailAddress.Address, truncateForError(unparsed)))
+				errList = append(errList, errs.Errorf("expected ',' after email address %s in email address list: %s", parsed.addr.Address, truncateForError(unparsed)))
 			} else if open := openAtEnd(entry); open != "" && (unparsed != "" || trailingComma) {
-				// Like `Doe (Sales <doe@example.com>, b@example.com`
-				errList = append(errList, errs.Errorf("%s not closed before ',' after email address %s in email address list: %s", open, mailAddress.Address, truncateForError(remaining)))
+				// Like `x <a@example.com, b@example.com`. Only an angle
+				// bracket can be open here, a quote or comment that isn't
+				// closed holds an address part, see within.
+				errList = append(errList, errs.Errorf("%s not closed before ',' after email address %s in email address list: %s", open, parsed.addr.Address, truncateForError(remaining)))
 			} else if unparsed == "" {
 				break
 			} else {
@@ -596,4 +722,21 @@ func parseAddressList(sanitized string, specs *[]specRange) (addrs []*mail.Addre
 	}
 
 	return addrs, errors.Join(errList...)
+}
+
+// withinQuoteOrComment reports whether one of the ranges specs of text,
+// in increasing order, starts within a quoted string or a comment,
+// read like nextListSeparator reads them.
+func withinQuoteOrComment(text string, specs []specRange) bool {
+	var state listState
+	i := 0
+	for _, spec := range specs {
+		for ; i < spec.start; i++ {
+			state.read(text[i])
+		}
+		if state.quoted || state.comment > 0 {
+			return true
+		}
+	}
+	return false
 }

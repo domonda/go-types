@@ -104,7 +104,6 @@ func TestAddressList_SplitRawMatchesSplitNormalized(t *testing.T) {
 		`a@example.com (outer (inner, x)), b@example.com`,
 		`a@example.com (x \), y), <b@example.com> (B (C, D)), c@example.com`,
 		`John (Sales, EU) <a@example.com>, b@example.com`,
-		`b@example.com, Doe (Sales <doe@example.com>`,
 		// Escaped quotes in quoted names, which ParseAddressList read as
 		// the end of the name, see TestParseAddressList_EscapedQuoteInName
 		`"x\" <ok@example.com>, ok2@example.com (," <other@example.net>, "z)" <ok3@example.com>`,
@@ -112,8 +111,8 @@ func TestAddressList_SplitRawMatchesSplitNormalized(t *testing.T) {
 		// A backslash escapes a rune that the parser drops, here a zero
 		// width joiner, so it doesn't escape the quote after it
 		"\"x\\\u200d\" <a@example.com>, b@example.com",
-		// An encoded-word name holds only the characters of a display name,
-		// a comma in it splits like in an unquoted name
+		// An encoded-word is read like any other word of an unquoted
+		// display name, a comma in it splits like in an unquoted name
 		`=?utf-8?q?J=C3=BCrgen_M=C3=BCller?= <j@example.de>, b@example.com`,
 		`=?utf-8?q?a,b?= <c@example.com>, d@example.com`,
 		// The no-break space in the unquoted name is read as space
@@ -140,7 +139,9 @@ func TestAddressList_SplitRawMatchesSplitNormalized(t *testing.T) {
 	// quote or angle bracket holds the rest of the list for SplitRaw,
 	// and a leading or doubled comma became the display name ",".
 	// They are invalid now, so that no validated list reads back as
-	// other entries.
+	// other entries. An unclosed comment holds the address after it for
+	// other parsers also at the end of the list, see
+	// TestParseAddress_UnclosedQuoteOrComment.
 	for _, list := range []AddressList{
 		`"Doe <a@b.cc>, z@y.zz`,
 		`x <a@b.cc, z@y.zz`,
@@ -148,6 +149,7 @@ func TestAddressList_SplitRawMatchesSplitNormalized(t *testing.T) {
 		`<a@b.cc,`,
 		`,<a@example.com>`,
 		`a@example.com,, <b@example.com>`,
+		`b@example.com, Doe (Sales <doe@example.com>`,
 	} {
 		t.Run(string(list), func(t *testing.T) {
 			assert.False(t, list.Valid())
@@ -160,9 +162,9 @@ func TestAddressList_SplitRawMatchesSplitNormalized(t *testing.T) {
 	// up to the angle bracket, with the comma, @ or parenthesis in it,
 	// while net/mail and mail servers read its comma as separator and
 	// =?utf-8?q?a@b as another recipient, or don't read the list at all.
-	// An encoded-word in a name holds none of these characters now, so
-	// the comma separates the invalid address =?utf-8?q?a@b, and the
-	// parenthesis opens a comment that holds the rest of the list.
+	// An encoded-word is read like any other word now, so the comma
+	// separates the invalid address =?utf-8?q?a@b, and the parenthesis
+	// opens a comment that holds the rest of the list.
 	for _, list := range []AddressList{
 		`=?utf-8?q?a@b,?= <hidden@example.com>, =?utf-8?q?c?= <shown@example.com>`,
 		"=\u200d?utf-8?q?a@b,?= <hidden@example.com>, shown@example.com",
@@ -198,9 +200,11 @@ func TestAddressList_UnclosedCommentHoldsRestOfList(t *testing.T) {
 			wantNorm: []Address{`a@example.com`, `b@example.com`},
 		},
 		{
+			// The address is within the comment of its name,
+			// see TestParseAddress_UnclosedQuoteOrComment
 			list:     `Doe (Sales <doe@example.com>, b@example.com`,
 			wantRaw:  []Address{`Doe (Sales <doe@example.com>, b@example.com`},
-			wantNorm: []Address{`"Doe (Sales" <doe@example.com>`},
+			wantNorm: nil,
 		},
 	}
 	for _, tt := range tests {
@@ -621,11 +625,23 @@ func TestCollectionsRefuseRunesInAddressParts(t *testing.T) {
 		"Boss <ceo@corp.com'>",
 		"Boss <ceo@corp.com '>",
 		"a@b.com, ' c@d.com",
-		"x@y.com <'a@b.com>",
-		// The address in angle brackets after an address is the address,
-		// see the special case in parseAddress
-		"\"a,b\"@c.com <'x@y.com>",
-		"\"a,b\"@c.com <x\u00ad@y.com>",
+		"a@b.com <'a@b.com>",
+		// The same address repeated in angle brackets after it is checked
+		// too, before and after, see the special case in parseAddress
+		"\"a,b\"@c.com <'\"a,b\"@c.com>",
+		"\"a,b\"@c.com <\"a,b\"@c\u00ad.com>",
+		"<a\u00ad@b.com> <a@b.com>",
+		"<a@b.com'> <a@b.com>",
+		// An unquoted name that is the address is read as address by
+		// Python's email.utils, here as \u00a0a@b.com, and a rune after
+		// a comment after an address is appended to its domain, here
+		// a@b.com\u00a0. Found by the differential test against Python.
+		"c@d.com, \u00a0a@b.com <a@b.com>",
+		"a\u00ad@b.com <a@b.com>",
+		"a@b.com\u3000<a@b.com>",
+		"a@b.com (x)\u00a0, c@d.com",
+		"a@b.com ()\u200b, c@d.com",
+		"\"a,b\"@c.com (x)\u3000<\"a,b\"@c.com>",
 	}
 	for _, addr := range refused {
 		t.Run(string(addr), func(t *testing.T) {
@@ -662,6 +678,12 @@ func TestCollectionsRefuseRunesInAddressParts(t *testing.T) {
 		"\"John\"\t<a@b.com>",
 		"a@b.com (Mi\u00adke)",
 		"a@b.com,\tc@d.com",
+		// A tab right after an address part is a space for net/mail
+		// and Python too, which read the same addresses
+		"a@b.com\t(Mike)",
+		"a@b.com\t, c@d.com",
+		"a@b.com (Mike)\t, c@d.com",
+		"a@b.com\t<a@b.com>",
 		"a@b.com,\u00a0\"Doe\" <c@d.com>",
 		"x <\ta@b.com>",
 		// After the angle bracket the rune is no part of the address part:

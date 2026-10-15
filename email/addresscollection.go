@@ -83,9 +83,9 @@ func SplitAddressList(list string) []Address {
 // brackets and nested comments, with backslash escapes in quotes and
 // comments, or -1 if there is none. SplitAddressList splits at these
 // commas, and ParseAddressList skips to them after an invalid entry,
-// so that both find the same entries. An RFC 2047 encoded-word of a
-// display name holds none of these characters, see phraseEncodedWord,
-// so the address pattern and nextListSeparator read it alike.
+// so that both find the same entries. An RFC 2047 encoded-word is read
+// like any other word, so a comma, quote, parenthesis or angle bracket
+// written unencoded in it is read like outside of it, like by net/mail.
 // list starts at the start of an entry and is sanitized by sanitizeAddr.
 func nextListSeparator(list string) int {
 	var state listState
@@ -283,11 +283,11 @@ func hasHiddenAddrSpecRune(text string, single bool) bool {
 	sanitized := sanitizeRunes(text, &offsets)
 	var specs []specRange
 	if single {
-		_, unparsed, ok, spec := parseAddress(sanitized)
-		if !ok || strutil.TrimSpace(unparsed) != "" {
+		parsed, ok := parseAddress(sanitized)
+		if singleAddressProblem(sanitized, parsed, ok) != "" {
 			return false
 		}
-		specs = append(specs, spec)
+		specs = parsed.specs
 	} else if _, err := parseAddressList(sanitized, &specs); err != nil {
 		return false
 	}

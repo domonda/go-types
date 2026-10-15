@@ -718,11 +718,11 @@ func TestAddressSet_MarshalText(t *testing.T) {
 	require.NoError(t, back.UnmarshalText(text))
 	assert.Equal(t, MakeAddressSet("a@example.com", "Doe, John <john@example.com>"), back)
 
-	// A valid address whose name opens a comment reads back alone, but in
-	// the joined list the comment swallows the entries after it, so the
-	// set is refused instead of reading back with one entry
-	require.NoError(t, Address("Doe (Sales <doe@example.com>").Validate())
-	_, err = MakeAddressSet("Doe (Sales <doe@example.com>", "b@example.com").MarshalText()
+	// A valid address with an angle bracket that isn't closed reads back
+	// alone, but in the joined list the bracket swallows the entries after
+	// it, so the set is refused instead of reading back with one entry
+	require.NoError(t, Address("Doe <doe@example.com").Validate())
+	_, err = MakeAddressSet("Doe <doe@example.com", "b@example.com").MarshalText()
 	assert.ErrorContains(t, err, "would not read back")
 
 	text, err = AddressSet(nil).MarshalText()

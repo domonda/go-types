@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/mail"
 	"reflect"
+	"runtime/debug"
 	"slices"
 	"sort"
 	"strings"
@@ -28,8 +29,8 @@ var (
 		`"Erik Unger" <erik@domonda.com>`:                               {Name: "Erik Unger", Address: "erik@domonda.com"},
 		`"Erik Unger" <"Erik.Unger"@domonda.com>`:                       {Name: "Erik Unger", Address: "erik.unger@domonda.com"},
 		`" Erik Unger " <erik@domonda.com>`:                             {Name: "Erik Unger", Address: "erik@domonda.com"},
-		`@Erik <erik@domonda.com>`:                                      {Name: "@Erik", Address: "erik@domonda.com"},
-		`erik.unger@domonda.com <erik@domonda.com>`:                     {Name: "erik.unger@domonda.com", Address: "erik@domonda.com"}, // Use "erik.unger" in name part vs "erik" in address part to test picking up the right part
+		`"@Erik" <erik@domonda.com>`:                                    {Name: "@Erik", Address: "erik@domonda.com"},
+		`"erik.unger@domonda.com" <erik@domonda.com>`:                   {Name: "erik.unger@domonda.com", Address: "erik@domonda.com"}, // Use "erik.unger" in name part vs "erik" in address part to test picking up the right part
 		`"Erik Unger-Phd </Domonda-IT>" <Erik.Unger-Phd@domonda-it.at>`: {Name: "Erik Unger-Phd </Domonda-IT>", Address: "erik.unger-phd@domonda-it.at"},
 		`refill@example24.de`:                                           {Name: "", Address: "refill@example24.de"},
 		`x@mail.example.com`:                                            {Name: "", Address: "x@mail.example.com"},
@@ -114,6 +115,9 @@ var (
 		`, erik@domonda.com`:     {},
 		` , erik@domonda.com`:    {},
 		`unger erik@domonda.com`: {},
+		// An @ in an unquoted name, see TestParseAddress_AtInUnquotedName
+		`@Erik <erik@domonda.com>`:                  {},
+		`erik.unger@domonda.com <erik@domonda.com>`: {},
 		// `If need of a ''Declaration of Compliance'' please contact us@example.com`: {},
 	}
 
@@ -127,6 +131,9 @@ var (
 		`, erik@domonda.com`:     {},
 		` , erik@domonda.com`:    {},
 		`unger erik@domonda.com`: {},
+		// An @ in an unquoted name, see TestParseAddress_AtInUnquotedName
+		`@Erik <erik@domonda.com>`:                  {},
+		`erik.unger@domonda.com <erik@domonda.com>`: {},
 	}
 )
 
@@ -255,14 +262,194 @@ func TestParseAddress_QuotedNameEscapes(t *testing.T) {
 	}
 
 	// Outside a quoted name quotes and backslashes are no part of the name
-	for addr, want := range map[string]string{
-		`Jo"hn <a@example.com>`:             "John",
-		`John "Johnny" Doe <a@example.com>`: "John Johnny Doe",
-		`"Doe <a@example.com>`:              "Doe",
+	parsed, err := ParseAddress(`John "Johnny" Doe <a@example.com>`)
+	require.NoError(t, err)
+	assert.Equal(t, "John Johnny Doe", parsed.Name)
+
+	// A quote that isn't closed holds the rest of the text for other
+	// parsers, which read no address in angle brackets in it, see
+	// TestParseAddress_UnclosedQuoteOrComment
+	for _, addr := range []string{
+		`Jo"hn <a@example.com>`,
+		`"Doe <a@example.com>`,
+	} {
+		_, err := ParseAddress(addr)
+		assert.Error(t, err, addr)
+	}
+}
+
+// TestParseAddress_UnclosedQuoteOrComment protects the recipient of a
+// stored address: a quote or comment that isn't closed holds the rest of
+// the text for other parsers, while the parser read an angle bracket in it
+// as the start of the address. `"x@evil.com" "<ceo@corp.com>` validated
+// as ceo@corp.com, while Python's email.utils.getaddresses reads
+// x@evil.com, and `Doe (Sales <doe@example.com>` as doe@example.com, while
+// Python reads the address Doe. Address.Validate and the Validate methods
+// of the collections refuse them, also as the last entry of a list.
+func TestParseAddress_UnclosedQuoteOrComment(t *testing.T) {
+	for _, addr := range []string{
+		`"x@evil.com" "<ceo@corp.com>`,
+		`"Doe <doe@example.com>`,
+		`Jo"hn <j@example.com>`,
+		`Doe (Sales <doe@example.com>`,
+		`Doe (Sales \) <doe@example.com>`,
+		`=?utf-8?q?(Sales?= <a@example.com>`,
+		// The repeated address after it is within the quote
+		`<doe@example.com> "<doe@example.com>`,
+	} {
+		t.Run(addr, func(t *testing.T) {
+			_, err := ParseAddress(addr)
+			assert.Error(t, err, "ParseAddress")
+			assert.Error(t, Address(addr).Validate(), "Address.Validate")
+			assert.Error(t, NullableAddress(addr).Validate(), "NullableAddress.Validate")
+			_, err = Address(addr).Normalized()
+			assert.Error(t, err, "Normalized")
+			for method, err := range validateCollections(Address(addr)) {
+				assert.Error(t, err, method)
+			}
+			// Also as last entry of a list,
+			// which no comma after it ends
+			list := AddressList("b@example.com, " + addr)
+			assert.Error(t, list.Validate(), "last entry of %q", list)
+			// The address within the quote or comment is not returned
+			parsed, err := list.Parse()
+			assert.Error(t, err)
+			assert.Equal(t, []string{"b@example.com"}, addressParts(parsed))
+		})
+	}
+
+	// The quote of the local part closes the quote of the name, so the
+	// quotes are balanced, but the address starts within the quoted
+	// string `"hn <"`. Python reads one address of the whole text.
+	// Found by the differential test against Python.
+	for _, addr := range []string{
+		`Jo"hn <"a\"b"@example.com>`,
+		`Jo"hn <"a\"b"@example.com`,
+	} {
+		_, err := ParseAddress(addr)
+		assert.Error(t, err, addr)
+		assert.Error(t, AddressList(addr).Validate(), addr)
+		assert.Error(t, MakeAddressSet(Address(addr)).Validate(), addr)
+	}
+
+	// Closed, the quote is a name and the comment part of the name.
+	// An unclosed angle bracket at the end holds no other address,
+	// like for Python, which reads the same address.
+	for addr, want := range map[string]*mail.Address{
+		`"x@evil.com" <ceo@corp.com>`:   {Name: "x@evil.com", Address: "ceo@corp.com"},
+		`Doe (Sales) <doe@example.com>`: {Name: "Doe (Sales)", Address: "doe@example.com"},
+		`x <a@example.com`:              {Name: "x", Address: "a@example.com"},
 	} {
 		parsed, err := ParseAddress(addr)
 		require.NoError(t, err, addr)
-		assert.Equal(t, want, parsed.Name, addr)
+		assert.Equal(t, want, parsed, addr)
+		assert.NoError(t, AddressList("b@example.com, "+addr).Validate(), addr)
+	}
+}
+
+// TestParseAddress_QuotedNameWithoutAngleBrackets protects the recipient
+// of a stored address: a quoted display name was read as name also
+// without an angle bracket after it, so `"x@evil.com" ceo@corp.com`
+// validated as ceo@corp.com, and `"<a@b.co""m>"@corp.com` as m>@corp.com,
+// while Python's email.utils reads a quoted string followed by a word as
+// one local part: the one address `"x@evil.com" ceo@corp.com`. They are
+// errors now, lenient parsing still returns the address after the name.
+// Found by the differential test against Python.
+func TestParseAddress_QuotedNameWithoutAngleBrackets(t *testing.T) {
+	for _, addr := range []string{
+		`"x@evil.com" ceo@corp.com`,
+		`"Doe, John" o'brien@example.com`,
+		`""a@example.com`,
+		`"<a@b.co""m>"@corp.com`,
+		`"x@evil.com <a@x.de>, <a"b@evil.com`,
+	} {
+		t.Run(addr, func(t *testing.T) {
+			_, err := ParseAddress(addr)
+			assert.Error(t, err, "ParseAddress")
+			for method, err := range validateCollections(Address(addr)) {
+				assert.Error(t, err, method)
+			}
+			parsed, err := ParseAddressList(addr)
+			assert.Error(t, err)
+			assert.Len(t, parsed, 1)
+		})
+	}
+
+	// A quoted local part is no name, and a quoted name before
+	// an angle bracket is valid, also without a space
+	for addr, want := range map[string]*mail.Address{
+		`"a b"@example.com`:              {Address: "a b@example.com"},
+		`"x@evil.com"<ceo@corp.com>`:     {Name: "x@evil.com", Address: "ceo@corp.com"},
+		"\"x@evil.com\"\t<ceo@corp.com>": {Name: "x@evil.com", Address: "ceo@corp.com"},
+	} {
+		parsed, err := ParseAddress(addr)
+		require.NoError(t, err, addr)
+		assert.Equal(t, want, parsed, addr)
+	}
+}
+
+// TestParseAddress_AtInUnquotedName protects the recipients of a stored
+// address: an unquoted display name with an @ was read as name, and a
+// second address in angle brackets replaced the first one, so that these
+// addresses validated as ceo@corp.com, and Normalized of
+// `<x@evil.com> <ceo@corp.com>` returned ceo@corp.com, while Python's
+// email.utils.getaddresses, which smtplib.send_message uses, reads them
+// with a comma after them as the two recipients x@evil.com and
+// ceo@corp.com. They are errors now. A quoted name can hold an @, and an
+// unquoted name or a second address that is the same address as written,
+// with the domain in any case, is the address.
+func TestParseAddress_AtInUnquotedName(t *testing.T) {
+	for _, addr := range []string{
+		`x@evil.com <ceo@corp.com>`,
+		`Bob <x@evil.com> <ceo@corp.com>`,
+		`<x@evil.com> <ceo@corp.com>`,
+		// A repeated address has no name, like before
+		`<ceo@corp.com> <ceo@corp.com> (Bob)`,
+		`x@evil.com (y) <ceo@corp.com>`,
+		`"a,b"@evil.com <ceo@corp.com>`,
+		`@Bob <ceo@corp.com>`,
+		// An encoded-word is a word of the unquoted name
+		`=?utf-8?q?x@evil.com?= <ceo@corp.com>`,
+		// The local part of the name is another mailbox
+		`Ceo@corp.com <ceo@corp.com>`,
+		`<Ceo@corp.com> <ceo@corp.com>`,
+	} {
+		t.Run(addr, func(t *testing.T) {
+			_, err := ParseAddress(addr)
+			assert.Error(t, err, "ParseAddress")
+			_, err = Address(addr).Normalized()
+			assert.Error(t, err, "Normalized")
+			assert.Error(t, NullableAddress(addr).Validate(), "NullableAddress.Validate")
+			for method, err := range validateCollections(Address(addr)) {
+				assert.Error(t, err, method)
+			}
+			assert.Error(t, AddressList(addr+",").Validate(), "with a comma like for Python")
+			// Lenient parsing still returns one of the addresses
+			parsed, err := ParseAddressList(addr)
+			assert.Error(t, err)
+			assert.Len(t, parsed, 1)
+		})
+	}
+
+	for addr, want := range map[string]*mail.Address{
+		`"x@evil.com" <ceo@corp.com>`:             {Name: "x@evil.com", Address: "ceo@corp.com"},
+		`John "x@evil.com" Doe <ceo@corp.com>`:    {Name: "John x@evil.com Doe", Address: "ceo@corp.com"},
+		`John (x@evil.com) <ceo@corp.com>`:        {Name: "John (x@evil.com)", Address: "ceo@corp.com"},
+		`ceo@corp.com <ceo@corp.com>`:             {Address: "ceo@corp.com"},
+		`ceo@Corp.COM <ceo@corp.com>`:             {Name: "ceo@Corp.COM", Address: "ceo@corp.com"},
+		`<ceo@corp.com> <ceo@Corp.com>`:           {Address: "ceo@corp.com"},
+		`Boss <ceo@corp.com> <ceo@corp.com>`:      {Name: "Boss", Address: "ceo@corp.com"},
+		`"a,b"@corp.com <"a,b"@corp.com>`:         {Address: "a,b@corp.com"},
+		`=?utf-8?q?x=40evil.com?= <ceo@corp.com>`: {Name: "x@evil.com", Address: "ceo@corp.com"},
+	} {
+		t.Run(addr, func(t *testing.T) {
+			parsed, err := ParseAddress(addr)
+			require.NoError(t, err)
+			assert.Equal(t, want, parsed)
+			for method, err := range validateCollections(Address(addr)) {
+				assert.NoError(t, err, method)
+			}
+		})
 	}
 }
 
@@ -398,19 +585,21 @@ func TestParseAddressList_Comments(t *testing.T) {
 		{list: `a@example.com (outer (inner, x)), b@example.com`, want: []string{"a@example.com", "b@example.com"}},
 		{list: `a@example.com (x \), y), b@example.com`, want: []string{"a@example.com", "b@example.com"}},
 		{list: `John (Sales, EU) <a@example.com>, b@example.com`, want: []string{"a@example.com", "b@example.com"}},
-		// An address with an unclosed comment in its name is valid
-		// if no comma follows, like for ParseAddress
-		{list: `b@example.com, Doe (Sales <doe@example.com>`, want: []string{"b@example.com", "doe@example.com"}},
+		// An address within a comment of its name is no address, also if no
+		// comma follows: Python's email.utils reads the address Doe with
+		// the comment "Sales <doe@example.com>", see
+		// TestParseAddress_UnclosedQuoteOrComment
+		{list: `b@example.com, Doe (Sales <doe@example.com>`, want: []string{"b@example.com"}, wantErr: true},
 		// The comment holds the rest of the list, so b@example.com is no
 		// address: it was returned after the comment ended at "(y)"
 		{list: `a@example.com (x, (y), b@example.com`, want: []string{"a@example.com"}, wantErr: true},
 		{list: `a@example.com, b@example.com (x, c@example.com`, want: []string{"a@example.com", "b@example.com"}, wantErr: true},
 		// The comma after doe@example.com is in the comment of its name
-		{list: `Doe (Sales <doe@example.com>, b@example.com`, want: []string{"doe@example.com"}, wantErr: true},
-		{list: `Doe (Sales <doe@example.com>,`, want: []string{"doe@example.com"}, wantErr: true},
+		{list: `Doe (Sales <doe@example.com>, b@example.com`, want: nil, wantErr: true},
+		{list: `Doe (Sales <doe@example.com>,`, want: nil, wantErr: true},
 		// A comment that is closed later doesn't hold the rest of the list,
 		// parsing continues after the next comma like after other errors
-		{list: `Doe (Sales <doe@example.com>, b), c@example.com`, want: []string{"doe@example.com", "c@example.com"}, wantErr: true},
+		{list: `Doe (Sales <doe@example.com>, b), c@example.com`, want: []string{"c@example.com"}, wantErr: true},
 		// An entry that can't be parsed is skipped up to the next comma,
 		// but not into a comment that it opened and didn't close
 		{list: `bad (x, b@example.com`, want: nil, wantErr: true},
@@ -425,7 +614,7 @@ func TestParseAddressList_Comments(t *testing.T) {
 		{list: `bad@@, a@b.cc, c@d.ee, z@y.zz (x`, want: []string{"a@b.cc", "c@d.ee", "z@y.zz"}, wantErr: true},
 		// An escaped ')' doesn't close the comment that an unquoted
 		// name opened, so the comma is inside it and b is not separate
-		{list: `Doe (Sales \) <doe@example.com>, b@example.com`, want: []string{"doe@example.com"}, wantErr: true},
+		{list: `Doe (Sales \) <doe@example.com>, b@example.com`, want: nil, wantErr: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.list, func(t *testing.T) {
@@ -451,23 +640,26 @@ func TestParseAddressList_Comments(t *testing.T) {
 // parsed as two addresses without an error, while SplitAddressList and
 // so AddressSet.Scan read one entry and net/mail rejects the list.
 // A leading or doubled comma is an empty entry, which became the display
-// name "," of the next address.
+// name "," of the next address. An address within an unclosed quote is
+// no address, other parsers read it as part of the quoted string, see
+// TestParseAddress_UnclosedQuoteOrComment.
 func TestParseAddressList_UnclosedQuoteOrAngle(t *testing.T) {
 	tests := []struct {
 		list    string
 		want    []string // the addresses parts of the parsed addresses
 		wantErr bool
 	}{
-		{list: `"Doe <a@b.cc>, z@y.zz`, want: []string{"a@b.cc"}, wantErr: true},
+		{list: `"Doe <a@b.cc>, z@y.zz`, want: nil, wantErr: true},
 		{list: `x <a@b.cc, z@y.zz`, want: []string{"a@b.cc"}, wantErr: true},
-		{list: `Jo"hn <a@example.com>, b@example.com`, want: []string{"a@example.com"}, wantErr: true},
+		{list: `Jo"hn <a@example.com>, b@example.com`, want: nil, wantErr: true},
 		// The comma trimmed from the end of the list is in the bracket
 		{list: `<a@b.cc,`, want: []string{"a@b.cc"}, wantErr: true},
-		// Without a comma after them they hold no other entry,
+		// Without a comma after it the angle bracket holds no other entry,
 		// so the address is valid like for ParseAddress
-		{list: `"Doe <a@b.cc>`, want: []string{"a@b.cc"}},
 		{list: `x <a@b.cc`, want: []string{"a@b.cc"}},
-		{list: `a@b.cc, Jo"hn <c@d.ee>`, want: []string{"a@b.cc", "c@d.ee"}},
+		// A quote holds the address also at the end of the list
+		{list: `"Doe <a@b.cc>`, want: nil, wantErr: true},
+		{list: `a@b.cc, Jo"hn <c@d.ee>`, want: []string{"a@b.cc"}, wantErr: true},
 		// An empty entry is no display name
 		{list: `,<a@example.com>`, want: []string{"a@example.com"}, wantErr: true},
 		{list: `a@example.com,, <b@example.com>`, want: []string{"a@example.com", "b@example.com"}, wantErr: true},
@@ -475,12 +667,12 @@ func TestParseAddressList_UnclosedQuoteOrAngle(t *testing.T) {
 		// separates entries, up to the entry with the unclosed quote or
 		// angle bracket, which holds the rest of the list
 		{list: `bad, a@b.cc, x <c@d.ee, e@f.gg`, want: []string{"a@b.cc", "c@d.ee"}, wantErr: true},
-		{list: `bad, a@b.cc, "e <e@f.com>, g@h.com`, want: []string{"a@b.cc", "e@f.com"}, wantErr: true},
-		{list: `bad (x, y), a@b.cc, Jo"hn <c@d.ee>, e@f.gg`, want: []string{"a@b.cc", "c@d.ee"}, wantErr: true},
-		// A comma that separates entries for SplitAddressList within what
-		// the address pattern reads as one address, here between the
-		// quotes of the second address in angle brackets after the first,
-		// see the special case in parseAddress. Neither entry is valid.
+		{list: `bad, a@b.cc, "e <e@f.com>, g@h.com`, want: []string{"a@b.cc"}, wantErr: true},
+		{list: `bad (x, y), a@b.cc, Jo"hn <c@d.ee>, e@f.gg`, want: []string{"a@b.cc"}, wantErr: true},
+		// A comma that separates entries for SplitAddressList between the
+		// quotes of the address in angle brackets, which the pattern reads
+		// as the address of the name `x@y.com "`, and which starts within
+		// the quoted string `"<"`. Neither entry is valid.
 		{list: `x@y.com "<"a,b"@x.com>`, want: nil, wantErr: true},
 	}
 	for _, tt := range tests {
@@ -496,6 +688,38 @@ func TestParseAddressList_UnclosedQuoteOrAngle(t *testing.T) {
 				got = append(got, addr.Address)
 			}
 			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+// TestParseAddressList_NoAddressFromQuoteOrComment protects the recipients
+// that lenient parsing returns, like Message.Recipients of inbound mail:
+// an address part within a quoted string or comment, closed or not, is
+// never returned, because other parsers read it as part of the quoted
+// string or comment. For the first list ParseAddressList returned
+// ceo@corp.com, which the unquoted name Support opened a quote before,
+// and dropped attacker@evil.com, the address in angle brackets after the
+// quoted name that Python's email.utils reads. The last part of such an
+// entry is parsed once more, so that address is returned now.
+func TestParseAddressList_NoAddressFromQuoteOrComment(t *testing.T) {
+	tests := []struct {
+		list string
+		want []string // the address parts of the parsed addresses
+	}{
+		{list: `Support, "x\" <ceo@corp.com>, y (," <attacker@evil.com>, z@z.com`, want: []string{"attacker@evil.com", "z@z.com"}},
+		{list: `Support, "x\" <a@b.com>, y" <c@d.com>`, want: []string{"c@d.com"}},
+		{list: `"x@evil.com" "<a@corp.com>`, want: []string{}},
+		{list: `b@corp.com, "x@evil.com" "<a@corp.com>`, want: []string{"b@corp.com"}},
+		{list: `"x <a@b.com> y", z@z.com`, want: []string{"z@z.com"}},
+		{list: `Doe (Sales <doe@example.com>, b), c@example.com`, want: []string{"c@example.com"}},
+		{list: `(x <a@b.com>) <c@d.com>, e@f.com`, want: []string{"e@f.com"}},
+		{list: `Jo"hn <"a\"b"@example.com>, e@f.com`, want: []string{"e@f.com"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.list, func(t *testing.T) {
+			addrs, err := ParseAddressList(tt.list)
+			assert.Error(t, err)
+			assert.Equal(t, tt.want, addressParts(addrs))
 		})
 	}
 }
@@ -597,9 +821,10 @@ func TestParseAddressList_ErrorAfterDisplayNameWithCommas(t *testing.T) {
 // also with an unencoded comma or @ in it, so that the list below validated
 // with the one recipient ceo@corp.example, and SplitAddressList kept it as
 // one entry, while net/mail and mail servers read the comma as separator and
-// =?utf-8?q?spy@evil.example as another recipient. An encoded-word in a
-// display name holds only the characters that RFC 2047 allows there, so
-// the parser reads the recipients that net/mail reads.
+// =?utf-8?q?spy@evil.example as another recipient. An encoded-word is read
+// like any other word of an unquoted display name, so the parser reads the
+// recipients that net/mail reads, and an unencoded @ in it is an @ in an
+// unquoted name, see TestParseAddress_AtInUnquotedName.
 func TestParseAddressList_EncodedWordNameHoldsNoAddress(t *testing.T) {
 	for _, list := range []string{
 		`=?utf-8?q?spy@evil.example,?= <ceo@corp.example>`,
@@ -630,8 +855,12 @@ func TestParseAddressList_EncodedWordNameHoldsNoAddress(t *testing.T) {
 		assert.Error(t, err, list)
 	}
 
-	// Encoded-words that hold only the characters of a display name,
-	// with commas and @ encoded, are still one name
+	// Without a comma the unencoded @ is in the unquoted name, which other
+	// parsers read as address, see TestParseAddress_AtInUnquotedName
+	_, err := ParseAddressList(`=?utf-8?q?spy@evil.example?= <ceo@corp.example>`)
+	assert.Error(t, err)
+
+	// Encoded-words with commas and @ encoded are one name
 	for addr, wantName := range map[string]string{
 		`=?utf-8?q?J=C3=BCrgen_M=C3=BCller?= <j@x.de>`:    "Jürgen Müller",
 		`=?utf-8?q?a=40b=2C?= <j@x.de>`:                   "a@b,",
@@ -991,15 +1220,32 @@ func TestParseAddressList_LongGarbageList(t *testing.T) {
 	}
 }
 
+// TestParseAddress_LongChainOfRepeatedAddresses protects the process: the
+// parser read an address repeated in angle brackets after an address with
+// a recursion per address, so millions of them like `<a@x.com> <a@x.com> ...`
+// exhausted the goroutine stack, a fatal error that no recover catches.
+// A loop reads them now. The stack limit is lowered, so that the recursion
+// failed with these 20,000 addresses already.
+func TestParseAddress_LongChainOfRepeatedAddresses(t *testing.T) {
+	defer debug.SetMaxStack(debug.SetMaxStack(1 << 20))
+	parsed, err := ParseAddress(strings.Repeat("<a@x.com> ", 20_000))
+	require.NoError(t, err)
+	assert.Equal(t, &mail.Address{Address: "a@x.com"}, parsed)
+}
+
 // TestParseAddress_NoSecondUnbracketedAddress protects the sender of a
 // message: "attacker@evil.com ceo@corp.com" was read as ceo@corp.com,
 // which net/mail rejects, while a check of the first address saw
-// evil.com. Only an address in angle brackets is the address of a name.
+// evil.com. Only an address in angle brackets is the address of a name,
+// and a name with an address must be quoted, see
+// TestParseAddress_AtInUnquotedName.
 func TestParseAddress_NoSecondUnbracketedAddress(t *testing.T) {
 	_, err := ParseAddress("attacker@evil.com ceo@corp.com")
 	assert.Error(t, err)
+	_, err = ParseAddress("attacker@evil.com <ceo@corp.com>")
+	assert.Error(t, err)
 
-	parsed, err := ParseAddress("attacker@evil.com <ceo@corp.com>")
+	parsed, err := ParseAddress(`"attacker@evil.com" <ceo@corp.com>`)
 	require.NoError(t, err)
 	assert.Equal(t, "ceo@corp.com", parsed.Address)
 	parsed, err = ParseAddress(`"\"Example\" <ar1@example.com>" <ar@example.com>`)
