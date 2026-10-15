@@ -3,6 +3,7 @@ package email
 import (
 	"encoding/json"
 	"fmt"
+	"net/mail"
 	"strings"
 	"testing"
 	"unicode"
@@ -262,6 +263,10 @@ func FuzzSplitRawMatchesParse(f *testing.F) {
 		// Placeholders without the runes that the parser drops
 		"undisclosed\u200d-recipients:",
 		"Undisclosed re\u202ecipients",
+		// Runes in address parts that the parser drops or reads as space,
+		// see TestCollectionsRefuseRunesInAddressParts
+		"ad\u00admin@corp.com",
+		"x <\u00a0a@b.com>, b@example.com",
 	} {
 		f.Add(list)
 	}
@@ -575,6 +580,108 @@ func TestCollectionsValidateAgreesWithValueAtTrailingBackslash(t *testing.T) {
 			assert.Error(t, err, "ParseAddressList")
 		})
 	}
+}
+
+// The parser reads an address part without the runes that it drops, like
+// the soft hyphen, and with other spaces read as the ASCII space, while
+// net/mail and mail servers read them as part of the local part or domain,
+// so "ad<soft hyphen>min@corp.com" validated as admin@corp.com and was
+// stored and sent to another mailbox. The collections refuse every rune
+// within an address part that the parser drops or changes, in Validate
+// and in the methods that write the text as stored. Display names keep
+// the rule of hasUnsafeRune, see TestCollectionsWriteNamesWithSpecialSpacesAndJoiners.
+func TestCollectionsRefuseRunesInAddressParts(t *testing.T) {
+	refused := []Address{
+		"ad\u00admin@corp.com",
+		"Boss <ceo\u00ad@corp.com>",
+		"Boss <ceo@corp\u00ad.com>",
+		"x <\u00a0a@b.com>",
+		"x <\ufeffa@b.com>",
+		"x <\u3000a@b.com>",
+		"Boss <ceo@corp.com\u200b>",
+		"x <a@b.com\u2028>",
+		"<a@b.com\u200e>",
+		"\"a\u200db\"@x.com",
+		// A tab is a space for net/mail outside a quoted string,
+		// but part of a quoted local part
+		"\"a\tb\"@x.com",
+		// After a comma the next address starts, so net/mail reads
+		// the no-break space as part of its local part, and before a
+		// comma as part of the domain
+		"a@b.com,\u00a0c@d.com",
+		"a@b.com\u00a0, c@d.com",
+		// A backslash escapes the dropped rune in a quoted local part
+		"\"a\\\u200db\"@x.com",
+	}
+	for _, addr := range refused {
+		t.Run(string(addr), func(t *testing.T) {
+			parsed, err := ParseAddressList(string(addr))
+			require.NoError(t, err, "the parser reads it without the rune")
+			if stdlib, err := mail.ParseAddressList(string(addr)); err == nil {
+				assert.NotEqual(t, addressParts(parsed), addressParts(stdlib), "net/mail reads another address")
+			}
+			for method, err := range validateCollections(addr) {
+				assert.Error(t, err, method)
+			}
+			for method, err := range writeCollections(addr) {
+				assert.Error(t, err, method)
+			}
+			// Validate refuses it with the error that Value returns
+			_, valueErr := AddressList(addr).Value()
+			assert.Equal(t, errs.UnwrapCallStack(AddressList(addr).Validate()).Error(), errs.UnwrapCallStack(valueErr).Error())
+			// The normalized address is what the parser read
+			norm, err := addr.Normalized()
+			if err == nil {
+				for method, err := range writeCollections(norm) {
+					assert.NoError(t, err, "%s of %q", method, norm)
+				}
+			}
+		})
+	}
+
+	// In display names and comments, and as space between the parts
+	// of a list, the runes are valid and written as stored
+	for _, addr := range []Address{
+		"Donau\u00addampf <kapitaen@example.at>",
+		"John\u00a0<a@b.com>",
+		"\"John\"\u00a0<a@b.com>",
+		"\"John\"\t<a@b.com>",
+		"a@b.com (Mi\u00adke)",
+		"a@b.com,\tc@d.com",
+		"a@b.com,\u00a0\"Doe\" <c@d.com>",
+		"x <\ta@b.com>",
+		// After the angle bracket the rune is no part of the address part:
+		// net/mail rejects the list, but reads no other address
+		"<a@b.com>\u00a0(Comment)",
+		// Between a name and its angle bracket, also after a quoted name
+		// with a comma and @, or a name of only that rune before an address
+		// with a comment
+		"\"Doe, @John\"\u3000 <j@x.com>",
+		"\"cc@evil.com,\"\u00ad <cc@good.com>",
+		"a@example.com (x \\), y),\u200b <b@example.com> (B (C, D)), c@example.com",
+	} {
+		t.Run(string(addr), func(t *testing.T) {
+			for method, err := range validateCollections(addr) {
+				if method == "AddressSet.Validate" && strings.Contains(string(addr), ",") {
+					// A list is no address of a set
+					continue
+				}
+				assert.NoError(t, err, method)
+			}
+			v, err := AddressList(addr).Value()
+			require.NoError(t, err)
+			assert.Equal(t, string(addr), v, "written as stored")
+		})
+	}
+}
+
+// addressParts returns the address parts of addrs lower cased.
+func addressParts(addrs []*mail.Address) []string {
+	parts := make([]string, len(addrs))
+	for i, addr := range addrs {
+		parts[i] = strings.ToLower(addr.Address)
+	}
+	return parts
 }
 
 // BenchmarkReadAddressCollection measures reading 1000 addresses in every

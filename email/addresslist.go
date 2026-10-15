@@ -161,10 +161,13 @@ func (l AddressList) UniqueAddressParts() (AddressSet, error) {
 // A list with a control character other than the tab, like a line break
 // or a NUL, a bidi embedding, override or isolate, or invalid UTF-8 within
 // the text is an error too, because Value writes the list as stored and
-// the parser ignores these runes. Surrounding whitespace is not checked,
+// the parser ignores these runes. So is an address part with a rune that
+// the parser drops or reads as another rune, like a soft hyphen or a space
+// other than U+0020, because net/mail and mail servers read another
+// mailbox in the stored list. Surrounding whitespace is not checked,
 // because Value trims it.
 func (l AddressList) Validate() error {
-	if err := checkSafeRunes(string(l), "email address list"); err != nil {
+	if err := checkSafeRunes(string(l), "email address list", false); err != nil {
 		return err
 	}
 	_, err := l.Parse()
@@ -245,7 +248,7 @@ func headerAddresses(addrs ...*mail.Address) string {
 // It returns the list as stored with the surrounding whitespace trimmed,
 // SQL NULL for a blank list, or the error of Validate for an invalid list,
 // also for a line break, a NUL or a bidi override within the list,
-// see Validate.
+// or a rune in an address part that the parser drops, see Validate.
 func (l AddressList) Value() (driver.Value, error) {
 	list := strutil.TrimSpace(l)
 	if list == "" {

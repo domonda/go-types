@@ -11,6 +11,8 @@ import (
 
 	"github.com/domonda/go-errs"
 
+	"github.com/domonda/go-types/strutil"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -982,4 +984,100 @@ func TestParseAddress_NoSecondUnbracketedAddress(t *testing.T) {
 	parsed, err = ParseAddress(`"\"Example\" <ar1@example.com>" <ar@example.com>`)
 	require.NoError(t, err)
 	assert.Equal(t, "ar@example.com", parsed.Address)
+}
+
+// FuzzSanitizeRunesOffsets checks what hasHiddenAddrSpecRune relies on to
+// find the text that the parser read: for a trimmed text sanitizeRunes
+// returns sanitizeAddr of it, with the offset in the text of every byte,
+// so that a check of the text of an address part checks the runes that
+// the parser read there.
+func FuzzSanitizeRunesOffsets(f *testing.F) {
+	for _, text := range []string{
+		"a@example.com",
+		"\"x\\\u200d\" <a@example.com>",
+		"Jo\"hn <j@x.com>\\\ufeff",
+		"M\u00fcller,\u00a0Hans <hans@example.com>",
+		"x <\u00a0a@b.com>\x00\xff",
+	} {
+		f.Add(text)
+	}
+	f.Fuzz(func(t *testing.T, text string) {
+		text = strutil.TrimSpace(text)
+		var offsets []int
+		sanitized := sanitizeRunes(text, &offsets)
+		if want := sanitizeAddr(text); sanitized != want {
+			t.Fatalf("sanitizeRunes(%q) = %q, but sanitizeAddr = %q", text, sanitized, want)
+		}
+		if len(offsets) != len(sanitized)+1 || offsets[len(sanitized)] != len(text) {
+			t.Fatalf("sanitizeRunes(%q) returned %d offsets for %d bytes", text, len(offsets), len(sanitized))
+		}
+		for i := range len(sanitized) {
+			if c := sanitized[i]; c != ' ' && c != text[offsets[i]] {
+				t.Fatalf("sanitizeRunes(%q) byte %d %q comes from %q at %d", text, i, c, text[offsets[i]], offsets[i])
+			}
+			if i > 0 && offsets[i] <= offsets[i-1] {
+				t.Fatalf("sanitizeRunes(%q) offsets not increasing: %v", text, offsets)
+			}
+		}
+	})
+}
+
+// FuzzParseAddressListMatchesNetMail checks that a list that the collections
+// validate and store has the recipients that net/mail reads in the stored
+// text, like a mail server that a message built from it is sent to: for
+// every list that AddressList.Value writes and net/mail parses, the
+// address parts that ParseAddressList and net/mail.ParseAddressList read,
+// lower cased, are the same set. Where they differed, a recipient check of
+// a validated list saw other addresses than the message was sent to, like
+// for an encoded-word name with a comma and @, or a soft hyphen in an
+// address. The single address of an AddressSet is checked the same way.
+func FuzzParseAddressListMatchesNetMail(f *testing.F) {
+	for _, list := range []string{
+		`a@example.com, "Doe, John" <j@example.com>`,
+		`Doe, John <john@example.com>, b@example.com (Comment, x)`,
+		`"x\" <ok@example.com>, ok2@example.com (," <other@example.net>, "z)" <ok3@example.com>`,
+		`=?utf-8?q?J=C3=BCrgen_M=C3=BCller?= <j@x.de>, "a b"@example.com`,
+		`=?utf-8?q?spy@evil.example,?= <ceo@corp.example>`,
+		`=?utf-8?q?<a@b.com>,?= <c@x.com>`,
+		"ad\u00admin@corp.com",
+		"Boss <ceo\u00ad@corp.com>",
+		"x <\u00a0a@b.com>",
+		"a@b.com,\u00a0c@d.com",
+		"\"a\tb\"@x.com",
+		"e@f.net..Doe",
+		"undisclosed-recipients:;",
+	} {
+		f.Add(list)
+	}
+	f.Fuzz(func(t *testing.T, list string) {
+		if v, err := AddressList(list).Value(); err == nil && v != nil {
+			stdlib, err := mail.ParseAddressList(v.(string))
+			if err == nil {
+				parsed, err := ParseAddressList(list)
+				if err != nil {
+					t.Fatalf("AddressList(%q) is valid, but ParseAddressList fails: %v", list, err)
+				}
+				if got, want := addressPartSet(parsed), addressPartSet(stdlib); !slices.Equal(got, want) {
+					t.Fatalf("AddressList(%q) is valid with the addresses %q, but net/mail reads %q", list, got, want)
+				}
+			}
+		}
+		if _, err := MakeAddressSet(Address(list)).Value(); err == nil {
+			stdlib, err := mail.ParseAddress(strutil.TrimSpace(list))
+			if err == nil {
+				parsed, err := ParseAddress(list)
+				if err != nil {
+					t.Fatalf("AddressSet{%q} is valid, but ParseAddress fails: %v", list, err)
+				}
+				if got, want := parsed.Address, strings.ToLower(stdlib.Address); got != want {
+					t.Fatalf("AddressSet{%q} is valid with the address %q, but net/mail reads %q", list, got, want)
+				}
+			}
+		}
+	})
+}
+
+// addressPartSet returns the sorted unique address parts of addrs lower cased.
+func addressPartSet(addrs []*mail.Address) []string {
+	return slices.Compact(slices.Sorted(slices.Values(addressParts(addrs))))
 }

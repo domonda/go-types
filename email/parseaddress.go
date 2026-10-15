@@ -87,7 +87,20 @@ func sanitizeAddr(s string) string {
 	if strings.IndexByte(s, '\\') < 0 {
 		return strutil.TrimSpace(strings.Map(sanitizeRune, s))
 	}
+	return strutil.TrimSpace(sanitizeRunes(s, nil))
+}
+
+// sanitizeRunes returns s sanitized like by sanitizeAddr, but not trimmed.
+// If offsets is not nil, it is set to the offset in s of the rune that
+// each byte of the result comes from, followed by len(s), so that
+// hasHiddenAddrSpecRune finds the text of s that the parser read.
+// For s trimmed like by strutil.TrimSpace the result is sanitizeAddr(s),
+// because the first and the last rune of s are kept.
+func sanitizeRunes(s string, offsets *[]int) string {
 	sanitized := make([]byte, 0, len(s))
+	if offsets != nil {
+		*offsets = make([]int, 0, len(s)+1)
+	}
 	var state listState
 	for i := 0; i < len(s); {
 		r, size := utf8.DecodeRuneInString(s[i:])
@@ -98,15 +111,29 @@ func sanitizeAddr(s string) string {
 		switch mapped := sanitizeRune(r); {
 		case mapped == ' ':
 			sanitized = append(sanitized, ' ')
+			if offsets != nil {
+				*offsets = append(*offsets, i)
+			}
 		case mapped < 0 && escaped:
 			// The escaping backslash is the last byte written
 			sanitized = sanitized[:len(sanitized)-1]
+			if offsets != nil {
+				*offsets = (*offsets)[:len(*offsets)-1]
+			}
 		case mapped >= 0:
 			sanitized = append(sanitized, s[i:i+size]...)
+			if offsets != nil {
+				for j := i; j < i+size; j++ {
+					*offsets = append(*offsets, j)
+				}
+			}
 		}
 		i += size
 	}
-	return strutil.TrimSpace(string(sanitized))
+	if offsets != nil {
+		*offsets = append(*offsets, len(s))
+	}
+	return string(sanitized)
 }
 
 // sanitizeRune maps whitespace to a space and runes that are not graphic
@@ -183,7 +210,7 @@ func ParseAddress(addr string) (mailAddress *mail.Address, err error) {
 		return nil, errors.New("empty email address")
 	}
 
-	mailAddress, unparsed, ok := parseAddress(addr)
+	mailAddress, unparsed, ok, _ := parseAddress(addr)
 	if !ok {
 		return nil, errs.Errorf("could not parse email address: %s", truncateForError(addr))
 	}
@@ -209,23 +236,30 @@ var errInvalidAddress = errors.New("invalid email address")
 // NullableAddress it returns errInvalidAddress for a blank address,
 // which the callers handle before.
 func normalizeAddressForRead[S Address | NullableAddress](s S) (S, error) {
-	mailAddress, unparsed, ok := parseAddress(sanitizeAddr(string(s)))
+	mailAddress, unparsed, ok, _ := parseAddress(sanitizeAddr(string(s)))
 	if !ok || strutil.TrimSpace(unparsed) != "" {
 		return s, errInvalidAddress
 	}
 	return S(AddressFrom(mailAddress)), nil
 }
 
+// specRange is the byte range of the address part of a parsed address,
+// from the start of its local part to the end of its domain, in the
+// sanitized text that was parsed.
+type specRange struct{ start, end int }
+
 // parseAddress parses the address at the start of the sanitized addr
 // and returns it with the rest of addr after it, or ok false if addr
 // doesn't start with an address. It builds no error, so that a caller
 // that drops the error doesn't pay for its call stack.
-func parseAddress(addr string) (mailAddress *mail.Address, unparsed string, ok bool) {
+// spec is the range of the address part in addr.
+func parseAddress(addr string) (mailAddress *mail.Address, unparsed string, ok bool, spec specRange) {
 	i := nameAddressRegexp.FindStringSubmatchIndex(addr)
 	if len(i) != 12 {
 		// fmt.Println("REGEX:", nameAddressRegex)
-		return nil, "", false
+		return nil, "", false, specRange{}
 	}
+	spec = specRange{start: i[8], end: i[11]}
 
 	var name string
 	switch {
@@ -273,9 +307,11 @@ func parseAddress(addr string) (mailAddress *mail.Address, unparsed string, ok b
 	// the address of a name, so that "attacker@evil.com ceo@corp.com"
 	// is not read as ceo@corp.com, which net/mail rejects.
 	if strings.HasPrefix(strings.TrimLeft(unparsed, ` "`), "<") {
-		right, unp, ok := parseAddress(unparsed)
+		right, unp, ok, rightSpec := parseAddress(unparsed)
 		if ok && right.Name == "" {
 			mailAddress.Address = right.Address
+			offset := len(addr) - len(unparsed)
+			spec = specRange{start: offset + rightSpec.start, end: offset + rightSpec.end}
 			unparsed = unp
 		}
 	}
@@ -284,7 +320,7 @@ func parseAddress(addr string) (mailAddress *mail.Address, unparsed string, ok b
 		mailAddress.Name = ""
 	}
 
-	return mailAddress, unparsed, true
+	return mailAddress, unparsed, true, spec
 }
 
 // readComment returns the content of the RFC 5322 comment at the start
@@ -474,8 +510,14 @@ func truncateForError(s string) string {
 // entry with such a name that can't be parsed is parsed once more, so the
 // address of `Doe, John (john@corp) <j@x.com>` is still returned.
 func ParseAddressList(list string) (addrs []*mail.Address, err error) {
-	sanitized := sanitizeAddr(list)
-	list = strings.TrimRight(sanitized, ", ")
+	return parseAddressList(sanitizeAddr(list), nil)
+}
+
+// parseAddressList is ParseAddressList for a list sanitized by sanitizeAddr.
+// If specs is not nil, the range of the address part of each returned
+// address in sanitized is appended to it.
+func parseAddressList(sanitized string, specs *[]specRange) (addrs []*mail.Address, err error) {
+	list := strings.TrimRight(sanitized, ", ")
 	if list == "" || isPlaceholderList(list) {
 		return nil, nil
 	}
@@ -490,7 +532,7 @@ func ParseAddressList(list string) (addrs []*mail.Address, err error) {
 			errList = append(errList, errs.Errorf("stopped parsing email address list after %d errors", len(errList)))
 			break
 		}
-		mailAddress, unparsed, ok := parseAddress(remaining)
+		mailAddress, unparsed, ok, spec := parseAddress(remaining)
 		unparsed = strings.TrimLeft(unparsed, " ")
 		entry := remaining[:len(remaining)-len(unparsed)]
 		// end is the index of the comma after which parsing continues
@@ -522,6 +564,10 @@ func ParseAddressList(list string) (addrs []*mail.Address, err error) {
 			end = nextListSeparator(remaining)
 		} else {
 			addrs = append(addrs, mailAddress)
+			if specs != nil {
+				offset := len(list) - len(remaining)
+				*specs = append(*specs, specRange{start: offset + spec.start, end: offset + spec.end})
+			}
 			if unparsed != "" && unparsed[0] != ',' {
 				errList = append(errList, errs.Errorf("expected ',' after email address %s in email address list: %s", mailAddress.Address, truncateForError(unparsed)))
 			} else if open := openAtEnd(entry); open != "" && (unparsed != "" || trailingComma) {

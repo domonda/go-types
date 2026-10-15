@@ -380,10 +380,12 @@ func (set AddressSet) Normalized() (AddressSet, error) {
 // Like for AddressList.Validate, an address with a control character
 // other than the tab, like a line break or a NUL, a bidi embedding,
 // override or isolate, or invalid UTF-8 within its text is an error too,
-// because Value and MarshalText write the addresses as stored.
+// and so is an address part with a rune that the parser drops or reads
+// as another rune, because Value and MarshalText write the addresses
+// as stored.
 func (set AddressSet) Validate() error {
 	for addr := range set {
-		if err := checkSafeRunes(string(addr), "email.AddressSet address"); err != nil {
+		if err := checkSafeRunes(string(addr), "email.AddressSet address", true); err != nil {
 			return err
 		}
 		if err := addr.Validate(); err != nil {
@@ -483,7 +485,8 @@ func (set *AddressSet) UnmarshalText(text []byte) error {
 // by writing the addresses as stored in sorted order as PostgreSQL array,
 // with the surrounding whitespace of valid addresses trimmed and duplicates
 // that this creates removed, or an error if an address is invalid,
-// also for a line break, a NUL or a bidi override within it, see Validate.
+// also for a line break, a NUL or a bidi override within it, or a rune in
+// its address part that the parser drops, see Validate.
 // A nil set is written as SQL NULL, an empty set as "{}".
 func (set AddressSet) Value() (driver.Value, error) {
 	if set == nil {
@@ -506,7 +509,7 @@ func (set AddressSet) writableAddresses(asListEntry bool) ([]string, error) {
 	for _, addr := range set.Sorted() {
 		trimmed := strutil.TrimSpace(addr)
 		// The same check and error as in Validate
-		if err := checkSafeRunes(string(trimmed), "email.AddressSet address"); err != nil {
+		if err := checkSafeRunes(string(trimmed), "email.AddressSet address", true); err != nil {
 			return nil, err
 		}
 		if err := trimmed.Validate(); err != nil {
@@ -537,8 +540,9 @@ func (set AddressSet) MarshalJSON() ([]byte, error) {
 // MarshalText implements encoding.TextMarshaler, used by encoding/xml, by
 // writing the addresses as stored in sorted order as address list, with
 // the surrounding whitespace of valid addresses trimmed, or an error if an
-// address is invalid, also for a line break or a NUL within it, see
-// Validate, or would not read back as one entry of the list.
+// address is invalid, also for a line break or a NUL within it or a rune
+// in its address part that the parser drops, see Validate, or would not
+// read back as one entry of the list.
 // A nil or empty set is written as "".
 func (set AddressSet) MarshalText() ([]byte, error) {
 	addrs, err := set.writableAddresses(true)

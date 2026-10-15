@@ -237,7 +237,7 @@ func isPlaceholderList(list string) bool {
 // or invalid UTF-8. All other runes are written as stored, like the
 // no-break space, the ideographic space, the zero width non-joiner and
 // joiner and the soft hyphen in names, and the left-to-right and
-// right-to-left marks.
+// right-to-left marks, but not in address parts, see hasHiddenAddrSpecRune.
 func hasUnsafeRune(text string) bool {
 	for i := 0; i < len(text); {
 		c := text[i]
@@ -261,21 +261,97 @@ func hasUnsafeRune(text string) bool {
 	return false
 }
 
+// hasHiddenAddrSpecRune reports whether text, trimmed like by
+// strutil.TrimSpace, has a rune that the parser drops or changes within an
+// address part, the local part and the domain, inside or without angle
+// brackets, or within the spaces around it: a rune that is not graphic,
+// like the soft hyphen or the zero width space, or a space other than the
+// ASCII space, like the no-break space, the line separator or a tab in a
+// quoted local part. The parser reads `ad<soft hyphen>min@corp.com` as
+// admin@corp.com, while net/mail and mail servers read another mailbox,
+// so a recipient check would see another address than the message is sent
+// to. These runes are valid in display names and comments, see
+// hasUnsafeRune, and a tab outside a quoted string is a space for net/mail
+// too. single parses text as one address like Address.Validate, else as
+// address list. A text that doesn't parse has no hidden rune, the parser
+// refuses it.
+func hasHiddenAddrSpecRune(text string, single bool) bool {
+	text = strutil.TrimSpace(text)
+	if strings.IndexFunc(text, func(r rune) bool { return sanitizeRune(r) != r }) < 0 {
+		return false
+	}
+	var offsets []int
+	sanitized := sanitizeRunes(text, &offsets)
+	var specs []specRange
+	if single {
+		_, unparsed, ok, spec := parseAddress(sanitized)
+		if !ok || strutil.TrimSpace(unparsed) != "" {
+			return false
+		}
+		specs = append(specs, spec)
+	} else if _, err := parseAddressList(sanitized, &specs); err != nil {
+		return false
+	}
+	for _, spec := range specs {
+		if hasChangedRuneAt(text, sanitized, offsets, spec) {
+			return true
+		}
+	}
+	return false
+}
+
+// hasChangedRuneAt reports whether the text of the address part spec of
+// sanitized, which sanitizeRunes returned for text with offsets, has a rune
+// that sanitizeRunes dropped or changed, also in the spaces around it and
+// right before and after it, which net/mail would read as part of the
+// address, but not a tab outside the address part.
+func hasChangedRuneAt(text, sanitized string, offsets []int, spec specRange) bool {
+	start, end := spec.start, spec.end
+	for start > 0 && sanitized[start-1] == ' ' {
+		start--
+	}
+	for end < len(sanitized) && sanitized[end] == ' ' {
+		end++
+	}
+	// from the end of the rune before the range,
+	// so that the runes dropped after it are checked
+	from := 0
+	if start > 0 {
+		_, size := utf8.DecodeRuneInString(text[offsets[start-1]:])
+		from = offsets[start-1] + size
+	}
+	specFrom, specTo := offsets[spec.start], offsets[spec.end]
+	for i, r := range text[from:offsets[end]] {
+		if r == '\t' && (from+i < specFrom || from+i >= specTo) {
+			continue
+		}
+		if sanitizeRune(r) != r {
+			return true
+		}
+	}
+	return false
+}
+
 // checkSafeRunes returns an error naming text as name if text, trimmed
-// like by strutil.TrimSpace, has a rune that hasUnsafeRune reports.
-// The surrounding runes that strutil.TrimSpace removes are not checked,
-// because the Value methods trim them and don't write them.
+// like by strutil.TrimSpace, has a rune that hasUnsafeRune reports, or one
+// within an address part that hasHiddenAddrSpecRune reports, with single
+// passed to it. The surrounding runes that strutil.TrimSpace removes are
+// not checked, because the Value methods trim them and don't write them.
 // The Validate methods of the address collections call it, so that their
 // Value methods and AddressSet.MarshalText, which write the text as
 // stored, write every text that Validate accepts and nothing else:
 // a display name with a line break must not pass Validate and inject
-// a header into a message built from the stored text.
-func checkSafeRunes(text, name string) error {
+// a header into a message built from the stored text, and an address
+// with a soft hyphen must not pass as another mailbox.
+func checkSafeRunes(text, name string, single bool) error {
 	text = strutil.TrimSpace(text)
-	if !hasUnsafeRune(text) {
-		return nil
+	if hasUnsafeRune(text) {
+		return errs.Errorf("%s %q has a control character, a bidi embedding, override or isolate, or invalid UTF-8", name, truncateForError(text))
 	}
-	return errs.Errorf("%s %q has a control character, a bidi embedding, override or isolate, or invalid UTF-8", name, truncateForError(text))
+	if hasHiddenAddrSpecRune(text, single) {
+		return errs.Errorf("%s %q has an address part with a rune that is not graphic or a space other than U+0020, which the parser drops", name, truncateForError(text))
+	}
+	return nil
 }
 
 // listPart is the byte range of an entry of an address list,
