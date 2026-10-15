@@ -833,9 +833,17 @@ See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut.
   return an error now, and `Validate` and `Valid` of the three types refuse
   the same runes, so a validated list can be saved; store `Normalized()`
   instead. Names with a no-break space, ideographic space, zero width
-  (non-)joiner, soft hyphen or directional mark are written as stored. `AddressSet.MarshalText` also refuses a set
-  whose joined list would read back as other entries, like a valid address
-  with an unclosed comment that swallowed the entries after it.
+  (non-)joiner, soft hyphen or directional mark are written as stored.
+  In an address part, and in the spaces around it, the three types refuse
+  every rune that the parser drops or reads as another rune: a rune that
+  is not graphic like the soft hyphen in `ad<U+00AD>min@corp.com`, a space
+  other than U+0020 like the no-break space in `x <<U+00A0>a@b.com>`, a tab
+  in a quoted local part, and an apostrophe right before or after the
+  address part like in `'ceo@corp.com`. The parser read these as
+  `admin@corp.com`, `a@b.com` and `ceo@corp.com`, while `net/mail` and
+  mail servers read other mailboxes. `AddressSet.MarshalText` also refuses
+  a set whose joined list would read back as other entries, like a valid
+  address with an unclosed comment that swallowed the entries after it.
 - `float.FormatDef.Format` and `Parse` panicked for a zero `DecimalSep`,
   as in the zero `FormatDef` or one decoded from `{"decimalSep":""}`; they
   use `.` for it. `UnmarshalJSON` rejects a zero `decimalSep` together with
@@ -851,10 +859,27 @@ See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut.
   angle bracket before a comma, like `"Doe <a@b.cc>, z@y.zz`, a stray quote
   in an unquoted name, and a leading or doubled comma, which became the
   display name `","`. These are errors now. `SplitAddressList` reads the
-  placeholder `undisclosed-recipients:;,` as the empty list, keeps an
-  encoded-word name with a comma together, and splits the list as the
-  parser reads it, so a backslash that escapes a rune the parser drops
-  can't escape the next quote.
+  placeholder `undisclosed-recipients:;,` as the empty list and splits the
+  list as the parser reads it, so a backslash that escapes a rune the
+  parser drops can't escape the next quote. After an invalid entry,
+  parsing continues where `SplitAddressList` ends that entry, so every
+  address is returned at most once, and of an entry that can't be parsed
+  only the last part with the angle brackets is parsed once more, so
+  `Doe, John (john@corp) <j@x.com>` still gives `j@x.com` with an error.
+- **Breaking:** an RFC 2047 encoded-word in an email display name may not
+  hold an unencoded `,<>@"()\`. `=?utf-8?q?spy@evil.example,?=
+  <ceo@corp.example>` validated as the one recipient `ceo@corp.example`,
+  while `net/mail` and mail servers read the second recipient
+  `=?utf-8?q?spy@evil.example`. The parser, `SplitAddressList` and
+  `net/mail` read the same recipients now; `ParseMIMEMessage` reports such
+  an address header as an error and keeps the addresses it can parse.
+- **Breaking:** the domain of an email address may not have an empty
+  label: `e@f.net..Doe` was valid and normalized to `e@f.net..doe`, which
+  `net/mail` rejects. `AddressRegexp` and `FindAllAddresses` match no domain
+  with consecutive dots either.
+- `email.AddressList.Validate` accepted a list that `Value` refused when a
+  backslash preceded a rune at the end that `strutil.TrimSpace` removes;
+  both refuse it now.
 - `date.YearQuarter.AddQuarters` and `NullableYearQuarter.AddQuarters`
   looped once per year, so a large count from input took about 400 ms for
   `1<<32` and never returned for `math.MaxInt`. They compute the year by
@@ -918,8 +943,7 @@ See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut.
 - `email` display names in a charset that only has an IANA label, like
   `cp850`, are decoded, and a name that can't be decoded is dropped instead
   of failing its address. A name in the comment syntax
-  `a@example.com (=?utf-8?q?M=C3=BCller?=)` is decoded, and an encoded name
-  holding a comma and `@` no longer swallows the address after it.
+  `a@example.com (=?utf-8?q?M=C3=BCller?=)` is decoded.
 - `strutil.TransliterateSpecialCharacters` and
   `TransliterateSpecialCharactersMaxLen` returned the input unchanged, with
   its invalid UTF-8, when it started with an invalid byte, like `"\xe4pfel"`.
