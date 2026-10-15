@@ -13,6 +13,10 @@
 // collections AddressList, NullableAddressList and AddressSet are read and
 // written as stored, because normalizing rewrites their entries and could
 // merge two elements of a set. Value refuses an invalid address or list.
+// The collections also store an unquoted display name as written, whose
+// words some mail stacks read as recipients: Python's smtplib sends
+// `admin, John <ceo@corp.com>` also to admin, so store Normalized, which
+// quotes every name, where the text goes into a header of another system.
 //
 // Normalization lowercases the address part and formats the display name
 // like [net/mail.Address.String], but keeps a non-ASCII name as UTF-8,
