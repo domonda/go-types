@@ -193,9 +193,11 @@ func TestAddressList_UnclosedCommentHoldsRestOfList(t *testing.T) {
 // a stored list with SplitAddressList, so where the two disagreed, a list
 // that validated was read back as other recipients.
 //
-// For every list, also an invalid one, Validate and Value of the
-// collections agree, so that no validated list fails to be stored and no
-// list that Validate refuses is stored.
+// For every list, also an invalid one, ParseAddressList returns at most one
+// address per entry of SplitAddressList, because an address that was
+// parsed again after an error was returned more than once, and Validate
+// and Value of the collections agree, so that no validated list fails to
+// be stored and no list that Validate refuses is stored.
 func FuzzSplitRawMatchesParse(f *testing.F) {
 	for _, list := range []string{
 		`a@example.com, b@example.com`,
@@ -218,10 +220,21 @@ func FuzzSplitRawMatchesParse(f *testing.F) {
 		// TestCollectionsValidateAgreesWithValueAtTrailingBackslash
 		"\"<0@0.AA\\\x9f",
 		"Jo\"hn <j@x.com>\\\ufeff",
+		// Addresses parsed again after an error at each comma of their
+		// unquoted display name, see
+		// TestParseAddressList_ErrorAfterDisplayNameWithCommas
+		`Doe, John <john@example.com>; Smith, Anna <anna@example.com>`,
+		`Doe, Jr., John <john@example.com>) , b@example.com`,
+		strings.Repeat("Doe, ", 200) + "John <a@b.cc> junk, b@c.dd",
 	} {
 		f.Add(list)
 	}
 	f.Fuzz(func(t *testing.T, list string) {
+		parsed, err := ParseAddressList(list)
+		raw := SplitAddressList(list)
+		if len(parsed) > len(raw) {
+			t.Fatalf("ParseAddressList(%q) parsed %d addresses from %d entries of SplitAddressList: %q", list, len(parsed), len(raw), parsed)
+		}
 		validateErr := AddressList(list).Validate()
 		if _, valueErr := AddressList(list).Value(); (validateErr == nil) != (valueErr == nil) {
 			t.Fatalf("AddressList(%q).Validate() = %v, but Value() = %v", list, validateErr, valueErr)
@@ -231,11 +244,9 @@ func FuzzSplitRawMatchesParse(f *testing.F) {
 		if _, valueErr := set.Value(); (setValidateErr == nil) != (valueErr == nil) {
 			t.Fatalf("AddressSet{%q}.Validate() = %v, but Value() = %v", list, setValidateErr, valueErr)
 		}
-		parsed, err := ParseAddressList(list)
 		if err != nil {
 			return
 		}
-		raw := SplitAddressList(list)
 		if len(raw) != len(parsed) {
 			t.Fatalf("SplitAddressList(%q) = %q, but ParseAddressList parsed %d addresses: %q", list, raw, len(parsed), parsed)
 		}

@@ -179,6 +179,44 @@ func openAtEnd(entry string) string {
 	return ""
 }
 
+// listEntryEnd returns the index of the comma where SplitAddressList ends
+// the first entry of the address list, or -1 if the entry holds the rest
+// of the list, and the index of the last part of the entry, if it has more
+// than one part, else 0. list starts at the start of an entry and is
+// sanitized by sanitizeAddr. A first part up to a comma without an @ or
+// angle brackets is joined with the following parts without them up to
+// one with angle brackets, see joinDisplayNameParts, so the entry ends
+// after that part, which is its last part, like `John <john@example.com>`
+// of `Doe, John <john@example.com>`. An empty first part is an entry of
+// its own here, unlike for SplitAddressList, which skips it:
+// ParseAddressList reads the empty entry before a doubled comma as invalid
+// entry and continues after it.
+func listEntryEnd(list string) (lastPart, end int) {
+	first := nextListSeparator(list)
+	if first < 0 || strings.ContainsAny(list[:first], "@<") || strutil.TrimSpace(list[:first]) == "" {
+		return 0, first
+	}
+	for start := first + 1; ; {
+		i := nextListSeparator(list[start:])
+		part := list[start:]
+		if i >= 0 {
+			part = part[:i]
+		}
+		switch {
+		case strings.Contains(part, "<"):
+			// The display name parts end at this part
+			if i < 0 {
+				return start, -1
+			}
+			return start, start + i
+		case strings.Contains(part, "@") || i < 0:
+			// No display name, the first part is an entry of its own
+			return 0, first
+		}
+		start += i + 1
+	}
+}
+
 // isSingleListEntry reports whether SplitAddressList reads the address
 // list entry as one entry: entry has no separator, or only the commas of
 // an unquoted display name, which SplitAddressList joins with the address

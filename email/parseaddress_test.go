@@ -497,6 +497,90 @@ func TestParseAddressList_UnclosedQuoteOrAngle(t *testing.T) {
 	}
 }
 
+// TestParseAddressList_ErrorAfterDisplayNameWithCommas protects that every
+// address is returned at most once. After an error parsing continued at the
+// first comma after the start of the entry, which for an unquoted display
+// name with commas is inside the address just appended, so the address was
+// appended again once per comma of its name, each time with another error.
+// With 100 commas the error limit stopped parsing, and the recipients after
+// the name were lost. Parsing continues where SplitAddressList ends the
+// entry, also after an entry that can't be parsed.
+func TestParseAddressList_ErrorAfterDisplayNameWithCommas(t *testing.T) {
+	tests := []struct {
+		name       string
+		list       string
+		want       []string // the address parts of the parsed addresses
+		wantErrors int
+	}{
+		{
+			name:       "semicolon as separator",
+			list:       `Doe, John <john@example.com>; Smith, Anna <anna@example.com>`,
+			want:       []string{"john@example.com", "anna@example.com"},
+			wantErrors: 1,
+		},
+		{
+			name:       "stray parenthesis",
+			list:       `Doe, Jr., John <john@example.com>) , b@example.com`,
+			want:       []string{"john@example.com", "b@example.com"},
+			wantErrors: 1,
+		},
+		{
+			name:       "more name commas than the error limit",
+			list:       strings.Repeat("Doe, ", 5000) + "John <a@b.cc> junk, b@c.dd",
+			want:       []string{"a@b.cc", "b@c.dd"},
+			wantErrors: 1,
+		},
+		{
+			name:       "text after the address up to the next name",
+			list:       `a@b.com junk, Doe, x <y@z.com> j, k@l.mm`,
+			want:       []string{"a@b.com", "y@z.com", "k@l.mm"},
+			wantErrors: 2,
+		},
+		{
+			// The entry that can't be parsed is skipped with an error for
+			// the entry and one for its last part, which is parsed once
+			// more, not with one error per part of its display name
+			name:       "invalid address with display name commas",
+			list:       strings.Repeat("Doe, ", 500) + "John <bad>, b@example.com",
+			want:       []string{"b@example.com"},
+			wantErrors: 2,
+		},
+		{
+			// The address pattern can't read a name with a comma and an @,
+			// so the address of the last part is returned with an error
+			// for the entry, like before parsing continued after it
+			name:       "display name with comma and @",
+			list:       `Doe, John (john@corp) <j@x.com>, b@example.com`,
+			want:       []string{"j@x.com", "b@example.com"},
+			wantErrors: 1,
+		},
+		{
+			// An empty entry is an invalid entry of its own,
+			// the address after it is parsed
+			name:       "doubled comma",
+			list:       `x@y.com,, a@b.com`,
+			want:       []string{"x@y.com", "a@b.com"},
+			wantErrors: 1,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			addrs, err := ParseAddressList(tt.list)
+			require.Error(t, err)
+			var got []string
+			for _, addr := range addrs {
+				got = append(got, addr.Address)
+			}
+			assert.Equal(t, tt.want, got)
+			joined, ok := err.(interface{ Unwrap() []error })
+			require.True(t, ok, "errors.Join error")
+			assert.Len(t, joined.Unwrap(), tt.wantErrors)
+			// Every address belongs to its own entry of SplitAddressList
+			assert.LessOrEqual(t, len(addrs), len(SplitAddressList(tt.list)))
+		})
+	}
+}
+
 // TestParseAddressList_EscapedDroppedRune protects that a backslash in a
 // quoted name escapes the rune after it also when the parser drops that
 // rune, like a zero width joiner: it escaped the next rune instead, so
