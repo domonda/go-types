@@ -119,11 +119,16 @@ type Validatables []Validatable
 // no element may rely on an earlier one, like a check of a field
 // that relies on an earlier check that the pointer to the struct
 // is not nil. Make such dependent checks one Validatable instead.
-func (v Validatables) Validate() (err error) {
+func (v Validatables) Validate() error {
+	// Join once, so Unwrap() []error lists the errors of the elements
+	// instead of one nested join per element
+	var errs []error
 	for _, validatable := range v {
-		err = errors.Join(err, Validate(validatable))
+		if err := Validate(validatable); err != nil {
+			errs = append(errs, err)
+		}
 	}
-	return err
+	return errors.Join(errs...)
 }
 
 // CombinedValidatable creates a Validatable whose Validate method

@@ -894,8 +894,10 @@ func TestValidators(t *testing.T) {
 // invalid elements at once instead of only the first one, so that a caller
 // can show every problem of a value together. Every element has to be
 // validated, also the ones after an error, the message has to list the
-// errors in element order without gaps for valid elements, and errors.Is
-// has to find each joined error, including a single one that the join wraps.
+// errors in element order without gaps for valid elements, errors.Is
+// has to find each joined error, including a single one that the join wraps,
+// and Unwrap() []error has to list the errors of the failed elements,
+// so a caller can handle them one by one without walking nested joins.
 func TestValidatables(t *testing.T) {
 	errA := errors.New("error a")
 	errB := errors.New("error b")
@@ -982,6 +984,13 @@ func TestValidatables(t *testing.T) {
 				wantMsg := errors.Join(tt.wantErrs...).Error()
 				if err.Error() != wantMsg {
 					t.Errorf("Validate() message = %q, want %q", err, wantMsg)
+				}
+				joined, ok := err.(interface{ Unwrap() []error })
+				if !ok {
+					t.Fatalf("Validate() = %T, want an error with Unwrap() []error", err)
+				}
+				if got := joined.Unwrap(); !slices.Equal(got, tt.wantErrs) {
+					t.Errorf("Validate().Unwrap() = %#v, want %#v", got, tt.wantErrs)
 				}
 			})
 		}
