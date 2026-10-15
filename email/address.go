@@ -121,11 +121,12 @@ func addrSpec(addr *mail.Address) string {
 
 // encodedName returns name as RFC 2047 B encoded-words of at most the 75
 // characters that RFC 2047 allows, split at rune boundaries. A word that
-// would hold only ASCII text with one of @"(<\ or an =?, like the @ of
-// a long name with an address in parentheses, is not written, because
-// Python's email package writes such text unencoded and unquoted when it
-// writes the header, and ParseAddress refuses it, see readEncodedWords:
-// then the name is one longer word, which holds its other runes too.
+// would hold only ASCII text, like the ")" or "@" of a long name with an
+// address in parentheses, is not written, because Python's email package
+// writes such text unencoded and unquoted when it writes the header, so
+// that the ";" of "(Vorstand; Finanzen)" ends the address list, and
+// ParseAddress refuses an @ or =? in it, see readEncodedWords: then the
+// name is one longer word, which holds its other runes too.
 func encodedName(name string) string {
 	const (
 		prefix, suffix = "=?utf-8?b?", "?="
@@ -139,7 +140,7 @@ func encodedName(name string) string {
 			n--
 		}
 		text := rest[:n]
-		if isASCII(text) && (strings.ContainsAny(text, `@"(<\`) || strings.Contains(text, "=?")) {
+		if isASCII(text) {
 			return prefix + base64.StdEncoding.EncodeToString([]byte(name)) + suffix
 		}
 		words = append(words, prefix+base64.StdEncoding.EncodeToString([]byte(text))+suffix)

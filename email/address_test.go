@@ -343,15 +343,37 @@ func TestAddress_MarshalTextAndASCII(t *testing.T) {
 	require.NoError(t, err, long.ASCII())
 	assert.Equal(t, longName, parsed.Name)
 	// Else it is split into words of at most 75 characters like RFC 2047
-	// requires, here like a mail client wrote the name, see
-	// TestParseAddress_OrdinaryEncodedNames: the ASCII text with only a ")"
-	// in the last word Python reads as part of the name
-	split := Address(`"Jürgen Müller, Buchhaltung und Finanzen (Abteilung Nord)" <j.mueller@example.com>`)
-	assert.Equal(t, `=?utf-8?b?SsO8cmdlbiBNw7xsbGVyLCBCdWNoaGFsdHVuZyB1bmQgRmluYW56ZW4gKEFi?= =?utf-8?b?dGVpbHVuZyBOb3JkKQ==?= <j.mueller@example.com>`, split.ASCII())
+	// requires, if every word holds a rune that is not ASCII, here like
+	// a mail client wrote the name, see TestParseAddress_OrdinaryEncodedNames
+	split := Address(`"Jürgen Müller, Buchhaltung und Finanzen (Abteilung Nörd)" <j.mueller@example.com>`)
+	assert.Equal(t, `=?utf-8?b?SsO8cmdlbiBNw7xsbGVyLCBCdWNoaGFsdHVuZyB1bmQgRmluYW56ZW4gKEFi?= =?utf-8?b?dGVpbHVuZyBOw7ZyZCk=?= <j.mueller@example.com>`, split.ASCII())
 	for word := range strings.FieldsSeq(split.ASCII()) {
 		assert.LessOrEqual(t, len(word), 75, word)
 	}
 	assert.Equal(t, string(split), marshalText(t, Address(split.ASCII())))
+
+	// A word with only ASCII text Python's email package writes unencoded
+	// and unquoted when it writes the header, also one with a phrase end
+	// like the ";" or "," of these names, which ends the name there, so
+	// that Python read the name before it as another entry of the list,
+	// and the decoded text of an earlier word with an @ as its address:
+	// such a name is written as one word, which the parser reads back.
+	// Split into words of at most 75 characters, these were written with
+	// the last word holding only ASCII text, which the parser refused
+	for _, name := range []string{
+		"Jürgen Müller, Buchhaltung und Finanzen (Abteilung Nord)",
+		"Müller-Lüdenscheidt, Dr. Hans-Jürgen (Vorstand; Finanzen)",
+		"ä aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa x@evil.com, y",
+		"ä x@evil.com Abcdefghijklmnopqrstuvwxyz01234; Sales",
+	} {
+		addr := Address(quoteName(name) + " <ceo@corp.com>")
+		require.NoError(t, addr.Validate(), name)
+		assert.NotContains(t, addr.ASCII(), "?= =?", "one word for %q", name)
+		parsed, err := ParseAddress(addr.ASCII())
+		require.NoError(t, err, addr.ASCII())
+		assert.Equal(t, name, parsed.Name)
+		assert.Equal(t, "ceo@corp.com", parsed.Address)
+	}
 
 	// A name holding "=?" is written quoted with every =? escaped as `=\?`
 	// by MarshalText and ASCII, so that ParseAddress and net/mail read the
