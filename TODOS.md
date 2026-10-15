@@ -131,6 +131,28 @@ none in this module or in the local checkouts of the domonda repos.
       `HTMLToPlaintext`, which domonda-service calls, and the
       `inbucket/html2text` library used for TNEF bodies. Keep one.
 
+- [ ] **`types.ValidatErr` users outside this module.** The rename to
+      `types.Validatable` breaks `go-function/htmlform` v0.7.0, whose public
+      `SetArgValidator` uses `types.ValidatErr`. Either add deprecated
+      aliases (`type ValidatErr = Validatable` and the helpers) for one
+      release, or release go-function in lockstep. The CHANGELOG `Fixed`
+      entries name the new types for bugs that the old-named types had.
+- [ ] **Unquoted email display names that mail stacks read as recipients.**
+      `email.AddressList`, `NullableAddressList` and `AddressSet` store an
+      unquoted name as written, and Python's `EmailMessage` with
+      `smtplib.send_message` reads its words as recipients:
+      `admin, John <ceo@corp.com>` goes to `admin` and `ceo@corp.com`, and
+      `John Doe [External] <ceo@corp.com>` only to `John`. Decided for PR #28
+      to keep accepting them as a documented risk. Options: refuse an
+      unquoted name with a comma or one of `;:)>[]` in the collections'
+      `Validate`, or have `Value` write the normalized, quoted form.
+- [ ] **Read US dates with dashes month first.** Dots, dashes and spaces
+      are read day first with every language hint, so a US document that
+      writes `05-06-2024` can no longer be read as May 6. `ScanStringWithLang`
+      reports `monthMustBeFirst` but has no flag for "must be day first", so a
+      caller can't detect the order of a whole column. A document-level order
+      detection, or a hint that also decides dashes, would cover it.
+
 ## Cleanup decisions (internal or additive)
 
 From the same audit. These don't remove exported API, so they can land any
@@ -201,6 +223,42 @@ time.
         float64 difference loses the cents beyond 2^53.
       - `vat` accepts `" No.974760673"` but rejects `"No.974760673"`: the
         Norwegian "No." guard depends on the spacing.
+- [ ] **Follow-ups from the PR #28 /ship review (2026-10-15).**
+      - `email`: the anti-spoofing differential against Python's
+        `getaddresses` and its default header parser ran offline and is not
+        committed; commit a golden corpus of lists with the recipients each
+        parser reads, so CI keeps checking the agreement.
+      - `email`: Python's lenient `getaddresses` reads a garbled duplicate of
+        the same mailbox, like `<_x@x.de ""<_x@X.DE >`, as an extra entry.
+        Same mailbox, so not a spoofing path, but `Validate` could refuse it.
+      - `email`: `AddressList.MarshalText`, `MarshalJSON` and those of
+        `NullableAddressList` write the stored text untrimmed, so a CR/LF at
+        the edges that `Validate` skips reaches the output.
+      - `email`: the "unexpected remaining characters" error of
+        `ParseAddress` embeds the whole input twice instead of a truncated
+        part, so a 1 MB element gives a 2 MB error.
+      - `types.Validate`: an embedded interface that holds a nil `*T`, and an
+        embedded nil func type like `ValidatorFunc`, still panic. A nil
+        embedded pointer or interface is skipped.
+      - `date`: `YearMonth.AddMonths` and the `AddYears` methods add the
+        whole count in one sum, which wraps the year for counts near
+        `math.MaxInt`; the result is invalid and `Value` refuses it.
+        `"0001-Q2".AddQuarters(-1)` and `"0001-02".AddMonths(-1)` give the
+        zero value, which `Value` writes as NULL instead of an error.
+      - `strfmt.Format` panics for a float when `FormatConfig.Float` has a
+        zero `DecimalSep`; `float.FormatDef.Format` already reads it as `.`.
+      - `strfmt`: a `Precision` of -1 writes a whole KWD 1234 as
+        `"KWD 1,234"`, which `money.CurrencyAmount.ScanString` reads as
+        1.234. Scanning with the decimal separator of the config instead of
+        guessing would remove the ambiguity.
+      - `strfmt.EnglishFloatFormat` and `EnglishMoneyFormat` kept their
+        names when `NewEnglishFormatConfig` became `NewUSFormatConfig`;
+        rename them too if "English" should only mean UK conventions.
+      - Tests proposed by the coverage audits: `Date.Scan` of a
+        `time.Time` on 0001-01-01 that is not `time.Time{}`,
+        `NullableDate.NormalizedOrNull` with a language hint,
+        `AddressList.UnmarshalJSON(null)`, `AddressSet.Scan` of a
+        placeholder list, and `NullableAddressList("  ").MarshalText()`.
 - [ ] **Fast paths for the remaining exact math and parsing.** The
       `CentAmount` rate methods, `float.RoundToDecimals` and `float.Format`
       have float64 fast paths, and `internal.UnmarshalJSONNormalized`
@@ -249,6 +307,12 @@ time.
 - [ ] **Bump `gosec` in `tools/go.mod`.** The pinned version cannot read the
       build data of Go 1.27 and then runs without type information, so its
       "0 issues" is meaningless locally. CI on Go 1.26 is not affected.
+- [ ] **Performance of the `email` address checks.** `AddressList.Validate`
+      allocates about 35 to 40 times the size of the list, partly for the
+      rune offset map, and `AddressListJoinStrings` grows its builder
+      without `Grow`. `NullableYearMonth.Compare` and
+      `NullableYearQuarter.Compare` normalize on every call, unlike the
+      non-nullable types.
 - [ ] **Go 1.27 `encoding/json`.** With json/v2 as the default, `float64` and
       `any` map keys marshal, unlike in Go 1.26. `types.CanMarshalJSON`
       follows the documented Go 1.26 rule and reports false for them.
