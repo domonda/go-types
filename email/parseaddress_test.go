@@ -1046,6 +1046,10 @@ func FuzzParseAddressListMatchesNetMail(f *testing.F) {
 		"\"a\tb\"@x.com",
 		"e@f.net..Doe",
 		"undisclosed-recipients:;",
+		// Found by fuzzing: the address pattern drops the apostrophe,
+		// net/mail reads the address '0@0.aa
+		"'0@0.AA",
+		"o'brien@example.com, 'Brien' <ob@example.com>",
 	} {
 		f.Add(list)
 	}

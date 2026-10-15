@@ -612,6 +612,15 @@ func TestCollectionsRefuseRunesInAddressParts(t *testing.T) {
 		"a@b.com\u00a0, c@d.com",
 		// A backslash escapes the dropped rune in a quoted local part
 		"\"a\\\u200db\"@x.com",
+		// The address pattern drops an apostrophe before the local part
+		// and after the domain, which net/mail reads as part of them.
+		// Found by FuzzParseAddressListMatchesNetMail.
+		"'0@0.AA",
+		"'stupid@quoting.me'",
+		"Boss <'ceo@corp.com>",
+		"Boss <ceo@corp.com'>",
+		"a@b.com, ' c@d.com",
+		"x@y.com <'a@b.com>",
 	}
 	for _, addr := range refused {
 		t.Run(string(addr), func(t *testing.T) {
@@ -659,6 +668,14 @@ func TestCollectionsRefuseRunesInAddressParts(t *testing.T) {
 		"\"Doe, @John\"\u3000 <j@x.com>",
 		"\"cc@evil.com,\"\u00ad <cc@good.com>",
 		"a@example.com (x \\), y),\u200b <b@example.com> (B (C, D)), c@example.com",
+		// An apostrophe within an address part, in a quoted local part or
+		// in a name is read by the parser like by net/mail
+		"o'brien@example.com",
+		"a'@example.com",
+		"\"'abc\"@example.com",
+		"O'Brien <ob@example.com>",
+		"'Brien' <ob@example.com>",
+		"ob@example.com (O'Brien)",
 	} {
 		t.Run(string(addr), func(t *testing.T) {
 			for method, err := range validateCollections(addr) {

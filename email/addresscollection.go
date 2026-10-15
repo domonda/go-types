@@ -265,19 +265,20 @@ func hasUnsafeRune(text string) bool {
 // strutil.TrimSpace, has a rune that the parser drops or changes within an
 // address part, the local part and the domain, inside or without angle
 // brackets, or within the spaces around it: a rune that is not graphic,
-// like the soft hyphen or the zero width space, or a space other than the
+// like the soft hyphen or the zero width space, a space other than the
 // ASCII space, like the no-break space, the line separator or a tab in a
-// quoted local part. The parser reads `ad<soft hyphen>min@corp.com` as
-// admin@corp.com, while net/mail and mail servers read another mailbox,
-// so a recipient check would see another address than the message is sent
-// to. These runes are valid in display names and comments, see
-// hasUnsafeRune, and a tab outside a quoted string is a space for net/mail
-// too. single parses text as one address like Address.Validate, else as
-// address list. A text that doesn't parse has no hidden rune, the parser
-// refuses it.
+// quoted local part, or an apostrophe right before or after the address
+// part, which the address pattern drops. The parser reads
+// `ad<soft hyphen>min@corp.com` and 'admin@corp.com as admin@corp.com,
+// while net/mail and mail servers read other mailboxes, so a recipient
+// check would see another address than the message is sent to. These
+// runes are valid in display names and comments, see hasUnsafeRune, and
+// a tab outside a quoted string is a space for net/mail too. single parses
+// text as one address like Address.Validate, else as address list.
+// A text that doesn't parse has no hidden rune, the parser refuses it.
 func hasHiddenAddrSpecRune(text string, single bool) bool {
 	text = strutil.TrimSpace(text)
-	if strings.IndexFunc(text, func(r rune) bool { return sanitizeRune(r) != r }) < 0 {
+	if !strings.Contains(text, "'") && strings.IndexFunc(text, func(r rune) bool { return sanitizeRune(r) != r }) < 0 {
 		return false
 	}
 	var offsets []int
@@ -293,11 +294,21 @@ func hasHiddenAddrSpecRune(text string, single bool) bool {
 		return false
 	}
 	for _, spec := range specs {
-		if hasChangedRuneAt(text, sanitized, offsets, spec) {
+		if hasApostropheAround(sanitized, spec) || hasChangedRuneAt(text, sanitized, offsets, spec) {
 			return true
 		}
 	}
 	return false
+}
+
+// hasApostropheAround reports whether the address pattern dropped an
+// apostrophe right before the local part or after the domain of the
+// address part spec of sanitized, see localPart and nameAddressRegex,
+// like the one of 'ceo@corp.com, which net/mail reads as part of the
+// local part, so that the mailbox 'ceo@corp.com was read as ceo@corp.com.
+func hasApostropheAround(sanitized string, spec specRange) bool {
+	return strings.HasSuffix(strings.TrimSuffix(sanitized[:spec.start], " "), "'") ||
+		strings.HasPrefix(strings.TrimPrefix(sanitized[spec.end:], " "), "'")
 }
 
 // hasChangedRuneAt reports whether the text of the address part spec of
@@ -342,14 +353,15 @@ func hasChangedRuneAt(text, sanitized string, offsets []int, spec specRange) boo
 // stored, write every text that Validate accepts and nothing else:
 // a display name with a line break must not pass Validate and inject
 // a header into a message built from the stored text, and an address
-// with a soft hyphen must not pass as another mailbox.
+// with a soft hyphen or an apostrophe before it must not pass as another
+// mailbox.
 func checkSafeRunes(text, name string, single bool) error {
 	text = strutil.TrimSpace(text)
 	if hasUnsafeRune(text) {
 		return errs.Errorf("%s %q has a control character, a bidi embedding, override or isolate, or invalid UTF-8", name, truncateForError(text))
 	}
 	if hasHiddenAddrSpecRune(text, single) {
-		return errs.Errorf("%s %q has an address part with a rune that is not graphic or a space other than U+0020, which the parser drops", name, truncateForError(text))
+		return errs.Errorf("%s %q has an address part with a rune that is not graphic or a space other than U+0020, or with an apostrophe before or after it, which the parser drops", name, truncateForError(text))
 	}
 	return nil
 }

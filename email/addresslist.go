@@ -162,10 +162,10 @@ func (l AddressList) UniqueAddressParts() (AddressSet, error) {
 // or a NUL, a bidi embedding, override or isolate, or invalid UTF-8 within
 // the text is an error too, because Value writes the list as stored and
 // the parser ignores these runes. So is an address part with a rune that
-// the parser drops or reads as another rune, like a soft hyphen or a space
-// other than U+0020, because net/mail and mail servers read another
-// mailbox in the stored list. Surrounding whitespace is not checked,
-// because Value trims it.
+// the parser drops or reads as another rune, like a soft hyphen, a space
+// other than U+0020 or an apostrophe before it, because net/mail and mail
+// servers read another mailbox in the stored list. Surrounding whitespace
+// is not checked, because Value trims it.
 func (l AddressList) Validate() error {
 	if err := checkSafeRunes(string(l), "email address list", false); err != nil {
 		return err
