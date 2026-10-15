@@ -619,8 +619,13 @@ func TestCollectionsRefuseRunesInAddressParts(t *testing.T) {
 		"'stupid@quoting.me'",
 		"Boss <'ceo@corp.com>",
 		"Boss <ceo@corp.com'>",
+		"Boss <ceo@corp.com '>",
 		"a@b.com, ' c@d.com",
 		"x@y.com <'a@b.com>",
+		// The address in angle brackets after an address is the address,
+		// see the special case in parseAddress
+		"\"a,b\"@c.com <'x@y.com>",
+		"\"a,b\"@c.com <x\u00ad@y.com>",
 	}
 	for _, addr := range refused {
 		t.Run(string(addr), func(t *testing.T) {
@@ -689,6 +694,24 @@ func TestCollectionsRefuseRunesInAddressParts(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, string(addr), v, "written as stored")
 		})
+	}
+}
+
+// An address of an AddressSet is checked as one address, like
+// Address.Validate parses it, also when it is no valid address list,
+// like with the leading comma, which the address pattern reads as part of
+// the name. Checked as list it doesn't parse and so had no hidden rune.
+func TestAddressSetRefusesRunesInAddressPartOfNoList(t *testing.T) {
+	for _, addr := range []Address{
+		",x <a\u00ad@b.cc>",
+		",x <'a@b.cc>",
+	} {
+		require.NoError(t, addr.Validate(), "valid as one address")
+		assert.Error(t, AddressList(addr).Validate(), "no valid list")
+		set := MakeAddressSet(addr)
+		assert.Error(t, set.Validate(), "%q", addr)
+		_, err := set.Value()
+		assert.Error(t, err, "%q", addr)
 	}
 }
 

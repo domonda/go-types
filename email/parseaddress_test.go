@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/domonda/go-errs"
 
@@ -533,6 +534,14 @@ func TestParseAddressList_ErrorAfterDisplayNameWithCommas(t *testing.T) {
 			wantErrors: 1,
 		},
 		{
+			// No comma after the address, so the rest of the list
+			// belongs to its entry
+			name:       "text after the address at the end",
+			list:       `Doe, Jr., John <john@example.com> junk`,
+			want:       []string{"john@example.com"},
+			wantErrors: 1,
+		},
+		{
 			name:       "text after the address up to the next name",
 			list:       `a@b.com junk, Doe, x <y@z.com> j, k@l.mm`,
 			want:       []string{"a@b.com", "y@z.com", "k@l.mm"},
@@ -607,6 +616,18 @@ func TestParseAddressList_EncodedWordNameHoldsNoAddress(t *testing.T) {
 			}
 			assert.Len(t, SplitAddressList(list), len(stdlib), "SplitAddressList finds every recipient")
 		})
+	}
+
+	// The angle bracket in an encoded-word opens the address, like for
+	// net/mail, so the encoded-word is no name of the address after it
+	for _, list := range []string{
+		`=?utf-8?q?<x?= <c@x.com>`,
+		`=?utf-8?q?<x?= <c@x.com>, d@x.com`,
+	} {
+		_, err := mail.ParseAddressList(list)
+		require.Error(t, err, "net/mail")
+		_, err = ParseAddressList(list)
+		assert.Error(t, err, list)
 	}
 
 	// Encoded-words that hold only the characters of a display name,
@@ -1014,6 +1035,9 @@ func FuzzSanitizeRunesOffsets(f *testing.F) {
 		for i := range len(sanitized) {
 			if c := sanitized[i]; c != ' ' && c != text[offsets[i]] {
 				t.Fatalf("sanitizeRunes(%q) byte %d %q comes from %q at %d", text, i, c, text[offsets[i]], offsets[i])
+			}
+			if r, _ := utf8.DecodeRuneInString(text[offsets[i]:]); sanitized[i] == ' ' && sanitizeRune(r) != ' ' {
+				t.Fatalf("sanitizeRunes(%q) space %d comes from %q at %d", text, i, r, offsets[i])
 			}
 			if i > 0 && offsets[i] <= offsets[i-1] {
 				t.Fatalf("sanitizeRunes(%q) offsets not increasing: %v", text, offsets)
