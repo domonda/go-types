@@ -131,12 +131,6 @@ none in this module or in the local checkouts of the domonda repos.
       `HTMLToPlaintext`, which domonda-service calls, and the
       `inbucket/html2text` library used for TNEF bodies. Keep one.
 
-- [ ] **`types.ValidatErr` users outside this module.** The rename to
-      `types.Validatable` breaks `go-function/htmlform` v0.7.0, whose public
-      `SetArgValidator` uses `types.ValidatErr`. Either add deprecated
-      aliases (`type ValidatErr = Validatable` and the helpers) for one
-      release, or release go-function in lockstep. The CHANGELOG `Fixed`
-      entries name the new types for bugs that the old-named types had.
 - [ ] **Unquoted email display names that mail stacks read as recipients.**
       `email.AddressList`, `NullableAddressList` and `AddressSet` store an
       unquoted name as written, and Python's `EmailMessage` with
