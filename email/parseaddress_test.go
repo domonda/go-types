@@ -1426,3 +1426,128 @@ func FuzzParseAddressListMatchesNetMail(f *testing.F) {
 func addressPartSet(addrs []*mail.Address) []string {
 	return slices.Compact(slices.Sorted(slices.Values(addressParts(addrs))))
 }
+
+// FuzzValidListHasTheAddressesOfItsText checks the recipients of every
+// list that the collections validate, also where net/mail rejects the list
+// and FuzzParseAddressListMatchesNetMail checks nothing: every address
+// written in the stored text outside quoted strings and comments is a
+// parsed address, and every parsed address is written there. Other parsers
+// read such an address as recipient, while one within a quoted string or
+// comment is part of a name for them. Lists that net/mail rejects validated
+// with other recipients than Python's email.utils.getaddresses reads, like
+// `x@evil.com <ceo@corp.com>`, read as ceo@corp.com, and
+// `"x@evil.com" "<ceo@corp.com>`, whose address is within the unclosed
+// quote. The single address of an AddressSet is checked the same way.
+func FuzzValidListHasTheAddressesOfItsText(f *testing.F) {
+	for _, list := range []string{
+		`a@example.com, "Doe, John" <j@example.com>`,
+		`Doe, John <john@example.com>, b@example.com (Comment, x@y.com)`,
+		`"a b"@example.com, "a\"b"@Example.COM`,
+		`=?utf-8?q?spy@evil.example,?= <ceo@corp.example>`,
+		`a@example.com <a@example.com>, <b@example.com> <b@example.com>`,
+		// The findings that validated with other recipients
+		`"x@evil.com" "<a@corp.com>`,
+		`b@corp.com, "x@evil.com" "<a@corp.com>`,
+		`x@evil.com <a@corp.com>,`,
+		`Bob <x@evil.com> <a@corp.com>,`,
+		`<x@evil.com> <a@corp.com>`,
+		`x@evil.com (y) <a@corp.com>`,
+		`=?utf-8?q?spy@evil.example?= <ceo@corp.example>`,
+		`Support, "x\" <ceo@corp.com>, y (," <attacker@evil.com>, z@z.com`,
+		`b@example.com, Doe (Sales <doe@example.com>`,
+		`"a,b"@c.com <x@y.com>`,
+		"a@b.com\t(Mike)",
+		"a@b.com\t, c@d.com",
+	} {
+		f.Add(list)
+	}
+	f.Fuzz(func(t *testing.T, list string) {
+		if v, err := AddressList(list).Value(); err == nil && v != nil {
+			parsed, err := ParseAddressList(list)
+			if err != nil {
+				t.Fatalf("AddressList(%q) is valid, but ParseAddressList fails: %v", list, err)
+			}
+			checkAddressesOfText(t, v.(string), parsed)
+		}
+		if _, err := MakeAddressSet(Address(list)).Value(); err == nil {
+			parsed, err := ParseAddress(list)
+			if err != nil {
+				t.Fatalf("AddressSet{%q} is valid, but ParseAddress fails: %v", list, err)
+			}
+			checkAddressesOfText(t, strutil.TrimSpace(list), []*mail.Address{parsed})
+		}
+	})
+}
+
+// checkAddressesOfText fails t if the addresses written in the stored text
+// outside quoted strings and comments, see textAddresses, are not the
+// address parts of parsed, ignoring case, which the parser lower cases.
+func checkAddressesOfText(t *testing.T, stored string, parsed []*mail.Address) {
+	t.Helper()
+	got := addressPartSet(parsed)
+	written := textAddresses(stored)
+	for _, addr := range written {
+		if _, found := slices.BinarySearch(got, addr); !found {
+			t.Fatalf("%q is valid with the addresses %q, but has the address %q outside quotes and comments", stored, got, addr)
+		}
+	}
+	for _, addr := range got {
+		if !slices.Contains(written, addr) {
+			t.Fatalf("%q is valid with the address %q, which it has not outside quotes and comments: %q", stored, addr, written)
+		}
+	}
+}
+
+// textAddresses returns the lower cased words of text with an @ outside
+// its quoted strings and comments, read like nextListSeparator reads them:
+// the runs of characters that are no ASCII space and none of the
+// delimiters <>,;:()[]" or the backslash, with the content of a quoted
+// string right before an @ as unescaped local part, like for "a b"@x.com.
+// It is no address parser, so that it finds every address that another
+// parser could read, also where the address pattern of the package
+// reads none.
+func textAddresses(text string) []string {
+	var (
+		addrs []string
+		state listState
+		word  []byte
+		local string // the quoted local part of word
+		// quoted is the unescaped content of the last quoted string,
+		// which ended before quoteEnd
+		quoted   []byte
+		quoteEnd = -1
+	)
+	endWord := func() {
+		if slices.Contains(word, '@') {
+			addrs = append(addrs, strings.ToLower(local+string(word)))
+		}
+		word, local = word[:0], ""
+	}
+	for i := 0; i < len(text); i++ {
+		c := text[i]
+		inQuote, inComment, escaped := state.quoted, state.comment > 0, state.escaped
+		state.read(c)
+		switch {
+		case inQuote:
+			if escaped || (c != '\\' && c != '"') {
+				quoted = append(quoted, c)
+			} else if c == '"' {
+				quoteEnd = i + 1
+			}
+		case inComment:
+		case c == '"':
+			endWord()
+			quoted = quoted[:0]
+		case strings.IndexByte(" \t<>,;:()[]\\", c) >= 0:
+			endWord()
+		default:
+			if len(word) == 0 && c == '@' && quoteEnd == i {
+				local = string(quoted)
+			}
+			word = append(word, c)
+		}
+	}
+	endWord()
+	slices.Sort(addrs)
+	return slices.Compact(addrs)
+}
