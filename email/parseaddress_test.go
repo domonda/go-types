@@ -472,7 +472,7 @@ func TestParseAddress_EncodedWordThatPythonReadsAsAddress(t *testing.T) {
 		// before it would encode it again
 		`=?utf-8?q?=C3=A4=2C_x=40evil.com?=; <ceo@corp.com>`,
 		// The decoded ASCII text is written unencoded and unquoted, where
-		// its @, quotes, parentheses, angle brackets and ;[]\, are read
+		// its @, quotes, parentheses, angle brackets and :;[]\, are read
 		`=?utf-8?q?x=40evil.com?= <ceo@corp.com>`,
 		`=?utf-8?b?eEBldmlsLmNvbQ==?= <ceo@corp.com>`,
 		`John =?utf-8?q?x=40evil.com?= <ceo@corp.com>`,
@@ -497,6 +497,9 @@ func TestParseAddress_EncodedWordThatPythonReadsAsAddress(t *testing.T) {
 		`"ä =?utf-8?q?x=40evil.com?=" <ceo@corp.com>`,
 		`"=?utf-8?q?x=40evil.com?= ä" <ceo@corp.com>`,
 		`"=?utf-8?q?=C3=A4?= =?utf-8?q?x=40evil.com?=" <ceo@corp.com>`,
+		// The colon starts a group, Python sends this one to
+		// `b " <x@evil.cöm>, a` instead of ceo@corp.com
+		`"=?utf-8?b?YTpi?= \" <x@evil.cöm>, =?utf-8?b?YTpi?= " <ceo@corp.com>`,
 		`"=?utf-8?q?x=40evil.com?=" <ceo@corp.com>`,
 		`"John =?utf-8?q?x=40evil.com?=" <ceo@corp.com>`,
 		`"=?x-unknown?q?x=40evil.com?= ä" <ceo@corp.com>`,

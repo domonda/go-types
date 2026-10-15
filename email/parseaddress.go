@@ -208,7 +208,7 @@ func UniqueNormalizedAddressSlice(addrs []Address) []Address {
 // decoded, as an address, like in `"x@evil.com"; <ceo@corp.com>`,
 // `Team:"x@evil.com":<ceo@corp.com>` and
 // `=?utf-8?q?x=40evil.com?=, <ceo@corp.com>`. An encoded-word in an
-// unquoted name whose text is ASCII with one of the specials @"()<>[];\,
+// unquoted name whose text is ASCII with one of the specials @"()<>[]:;\,
 // is an error too, because Python's email package writes such text
 // unencoded and unquoted when it writes the header, so that a message to
 // `=?utf-8?q?x=40evil.com?= <ceo@corp.com>` holds
@@ -403,7 +403,7 @@ func parseNameAddress(addr string) (parsed parsedAddress, ok bool) {
 				undecodable, asciiSpecial = readEncodedWords(quoted)
 			}
 			if undecodable || asciiSpecial {
-				parsed.problem = `encoded-word that can't be decoded or decodes to ASCII with one of @"()<>[];\, in quoted display name`
+				parsed.problem = `encoded-word that can't be decoded or decodes to ASCII with one of @"()<>[]:;\, in quoted display name`
 			}
 			name = decodeName(name)
 		}
@@ -491,7 +491,7 @@ func hasAtOutsideQuotes(text string) bool {
 //
 //   - An =? that doesn't start an encoded-word that the parser decodes,
 //     which Python can still decode, or an encoded-word whose text is ASCII
-//     with one of the specials @"()<>[];\, which Python writes unencoded
+//     with one of the specials @"()<>[]:;\, which Python writes unencoded
 //     and unquoted when it writes the header, see readEncodedWords.
 //   - A quoted @ or an encoded-word, and one of ;:)>[]\, outside the
 //     quoted strings and comments, where Python's parsers end the name
@@ -534,7 +534,7 @@ func unquotedNameProblem(text string) string {
 			undecodable, asciiSpecial = readEncodedWords(strings.ReplaceAll(text, `\`, ""))
 		}
 		if undecodable || asciiSpecial {
-			return `encoded-word that can't be decoded or decodes to ASCII with one of @"()<>[];\, in unquoted display name`
+			return `encoded-word that can't be decoded or decodes to ASCII with one of @"()<>[]:;\, in unquoted display name`
 		}
 	}
 	if (quotedAt || encoded) && phraseEnd {
@@ -556,11 +556,10 @@ var encodedWordStartRegexp = regexp.MustCompile(`^` + encodedWord)
 // a quote written in it, which Python reads across the quote, while the
 // parser reads the quote as the start or end of a quoted string, like in
 // `"=?utf-8?q?J"=C3=BCrgen?= <a@b.com>`. asciiSpecial reports an
-// encoded-word whose text is ASCII with one of the specials @"()<>[];\,
-// of RFC 5322 other than the dot and the colon, which Python reads as the
-// start of a group without changing its recipients. Python writes such
-// text unencoded and unquoted when it writes the header, where it is an
-// address, a quoted string, a comment or the end of the name: for
+// encoded-word whose text is ASCII with one of the specials @"()<>[]:;\,
+// of RFC 5322 other than the dot. Python writes such text unencoded and
+// unquoted when it writes the header, where it is an address, a quoted
+// string, a comment, a group or the end of the name: for
 // `=?utf-8?q?x=40evil.com?= <ceo@corp.com>` it writes
 // `x@evil.com <ceo@corp.com>`, which is sent to x@evil.com when the
 // message is read again. Text with other runes or bytes it encodes again,
@@ -579,7 +578,7 @@ func readEncodedWords(text string) (undecodable, asciiSpecial bool) {
 		if err != nil {
 			return true, asciiSpecial
 		}
-		if strings.ContainsAny(decoded, `@"()<>[];\,`) && isASCII(decoded) {
+		if strings.ContainsAny(decoded, `@"()<>[]:;\,`) && isASCII(decoded) {
 			asciiSpecial = true
 		}
 		text = text[i+len(word):]
