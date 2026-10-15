@@ -7,7 +7,7 @@ Releases are numbered like the `VERSION` file and the git tags, without the
 `v` prefix; the entry from before the first version is dated.
 See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut.
 
-## [1.0.0-beta.1] - 2026-10-14
+## [1.0.0-beta.1] - 2026-10-15
 
 ### Added
 
