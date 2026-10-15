@@ -843,7 +843,8 @@ See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut.
   `admin@corp.com`, `a@b.com` and `ceo@corp.com`, while `net/mail` and
   mail servers read other mailboxes. `AddressSet.MarshalText` also refuses
   a set whose joined list would read back as other entries, like a valid
-  address with an unclosed comment that swallowed the entries after it.
+  address with an unclosed angle bracket, `Doe <doe@example.com`, that
+  swallowed the entries after it.
 - `float.FormatDef.Format` and `Parse` panicked for a zero `DecimalSep`,
   as in the zero `FormatDef` or one decoded from `{"decimalSep":""}`; they
   use `.` for it. `UnmarshalJSON` rejects a zero `decimalSep` together with
@@ -852,7 +853,11 @@ See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut.
   methods of the address lists and `ParseMIMEMessage`, took quadratic time
   and memory for a list of unparsable entries: every error held the whole
   list, so 10,000 entries took seconds and hundreds of megabytes. Errors
-  hold at most 100 bytes of the input, and parsing stops after 100 errors.
+  hold at most 100 bytes of the input, parsing stops after 100 errors, and
+  each entry is parsed only up to its end, so 1 MB of entries without `@`
+  or of commas takes 14 ms instead of over 6 s. A repeated address like in
+  `<a@x.com> <a@x.com>` is read in a loop instead of one recursion per
+  address, which exhausted the goroutine stack for millions of them.
 - `email.ParseAddressList` parsed lists without an error as other entries
   than `SplitAddressList` found, so a validated list read back as other
   recipients through `AddressSet.Scan` and `SplitRaw`: an unclosed quote or
@@ -866,13 +871,41 @@ See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut.
   address is returned at most once, and of an entry that can't be parsed
   only the last part with the angle brackets is parsed once more, so
   `Doe, John (john@corp) <j@x.com>` still gives `j@x.com` with an error.
-- **Breaking:** an RFC 2047 encoded-word in an email display name may not
-  hold an unencoded `,<>@"()\`. `=?utf-8?q?spy@evil.example,?=
-  <ceo@corp.example>` validated as the one recipient `ceo@corp.example`,
-  while `net/mail` and mail servers read the second recipient
-  `=?utf-8?q?spy@evil.example`. The parser, `SplitAddressList` and
-  `net/mail` read the same recipients now; `ParseMIMEMessage` reports such
-  an address header as an error and keeps the addresses it can parse.
+- **Breaking:** `email.ParseAddress`, and so `Validate` and `Normalized` of
+  `Address`, `NullableAddress`, `AddressList`, `NullableAddressList` and
+  `AddressSet`, refuse addresses that other parsers read as other
+  recipients. Python's `email.utils.getaddresses(strict=True)`, which
+  `smtplib.send_message` uses, and `net/mail` read other recipients in
+  lists that validated, which are refused now:
+  - an address inside a quote or comment that isn't closed:
+    `"x@evil.com" "<ceo@corp.com>` validated as `ceo@corp.com` where Python
+    reads `x@evil.com`, and in `Doe (Sales <doe@example.com>` Python reads
+    `Doe`, so an unclosed quote or comment is an error also without a
+    comma after it, and its address is not returned;
+  - an `@` in an unquoted display name, also in an RFC 2047 encoded-word,
+    unless the name is the address itself as written:
+    `x@evil.com <ceo@corp.com>` and
+    `=?utf-8?q?spy@evil.example?= <ceo@corp.example>`. An encoded-word is
+    read like any other word of an unquoted name, so its unencoded comma
+    separates entries like in `net/mail`;
+  - a second, different address in angle brackets: `Normalized` of
+    `<x@evil.com> <ceo@corp.com>` returned `ceo@corp.com`; only the same
+    address may repeat;
+  - a quoted name without angle brackets after it:
+    `"x@evil.com" ceo@corp.com`;
+  - an unquoted name with a quoted `@` that one of `;)>[]` ends, which
+    Python's lenient parser also sends to the quoted address:
+    `"x@evil.com"; <ceo@corp.com>`.
+  Quote such names: `"x@evil.com" <ceo@corp.com>` is valid.
+  `ParseMIMEMessage` reports such an address header as an error and keeps
+  the addresses it can parse, so `From: x@evil.com <ceo@corp.com>` leaves
+  `From` empty. `ParseAddressList` and the `SplitNormalized` methods never
+  return an address from inside a quoted string or comment: for
+  `Support, "x\" <ceo@corp.com>, y (," <attacker@evil.com>` they returned
+  `ceo@corp.com` and now return `attacker@evil.com` with an error. The
+  collections also refuse runes the parser drops in an unquoted name that
+  is the address, in a repeated address, and after a comment after an
+  address up to the next comma, where Python appends them to the domain.
 - **Breaking:** the domain of an email address may not have an empty
   label: `e@f.net..Doe` was valid and normalized to `e@f.net..doe`, which
   `net/mail` rejects. `AddressRegexp` and `FindAllAddresses` match no domain
@@ -897,7 +930,6 @@ See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut.
   is valid, and a comment that isn't closed is an error:
   `a@example.com (x (y)` was valid with the name `x (y`, and in a list it
   holds the rest of the list, so parsing stops there with an error.
-  `Doe (Sales <doe@example.com>, b@example.com` is an error too.
 - `email.Address` and `NullableAddress` built an error with a call stack
   for every invalid value they read or write unchanged, which `Scan`,
   `UnmarshalJSON`, `UnmarshalXML`, `MarshalJSON` and `MarshalText` dropped;
@@ -905,8 +937,8 @@ See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut.
   nothing. Each `ParseAddressList` error carries one call stack instead of
   two.
 - `email.ParseAddress` read `attacker@evil.com ceo@corp.com` as
-  `ceo@corp.com`, which `net/mail` rejects. A second address is only taken
-  from angle brackets, like in `"Example" <ar1@example.com> <ar@example.com>`.
+  `ceo@corp.com`, which `net/mail` rejects. A repeated address is only
+  read from angle brackets, and only the same address may repeat.
 - `date.Normalize` accepted the year 0 in the year-day-month order, like
   `"0000 25 may"`, which `Scan` and PostgreSQL reject.
 - `date.Date.Format` and `NullableDate.Format` formatted an invalid date as
