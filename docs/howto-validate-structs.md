@@ -1,8 +1,8 @@
 # How to validate structs
 
-This guide shows how to make your own types validatable, validate a nested
-struct in one call with `types.DeepValidate`, and work with the errors it
-returns. For the reasoning behind the interfaces, see
+This guide shows how to let your own types validate themselves, validate a
+nested struct in one call with `types.DeepValidate`, and work with the errors
+it returns. For the reasoning behind the interfaces, see
 [Validation and normalization](explanation-validation-and-normalization.md).
 
 ## Prerequisites
@@ -80,7 +80,7 @@ a pointer when only the pointer type has the method. `types.Validate(line)` and
 `types.DeepValidate(line)` with a value don't find a pointer receiver method
 of `line` itself; pass `&line`.
 
-### 3. Build the struct from validatable fields
+### 3. Build the struct from fields that validate themselves
 
 The domain types of this module already implement both interfaces, so a
 `vat.ID` or `money.Currency` field is validated without extra code. Put only

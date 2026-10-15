@@ -13,7 +13,7 @@ pick the section that matches what you need right now.
 
 | Document                                          | Task                                               |
 |---------------------------------------------------|----------------------------------------------------|
-| [How to validate structs](howto-validate-structs.md) | Make your own types validatable and check nested structs with `types.DeepValidate` |
+| [How to validate structs](howto-validate-structs.md) | Let your own types validate themselves and check nested structs with `types.DeepValidate` |
 | [How to store optional values](howto-store-optional-values.md) | Pick the Go type for a nullable SQL column or optional JSON field |
 | [How to extract identifiers, dates and amounts from text](howto-extract-identifiers-from-text.md) | Find IBANs, BICs, VAT IDs, dates and amounts in OCR or PDF text |
 | [How to scan and format table rows](howto-scan-and-format-table-rows.md) | Read CSV cells into typed fields and write localized CSV with `strfmt` |

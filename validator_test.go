@@ -337,7 +337,7 @@ func TestDeepValidate(t *testing.T) {
 			wantErrs: 0,
 		},
 		{
-			name: "struct with non-validatable fields",
+			name: "struct with fields that implement neither interface",
 			input: struct {
 				Name  string
 				Value int
@@ -661,7 +661,8 @@ func TestDeepValidate_DeterministicIntKeyOrder(t *testing.T) {
 }
 
 func TestDeepValidate_NonNilableLeafTypes(t *testing.T) {
-	// Channels/funcs/etc. are reachable but not validatable; should not crash.
+	// Channels/funcs/etc. are reachable but implement neither interface,
+	// which must not crash.
 	type s struct {
 		Ch  chan int
 		Fn  func()
@@ -669,7 +670,7 @@ func TestDeepValidate_NonNilableLeafTypes(t *testing.T) {
 	}
 	errs := DeepValidate(s{Ch: make(chan int), Fn: func() {}, Map: map[string]int{"x": 1}})
 	if len(errs) != 0 {
-		t.Errorf("expected 0 errors for non-validatable leaf kinds, got %d: %v", len(errs), errs)
+		t.Errorf("expected 0 errors for leaf kinds that implement neither interface, got %d: %v", len(errs), errs)
 	}
 }
 

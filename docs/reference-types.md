@@ -62,7 +62,7 @@ A nil `Set` is a valid empty set for every method except `Insert`, `InsertAll`, 
 
 ## Validation
 
-Two interfaces describe validatable types:
+Two interfaces let a type validate itself:
 
 | Interface     | Method             | Use it when                                        |
 |---------------|--------------------|----------------------------------------------------|
@@ -102,7 +102,7 @@ Entry points:
 - It calls `Validate` on `v` and then on every reachable value. If only the pointer type implements an interface, like `*LenString`, it validates through a pointer to the value, or to a copy if the value is not addressable. `v` itself is not copied: passed by value it is validated with the methods of its own type like by `Validate`, so a pointer receiver `Validate` calling `DeepValidate(*receiver)` doesn't call itself again. The nested call has its own cycle detection, and an outer `DeepValidate` reports the field errors twice.
 - It follows pointers and interfaces to any depth. nil pointers, interfaces and funcs stop the descent.
 - It descends into exported struct fields, the exported fields of unexported embedded structs, slice and array elements, and map values. Unexported fields and map keys are not validated. Map keys are sorted with `CompareReflectValue`, so the error order is deterministic.
-- A value that is validatable itself is still descended into, so a struct can report its own error and errors of its fields.
+- A value that implements one of the interfaces is still descended into, so a struct can report its own error and errors of its fields.
 - A pointer, map or slice that is already on the current path is not entered again, so cyclic data is validated once.
 - Every error except one of `v` itself is prefixed with its path and wraps the original error, so `errors.Is` and `errors.As` work:
 
