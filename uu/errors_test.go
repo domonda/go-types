@@ -31,8 +31,8 @@ func TestID_Validate_Errors(t *testing.T) {
 			id := valid
 			id.SetVersion(version)
 			err := id.Validate()
-			var versionErr ErrInvalidVersion
-			require.True(t, errors.As(err, &versionErr), "version %d: %v", version, err)
+			versionErr, ok := errors.AsType[ErrInvalidVersion](err)
+			require.True(t, ok, "version %d: %v", version, err)
 			assert.Equal(t, ErrInvalidVersion(version), versionErr)
 			assert.False(t, id.Valid())
 		}

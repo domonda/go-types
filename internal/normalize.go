@@ -165,8 +165,7 @@ func UnmarshalJSONNormalized[S ~string](dst *S, data []byte, nullable bool, norm
 	if !ok {
 		err := json.Unmarshal(data, &str)
 		if err != nil {
-			var typeErr *json.UnmarshalTypeError
-			if errors.As(err, &typeErr) {
+			if typeErr, ok := errors.AsType[*json.UnmarshalTypeError](err); ok {
 				// Name S instead of string, like encoding/json does
 				// for a string type without UnmarshalJSON
 				return &json.UnmarshalTypeError{Value: typeErr.Value, Type: reflect.TypeFor[S](), Offset: typeErr.Offset}
