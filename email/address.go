@@ -119,15 +119,33 @@ func addrSpec(addr *mail.Address) string {
 	return quoteString(addr.Address[:at]) + addr.Address[at:]
 }
 
-// encodedName returns name as one RFC 2047 B encoded-word, also if it is
-// longer than the 75 characters that mime.BEncoding.Encode writes in one
-// word. Split into several words, a word can hold only ASCII text with
-// a special character like the @ or ) of a long name with an address in
-// parentheses, which Python's email package writes unencoded and unquoted
-// when it writes the header, and which ParseAddress refuses, see
-// readEncodedWords. One word with the whole name holds its other runes.
+// encodedName returns name as RFC 2047 B encoded-words of at most the 75
+// characters that RFC 2047 allows, split at rune boundaries. A word that
+// would hold only ASCII text with one of @"(<\ or an =?, like the @ of
+// a long name with an address in parentheses, is not written, because
+// Python's email package writes such text unencoded and unquoted when it
+// writes the header, and ParseAddress refuses it, see readEncodedWords:
+// then the name is one longer word, which holds its other runes too.
 func encodedName(name string) string {
-	return "=?utf-8?b?" + base64.StdEncoding.EncodeToString([]byte(name)) + "?="
+	const (
+		prefix, suffix = "=?utf-8?b?", "?="
+		// The most bytes whose base64 text fits into a word
+		maxBytes = (75 - len(prefix) - len(suffix)) / 4 * 3
+	)
+	var words []string
+	for rest := name; rest != ""; {
+		n := min(len(rest), maxBytes)
+		for n < len(rest) && !utf8.RuneStart(rest[n]) {
+			n--
+		}
+		text := rest[:n]
+		if isASCII(text) && (strings.ContainsAny(text, `@"(<\`) || strings.Contains(text, "=?")) {
+			return prefix + base64.StdEncoding.EncodeToString([]byte(name)) + suffix
+		}
+		words = append(words, prefix+base64.StdEncoding.EncodeToString([]byte(text))+suffix)
+		rest = rest[n:]
+	}
+	return strings.Join(words, " ")
 }
 
 // asciiAddress formats addr like AddressFrom, but RFC 2047 encodes

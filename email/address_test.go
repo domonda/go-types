@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/mail"
 	"reflect"
+	"strings"
 	"testing"
 	"unicode"
 
@@ -331,8 +332,9 @@ func TestAddress_MarshalTextAndASCII(t *testing.T) {
 	assert.Equal(t, `"Jürgen Müller" <j@example.com>`, marshalText(t, ascii))
 
 	// A long non-ASCII name with special characters is written as one
-	// B encoded-word. mime.BEncoding.Encode split it into words of at most
-	// 75 characters, so that the last one held only the ASCII text
+	// B encoded-word, if a word of at most the 75 characters of RFC 2047
+	// would hold only ASCII text with an @: mime.BEncoding.Encode split it
+	// so that the last word held only the ASCII text
 	// "rechnungen@mueller-gmbh.de)", which Python's email package writes
 	// unencoded and unquoted, and which the parser refuses for that reason
 	const longName = "Müller GmbH Buchhaltung und Rechnungswesen (rechnungen@mueller-gmbh.de)"
@@ -340,6 +342,16 @@ func TestAddress_MarshalTextAndASCII(t *testing.T) {
 	parsed, err := ParseAddress(long.ASCII())
 	require.NoError(t, err, long.ASCII())
 	assert.Equal(t, longName, parsed.Name)
+	// Else it is split into words of at most 75 characters like RFC 2047
+	// requires, here like a mail client wrote the name, see
+	// TestParseAddress_OrdinaryEncodedNames: the ASCII text with only a ")"
+	// in the last word Python reads as part of the name
+	split := Address(`"Jürgen Müller, Buchhaltung und Finanzen (Abteilung Nord)" <j.mueller@example.com>`)
+	assert.Equal(t, `=?utf-8?b?SsO8cmdlbiBNw7xsbGVyLCBCdWNoaGFsdHVuZyB1bmQgRmluYW56ZW4gKEFi?= =?utf-8?b?dGVpbHVuZyBOb3JkKQ==?= <j.mueller@example.com>`, split.ASCII())
+	for word := range strings.FieldsSeq(split.ASCII()) {
+		assert.LessOrEqual(t, len(word), 75, word)
+	}
+	assert.Equal(t, string(split), marshalText(t, Address(split.ASCII())))
 
 	// A name holding "=?" is written quoted with every =? escaped as `=\?`
 	// by MarshalText and ASCII, so that ParseAddress and net/mail read the
