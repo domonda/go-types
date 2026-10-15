@@ -69,6 +69,12 @@ func TestSplitAddressList(t *testing.T) {
 		// Without an @ or angle brackets the parts are an unquoted
 		// display name of the address after them, like any other
 		{list: `=?utf-8?q?a,b?= <c@x.com>, d@x.com`, want: []Address{`=?utf-8?q?a,b?= <c@x.com>`, "d@x.com"}},
+		// A placeholder is found without the runes that ParseAddressList
+		// drops, so that SplitAddressList returns no entry for a list
+		// that ParseAddressList parses as empty
+		{list: "undisclosed\u200d-recipients:", want: nil},
+		{list: "Undisclosed re\u202ecipients", want: nil},
+		{list: "withheld\u00ad recipients:;, ", want: nil},
 		// A backslash escapes the next rune that ParseAddressList reads,
 		// not the zero width joiner that it drops, so the quote closes
 		{list: "\"x\\\u200d\" <a@example.com>, b@example.com", want: []Address{"\"x\\\u200d\" <a@example.com>", "b@example.com"}},
@@ -253,6 +259,9 @@ func FuzzSplitRawMatchesParse(f *testing.F) {
 		`=?utf-8?q?<a@b.com>,?= <c@x.com>`,
 		// An empty domain label, see TestParseAddress_DomainWithoutEmptyLabel
 		"e@f.net..Doe",
+		// Placeholders without the runes that the parser drops
+		"undisclosed\u200d-recipients:",
+		"Undisclosed re\u202ecipients",
 	} {
 		f.Add(list)
 	}
