@@ -276,10 +276,13 @@ See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut.
   and `DeliveredTo` of a message parsed by `ParseMIMEMessage` hold UTF-8
   names too. `Message.BuildRawMessage` still writes RFC 2047 encoded names,
   because MIME headers must be ASCII. ASCII names are formatted as before,
-  except names containing `=?`, which are RFC 2047 encoded, because the
-  parser would decode them again: `"=?utf-8?q?x?=" <a@b.com>` normalizes to
-  `=?utf-8?b?PT91dGYtOD9xP3g/PQ==?= <a@b.com>` and stays that way, instead
-  of turning into `"x" <a@b.com>` when normalized once more.
+  except names containing `=?`, which are written quoted with every `=?`
+  escaped as `=\?`, because the parser and Python's email package would
+  decode them again: `"=?utf-8?q?x?=" <a@b.com>` normalizes to
+  `"=\?utf-8?q?x?=" <a@b.com>` and stays that way, instead of turning into
+  `"x" <a@b.com>` when normalized once more. A quoted name whose every `=?`
+  is escaped is not decoded. `ASCII` writes a non-ASCII name with special
+  characters as a single encoded-word.
 - **Breaking:** `email` normalization keeps the content of a quoted local
   part, only lower cased, instead of removing the quotes and turning spaces
   and commas into dots: `"Doe, John"@example.com` normalizes to
@@ -882,8 +885,8 @@ See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut.
     reads `x@evil.com`, and in `Doe (Sales <doe@example.com>` Python reads
     `Doe`, so an unclosed quote or comment is an error also without a
     comma after it, and its address is not returned;
-  - an `@` in an unquoted display name, also in an RFC 2047 encoded-word,
-    unless the name is the address itself as written:
+  - an `@` in an unquoted display name, unless the name is the address
+    itself as written:
     `x@evil.com <ceo@corp.com>` and
     `=?utf-8?q?spy@evil.example?= <ceo@corp.example>`. An encoded-word is
     read like any other word of an unquoted name, so its unencoded comma
@@ -893,19 +896,46 @@ See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut.
     address may repeat;
   - a quoted name without angle brackets after it:
     `"x@evil.com" ceo@corp.com`;
-  - an unquoted name with a quoted `@` that one of `;)>[]` ends, which
-    Python's lenient parser also sends to the quoted address:
-    `"x@evil.com"; <ceo@corp.com>`.
+  - an unquoted name with a quoted `@` that one of `;:)>[]\` ends, which
+    Python's lenient parser and its default header parser, the one
+    `EmailMessage` and `smtplib.send_message` use, also send to the quoted
+    address: `"x@evil.com"; <ceo@corp.com>` and
+    `Team:"x@evil.com":<ceo@corp.com>`;
+  - an RFC 2047 encoded-word whose decoded text is ASCII and contains one
+    of `@"()<>[]:;\,`, also inside a quoted name, because Python writes it
+    back unencoded: `=?utf-8?q?x=40evil.com?= <ceo@corp.com>`; an
+    encoded-word in an unquoted name that one of `;:)>[]\,` follows; an
+    encoded-word the parser can't decode, like one with an unknown charset
+    or invalid encoding, which Python decodes anyway; and `=?` at the
+    start of a local part or after a space in it, which Python decodes:
+    `=?utf-8?q?admin?=@corp.com`. Encoded-words with non-ASCII text stay
+    valid, because Python encodes them again;
   Quote such names: `"x@evil.com" <ceo@corp.com>` is valid.
   `ParseMIMEMessage` reports such an address header as an error and keeps
   the addresses it can parse, so `From: x@evil.com <ceo@corp.com>` leaves
-  `From` empty. `ParseAddressList` and the `SplitNormalized` methods never
+  `From` empty, also for such an encoded-word. `ParseAddressList` and the
+  `SplitNormalized` methods never
   return an address from inside a quoted string or comment: for
   `Support, "x\" <ceo@corp.com>, y (," <attacker@evil.com>` they returned
   `ceo@corp.com` and now return `attacker@evil.com` with an error. The
   collections also refuse runes the parser drops in an unquoted name that
   is the address, in a repeated address, and after a comment after an
   address up to the next comma, where Python appends them to the domain.
+- `email` local parts are lower cased without turning a non-ASCII rune
+  into ASCII: `"<U+212A>ate"@corp.com`, with the Kelvin sign, was read as
+  `kate@corp.com`. The domain of an unquoted name that equals the address
+  is compared the same way. An address without a name whose quoted local
+  part holds a `<` is written in angle brackets, so `Normalized` reads it
+  back as the same address. A run of empty entries in an address list is
+  one error, and parsing continues after it, so 1 MB of commas before an
+  entry with angle brackets takes milliseconds instead of 6 s.
+- `email.AddressList`, `NullableAddressList` and `AddressSet` store an
+  unquoted display name as written, which is a known risk: some mail
+  stacks read its words as recipients. Python's `EmailMessage` with
+  `smtplib.send_message` sends `admin, John <ceo@corp.com>` to `admin` and
+  `ceo@corp.com`, and `John Doe [External] <ceo@corp.com>` only to
+  `John Doe`. Store `Normalized()`, which quotes every name, or quote the
+  name where the text goes into a header of another system.
 - **Breaking:** the domain of an email address may not have an empty
   label: `e@f.net..Doe` was valid and normalized to `e@f.net..doe`, which
   `net/mail` rejects. `AddressRegexp` and `FindAllAddresses` match no domain
@@ -968,13 +998,17 @@ See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut.
   `To: =?utf-8?q?victim=40evil=2Ecom=2C?= <ok@good.com>`, added the
   recipient `victim@evil.com`, which `net/mail` and mail clients don't see,
   and a name like `=?UTF-8?Q?M=C3=BCller=2C_J=C3=BCrgen?=` failed to parse
-  at its comma. The headers are parsed raw now, and only display names are
+  at its comma; such a header is now also reported as an error, because
+  an encoded `@` in an unquoted name is invalid. The headers are parsed raw
+  now, and only display names are
   decoded. A header value that is only encoded-words, which MIME encoders
   write for a non-ASCII address part, is decoded as a whole, and
   `BuildRawMessage` no longer encodes names a second time for it.
 - `email` display names in a charset that only has an IANA label, like
-  `cp850`, are decoded, and a name that can't be decoded is dropped instead
-  of failing its address. A name in the comment syntax
+  `cp850`, are decoded. A display name that can't be decoded fails
+  `ParseAddress` and `Validate`, and `ParseAddressList` returns its address
+  with an error; a name in a comment that can't be decoded is dropped. A
+  name in the comment syntax
   `a@example.com (=?utf-8?q?M=C3=BCller?=)` is decoded.
 - `strutil.TransliterateSpecialCharacters` and
   `TransliterateSpecialCharactersMaxLen` returned the input unchanged, with
