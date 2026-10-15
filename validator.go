@@ -14,12 +14,12 @@ import (
 // The Valid method should return true if the data is valid, false otherwise.
 //
 // Because Valid can't tell why the data is invalid, Validate, TryValidate,
-// DeepValidate and ValidatorAsValidatErr return an error naming the type
+// DeepValidate and ValidatorAsValidatable return an error naming the type
 // and the value formatted with %#v, like `invalid main.Status value: "unknown"`.
-// So the whole value is part of the error message. Implement ValidatErr
+// So the whole value is part of the error message. Implement Validatable
 // instead for other errors, like for a value that must not be logged,
 // such as a password, or that can be large, because the error
-// of ValidatErr.Validate is returned unchanged.
+// of Validatable.Validate is returned unchanged.
 type Validator interface {
 	// Valid returns if the data of the implementation is valid.
 	Valid() bool
@@ -70,40 +70,40 @@ func CombinedValidator(validators ...Validator) Validator {
 	return Validators(validators)
 }
 
-// ValidatErr can be implemented by types that can validate their data and return detailed error information.
+// Validatable can be implemented by types that can validate their data and return detailed error information.
 // This is more informative than the Validator interface as it provides specific error details.
 //
 // Any non-nil error means the data is invalid,
 // so the error should describe what is invalid.
-type ValidatErr interface {
+type Validatable interface {
 	// Validate returns an error if the data of the implementation is not valid.
 	Validate() error
 }
 
-// ValidatErrFunc implements the ValidatErr interface with a function.
+// ValidatableFunc implements the Validatable interface with a function.
 // This allows you to use a function as a validator that returns detailed errors.
-type ValidatErrFunc func() error
+type ValidatableFunc func() error
 
 // Validate returns an error if the data of the implementation is not valid.
-func (f ValidatErrFunc) Validate() error {
+func (f ValidatableFunc) Validate() error {
 	return f()
 }
 
-// StaticValidatErr implements the ValidatErr interface for a validation error value.
+// StaticValidatable implements the Validatable interface for a validation error value.
 // This is useful when you have a pre-computed validation error.
-type StaticValidatErr struct {
+type StaticValidatable struct {
 	Err error
 }
 
 // Validate returns an error if the data of the implementation is not valid.
-func (v StaticValidatErr) Validate() error {
+func (v StaticValidatable) Validate() error {
 	return v.Err
 }
 
-// ValidatErrs is a slice of ValidatErr implementations.
-// It implements the ValidatErr interface itself,
+// Validatables is a slice of Validatable implementations.
+// It implements the Validatable interface itself,
 // returning the errors of all its elements joined.
-type ValidatErrs []ValidatErr
+type Validatables []Validatable
 
 // Validate calls Validate on every element of v,
 // also after one of them returned an error,
@@ -112,35 +112,35 @@ type ValidatErrs []ValidatErr
 // errors.Is and errors.As find each of the joined errors.
 // Elements that [Validate] does not validate are skipped:
 // nil, a nil func, a nil pointer to a type implementing
-// ValidatErr with a value receiver, and a value whose Validate method
+// Validatable with a value receiver, and a value whose Validate method
 // is promoted from a nil embedded pointer or interface.
 //
 // Because an element is called also after an earlier one failed,
 // no element may rely on an earlier one, like a check of a field
 // that relies on an earlier check that the pointer to the struct
-// is not nil. Make such dependent checks one ValidatErr instead.
-func (v ValidatErrs) Validate() (err error) {
-	for _, validatErr := range v {
-		err = errors.Join(err, Validate(validatErr))
+// is not nil. Make such dependent checks one Validatable instead.
+func (v Validatables) Validate() (err error) {
+	for _, validatable := range v {
+		err = errors.Join(err, Validate(validatable))
 	}
 	return err
 }
 
-// CombinedValidatErr creates a ValidatErr whose Validate method
-// returns the errors of all the passed validatErrs Validate methods
+// CombinedValidatable creates a Validatable whose Validate method
+// returns the errors of all the passed validatables Validate methods
 // joined with errors.Join, or nil if none returned an error.
-// Every validatErr is called, also after an earlier one failed,
-// see [ValidatErrs.Validate].
-// This is equivalent to creating a ValidatErrs slice.
-func CombinedValidatErr(validatErrs ...ValidatErr) ValidatErr {
-	return ValidatErrs(validatErrs)
+// Every validatable is called, also after an earlier one failed,
+// see [Validatables.Validate].
+// This is equivalent to creating a Validatables slice.
+func CombinedValidatable(validatables ...Validatable) Validatable {
+	return Validatables(validatables)
 }
 
-// ValidatorAsValidatErr wraps a Validator as a ValidatErr,
+// ValidatorAsValidatable wraps a Validator as a Validatable,
 // returning an error naming the type and value of the Validator
 // when Validator.Valid() returns false.
 // This allows you to use a simple boolean validator in contexts that require detailed error information.
-type ValidatorAsValidatErr struct {
+type ValidatorAsValidatable struct {
 	Validator
 }
 
@@ -149,23 +149,23 @@ type ValidatorAsValidatErr struct {
 // nil, a nil func, a nil pointer to a type implementing
 // Validator with a value receiver, and a value whose Valid method
 // is promoted from a nil embedded pointer or interface.
-func (v ValidatorAsValidatErr) Validate() error {
+func (v ValidatorAsValidatable) Validate() error {
 	if validOrSkipped(v.Validator) {
 		return nil
 	}
 	return fmt.Errorf("invalid %T value: %#v", v.Validator, v.Validator)
 }
 
-// Validate returns an error if v implements ValidatErr or Validator
-// and the methods ValidatErr.Validate() or Validator.Valid()
+// Validate returns an error if v implements Validatable or Validator
+// and the methods Validatable.Validate() or Validator.Valid()
 // indicate an invalid value.
-// If v implements both interfaces, only ValidatErr.Validate() is called.
-// The error from ValidatErr.Validate() is returned unchanged.
+// If v implements both interfaces, only Validatable.Validate() is called.
+// The error from Validatable.Validate() is returned unchanged.
 // If Validator.Valid() is false, which can't tell why v is invalid,
 // an error naming the type and value of v is returned,
 // like `invalid main.Status value: "unknown"`.
 // Any non-nil error means v is invalid.
-// If v does not implement ValidatErr or Validator then nil will be returned.
+// If v does not implement Validatable or Validator then nil will be returned.
 // If v is a nil pointer to a type implementing the method with a value
 // receiver, which can't be called without a value, then nil is returned,
 // like [DeepValidate] skips nil pointers. A method with a pointer receiver
@@ -174,7 +174,7 @@ func (v ValidatorAsValidatErr) Validate() error {
 // the nil func, then nil is returned, like [DeepValidate] skips nil funcs.
 // If v embeds a nil pointer or interface that its method is promoted from,
 // like struct{ *T } with a nil *T and a value receiver on T, or
-// struct{ ValidatErr } with a nil ValidatErr, then nil is returned too,
+// struct{ Validatable } with a nil Validatable, then nil is returned too,
 // because the method can't be called without the embedded value.
 // A panic in a method that v declares itself is passed on,
 // also if v embeds a nil pointer or interface.
@@ -183,16 +183,16 @@ func Validate(v any) error {
 	return err
 }
 
-// TryValidate returns an error and true if v implements ValidatErr or Validator
-// and the methods ValidatErr.Validate() or Validator.Valid()
+// TryValidate returns an error and true if v implements Validatable or Validator
+// and the methods Validatable.Validate() or Validator.Valid()
 // indicate an invalid value.
-// If v implements both interfaces, only ValidatErr.Validate() is called.
-// The error from ValidatErr.Validate() is returned unchanged.
+// If v implements both interfaces, only Validatable.Validate() is called.
+// The error from Validatable.Validate() is returned unchanged.
 // If Validator.Valid() is false, which can't tell why v is invalid,
 // an error naming the type and value of v is returned,
 // like `invalid main.Status value: "unknown"`.
 // Any non-nil error means v is invalid.
-// If v does not implement ValidatErr or Validator then nil and false
+// If v does not implement Validatable or Validator then nil and false
 // will be returned.
 // If v is a nil pointer to a type implementing the method with a value
 // receiver, which can't be called without a value, then nil and true are
@@ -205,8 +205,8 @@ func Validate(v any) error {
 // The boolean return value indicates whether the value was validatable.
 func TryValidate(v any) (err error, isValidatable bool) {
 	switch x := v.(type) {
-	case ValidatErr:
-		if isNilFunc(v) || isNilPointerWithValueMethod(v, validatErrType) {
+	case Validatable:
+		if isNilFunc(v) || isNilPointerWithValueMethod(v, validatableType) {
 			return nil, true
 		}
 		if embedsPointerOrInterface(v) {
@@ -306,7 +306,7 @@ func typeEmbedsPointerOrInterface(t reflect.Type) bool {
 // validateSkippingNilEmbedded returns x.Validate(), or nil if the method
 // is promoted from a nil pointer or interface that x embeds,
 // see recoverNilEmbedded.
-func validateSkippingNilEmbedded(x ValidatErr) error {
+func validateSkippingNilEmbedded(x Validatable) error {
 	defer recoverNilEmbedded(validateSkippingNilEmbedded)
 	return x.Validate()
 }
@@ -325,8 +325,8 @@ func validSkippingNilEmbedded(x Validator) (valid bool) {
 // call the Valid or Validate method of a value directly. It recovers the
 // panic of that call if the method is promoted from a nil pointer or
 // interface that the value embeds, like Validate of struct{ *T } with
-// a nil *T and a value receiver on T, or of struct{ ValidatErr } with
-// a nil ValidatErr. The method wrapper that the compiler generates for the
+// a nil *T and a value receiver on T, or of struct{ Validatable } with
+// a nil Validatable. The method wrapper that the compiler generates for the
 // promotion dereferences the nil pointer, or calls the method of the nil
 // interface, which faults before the method of the embedded value is called.
 // Such a value is not validated, like a nil pointer, because the method
@@ -391,7 +391,7 @@ func isNilFunc(v any) bool {
 // The traversal:
 //   - calls [Validate] on v itself, then on every reachable element,
 //     through a pointer to the element if only the pointer type
-//     implements ValidatErr or Validator, like [LenString]
+//     implements Validatable or Validator, like [LenString]
 //     (an element that is not addressable is copied for that,
 //     but not v itself: like [Validate], v passed by value is validated
 //     with the methods of its own type, so a pointer receiver Validate
@@ -472,7 +472,7 @@ func deepValidate(v reflect.Value, visiting map[visitKey]struct{}, onError func(
 	// set of **T does not include T's value-receiver Validators, so calling
 	// Validate only at the outer level would miss validators reachable only
 	// after one or more dereferences. Stop at the first level that implements
-	// ValidatErr or Validator, because the levels below call the same
+	// Validatable or Validator, because the levels below call the same
 	// methods again, which would duplicate errors and side effects.
 	// An interface is not validated itself, but its dynamic value
 	// after unwrapping it, which has the same methods.
@@ -553,26 +553,26 @@ func deepValidate(v reflect.Value, visiting map[visitKey]struct{}, onError func(
 }
 
 var (
-	validatErrType = reflect.TypeFor[ValidatErr]()
-	validatorType  = reflect.TypeFor[Validator]()
+	validatableType = reflect.TypeFor[Validatable]()
+	validatorType   = reflect.TypeFor[Validator]()
 )
 
 // validationTarget returns the value to pass to Validate for v,
 // which must be interfaceable and not an interface.
 // That is v itself, unless only the pointer type of v implements
-// ValidatErr, or only the pointer type implements Validator, in which
+// Validatable, or only the pointer type implements Validator, in which
 // case it is a pointer to v, or to a copy of v if v is not addressable
 // and copyUnaddressable is true.
-// Like Validate, a ValidatErr is preferred over a Validator.
+// Like Validate, a Validatable is preferred over a Validator.
 func validationTarget(v reflect.Value, copyUnaddressable bool) any {
 	val := v.Interface()
-	if _, ok := val.(ValidatErr); ok {
+	if _, ok := val.(Validatable); ok {
 		return val
 	}
 	_, isValidator := val.(Validator)
 	// The pointer type of a pointer has no methods
 	ptrType := reflect.PointerTo(v.Type())
-	if !ptrType.Implements(validatErrType) && (isValidator || !ptrType.Implements(validatorType)) {
+	if !ptrType.Implements(validatableType) && (isValidator || !ptrType.Implements(validatorType)) {
 		return val
 	}
 	if v.CanAddr() {

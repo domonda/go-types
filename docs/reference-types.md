@@ -1,6 +1,6 @@
 # types (root package)
 
-The root package of the module holds the building blocks the subpackages share: the generic `Set[T]`, the `Validator` and `ValidatErr` interfaces with `Validate`, `TryValidate` and `DeepValidate`, the `Normalizable` interfaces of the domain types, pointer and iterator helpers, the length-limited `LenString`, the `Finder` interface, the per-key `KeyMutex`, and two reflection helpers. Import it when you validate values or structs of `go-types` values, or need one of these helpers.
+The root package of the module holds the building blocks the subpackages share: the generic `Set[T]`, the `Validator` and `Validatable` interfaces with `Validate`, `TryValidate` and `DeepValidate`, the `Normalizable` interfaces of the domain types, pointer and iterator helpers, the length-limited `LenString`, the `Finder` interface, the per-key `KeyMutex`, and two reflection helpers. Import it when you validate values or structs of `go-types` values, or need one of these helpers.
 
 ```
 import "github.com/domonda/go-types"
@@ -64,10 +64,10 @@ A nil `Set` is a valid empty set for every method except `Insert`, `InsertAll`, 
 
 Two interfaces describe validatable types:
 
-| Interface    | Method             | Use it when                                        |
-|--------------|--------------------|----------------------------------------------------|
-| `Validator`  | `Valid() bool`     | A yes/no answer is enough.                         |
-| `ValidatErr` | `Validate() error` | The caller should learn why a value is invalid. Any non-nil error means invalid. |
+| Interface     | Method             | Use it when                                        |
+|---------------|--------------------|----------------------------------------------------|
+| `Validator`   | `Valid() bool`     | A yes/no answer is enough.                         |
+| `Validatable` | `Validate() error` | The caller should learn why a value is invalid. Any non-nil error means invalid. |
 
 Composition helpers:
 
@@ -77,11 +77,11 @@ Composition helpers:
 | `StaticValidator`                                  | `bool` that implements `Validator`.                |
 | `Validators`                                       | `[]Validator`. `Valid()` is false if any element is false. nil elements, nil funcs and nil pointers that `Validate` does not validate are skipped. |
 | `CombinedValidator(validators ...Validator) Validator` | Returns `Validators(validators)`.                  |
-| `ValidatErrFunc`                                   | `func() error` that implements `ValidatErr`.       |
-| `StaticValidatErr`                                 | `struct{ Err error }` whose `Validate()` returns `Err`. |
-| `ValidatErrs`                                      | `[]ValidatErr`. `Validate()` calls `Validate` for every element and returns all errors joined with `errors.Join`, or nil. |
-| `CombinedValidatErr(validatErrs ...ValidatErr) ValidatErr` | Returns `ValidatErrs(validatErrs)`.                |
-| `ValidatorAsValidatErr`                            | `struct{ Validator }` whose `Validate()` returns an error naming the type and value of the wrapped `Validator` if it is invalid. |
+| `ValidatableFunc`                                  | `func() error` that implements `Validatable`.      |
+| `StaticValidatable`                                | `struct{ Err error }` whose `Validate()` returns `Err`. |
+| `Validatables`                                     | `[]Validatable`. `Validate()` calls `Validate` for every element and returns all errors joined with `errors.Join`, or nil. |
+| `CombinedValidatable(validatables ...Validatable) Validatable` | Returns `Validatables(validatables)`.              |
+| `ValidatorAsValidatable`                           | `struct{ Validator }` whose `Validate()` returns an error naming the type and value of the wrapped `Validator` if it is invalid. |
 
 Entry points:
 
@@ -93,9 +93,9 @@ Entry points:
 
 `Validate` and `TryValidate` follow these rules:
 
-1. If `v` implements `ValidatErr`, only `Validate()` is called and its error is returned unchanged, even if `v` also implements `Validator`.
-2. Otherwise, if `v` implements `Validator` and `Valid()` is false, the error is `fmt.Errorf("invalid %T value: %#v", v, v)`, like `invalid main.Status value: "bad"`. The whole value is part of the message, so implement `ValidatErr` for a value that must not be logged, like a password, or that can be large.
-3. A nil pointer whose element type implements the method with a value receiver is not validated: `Validate` returns nil and `TryValidate` returns `nil, true`. A method with a pointer receiver is called with the nil pointer, so it can report nil itself. A struct whose method is promoted from an embedded nil pointer or interface, like `struct{ *T }` with a nil `*T` and a value receiver on `T`, or `struct{ types.ValidatErr }` with a nil `ValidatErr`, is not validated either. A panic in a method that the struct declares itself is passed on.
+1. If `v` implements `Validatable`, only `Validate()` is called and its error is returned unchanged, even if `v` also implements `Validator`.
+2. Otherwise, if `v` implements `Validator` and `Valid()` is false, the error is `fmt.Errorf("invalid %T value: %#v", v, v)`, like `invalid main.Status value: "bad"`. The whole value is part of the message, so implement `Validatable` for a value that must not be logged, like a password, or that can be large.
+3. A nil pointer whose element type implements the method with a value receiver is not validated: `Validate` returns nil and `TryValidate` returns `nil, true`. A method with a pointer receiver is called with the nil pointer, so it can report nil itself. A struct whose method is promoted from an embedded nil pointer or interface, like `struct{ *T }` with a nil `*T` and a value receiver on `T`, or `struct{ types.Validatable }` with a nil `Validatable`, is not validated either. A panic in a method that the struct declares itself is passed on.
 
 `DeepValidate` walks `v` with reflection:
 
@@ -155,7 +155,7 @@ These types assert `NormalizableValidator` at compile time: `bank.IBAN`, `bank.N
 | `MarshalText() ([]byte, error)` / `UnmarshalText(text []byte) error` | Text form. `UnmarshalText` validates like `SetString`. |
 | `MarshalJSON() ([]byte, error)` / `UnmarshalJSON(text []byte) error` | JSON string. `UnmarshalJSON` validates like `SetString`. |
 
-Implements, all with pointer receivers: `ValidatErr`, `fmt.Stringer`, `encoding.TextMarshaler`, `encoding.TextUnmarshaler`, `json.Marshaler`, `json.Unmarshaler`, `strfmt.Scannable`. There is no SQL support.
+Implements, all with pointer receivers: `Validatable`, `fmt.Stringer`, `encoding.TextMarshaler`, `encoding.TextUnmarshaler`, `json.Marshaler`, `json.Unmarshaler`, `strfmt.Scannable`. There is no SQL support.
 
 ## Finder
 
@@ -221,9 +221,9 @@ type Finder interface {
 - `Set` is not safe for concurrent use, like any map.
 - `ReduceSet` visits values in undefined order. Only an order independent function like a sum gives a stable result.
 - `Set.String()` gives `[1, 2]`, while `mapset.String` gives `{1 2}`.
-- A `ValidatErr` method wins over a `Validator` method on the same type, so `Validate` can accept a value whose `Valid()` is false.
-- The error for a failed `Validator` contains the value formatted with `%#v`: a pointer shows up as an address, and a secret like a password ends up in the message, for example `invalid main.secret value: "pw"`. Implement `ValidatErr` with your own message for such types.
-- A nil func like `types.ValidatorFunc(nil)` counts as valid: `Validate` returns nil for it, and `Validators`, `ValidatErrs` and `DeepValidate` skip it, also if its method could handle nil. So do nil elements of `Validators` and `ValidatErrs`.
+- A `Validatable` method wins over a `Validator` method on the same type, so `Validate` can accept a value whose `Valid()` is false.
+- The error for a failed `Validator` contains the value formatted with `%#v`: a pointer shows up as an address, and a secret like a password ends up in the message, for example `invalid main.secret value: "pw"`. Implement `Validatable` with your own message for such types.
+- A nil func like `types.ValidatorFunc(nil)` counts as valid: `Validate` returns nil for it, and `Validators`, `Validatables` and `DeepValidate` skip it, also if its method could handle nil. So do nil elements of `Validators` and `Validatables`.
 - `DeepValidate` calls `Validate` methods with pointer receivers through a pointer to addressable data, so a `Validate` that changes its receiver changes the caller's data when you pass a pointer. Map values and the fields and elements of values passed by value are validated through a copy.
 - `LenString` counts bytes: `NewLenString("äö", 0, 3).Validate()` fails because `"äö"` has 4 bytes.
 - All `LenString` methods have pointer receivers. A `LenString` field of a struct marshalled by value encodes as `{}`, and `types.MustLenString("abc", 1, 3).String()` does not compile. Use `*LenString` fields or marshal a pointer to the struct.

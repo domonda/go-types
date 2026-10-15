@@ -141,7 +141,7 @@ Rules for numeric dates:
 | `LastMonday()`                                     | The Monday on or before the date.                  |
 | `NextSunday()`                                     | The Sunday on or after the date.                   |
 
-Implements: `database/sql.Scanner`, `database/sql/driver.Valuer`, `json.Marshaler`, `json.Unmarshaler`, `encoding.TextMarshaler`, `xml.Unmarshaler`, `xml.UnmarshalerAttr`, `xml.MarshalerAttr`, `strfmt.Scannable`, `types.Validator`, `types.ValidatErr`, `types.NormalizableValidator[Date]` and `JSONSchema()` (`{"type":"string","format":"date"}`). `Date` has no `String` method, so `fmt` prints the stored date, and no `UnmarshalText`, so `encoding/json` reads the keys of a `map[Date]V` as given.
+Implements: `database/sql.Scanner`, `database/sql/driver.Valuer`, `json.Marshaler`, `json.Unmarshaler`, `encoding.TextMarshaler`, `xml.Unmarshaler`, `xml.UnmarshalerAttr`, `xml.MarshalerAttr`, `strfmt.Scannable`, `types.Validator`, `types.Validatable`, `types.NormalizableValidator[Date]` and `JSONSchema()` (`{"type":"string","format":"date"}`). `Date` has no `String` method, so `fmt` prints the stored date, and no `UnmarshalText`, so `encoding/json` reads the keys of a `map[Date]V` as given.
 
 ## NullableDate
 

@@ -27,7 +27,7 @@ as different countries.
 | Method                      | Interface                        | Question it answers                       |
 |-----------------------------|----------------------------------|-------------------------------------------|
 | `Valid() bool`              | `types.Validator`                | Can the value be used?                    |
-| `Validate() error`          | `types.ValidatErr`               | If not, why not? `nil` means valid.       |
+| `Validate() error`          | `types.Validatable`              | If not, why not? `nil` means valid.       |
 | `Normalized() (T, error)`   | `types.Normalizable[T]`          | What is the canonical form?               |
 | `ValidAndNormalized() bool` | `types.NormalizableValidator[T]` | Is the value valid and already canonical? |
 
@@ -93,10 +93,10 @@ as given, so whitespace makes it invalid there.
 The package READMEs and [Lenient parsing](explanation-lenient-parsing.md) list
 the details.
 
-## Why `types.Validate` prefers `ValidatErr`
+## Why `types.Validate` prefers `Validatable`
 
 `types.Validate(v any) error` and `types.TryValidate(v any) (error, bool)`
-check whether `v` implements `ValidatErr` or `Validator`. If it implements
+check whether `v` implements `Validatable` or `Validator`. If it implements
 both, only `Validate()` is called. There are two reasons:
 
 1. **The error says why.** A `false` from `Valid()` carries no reason, so
@@ -163,7 +163,7 @@ What `types.Validate` returns:
   `%#v`, like `invalid main.Status value: "unknown"`. For a pointer, `%#v`
   prints the address, like `invalid *main.Status value:
   (*main.Status)(0x...)`. The value ends up in the message, so a type
-  that holds secrets should implement `ValidatErr` with a message that leaves
+  that holds secrets should implement `Validatable` with a message that leaves
   the value out.
 - For a nil pointer whose element type has the method with a value receiver,
   there is no value to call it on. `types.Validate` returns `nil` and
@@ -174,7 +174,7 @@ What `types.Validate` returns:
 ## No sentinel error for "invalid"
 
 The module used to export `types.ErrInvalidValue`, and `types.Validate`
-returned it when `Valid()` was `false`. The error of a `ValidatErr` never
+returned it when `Valid()` was `false`. The error of a `Validatable` never
 wrapped it, so `errors.Is(err, types.ErrInvalidValue)` returned `false` for
 most invalid values: a check written against it passed invalid data. It was
 removed (see the Removed section of [CHANGELOG.md](../CHANGELOG.md)), and the
@@ -223,7 +223,7 @@ The rules of the walk, from the doc comment of `DeepValidate` and its tests:
   not entered again, so cyclic data ends the walk instead of overflowing the
   stack. Data shared by two paths without a cycle is validated on each path.
 - **Once per value:** in a chain of pointers, the first level that implements
-  `ValidatErr` or `Validator` is validated and the levels below are skipped,
+  `Validatable` or `Validator` is validated and the levels below are skipped,
   so a stateful validator is called once.
 - **Structs are validated and descended into.** If a struct's own `Validate`
   also checks its fields, `DeepValidate` reports the same problem twice: once

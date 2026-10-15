@@ -72,7 +72,7 @@ record from raw strings to validated JSON and SQL values step by step.
 
 | Package                                           | What it gives you                                  |
 |---------------------------------------------------|----------------------------------------------------|
-| [`types`](docs/reference-types.md) (root)         | `Set[T]`, the `Validator`/`ValidatErr` interfaces with `Validate` and `DeepValidate`, `Normalizable`, `LenString`, `KeyMutex`, `Finder`, pointer and iterator helpers |
+| [`types`](docs/reference-types.md) (root)         | `Set[T]`, the `Validator`/`Validatable` interfaces with `Validate` and `DeepValidate`, `Normalizable`, `LenString`, `KeyMutex`, `Finder`, pointer and iterator helpers |
 | [`account`](account/)                             | Alphanumeric account numbers with SQL, JSON and XML support |
 | [`bank`](bank/)                                   | IBAN and BIC validation and normalization, finders for document text, CAMT.053 XML structs |
 | [`charset`](charset/)                             | BOM detection, UTF-16 and UTF-32, legacy charsets by IANA or MIME label |

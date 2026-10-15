@@ -38,12 +38,12 @@ func (s Status) Valid() bool {
 
 When `Valid()` returns `false`, the module builds the error for you from the
 type and the value: `invalid main.Status value: "unknown"`. The whole value
-is part of the message, so implement `ValidatErr` instead for a value that
+is part of the message, so implement `Validatable` instead for a value that
 must not be logged, like a password, or that can be large.
 
-### 2. Implement `ValidatErr` on types that can say why
+### 2. Implement `Validatable` on types that can say why
 
-`types.ValidatErr` has one method, `Validate() error`. Any non-nil error means
+`types.Validatable` has one method, `Validate() error`. Any non-nil error means
 invalid, so return an error that describes the problem. Return a custom error
 type or a sentinel if callers need to tell problems apart:
 
@@ -57,7 +57,7 @@ func (e *QuantityError) Error() string {
 	return fmt.Sprintf("quantity %d must be positive", e.Quantity)
 }
 
-// Line can say why it is invalid: types.ValidatErr.
+// Line can say why it is invalid: types.Validatable.
 type Line struct {
 	SKU      string
 	Quantity int
@@ -164,19 +164,19 @@ The root package has helpers to combine checks without writing a new type:
 |----------------------------------------------------|----------------------------------------------------|
 | `types.Validators{a, b}`                           | a `Validator` that is valid if all of them are     |
 | `types.CombinedValidator(a, b)`                    | the same as `types.Validators{a, b}`               |
-| `types.ValidatErrs{a, b}`                          | a `ValidatErr` that calls all of them and joins their errors |
-| `types.CombinedValidatErr(a, b)`                   | the same as `types.ValidatErrs{a, b}`              |
-| `types.ValidatorAsValidatErr{Validator: v}`        | a `ValidatErr` with the error `types.Validate` would build |
-| `types.ValidatorFunc(f)`, `types.ValidatErrFunc(f)` | a function as validator                            |
-| `types.StaticValidator(b)`, `types.StaticValidatErr{Err: err}` | a precomputed result                               |
+| `types.Validatables{a, b}`                         | a `Validatable` that calls all of them and joins their errors |
+| `types.CombinedValidatable(a, b)`                  | the same as `types.Validatables{a, b}`             |
+| `types.ValidatorAsValidatable{Validator: v}`       | a `Validatable` with the error `types.Validate` would build |
+| `types.ValidatorFunc(f)`, `types.ValidatableFunc(f)` | a function as validator                            |
+| `types.StaticValidator(b)`, `types.StaticValidatable{Err: err}` | a precomputed result                               |
 
-`types.ValidatErrs` calls every element, also after one returned an error,
+`types.Validatables` calls every element, also after one returned an error,
 and joins all errors with `errors.Join`:
 
 ```go
-check := types.CombinedValidatErr(
+check := types.CombinedValidatable(
 	inv.VATID,
-	types.ValidatorAsValidatErr{Validator: inv.Status},
+	types.ValidatorAsValidatable{Validator: inv.Status},
 )
 fmt.Println(check.Validate())
 fmt.Println(types.Validators{inv.Status, inv.Currency}.Valid())
@@ -212,7 +212,7 @@ func (e *QuantityError) Error() string {
 	return fmt.Sprintf("quantity %d must be positive", e.Quantity)
 }
 
-// Line can say why it is invalid: types.ValidatErr.
+// Line can say why it is invalid: types.Validatable.
 type Line struct {
 	SKU      string
 	Quantity int
@@ -269,9 +269,9 @@ func main() {
 	paid := Invoice{Status: "paid", VATID: "ATU10223006", Currency: "EUR"}
 	fmt.Println(types.DeepValidate(paid))
 
-	check := types.CombinedValidatErr(
+	check := types.CombinedValidatable(
 		inv.VATID,
-		types.ValidatorAsValidatErr{Validator: inv.Status},
+		types.ValidatorAsValidatable{Validator: inv.Status},
 	)
 	fmt.Println(check.Validate())
 	fmt.Println(types.Validators{inv.Status, inv.Currency}.Valid())
@@ -317,7 +317,7 @@ The type implements only `Validator`, whose `Valid()` can't say why. Add a
 **The error contains an address, like `invalid *main.Status value:
 (*main.Status)(0x...)`.**
 A pointer to a `Validator`-only type was validated, and `%#v` of a pointer is
-its address. Implement `ValidatErr`, or pass the value instead of the pointer.
+its address. Implement `Validatable`, or pass the value instead of the pointer.
 The same `%#v` puts the value into the message, so don't rely on `Valid()`
 for types that hold secrets.
 
@@ -340,8 +340,8 @@ the fields again. One error comes without a path prefix, one with. Keep only
 cross-field rules in the struct's `Validate`, as in step 3.
 
 **`err == ErrSomething` is false although the error is in the output.**
-`DeepValidate` wraps every error with its path, and `types.ValidatErrs` and
-`types.CombinedValidatErr` wrap even a single error with `errors.Join`.
+`DeepValidate` wraps every error with its path, and `types.Validatables` and
+`types.CombinedValidatable` wrap even a single error with `errors.Join`.
 Compare with `errors.Is(err, ErrSomething)`.
 
 ## Related

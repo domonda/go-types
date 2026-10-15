@@ -46,7 +46,7 @@ func MustLenString(str string, min, max int) LenString {
 	return s
 }
 
-// Validate implements the ValidatErr interface.
+// Validate implements the Validatable interface.
 // It checks that the minimum and maximum lengths are valid and that the string
 // length falls within the specified bounds.
 func (s *LenString) Validate() error {

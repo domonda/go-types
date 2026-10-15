@@ -8,9 +8,9 @@
 //   - [Set]: generic set type backed by map[T]struct{} with set algebra
 //     and JSON marshaling. See also [SetToSortedSlice], [SetToRandomizedSlice],
 //     [ReduceSet], [ReduceSlice], [SliceContainsAll], [SliceContainsAny].
-//   - [Validator] / [ValidatErr]: interfaces for boolean and error-based
-//     validation, with [Validators] / [ValidatErrs] composition helpers,
-//     [CombinedValidator] / [CombinedValidatErr], and [Validate],
+//   - [Validator] / [Validatable]: interfaces for boolean and error-based
+//     validation, with [Validators] / [Validatables] composition helpers,
+//     [CombinedValidator] / [CombinedValidatable], and [Validate],
 //     [TryValidate], and [DeepValidate] entry points for recursive
 //     reflection-based validation.
 //   - [Normalizable] / [NormalizableValidator]: interfaces implemented

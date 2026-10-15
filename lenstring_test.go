@@ -49,11 +49,11 @@ func TestLenString_Validate(t *testing.T) {
 	}
 }
 
-// TestLenString_ImplementsValidatErr checks that a LenString pointer is
+// TestLenString_ImplementsValidatable checks that a LenString pointer is
 // picked up by the generic Validate function, so it gets validated
 // together with other values, e.g. by DeepValidate.
-func TestLenString_ImplementsValidatErr(t *testing.T) {
-	var _ ValidatErr = (*LenString)(nil)
+func TestLenString_ImplementsValidatable(t *testing.T) {
+	var _ Validatable = (*LenString)(nil)
 	if err := Validate(NewLenString("too long", 0, 3)); err == nil {
 		t.Error("Validate(*LenString) with too long string = nil, want error")
 	}

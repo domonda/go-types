@@ -322,13 +322,18 @@ See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut.
   normalized BIC like the other `ScanString` methods. `CountryCode`, `IsTestBIC`,
   `IsPassiveSWIFT` and `ReceiverPaysFees` read the normalized BIC.
   `BIC.Parse` and `BICParser` still reject whitespace.
-- **Breaking:** `types.ValidatErrs.Validate` and so `types.CombinedValidatErr`
+- **Breaking:** the interface `types.ValidatErr` is renamed to
+  `types.Validatable`, together with its helpers: `ValidatErrFunc` to
+  `ValidatableFunc`, `StaticValidatErr` to `StaticValidatable`, `ValidatErrs`
+  to `Validatables`, `CombinedValidatErr` to `CombinedValidatable` and
+  `ValidatorAsValidatErr` to `ValidatorAsValidatable`.
+- **Breaking:** `types.Validatables.Validate` and so `types.CombinedValidatable`
   validate every element and return all their errors joined with `errors.Join`,
   instead of stopping at the first error and returning it. A single error is
   now wrapped by the join as well, so compare with `errors.Is` instead of `==`.
   An element after a failed one is called too, so an element that relies on
   an earlier one, like a field check after a check that the pointer to the
-  struct is not nil, has to become one `ValidatErr` with that check.
+  struct is not nil, has to become one `Validatable` with that check.
 - **Breaking:** the `money` currency constants (`EUR`, `USD`, …) are typed
   `Currency` instead of untyped strings, so go-enum can collect them.
   Assigning one to a `string` or `NullableCurrency` now needs a conversion:
@@ -758,10 +763,10 @@ See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut.
 - **Breaking:** `strfmt.FormatConfig.Percent`. The field was set by the
   presets but never read anywhere.
 - **Breaking:** `types.ErrInvalidValue`. `types.Validate`, `TryValidate`,
-  `DeepValidate` and `ValidatorAsValidatErr.Validate` return an error naming
+  `DeepValidate` and `ValidatorAsValidatable.Validate` return an error naming
   the type and value for a `Validator` whose `Valid()` is false, like
   `invalid main.Status value: "unknown"`, instead of the bare `invalid value`.
-  Any non-nil error means the value is invalid. The error of a `ValidatErr`
+  Any non-nil error means the value is invalid. The error of a `Validatable`
   is still returned unchanged; it never wrapped `ErrInvalidValue`, so
   `errors.Is(err, ErrInvalidValue)` was never a reliable invalidity check.
 - **Breaking:** the set methods deprecated in the 2026-09-02 release. Each
@@ -880,9 +885,9 @@ See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut.
   the zero time, like `"01.01.0001"`, with every layout but `Layout`, and so
   did `strfmt`. An invalid date is returned unchanged.
 - `types.Validate`, `TryValidate`, `DeepValidate`, `Validators.Valid` and
-  `ValidatorAsValidatErr.Validate` panicked for a struct that embeds a nil
+  `ValidatorAsValidatable.Validate` panicked for a struct that embeds a nil
   `*T` whose `T` implements the method with a value receiver, or a nil
-  interface like `types.ValidatErr` or `types.Validator`. Such a value is
+  interface like `types.Validatable` or `types.Validator`. Such a value is
   not validated, like a nil pointer. A nil pointer dereference in a method
   that the struct declares itself still panics instead of reporting the
   value as valid.
@@ -945,13 +950,13 @@ See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut.
   Data shared by multiple paths without a cycle is still validated under
   each path.
 - `types.DeepValidate` panicked for a nil func whose type implements
-  `Validator` or `ValidatErr`, like a nil `types.ValidatorFunc` field.
+  `Validator` or `Validatable`, like a nil `types.ValidatorFunc` field.
   A nil func is now skipped like a nil pointer.
 - `types.DeepValidate` called the `Validate` or `Valid` method of a valid
   value twice when reached through a pointer, once for the pointer and once
   for the dereferenced value, repeating the side effects of stateful
   validators. Every level of a pointer chain after the first one implementing
-  `ValidatErr` or `Validator` is now skipped, not only after an error.
+  `Validatable` or `Validator` is now skipped, not only after an error.
 - `types.CompareReflectValue` returned 0 for interface values with different
   dynamic types, so `DeepValidate` returned the errors of a `map[any]T` with
   keys of mixed types in a random order. Such values are now ordered by type
@@ -967,7 +972,7 @@ See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut.
   than the slice has elements, even if every value is in it:
   `SliceContainsAll([]int{1}, 1, 1)` is now true.
 - `types.Validate` and `types.TryValidate` panicked for a nil pointer whose
-  element type implements `Validator` or `ValidatErr` with a value receiver.
+  element type implements `Validator` or `Validatable` with a value receiver.
   Such a pointer is now skipped like in `DeepValidate`: `Validate` returns
   nil and `TryValidate` returns `nil, true`. Pointer-receiver methods are
   still called with the nil pointer, so they can handle it themselves.
@@ -1058,8 +1063,8 @@ See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut.
 - `strfmt.ScanConfig.SetTypeScanner` panicked on a `ScanConfig` not created
   with `NewScanConfig`.
 - `types.Validate` and `types.TryValidate` panicked for a nil
-  `types.ValidatorFunc` or `ValidatErrFunc`, and `types.ValidatErrs` and
-  `types.Validators` for a nil element, and `types.ValidatorAsValidatErr`
+  `types.ValidatorFunc` or `ValidatableFunc`, and `types.Validatables` and
+  `types.Validators` for a nil element, and `types.ValidatorAsValidatable`
   for a nil `Validator`. Nil funcs and elements are now skipped like in
   `DeepValidate`.
 - `types.CanMarshalJSON` reported true for a map whose key type only
