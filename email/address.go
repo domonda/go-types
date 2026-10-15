@@ -45,8 +45,10 @@ type Address string
 // address without name with a quoted local part with an angle bracket is
 // written within angle brackets, see addrSpecAlone.
 // A name containing "=?" is quoted with every =? written as `=\?`, see
-// quoteName. Use mail.Address.String to format an address for a message
-// header.
+// quoteName, which Validate refuses if Python's email package reads an
+// encoded-word in it after writing the name again that the parser can't
+// decode or that decodes to an address or another encoded-word.
+// Use mail.Address.String to format an address for a message header.
 func AddressFrom(addr *mail.Address) Address {
 	if addr == nil {
 		return ""
@@ -71,7 +73,13 @@ func AddressFrom(addr *mail.Address) Address {
 // reads back unchanged instead of as "x", and normalizing it again gives
 // the same address. It was written as B encoded-word, whose text Python
 // writes unencoded and unquoted when it writes the header, so that the
-// name "=? x@evil.com" became the address `"=? x"@evil.com`.
+// name "=? x@evil.com" became the address `"=? x"@evil.com`. Python writes
+// the quoted string again without the backslash, so that the =? starts an
+// encoded-word once the message is read again, so ParseAddress refuses
+// a name with an =? at the start of a word that it can't decode, like
+// "=? x@evil.com", or that decodes to ASCII with an @ or another
+// encoded-word, see readEncodedWords: AddressFrom writes such a name in
+// an Address that Validate refuses, and Normalized refuses it before.
 func quoteName(name string) string {
 	return strings.ReplaceAll(quoteString(name), "=?", `=\?`)
 }

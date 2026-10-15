@@ -127,10 +127,12 @@ func TestAddress_NormalizedIsIdempotent(t *testing.T) {
 		`<"x <a@b.com>"@example.com>`,
 		// Names holding "=?", which were written as B encoded-word that
 		// decodes to ASCII with an @, which the parser refuses, see
-		// TestParseAddress_EncodedWordThatPythonReadsAsAddress
-		`"=\? x@evil.com" <ceo@corp.com>`,
-		`"=?utf-8?q?=3D=3Futf-8=3Fq=3Fx=3D40evil.com=3F=3D?=" <ceo@corp.com>`,
-		`"=?utf-8?q?=3D=3F_J=C3=BCrgen?=" <j@x.de>`,
+		// TestParseAddress_EncodedWordThatPythonReadsAsAddress. The names
+		// that Python decodes to an address or another encoded-word after
+		// writing them are refused now, see
+		// TestParseAddress_EncodedWordThatPythonDecodesAfterWriting
+		`"=\?utf-8?q?x?=" <ceo@corp.com>`,
+		`"Really=?" <a@example.com>`,
 	} {
 		t.Run(string(addr), func(t *testing.T) {
 			once, err := addr.Normalized()
@@ -158,6 +160,15 @@ func FuzzAddressNormalizedIsIdempotent(f *testing.F) {
 		"\"\u212Aate\"@Corp.com",
 		`=?utf-8?Q?J=C3=BCrgen_=28juergen=40example.com=29?= <ceo@corp.com>`,
 		`mike@doe.com (Mike (Sales))`,
+		// Ordinary names that the parser refused for a while, see
+		// TestParseAddress_OrdinaryEncodedNames
+		`=?utf-8?b?SsO8cmdlbiBNw7xsbGVyLCBCdWNoaGFsdHVuZyB1bmQgRmluYW56ZW4gKEFi?= =?utf-8?b?dGVpbHVuZyBOb3JkKQ==?= <j.mueller@example.com>`,
+		`=?utf-8?q?J=C3=BCrgen_M=C3=BCller_[Extern]?= <j@example.de>`,
+		`"Really=?" <a@example.com>`,
+		`M\u00FCller, =?utf-8?q?J=C3=BCrgen?= <j@x.de>`,
+		`Doe; =?utf-8?q?J=C3=BCrgen?= <ceo@corp.com>`,
+		`[Ext] =?utf-8?q?J=C3=BCrgen?= <j@x.de>`,
+		`=?utf-8?q?J=C3=BCrgen_M=C3=BCller=2C_Buchhaltung_und_Finanzen_=28Abteilung_Nord=29?= <j.mueller@example.com>`,
 	} {
 		f.Add(addr)
 	}
@@ -203,9 +214,12 @@ func TestAddress_NormalizedRoundTrip(t *testing.T) {
 		// adds backslashes and the stored mailbox drifts away.
 		`"a\ b"@example.com`,
 		`"a\\b"@example.com`,
-		// A name that decodes to an encoded-word would be decoded again
-		// by every normalization if it was written back as quoted text
-		`"=?utf-8?q?=3D=3Futf-8=3Fq=3Fx=3F=3D?=" <a@example.com>`,
+		// A name with an =? would be decoded again by every normalization
+		// if it was written back as quoted text without the escape `=\?`.
+		// One that decodes to an encoded-word is refused, see
+		// TestParseAddress_EncodedWordThatPythonDecodesAfterWriting
+		`"=\?utf-8?q?x?=" <a@example.com>`,
+		`"Really=?" <a@example.com>`,
 		// An encoded name with invalid UTF-8 decodes to a replacement
 		// character, which the parser removes from the written name
 		`=?utf8?B?X700?=<0@0.AA`,
@@ -332,9 +346,11 @@ func TestAddress_MarshalTextAndASCII(t *testing.T) {
 	// name as written instead of decoding it once more and showing other
 	// text. It was written as B encoded-word, which Python's email package
 	// writes decoded, unencoded and unquoted, so that it read the name
-	// "=? x@evil.com" as the address `"=? x"@evil.com`.
+	// "=? x@evil.com" as the address `"=? x"@evil.com`. A name that decodes
+	// to an encoded-word is refused, see
+	// TestParseAddress_EncodedWordThatPythonDecodesAfterWriting.
 	const literal = "=?utf-8?q?x?="
-	encoded := Address(`"=?utf-8?q?=3D=3Futf-8=3Fq=3Fx=3F=3D?=" <a@example.com>`)
+	encoded := Address(`"=\?utf-8?q?x?=" <A@example.com>`)
 	assert.Equal(t, `"=\?utf-8?q?x?=" <a@example.com>`, marshalText(t, encoded))
 	assert.Equal(t, `"=\?utf-8?q?x?=" <a@example.com>`, encoded.ASCII())
 	for _, written := range []string{marshalText(t, encoded), encoded.ASCII()} {
