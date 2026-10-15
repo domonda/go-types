@@ -389,6 +389,51 @@ func TestParseAddress_QuotedNameWithoutAngleBrackets(t *testing.T) {
 	}
 }
 
+// TestParseAddress_QuotedAtInNameThatLenientParsersEnd protects the
+// recipients of a stored address against lenient parsers: Python's
+// email.utils.getaddresses without strict, the default before the fix of
+// CVE-2023-27043, ends a display name at ;)>[ and ] and reads its first
+// word as an address, so for `"x@evil.com"; <ceo@corp.com>`, which validated
+// as ceo@corp.com, it also sends to x@evil.com. Python's strict parser
+// refuses these names. Found by the differential test against Python.
+func TestParseAddress_QuotedAtInNameThatLenientParsersEnd(t *testing.T) {
+	for _, addr := range []string{
+		`"x@evil.com"; <ceo@corp.com>`,
+		`"x@evil.com") <ceo@corp.com>`,
+		`"x@evil.com" > <ceo@corp.com>`,
+		`"x@evil.com" [EXTERNAL] <ceo@corp.com>`,
+		`(c) "x@evil.com" John] <ceo@corp.com>`,
+	} {
+		t.Run(addr, func(t *testing.T) {
+			_, err := ParseAddress(addr)
+			assert.Error(t, err, "ParseAddress")
+			for method, err := range validateCollections(Address(addr)) {
+				assert.Error(t, err, method)
+			}
+			parsed, err := ParseAddressList(addr)
+			assert.Error(t, err)
+			assert.Equal(t, []string{"ceo@corp.com"}, addressParts(parsed))
+		})
+	}
+
+	// Without a quoted @ the first word is no address with a domain,
+	// and in a comment or quoted string ;)>[] don't end the name
+	for _, addr := range []string{
+		`John Doe [External] <ceo@corp.com>`,
+		`"Doe, John" [External] <ceo@corp.com>`,
+		`"x@evil.com" (Sales; EU) <ceo@corp.com>`,
+		`"x@evil.com [EXTERNAL]" <ceo@corp.com>`,
+		`John "x@evil.com" Doe <ceo@corp.com>`,
+	} {
+		parsed, err := ParseAddress(addr)
+		require.NoError(t, err, addr)
+		assert.Equal(t, "ceo@corp.com", parsed.Address, addr)
+		for method, err := range validateCollections(Address(addr)) {
+			assert.NoError(t, err, "%s of %q", method, addr)
+		}
+	}
+}
+
 // TestParseAddress_AtInUnquotedName protects the recipients of a stored
 // address: an unquoted display name with an @ was read as name, and a
 // second address in angle brackets replaced the first one, so that these

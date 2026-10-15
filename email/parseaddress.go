@@ -191,14 +191,17 @@ func UniqueNormalizedAddressSlice(addrs []Address) []Address {
 // email.utils.getaddresses reads `x@evil.com <ceo@corp.com>,` as the two
 // recipients x@evil.com and ceo@corp.com. Only a name that is the address
 // itself, like in `a@example.com <a@example.com>`, is valid, and a quoted
-// name can hold an @: `"x@evil.com" <ceo@corp.com>`. So is a second address
-// in angle brackets after the address that is not the same address, like
-// in `<x@evil.com> <ceo@corp.com>`, and a quoted name that is not followed
-// by an angle bracket, which other parsers read as part of the local part,
-// like in `"x@evil.com" ceo@corp.com`. An address within a quoted string or
-// a comment is an error too, also if it isn't closed, because other parsers
-// read it as part of them: for them `"x@evil.com" "<ceo@corp.com>` has no
-// address in angle brackets.
+// name can hold an @: `"x@evil.com" <ceo@corp.com>`. For the same reason
+// these are errors: a second address in angle brackets after the address
+// that is not the same address, like in `<x@evil.com> <ceo@corp.com>`,
+// a quoted name that is not followed by an angle bracket, which other
+// parsers read as part of the local part, like in
+// `"x@evil.com" ceo@corp.com`, and an unquoted name with a quoted @ and
+// one of ;)>[], where Python's lenient parser ends the name and reads its
+// first word as an address, like in `"x@evil.com"; <ceo@corp.com>`.
+// An address within a quoted string or a comment is an error too, also if
+// it isn't closed, because other parsers read it as part of them: for them
+// `"x@evil.com" "<ceo@corp.com>` has no address in angle brackets.
 //
 // An address without name can be followed by an RFC 5322 comment,
 // which becomes the name, like in "mike@doe.com (Mike Doe)".
@@ -284,8 +287,9 @@ type parsedAddress struct {
 	// nameProblem is why the display name makes the address invalid,
 	// because other parsers read another address in it, or "":
 	// an unquoted name with an @ outside its quoted strings and comments
-	// that is not the address itself, or a quoted name that is not
-	// followed by an angle bracket
+	// that is not the address itself, or with a quoted @ that a lenient
+	// parser reads as address, see hasQuotedAtAndPhraseEnd, or a quoted
+	// name that is not followed by an angle bracket
 	nameProblem string
 }
 
@@ -355,7 +359,8 @@ func parseNameAddress(addr string) (parsed parsedAddress, ok bool) {
 	case i[5] != -1:
 		unquoted := addr[i[4]:i[5]]
 		name = decodeName(removeQuotes(unquoted))
-		if hasAtOutsideQuotes(unquoted) {
+		switch {
+		case hasAtOutsideQuotes(unquoted):
 			if !sameAddressSpec(unquoted, addr[spec.start:spec.end]) {
 				parsed.nameProblem = "@ in unquoted display name that is not the address"
 				break
@@ -363,6 +368,8 @@ func parseNameAddress(addr string) (parsed parsedAddress, ok bool) {
 			// The name is the address, which other parsers read
 			// as address, so its runes are checked like those of one
 			parsed.specs = []specRange{{start: i[4], end: i[5]}, spec}
+		case hasQuotedAtAndPhraseEnd(unquoted):
+			parsed.nameProblem = "quoted @ before one of ;)>[] in unquoted display name"
 		}
 	}
 
@@ -411,6 +418,28 @@ func hasAtOutsideQuotes(text string) bool {
 		state.read(text[i])
 	}
 	return false
+}
+
+// hasQuotedAtAndPhraseEnd reports whether text, an unquoted display name,
+// has a quoted string with an @ and, outside its quoted strings and
+// comments, one of ;)>[] where Python's lenient email.utils parser ends
+// the name before its angle bracket and reads the first word of the name
+// as an address, like the x@evil.com of `"x@evil.com"; <ceo@corp.com>`.
+// Python versions before the fix of CVE-2023-27043 parse lenient.
+func hasQuotedAtAndPhraseEnd(text string) bool {
+	var state listState
+	quotedAt, phraseEnd := false, false
+	for i := 0; i < len(text); i++ {
+		c := text[i]
+		switch {
+		case state.quoted:
+			quotedAt = quotedAt || c == '@'
+		case state.comment == 0:
+			phraseEnd = phraseEnd || strings.IndexByte(";)>[]", c) >= 0
+		}
+		state.read(c)
+	}
+	return quotedAt && phraseEnd
 }
 
 // sameAddressSpec reports whether the address parts a and b, as written,
