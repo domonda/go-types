@@ -1288,6 +1288,10 @@ func TestParseAddressList_LongGarbageList(t *testing.T) {
 // 40 times without any of these three. The time is compared to the scan,
 // so that the bound holds with the race detector and on slow machines,
 // and the fastest of three runs is taken against noise.
+// The empty entries before an address with angle brackets were skipped one
+// at a time, each time joining the others with that address again, so the
+// rest of the list was parsed once per empty entry: 1 MB of commas before
+// `<a@b.com>` took 6 seconds. A run of empty entries is skipped at once now.
 func TestParseAddressList_LongInvalidListTakesLinearTime(t *testing.T) {
 	fastest := func(f func()) time.Duration {
 		var best time.Duration
@@ -1304,6 +1308,9 @@ func TestParseAddressList_LongInvalidListTakesLinearTime(t *testing.T) {
 		"entries without @":            strings.Repeat("x, ", 1_000_000),
 		"commas between two addresses": "a@b.com" + strings.Repeat(",", 3_000_000) + "c@d.com",
 		"one entry without @":          strings.Repeat("x", 3_000_000),
+		"commas before angle brackets": strings.Repeat(",", 3_000_000) + "<a@b.com>",
+		"commas before a display name": "a@b.com" + strings.Repeat(",", 3_000_000) + "x <c@d.com>",
+		"empty entries with spaces":    strings.Repeat(", ", 1_500_000) + "x <c@d.com>",
 	} {
 		t.Run(name, func(t *testing.T) {
 			_, err := ParseAddressList(list)

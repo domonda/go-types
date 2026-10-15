@@ -205,18 +205,6 @@ func listEntryEnd(list string) (lastPart, end, alone int) {
 	}
 }
 
-// isSingleListEntry reports whether SplitAddressList reads the address
-// list entry as one entry: entry has no separator, or only the commas of
-// an unquoted display name, which SplitAddressList joins with the address
-// after them.
-func isSingleListEntry(entry string) bool {
-	if nextListSeparator(entry) < 0 {
-		return true
-	}
-	entries := SplitAddressList(entry)
-	return len(entries) == 1 && string(entries[0]) == strutil.TrimSpace(entry)
-}
-
 // isPlaceholderList reports whether list is only a placeholder for hidden
 // recipients like "undisclosed-recipients:;", read like ParseAddressList
 // reads it: sanitized and without trailing commas, so that SplitAddressList

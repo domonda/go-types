@@ -632,8 +632,8 @@ func truncateForError(s string) string {
 // like in `"Doe <doe@example.com>, b@example.com`, see ParseAddress.
 // An address with an invalid display name, like the unquoted
 // `x@evil.com <ceo@corp.com>`, is returned with an error.
-// An address that SplitAddressList reads as more than one entry is an
-// error too, like the one with the display name "," in `,<a@example.com>`.
+// An empty entry is an error, a run of them one error, like the leading
+// comma of `,<a@example.com>`, which is no display name of the address.
 // After an error parsing continues after the entry that SplitAddressList
 // finds there, so every address is returned at most once, also when an
 // unquoted display name with commas is followed by an error, like in
@@ -671,6 +671,17 @@ func parseAddressList(sanitized string, specs *[]specRange) (addrs []*mail.Addre
 		if len(errList) >= maxAddressListErrors {
 			errList = append(errList, errs.Errorf("stopped parsing email address list after %d errors", len(errList)))
 			break
+		}
+		if remaining[0] == ',' {
+			// A run of empty entries, which SplitAddressList skips, is one
+			// error, and parsing continues after it. Moving past one of them
+			// at a time joined the others again with the next entry that has
+			// angle brackets, see listEntryEnd, so that entry was scanned once
+			// per empty entry up to the error limit, like the 1 MB of commas
+			// before `<a@b.com>` for 6 seconds.
+			errList = append(errList, errs.Errorf("empty entry in email address list: %s", truncateForError(remaining)))
+			remaining = strings.TrimLeft(remaining, ", ")
+			continue
 		}
 		offset := len(list) - len(remaining)
 		// end is the index of the comma where SplitAddressList ends the
@@ -729,15 +740,14 @@ func parseAddressList(sanitized string, specs *[]specRange) (addrs []*mail.Addre
 				remaining = strings.TrimLeft(remaining[lastPart:], " ")
 				continue
 			}
-		case !isSingleListEntry(entry):
-			// Like the leading comma of `,<a@example.com>`, which the
-			// address pattern reads as display name, while
-			// SplitAddressList skips the empty entry before it.
-			// The address was not appended, so parsing continues
-			// at the first comma that separates entries.
-			errList = append(errList, errs.Errorf("',' within email address %s separates entries of email address list: %s", parsed.addr.Address, truncateForError(remaining)))
-			end = nextListSeparator(remaining)
 		default:
+			// The entry is one entry of SplitAddressList: without a part of
+			// a display name it has no comma that separates entries, and the
+			// address pattern reads the commas of such a name only as part of
+			// an unquoted name up to the angle bracket of the last part, and
+			// the first part is not empty, because a run of empty entries is
+			// skipped above. The empty first part of `,<a@example.com>` made
+			// "," the display name of an entry that SplitAddressList splits.
 			addrs = append(addrs, parsed.addr)
 			if specs != nil {
 				for _, spec := range parsed.specs {
