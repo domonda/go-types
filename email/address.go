@@ -41,9 +41,12 @@ type Address string
 // so that the Address stays readable in JSON and databases, and runes
 // that are not graphic are removed from the name, like control characters
 // that would break a header line. A local part is quoted if net/mail or
-// ParseAddress can't read it unquoted, like "a b"@example.com.
-// A name containing "=?" is RFC 2047 encoded, see encodedName.
-// Use mail.Address.String to format an address for a message header.
+// ParseAddress can't read it unquoted, like "a b"@example.com, and an
+// address without name with a quoted local part with an angle bracket is
+// written within angle brackets, see addrSpecAlone.
+// A name containing "=?" is quoted with every =? written as `=\?`, see
+// quoteName. Use mail.Address.String to format an address for a message
+// header.
 func AddressFrom(addr *mail.Address) Address {
 	if addr == nil {
 		return ""
@@ -51,27 +54,41 @@ func AddressFrom(addr *mail.Address) Address {
 	// The name is cleaned like by ParseAddress,
 	// so that the result parses back to the same address
 	name := cleanName(addr.Name)
-	switch {
-	case name == "":
+	if name == "" {
 		// Without name just return the address part.
 		// mail.Address.String always puts the address part
 		// within angle brackets which is only needed
 		// if there is also a name part.
-		return Address(addrSpec(addr))
-	case strings.Contains(name, "=?"):
-		return Address(encodedName(name) + " <" + addrSpec(addr) + ">")
+		return Address(addrSpecAlone(addr))
 	}
-	return Address(quoteString(name) + " <" + addrSpec(addr) + ">")
+	return Address(quoteName(name) + " <" + addrSpec(addr) + ">")
 }
 
-// encodedName returns name as RFC 2047 encoded-word, also if it is
-// ASCII, which mime.BEncoding.Encode would return unchanged.
-// It is used for names containing "=?", which ParseAddress and
-// mail clients would decode as encoded-word, also within quotes,
-// so that a name like "=?utf-8?q?x?=" reads back unchanged
-// instead of as "x", and normalizing it again gives the same address.
-func encodedName(name string) string {
-	return "=?utf-8?b?" + base64.StdEncoding.EncodeToString([]byte(name)) + "?="
+// quoteName returns name as quoted string like quoteString, with every
+// "=?" written as `=\?`, so that the quoted string holds no RFC 2047
+// encoded-word, which ParseAddress and Python's email package decode also
+// within quotes, but not one with an escaped =?: the name "=?utf-8?q?x?="
+// reads back unchanged instead of as "x", and normalizing it again gives
+// the same address. It was written as B encoded-word, whose text Python
+// writes unencoded and unquoted when it writes the header, so that the
+// name "=? x@evil.com" became the address `"=? x"@evil.com`.
+func quoteName(name string) string {
+	return strings.ReplaceAll(quoteString(name), "=?", `=\?`)
+}
+
+// addrSpecAlone returns addrSpec of addr for an address without name,
+// within angle brackets if it has a quoted local part with an angle
+// bracket: the parser reads the text before such an angle bracket as
+// display name, `"<a@b.com>"@example.com` as the address a@b.com with the
+// display name `"`, but `<"<a@b.com>"@example.com>` as the address
+// <a@b.com>@example.com, so that normalizing it again gives the same
+// address.
+func addrSpecAlone(addr *mail.Address) string {
+	spec := addrSpec(addr)
+	if strings.HasPrefix(spec, `"`) && strings.Contains(spec, "<") {
+		return "<" + spec + ">"
+	}
+	return spec
 }
 
 // addrSpec returns the address part of addr (local-part@domain)
@@ -94,26 +111,35 @@ func addrSpec(addr *mail.Address) string {
 	return quoteString(addr.Address[:at]) + addr.Address[at:]
 }
 
+// encodedName returns name as one RFC 2047 B encoded-word, also if it is
+// longer than the 75 characters that mime.BEncoding.Encode writes in one
+// word. Split into several words, a word can hold only ASCII text with
+// a special character like the @ or ) of a long name with an address in
+// parentheses, which Python's email package writes unencoded and unquoted
+// when it writes the header, and which ParseAddress refuses, see
+// readEncodedWords. One word with the whole name holds its other runes.
+func encodedName(name string) string {
+	return "=?utf-8?b?" + base64.StdEncoding.EncodeToString([]byte(name)) + "?="
+}
+
 // asciiAddress formats addr like AddressFrom, but RFC 2047 encodes
 // a non-ASCII name like mail.Address.String does.
 func asciiAddress(addr *mail.Address) string {
 	name := cleanName(addr.Name)
 	switch {
 	case name == "":
-		return addrSpec(addr)
-	case strings.Contains(name, "=?"):
-		name = encodedName(name)
+		return addrSpecAlone(addr)
 	case !isASCII(name) && strings.ContainsAny(name, "\"#$%&'(),.:;<>@[]^`{|}~\\"):
 		// Like mail.Address.String, because an encoded-word
 		// in a name must not hold these characters unencoded,
 		// and also for a backslash, which RFC 2047 doesn't allow
 		// in a Q encoded word in a name either: ParseAddress
 		// removes it from an unquoted name before decoding
-		name = mime.BEncoding.Encode("utf-8", name)
+		name = encodedName(name)
 	case !isASCII(name):
 		name = mime.QEncoding.Encode("utf-8", name)
 	default:
-		name = quoteString(name)
+		name = quoteName(name)
 	}
 	return name + " <" + addrSpec(addr) + ">"
 }

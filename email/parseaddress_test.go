@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/domonda/go-errs"
@@ -229,9 +230,11 @@ func TestParseAddress_QuotedNameEscapes(t *testing.T) {
 		// An address in the name is no address of the name
 		{addr: `"\"Example\" <ar1@example.com>" <ar@example.com>`, wantName: `"Example" <ar1@example.com>`, wantAddr: "ar@example.com", wantNorm: `"\"Example\" <ar1@example.com>" <ar@example.com>`},
 		{addr: `"x\" <ok@example.com>" <other@example.net>`, wantName: `x" <ok@example.com>`, wantAddr: "other@example.net", wantNorm: `"x\" <ok@example.com>" <other@example.net>`},
-		// The text of an encoded-word keeps its quotes and backslashes
-		{addr: `=?utf-8?q?Say_=22Hi=22?= <a@b.com>`, wantName: `Say "Hi"`, wantAddr: "a@b.com", wantNorm: `"Say \"Hi\"" <a@b.com>`},
-		{addr: `=?utf-8?b?YVxi?= <a@b.com>`, wantName: `a\b`, wantAddr: "a@b.com", wantNorm: `"a\\b" <a@b.com>`},
+		// The text of an encoded-word keeps its quotes and backslashes.
+		// Not ASCII text with them, which Python's email package writes
+		// unencoded, see TestParseAddress_EncodedWordThatPythonReadsAsAddress
+		{addr: `=?utf-8?q?Say_=22H=C3=AF=22?= <a@b.com>`, wantName: `Say "Hï"`, wantAddr: "a@b.com", wantNorm: `"Say \"Hï\"" <a@b.com>`},
+		{addr: `=?utf-8?b?w6RcYg==?= <a@b.com>`, wantName: `ä\b`, wantAddr: "a@b.com", wantNorm: `"ä\\b" <a@b.com>`},
 		// A non-ASCII name with a backslash, which ASCII must B encode
 		{addr: "\"Jürgen \\\\ Müller\" <j@example.com>", wantName: "Jürgen \\ Müller", wantAddr: "j@example.com", wantNorm: "\"Jürgen \\\\ Müller\" <j@example.com>"},
 	}
@@ -396,6 +399,11 @@ func TestParseAddress_QuotedNameWithoutAngleBrackets(t *testing.T) {
 // word as an address, so for `"x@evil.com"; <ceo@corp.com>`, which validated
 // as ceo@corp.com, it also sends to x@evil.com. Python's strict parser
 // refuses these names. Found by the differential test against Python.
+// The default header parser of Python's email package, whose header
+// smtplib.send_message reads the recipients from, also ends the name at
+// a colon, as the name of a group, and reads a backslash before a quote as
+// part of the address: it sends `Team:"x@evil.com":<ceo@corp.com>` only to
+// x@evil.com and `\"x@evil.com" <ceo@corp.com>` only to \x@evil.com.
 func TestParseAddress_QuotedAtInNameThatLenientParsersEnd(t *testing.T) {
 	for _, addr := range []string{
 		`"x@evil.com"; <ceo@corp.com>`,
@@ -403,6 +411,9 @@ func TestParseAddress_QuotedAtInNameThatLenientParsersEnd(t *testing.T) {
 		`"x@evil.com" > <ceo@corp.com>`,
 		`"x@evil.com" [EXTERNAL] <ceo@corp.com>`,
 		`(c) "x@evil.com" John] <ceo@corp.com>`,
+		`Team:"x@evil.com":<ceo@corp.com>`,
+		`\"x@evil.com" <ceo@corp.com>`,
+		`"x@evil.com" \ <ceo@corp.com>`,
 	} {
 		t.Run(addr, func(t *testing.T) {
 			_, err := ParseAddress(addr)
@@ -424,6 +435,8 @@ func TestParseAddress_QuotedAtInNameThatLenientParsersEnd(t *testing.T) {
 		`"x@evil.com" (Sales; EU) <ceo@corp.com>`,
 		`"x@evil.com [EXTERNAL]" <ceo@corp.com>`,
 		`John "x@evil.com" Doe <ceo@corp.com>`,
+		`"x@evil.com" (Team:) <ceo@corp.com>`,
+		`"Team: x@evil.com" <ceo@corp.com>`,
 	} {
 		parsed, err := ParseAddress(addr)
 		require.NoError(t, err, addr)
@@ -432,6 +445,221 @@ func TestParseAddress_QuotedAtInNameThatLenientParsersEnd(t *testing.T) {
 			assert.NoError(t, err, "%s of %q", method, addr)
 		}
 	}
+}
+
+// TestParseAddress_EncodedWordThatPythonReadsAsAddress protects the
+// recipients of a stored address against Python's email package, whose
+// default header parser decodes the encoded-words of a display name: these
+// validated as ceo@corp.com, while smtplib.send_message of a message with
+// one of them as To header sends to x@evil.com instead, either at once,
+// because the parser ends the name at one of ;:)>[]\, and reads its first
+// word, decoded, as the address, or once the message is written and read
+// again, because Python writes the decoded ASCII text of a name unencoded
+// and unquoted, so that `x@evil.com <ceo@corp.com>` is written. Python also
+// decodes words that the parser can't, like one in a charset it doesn't
+// know or with an invalid encoding, so these are errors too.
+func TestParseAddress_EncodedWordThatPythonReadsAsAddress(t *testing.T) {
+	for _, addr := range []string{
+		// The name ends at one of ;:)>[]\
+		`"=?utf-8?q?x=40evil.com?="; <ceo@corp.com>`,
+		`=?utf-8?q?x=40evil.com?=; <ceo@corp.com>`,
+		`=?utf-8?q?x=40evil.com?=) <ceo@corp.com>`,
+		`=?utf-8?q?x=40evil.com?= > <ceo@corp.com>`,
+		`=?utf-8?q?x=40evil.com?= [x] <ceo@corp.com>`,
+		`=?utf-8?b?eEBldmlsLmNvbQ==?=; <ceo@corp.com>`,
+		`Team:=?utf-8?q?x=40evil.com?=:<ceo@corp.com>`,
+		// Also in text with other runes, which Python reads as address
+		// before it would encode it again
+		`=?utf-8?q?=C3=A4=2C_x=40evil.com?=; <ceo@corp.com>`,
+		// The decoded ASCII text is written unencoded and unquoted, where
+		// its @, quotes, parentheses, angle brackets and ;:[]\, are read
+		`=?utf-8?q?x=40evil.com?= <ceo@corp.com>`,
+		`=?utf-8?b?eEBldmlsLmNvbQ==?= <ceo@corp.com>`,
+		`John =?utf-8?q?x=40evil.com?= <ceo@corp.com>`,
+		`=?utf-8?q?=C3=A4?= =?utf-8?q?x=40evil.com?= <ceo@corp.com>`,
+		`=?utf-8?q?=3Cx=40evil.com=3E?= <ceo@corp.com>`,
+		`"x@evil.com" =?utf-8?q?=3B?= <ceo@corp.com>`,
+		`"x@evil.com" =?utf-8?q?=29?= <ceo@corp.com>`,
+		`=?utf-8?q?a=22?= <ceo@corp.com>`,
+		// Also within quotes next to other runes, which Python encodes
+		// again, but not the encoded-word with ASCII text. Python keeps
+		// a quoted name of ASCII quoted, but the stored text can hold
+		// runes that the parser drops, and Python reads
+		// `"=?utf-8?q?x=40evil.com?=<U+00AD>" <ceo@corp.com>` as the
+		// address x@evil.com with the soft hyphen encoded after it
+		`"ä =?utf-8?q?x=40evil.com?=" <ceo@corp.com>`,
+		`"=?utf-8?q?x=40evil.com?= ä" <ceo@corp.com>`,
+		`"=?utf-8?q?=C3=A4?= =?utf-8?q?x=40evil.com?=" <ceo@corp.com>`,
+		`"=?utf-8?q?x=40evil.com?=" <ceo@corp.com>`,
+		`"John =?utf-8?q?x=40evil.com?=" <ceo@corp.com>`,
+		// Python reads an encoded-word up to its ?= across a quote
+		`"=?utf-8?q?a"b?= <ceo@corp.com>`,
+		// An escaped =? in a quoted string of an unquoted name, which
+		// Python writes without the backslash and decodes when it reads
+		// the message again
+		`"=\?utf-8?q?x=40evil.com?="; <ceo@corp.com>`,
+		// Encoded-words that Python decodes, but the parser doesn't
+		`=?x-unknown?q?x=40evil.com?= <ceo@corp.com>`,
+		`=?utf-7?q?x+AEA-evil.com?= <ceo@corp.com>`,
+		`=?utf-8?b?eEBldmlsLmNvbQ?= <ceo@corp.com>`,
+		`=?utf-8?q?x=40evil.com ?= <ceo@corp.com>`,
+		`=?utf-8?q?x=40evil.com=ZZ?= <ceo@corp.com>`,
+		`'=?\=?utf-8?b?eEBldmlsLmNvbQ==?= <ceo@corp.com>`,
+	} {
+		t.Run(addr, func(t *testing.T) {
+			_, err := ParseAddress(addr)
+			assert.Error(t, err, "ParseAddress")
+			assert.Error(t, NullableAddress(addr).Validate(), "NullableAddress.Validate")
+			for method, err := range validateCollections(Address(addr)) {
+				assert.Error(t, err, method)
+			}
+			// Lenient parsing still returns the address in angle brackets
+			parsed, err := ParseAddressList(addr)
+			assert.Error(t, err)
+			assert.Equal(t, []string{"ceo@corp.com"}, addressParts(parsed))
+		})
+	}
+	// A comma after the name, which SplitAddressList joins with the address
+	for _, list := range []string{
+		`=?utf-8?q?x=40evil.com?=, <ceo@corp.com>`,
+		`"=\?utf-8?q?x=40evil.com?=", <ceo@corp.com>`,
+	} {
+		assert.Error(t, AddressList(list).Validate(), list)
+		parsed, err := ParseAddressList(list)
+		assert.Error(t, err, list)
+		assert.Equal(t, []string{"ceo@corp.com"}, addressParts(parsed), list)
+	}
+	// The decoded quote holds the next entry for Python: it sends this list
+	// to x@evil.com once it is read again, not to b@b.cc and ceo@corp.com
+	assert.Error(t, AddressList(`=?utf-8?q?a=22?= <ceo@corp.com>, "x@evil.com" <b@b.cc>`).Validate())
+
+	// Python writes an encoded-word with other runes than ASCII encoded
+	// again, and the decoded text of a comment in the comment, so it reads
+	// no address in them. An escaped =? in a quoted name starts no
+	// encoded-word for Python, and an =? without ?= after it none either.
+	for addr, want := range map[string]*mail.Address{
+		`=?utf-8?Q?J=C3=BCrgen_=28juergen=40example.com=29?= <ceo@corp.com>`: {Name: "Jürgen (juergen@example.com)", Address: "ceo@corp.com"},
+		`"=?utf-8?q?J=C3=BCrgen_x=40evil.com?=" <ceo@corp.com>`:              {Name: "Jürgen x@evil.com", Address: "ceo@corp.com"},
+		`"=\?utf-8?q?x=40evil.com?=" <ceo@corp.com>`:                         {Name: "=?utf-8?q?x=40evil.com?=", Address: "ceo@corp.com"},
+		`"=? x@evil.com" <ceo@corp.com>`:                                     {Name: "=? x@evil.com", Address: "ceo@corp.com"},
+		// A byte that can't be decoded Python writes encoded again too
+		`=?utf-8?q?x=40evil.com=FF?= <ceo@corp.com>`:            {Name: "x@evil.com", Address: "ceo@corp.com"},
+		`ceo@corp.com (=?utf-8?q?x=40evil.com?=)`:               {Name: "x@evil.com", Address: "ceo@corp.com"},
+		`=?utf-8?q?J=C3=BCrgen?= =?utf-8?q?_M?= <ceo@corp.com>`: {Name: "Jürgen M", Address: "ceo@corp.com"},
+	} {
+		t.Run(addr, func(t *testing.T) {
+			parsed, err := ParseAddress(addr)
+			require.NoError(t, err)
+			assert.Equal(t, want, parsed)
+			for method, err := range validateCollections(Address(addr)) {
+				assert.NoError(t, err, method)
+			}
+		})
+	}
+}
+
+// TestParseAddress_EncodedWordInLocalPart protects the recipient of a stored
+// address: net/mail and the parser read an encoded-word in a local part as
+// written, but Python's email package decodes it, so these validated as
+// another mailbox than smtplib.send_message sends to, admin@corp.com.
+func TestParseAddress_EncodedWordInLocalPart(t *testing.T) {
+	for _, addr := range []string{
+		`=?utf-8?q?admin?=@corp.com`,
+		`"=?utf-8?q?admin?="@corp.com`,
+		`John <=?utf-8?q?admin?=@corp.com>`,
+		`=?utf-8?q?admin?=x@corp.com`,
+		// Within quotes Python also decodes one after a space,
+		// it sends to "a admin"@corp.com
+		`"a =?utf-8?q?admin?="@corp.com`,
+	} {
+		t.Run(addr, func(t *testing.T) {
+			_, err := ParseAddress(addr)
+			assert.Error(t, err, "ParseAddress")
+			for method, err := range validateCollections(Address(addr)) {
+				assert.Error(t, err, method)
+			}
+			// Lenient parsing returns the address as written
+			parsed, err := ParseAddressList(addr)
+			assert.Error(t, err)
+			assert.Len(t, parsed, 1)
+		})
+	}
+	// Python reads an encoded-word at the start of a local part up to the
+	// ?= after it, also after the address: it sends this list to
+	// x@evil.com once it is read again
+	assert.Error(t, AddressList(`=?utf-8?q?x@evil.com,?= <b@c.com>`).Validate())
+
+	// An =? after the start without ?= after it is no encoded-word
+	parsed, err := ParseAddress(`a=?b@corp.com`)
+	require.NoError(t, err)
+	assert.Equal(t, "a=?b@corp.com", parsed.Address)
+}
+
+// TestLowerAddressPart protects the mailbox of an address: the address part
+// was lower cased with strings.ToLower, which maps the Kelvin sign U+212A
+// to k and the capital I with dot U+0130 to i, so that the other mailbox
+// "<U+212A>ate"@corp.com was read as kate@corp.com, and a recipient check saw
+// another address than net/mail and mail servers send to. No rune that is
+// not ASCII is lower cased to ASCII, every other rune like by
+// strings.ToLower, so the rest of the address part is normalized like
+// before.
+func TestLowerAddressPart(t *testing.T) {
+	for r := rune(utf8.RuneSelf); r <= unicode.MaxRune; r++ {
+		if lower := []rune(lowerAddressPart(string(r))); len(lower) != 1 || lower[0] < utf8.RuneSelf {
+			t.Fatalf("lowerAddressPart(%U) = %q", r, string(lower))
+		}
+	}
+	assert.Equal(t, "kate", lowerAddressPart("Kate"))
+	assert.Equal(t, "\u212Aate", lowerAddressPart("\u212AATE"))
+	assert.Equal(t, "\u0130stanbul", lowerAddressPart("\u0130STANBUL"))
+	assert.Equal(t, "jürgen.müller", lowerAddressPart("Jürgen.MÜLLER"))
+
+	parsed, err := ParseAddress("\"\u212Aate\"@Corp.com")
+	require.NoError(t, err)
+	assert.Equal(t, "\u212Aate@corp.com", parsed.Address)
+	norm, err := Address("\"\u212Aate\"@Corp.com").Normalized()
+	require.NoError(t, err)
+	assert.Equal(t, Address("\"\u212Aate\"@corp.com"), norm)
+}
+
+// TestSameAddressSpec protects the recipients of a stored address: an
+// unquoted name with an @ is valid only if it is the address itself, which
+// compared the domains with strings.EqualFold, which also folds the Kelvin
+// sign U+212A to k and the long s U+017F to s, so that the name
+// ceo@<U+212A>orp.com, another address for other parsers, passed as
+// ceo@korp.com. The domains are compared as the parser lower cases them.
+func TestSameAddressSpec(t *testing.T) {
+	assert.True(t, sameAddressSpec("ceo@Corp.COM", "ceo@corp.com"))
+	assert.True(t, sameAddressSpec("ceo@MÜLLER.de", "ceo@müller.de"))
+	assert.False(t, sameAddressSpec("Ceo@corp.com", "ceo@corp.com"), "the local part as written")
+	assert.False(t, sameAddressSpec("ceo@\u212Aorp.com", "ceo@korp.com"))
+	assert.False(t, sameAddressSpec("ceo@corp.\u017Fe", "ceo@corp.se"))
+
+	for _, addr := range []string{
+		"ceo@\u212Aorp.com <ceo@korp.com>",
+		"ceo@corp.\u017Fe <ceo@corp.se>",
+	} {
+		_, err := ParseAddress(addr)
+		assert.Error(t, err, addr)
+		for method, err := range validateCollections(Address(addr)) {
+			assert.Error(t, err, "%s of %q", method, addr)
+		}
+	}
+}
+
+// TestParseAddress_RepeatedAddressWithComment protects the recipients of a
+// stored list: the runes that the parser drops after a comment after the
+// address are refused by the collections, because Python's email.utils
+// appends the word after the comment to the domain, see parsedAddress.specs,
+// but after a repeated address the comment was not checked, so that the
+// no-break space of this list passed AddressList.Validate.
+func TestParseAddress_RepeatedAddressWithComment(t *testing.T) {
+	const list = "<a@b.com> <a@b.com> ()\u00a0, c@d.com"
+	parsed, err := ParseAddressList(list)
+	require.NoError(t, err, "the parser reads the no-break space as space")
+	assert.Equal(t, []string{"a@b.com", "c@d.com"}, addressParts(parsed))
+	assert.Error(t, AddressList(list).Validate())
+	assert.NoError(t, AddressList("<a@b.com> <a@b.com> () , c@d.com").Validate())
 }
 
 // TestParseAddress_AtInUnquotedName protects the recipients of a stored
@@ -456,6 +684,8 @@ func TestParseAddress_AtInUnquotedName(t *testing.T) {
 		`@Bob <ceo@corp.com>`,
 		// An encoded-word is a word of the unquoted name
 		`=?utf-8?q?x@evil.com?= <ceo@corp.com>`,
+		// The encoded @ too, see TestParseAddress_EncodedWordThatPythonReadsAsAddress
+		`=?utf-8?q?x=40evil.com?= <ceo@corp.com>`,
 		// The local part of the name is another mailbox
 		`Ceo@corp.com <ceo@corp.com>`,
 		`<Ceo@corp.com> <ceo@corp.com>`,
@@ -478,15 +708,16 @@ func TestParseAddress_AtInUnquotedName(t *testing.T) {
 	}
 
 	for addr, want := range map[string]*mail.Address{
-		`"x@evil.com" <ceo@corp.com>`:             {Name: "x@evil.com", Address: "ceo@corp.com"},
-		`John "x@evil.com" Doe <ceo@corp.com>`:    {Name: "John x@evil.com Doe", Address: "ceo@corp.com"},
-		`John (x@evil.com) <ceo@corp.com>`:        {Name: "John (x@evil.com)", Address: "ceo@corp.com"},
-		`ceo@corp.com <ceo@corp.com>`:             {Address: "ceo@corp.com"},
-		`ceo@Corp.COM <ceo@corp.com>`:             {Name: "ceo@Corp.COM", Address: "ceo@corp.com"},
-		`<ceo@corp.com> <ceo@Corp.com>`:           {Address: "ceo@corp.com"},
-		`Boss <ceo@corp.com> <ceo@corp.com>`:      {Name: "Boss", Address: "ceo@corp.com"},
-		`"a,b"@corp.com <"a,b"@corp.com>`:         {Address: "a,b@corp.com"},
-		`=?utf-8?q?x=40evil.com?= <ceo@corp.com>`: {Name: "x@evil.com", Address: "ceo@corp.com"},
+		`"x@evil.com" <ceo@corp.com>`:          {Name: "x@evil.com", Address: "ceo@corp.com"},
+		`John "x@evil.com" Doe <ceo@corp.com>`: {Name: "John x@evil.com Doe", Address: "ceo@corp.com"},
+		`John (x@evil.com) <ceo@corp.com>`:     {Name: "John (x@evil.com)", Address: "ceo@corp.com"},
+		`ceo@corp.com <ceo@corp.com>`:          {Address: "ceo@corp.com"},
+		`ceo@Corp.COM <ceo@corp.com>`:          {Name: "ceo@Corp.COM", Address: "ceo@corp.com"},
+		`<ceo@corp.com> <ceo@Corp.com>`:        {Address: "ceo@corp.com"},
+		`Boss <ceo@corp.com> <ceo@corp.com>`:   {Name: "Boss", Address: "ceo@corp.com"},
+		`"a,b"@corp.com <"a,b"@corp.com>`:      {Address: "a,b@corp.com"},
+		// An encoded @ in text with other runes, which Python encodes again
+		`=?utf-8?q?x=40evil.com_=C3=A4?= <ceo@corp.com>`: {Name: "x@evil.com ä", Address: "ceo@corp.com"},
 	} {
 		t.Run(addr, func(t *testing.T) {
 			parsed, err := ParseAddress(addr)
@@ -882,13 +1113,20 @@ func TestParseAddressList_ErrorAfterDisplayNameWithCommas(t *testing.T) {
 // recipients that net/mail reads, and an unencoded @ in it is an @ in an
 // unquoted name, see TestParseAddress_AtInUnquotedName.
 func TestParseAddressList_EncodedWordNameHoldsNoAddress(t *testing.T) {
+	// Python's email package reads these encoded-words up to their ?=,
+	// which makes the first recipient x@evil.example and the second one
+	// the name of c@x.com, so the local part that starts with =? and the
+	// =? of the name `=?utf-8?q?`, which starts no encoded-word for the
+	// parser, are errors now, see TestParseAddress_EncodedWordInLocalPart
+	// and TestParseAddress_EncodedWordThatPythonReadsAsAddress, but the
+	// recipients of net/mail are still returned
 	for _, list := range []string{
 		`=?utf-8?q?spy@evil.example,?= <ceo@corp.example>`,
 		`=?utf-8?q?<a@b.com>,?= <c@x.com>`,
 	} {
 		t.Run(list, func(t *testing.T) {
 			parsed, err := ParseAddressList(list)
-			require.NoError(t, err)
+			require.Error(t, err)
 			stdlib, err := mail.ParseAddressList(list)
 			require.NoError(t, err)
 			require.Len(t, parsed, len(stdlib), "the recipients of net/mail")
@@ -916,10 +1154,11 @@ func TestParseAddressList_EncodedWordNameHoldsNoAddress(t *testing.T) {
 	_, err := ParseAddressList(`=?utf-8?q?spy@evil.example?= <ceo@corp.example>`)
 	assert.Error(t, err)
 
-	// Encoded-words with commas and @ encoded are one name
+	// Encoded-words with commas and @ encoded are one name. Not ASCII
+	// with an @, see TestParseAddress_EncodedWordThatPythonReadsAsAddress
 	for addr, wantName := range map[string]string{
 		`=?utf-8?q?J=C3=BCrgen_M=C3=BCller?= <j@x.de>`:    "Jürgen Müller",
-		`=?utf-8?q?a=40b=2C?= <j@x.de>`:                   "a@b,",
+		`=?utf-8?q?=C3=A4=40b=2C?= <j@x.de>`:              "ä@b,",
 		`=?utf-8?b?wqFIb2xhLCBzZcOxb3Ih?= <j@x.de>`:       "¡Hola, señor!",
 		`=?utf-8?q?J=C3=BCrgen?= =?utf-8?q?_M?= <j@x.de>`: "Jürgen M",
 	} {
@@ -1443,6 +1682,12 @@ func FuzzParseAddressListMatchesNetMail(f *testing.F) {
 		// net/mail reads the address '0@0.aa
 		"'0@0.AA",
 		"o'brien@example.com, 'Brien' <ob@example.com>",
+		// Found by the differential test against Python's email package,
+		// see TestParseAddress_EncodedWordThatPythonReadsAsAddress
+		`=?utf-8?q?x=40evil.com?= <ceo@corp.com>`,
+		`=?utf-8?q?admin?=@corp.com, "=?utf-8?q?admin?="@corp.com`,
+		"\"\u212Aate\"@corp.com, ceo@\u212Aorp.com <ceo@korp.com>",
+		"<a@b.com> <a@b.com> ()\u00a0, c@d.com",
 	} {
 		f.Add(list)
 	}
@@ -1510,6 +1755,22 @@ func FuzzValidListHasTheAddressesOfItsText(f *testing.F) {
 		`"a,b"@c.com <x@y.com>`,
 		"a@b.com\t(Mike)",
 		"a@b.com\t, c@d.com",
+		// Names with a quoted @ that Python's default header parser ends
+		// at a colon or reads with a backslash, see
+		// TestParseAddress_QuotedAtInNameThatLenientParsersEnd
+		`Team:"x@evil.com":<ceo@corp.com>`,
+		`\"x@evil.com" <ceo@corp.com>`,
+		// Encoded-words that Python decodes to another recipient, see
+		// TestParseAddress_EncodedWordThatPythonReadsAsAddress
+		`"=?utf-8?q?x=40evil.com?="; <ceo@corp.com>`,
+		`=?utf-8?q?x=40evil.com?=; <ceo@corp.com>`,
+		`=?utf-8?b?eEBldmlsLmNvbQ==?=) <ceo@corp.com>`,
+		`Team:=?utf-8?q?x=40evil.com?=:<ceo@corp.com>`,
+		`=?utf-8?q?x=40evil.com?=, <ceo@corp.com>`,
+		`=?x-unknown?q?x=40evil.com?= <ceo@corp.com>`,
+		`"=\?utf-8?q?x=40evil.com?=", <ceo@corp.com>`,
+		`=?utf-8?q?admin?=@corp.com`,
+		`=?utf-8?q?x@evil.com,?= <b@c.com>`,
 	} {
 		f.Add(list)
 	}

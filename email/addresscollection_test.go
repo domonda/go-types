@@ -114,7 +114,6 @@ func TestAddressList_SplitRawMatchesSplitNormalized(t *testing.T) {
 		// An encoded-word is read like any other word of an unquoted
 		// display name, a comma in it splits like in an unquoted name
 		`=?utf-8?q?J=C3=BCrgen_M=C3=BCller?= <j@example.de>, b@example.com`,
-		`=?utf-8?q?a,b?= <c@example.com>, d@example.com`,
 		// The no-break space in the unquoted name is read as space
 		"Müller,\u00a0Hans <hans@example.com>, b@example.com",
 		// A placeholder with a trailing comma is the empty list
@@ -133,6 +132,19 @@ func TestAddressList_SplitRawMatchesSplitNormalized(t *testing.T) {
 			}
 		})
 	}
+
+	// The comma in the encoded-word splits it like an unquoted name, so the
+	// list was valid with the recipients c@example.com and d@example.com.
+	// But Python's email.utils.getaddresses reads =?utf-8?q?a as a third
+	// recipient, and its default header parser writes the decoded name a,b
+	// unquoted, which is read again as the recipient a, so the list is
+	// invalid now. SplitRaw and SplitNormalized still read the same entries.
+	list := AddressList(`=?utf-8?q?a,b?= <c@example.com>, d@example.com`)
+	assert.False(t, list.Valid())
+	normalized, err := list.SplitNormalized()
+	assert.Error(t, err)
+	assert.Equal(t, []Address{`=?utf-8?q?a,b?= <c@example.com>`, "d@example.com"}, list.SplitRaw())
+	assert.Len(t, normalized, 2)
 
 	// ParseAddressList parsed these lists without an error as more
 	// addresses or other ones than SplitRaw finds entries: an unclosed
@@ -271,6 +283,19 @@ func FuzzSplitRawMatchesParse(f *testing.F) {
 		// see TestCollectionsRefuseRunesInAddressParts
 		"ad\u00admin@corp.com",
 		"x <\u00a0a@b.com>, b@example.com",
+		// Runs of empty entries before an entry with angle brackets, which
+		// were parsed once per empty entry, see
+		// TestParseAddressList_LongInvalidListTakesLinearTime
+		",,,<a@b.com>",
+		"a@b.com,,, ,x <c@d.com>",
+		// Encoded-words and local parts that Python reads as other
+		// recipients, see TestParseAddress_EncodedWordThatPythonReadsAsAddress
+		`=?utf-8?q?a,b?= <c@example.com>, d@example.com`,
+		`=?utf-8?q?x=40evil.com?=, <ceo@corp.com>`,
+		`=?utf-8?q?x@evil.com,?= <b@c.com>`,
+		// A quoted local part with an angle bracket, which Normalized wrote
+		// without angle brackets
+		`<"<a@b.com>"@EXAMPLE.com>, b@c.com`,
 	} {
 		f.Add(list)
 	}

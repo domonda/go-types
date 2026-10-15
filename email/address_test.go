@@ -120,6 +120,17 @@ func TestAddress_NormalizedIsIdempotent(t *testing.T) {
 		`=?utf-8?b?wqFIb2xhLCBzZcOxb3Ih?= <senor@hola.com>`,
 		`Jürgen Müller <J@X.de>`,
 		`"Müller, Jürgen" <j@x.de>`,
+		// A quoted local part with an angle bracket without name, which
+		// was written without angle brackets and read back as the display
+		// name `"` of a@b.com, which is an error
+		`<"<a@b.com>"@EXAMPLE.com>`,
+		`<"x <a@b.com>"@example.com>`,
+		// Names holding "=?", which were written as B encoded-word that
+		// decodes to ASCII with an @, which the parser refuses, see
+		// TestParseAddress_EncodedWordThatPythonReadsAsAddress
+		`"=? x@evil.com" <ceo@corp.com>`,
+		`"=?utf-8?q?=3D=3Futf-8=3Fq=3Fx=3D40evil.com=3F=3D?=" <ceo@corp.com>`,
+		`"=?utf-8?q?=3D=3F_J=C3=BCrgen?=" <j@x.de>`,
 	} {
 		t.Run(string(addr), func(t *testing.T) {
 			once, err := addr.Normalized()
@@ -130,6 +141,39 @@ func TestAddress_NormalizedIsIdempotent(t *testing.T) {
 			assert.True(t, once.ValidAndNormalized())
 		})
 	}
+}
+
+// FuzzAddressNormalizedIsIdempotent checks TestAddress_NormalizedIsIdempotent
+// for every address: Normalized of a valid address is valid and normalized,
+// so that Value writes an address that reads back as itself. For the seeds
+// from TestAddress_NormalizedIsIdempotent, Normalized wrote an address that
+// ParseAddress refused.
+func FuzzAddressNormalizedIsIdempotent(f *testing.F) {
+	for _, addr := range []string{
+		`John Doe <John.Doe@Example.com>`,
+		`<"<a@b.com>"@EXAMPLE.com>`,
+		`<"x <a@b.com>"@example.com>`,
+		`"=? x@evil.com" <ceo@corp.com>`,
+		`"=?utf-8?q?=3D=3Futf-8=3Fq=3Fx=3D40evil.com=3F=3D?=" <ceo@corp.com>`,
+		"\"\u212Aate\"@Corp.com",
+		`=?utf-8?Q?J=C3=BCrgen_=28juergen=40example.com=29?= <ceo@corp.com>`,
+		`mike@doe.com (Mike (Sales))`,
+	} {
+		f.Add(addr)
+	}
+	f.Fuzz(func(t *testing.T, addr string) {
+		once, err := Address(addr).Normalized()
+		if err != nil {
+			return
+		}
+		twice, err := once.Normalized()
+		if err != nil {
+			t.Fatalf("Normalized(%q) = %q, which is invalid: %v", addr, once, err)
+		}
+		if twice != once {
+			t.Fatalf("Normalized(%q) = %q, but Normalized of it = %q", addr, once, twice)
+		}
+	})
 }
 
 // TestAddress_NormalizedRoundTrip protects that what Value, MarshalJSON
@@ -268,11 +312,27 @@ func TestAddress_MarshalTextAndASCII(t *testing.T) {
 	ascii := Address(Address(`Jürgen Müller <J@Example.com>`).ASCII())
 	assert.Equal(t, `"Jürgen Müller" <j@example.com>`, marshalText(t, ascii))
 
-	// A name holding "=?" is written as encoded-word by MarshalText and ASCII,
-	// so that ParseAddress and net/mail read the name as written instead
-	// of decoding it once more and showing other text
+	// A long non-ASCII name with special characters is written as one
+	// B encoded-word. mime.BEncoding.Encode split it into words of at most
+	// 75 characters, so that the last one held only the ASCII text
+	// "rechnungen@mueller-gmbh.de)", which Python's email package writes
+	// unencoded and unquoted, and which the parser refuses for that reason
+	const longName = "Müller GmbH Buchhaltung und Rechnungswesen (rechnungen@mueller-gmbh.de)"
+	long := Address(`"` + longName + `" <r@mueller-gmbh.de>`)
+	parsed, err := ParseAddress(long.ASCII())
+	require.NoError(t, err, long.ASCII())
+	assert.Equal(t, longName, parsed.Name)
+
+	// A name holding "=?" is written quoted with every =? escaped as `=\?`
+	// by MarshalText and ASCII, so that ParseAddress and net/mail read the
+	// name as written instead of decoding it once more and showing other
+	// text. It was written as B encoded-word, which Python's email package
+	// writes decoded, unencoded and unquoted, so that it read the name
+	// "=? x@evil.com" as the address `"=? x"@evil.com`.
 	const literal = "=?utf-8?q?x?="
 	encoded := Address(`"=?utf-8?q?=3D=3Futf-8=3Fq=3Fx=3F=3D?=" <a@example.com>`)
+	assert.Equal(t, `"=\?utf-8?q?x?=" <a@example.com>`, marshalText(t, encoded))
+	assert.Equal(t, `"=\?utf-8?q?x?=" <a@example.com>`, encoded.ASCII())
 	for _, written := range []string{marshalText(t, encoded), encoded.ASCII()} {
 		name, err := Address(written).NamePart()
 		require.NoError(t, err)

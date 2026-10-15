@@ -74,28 +74,49 @@ func TestParseMIMEMessage_NonStdlibCharset(t *testing.T) {
 // encoded display name is decoded only as a name: decoding the whole header
 // before splitting it turned an encoded comma and @ in a name into another
 // recipient, which net/mail and mail clients don't see.
+//
+// An encoded name whose text is ASCII with an @ is an error, because
+// Python's email package writes such text unencoded and unquoted, where
+// the @ is an address, see TestParseAddress_EncodedWordThatPythonReadsAsAddress.
+// The addresses of a To header with such a name are kept like for other
+// errors, and still don't split.
 func TestParseMIMEMessage_EncodedNameIsOneAddress(t *testing.T) {
 	msg, err := email.ParseMessage(rawMessage(
-		`From: =?utf-8?q?attacker=40evil=2Ecom=2C?= <sender@example.com>`,
-		`To: =?utf-8?q?victim=40evil=2Ecom=2C?= <ok@good.com>, =?UTF-8?Q?M=C3=BCller=2C_J=C3=BCrgen?= <j@example.de>`,
-		`Cc: =?utf-8?q?cc=40evil=2Ecom=2C?= <cc@good.com>`,
+		`From: =?utf-8?q?J=C3=BCrgen_attacker=40evil=2Ecom=2C?= <sender@example.com>`,
+		`To: =?utf-8?q?J=C3=BCrgen_victim=40evil=2Ecom=2C?= <ok@good.com>, =?UTF-8?Q?M=C3=BCller=2C_J=C3=BCrgen?= <j@example.de>`,
+		`Cc: =?utf-8?q?J=C3=BCrgen_cc=40evil=2Ecom=2C?= <cc@good.com>`,
 		`Date: Thu, 22 Jan 2026 16:21:11 +0100`,
 		`Content-Type: text/plain; charset=utf-8`,
 		``,
 		`Body`,
 	))
 	require.NoError(t, err)
-	require.Equal(t, email.Address(`"attacker@evil.com," <sender@example.com>`), msg.From)
-	require.Equal(t, email.AddressList(`"victim@evil.com," <ok@good.com>, "Müller, Jürgen" <j@example.de>`), msg.To)
-	require.Equal(t, email.NullableAddressList(`"cc@evil.com," <cc@good.com>`), msg.Cc)
+	require.Equal(t, email.Address(`"Jürgen attacker@evil.com," <sender@example.com>`), msg.From)
+	require.Equal(t, email.AddressList(`"Jürgen victim@evil.com," <ok@good.com>, "Müller, Jürgen" <j@example.de>`), msg.To)
+	require.Equal(t, email.NullableAddressList(`"Jürgen cc@evil.com," <cc@good.com>`), msg.Cc)
 	require.Equal(t, []string{"ok@good.com", "j@example.de", "cc@good.com"}, msg.Recipients())
+
+	msg, err = email.ParseMessage(rawMessage(
+		`From: =?utf-8?q?attacker=40evil=2Ecom=2C?= <sender@example.com>`,
+		`To: =?utf-8?q?victim=40evil=2Ecom=2C?= <ok@good.com>, b@good.com`,
+		`Date: Thu, 22 Jan 2026 16:21:11 +0100`,
+		`Content-Type: text/plain; charset=utf-8`,
+		``,
+		`Body`,
+	))
+	require.ErrorContains(t, err, "can't parse email header 'From'")
+	require.ErrorContains(t, err, "can't parse email header 'To'")
+	require.Equal(t, email.Address(""), msg.From)
+	require.Equal(t, email.AddressList(`"victim@evil.com," <ok@good.com>, b@good.com`), msg.To)
 }
 
 // TestParseMIMEMessage_AddressHeadersOfOtherSenders protects that reading
 // the raw address headers loses no sender or recipient that the decoded
 // headers gave: a name in a charset that can't be decoded drops only the
-// name, IANA charset labels like cp850 decode, a value encoded as a whole
-// is decoded as a whole, and a name written as comment is decoded too.
+// name of a Cc address, which is kept, but makes the entry an error,
+// because Python's email package can still decode it, IANA charset labels
+// like cp850 decode, a value encoded as a whole is decoded as a whole, and
+// a name written as comment is decoded too.
 //
 // A comma and @ written unencoded in an encoded-word of a name are not
 // part of the name, because net/mail and mail servers read the comma as
@@ -121,17 +142,18 @@ func TestParseMIMEMessage_AddressHeadersOfOtherSenders(t *testing.T) {
 	require.Equal(t, email.NullableAddressList(`"Müller" <cc1@example.com>, cc2@example.com, cc3@example.com`), msg.Cc)
 
 	// The encoded-word of a name without unencoded commas and @ is still
-	// one name, like the encoded comma and @ of the Müller, Jürgen name
+	// one name, like the encoded comma and @ of the Müller, Jürgen name.
+	// Not ASCII with an @, see TestParseMIMEMessage_EncodedNameIsOneAddress.
 	msg, err = email.ParseMessage(rawMessage(
 		`From: sender@example.com`,
-		`To: =?utf-8?q?a=40b=2C?= <hidden@example.com>, =?UTF-8?Q?M=C3=BCller=2C_J=C3=BCrgen?= <j@example.de>`,
+		`To: =?utf-8?q?=C3=A4=40b=2C?= <hidden@example.com>, =?UTF-8?Q?M=C3=BCller=2C_J=C3=BCrgen?= <j@example.de>`,
 		`Date: Thu, 22 Jan 2026 16:21:11 +0100`,
 		`Content-Type: text/plain; charset=utf-8`,
 		``,
 		`Body`,
 	))
 	require.NoError(t, err)
-	require.Equal(t, email.AddressList(`"a@b," <hidden@example.com>, "Müller, Jürgen" <j@example.de>`), msg.To)
+	require.Equal(t, email.AddressList(`"ä@b," <hidden@example.com>, "Müller, Jürgen" <j@example.de>`), msg.To)
 }
 
 // TestParseMIMEMessage_PartialResult verifies that a message with usable data
