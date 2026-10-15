@@ -245,6 +245,24 @@ time.
         can't see it. Python's SMTPUTF8 policy also writes a decoded
         non-ASCII encoded-word with `, x@evil.com` raw, which then reads as
         another recipient.
+      - `email`: an encoded-word whose text is ASCII with an `@` outside
+        a comment is refused, also where Python joins it with the word
+        before it: `mail.Address.String` writes the name
+        `Ivan Petrović [via Mailchimp] (ivan.petrovic@example.org)` with
+        the last word `@example.org)`, which Python reads back correctly,
+        but `ParseMIMEMessage` leaves such a `From` empty with an error.
+        Accepting it needs a model of when Python joins encoded-words.
+      - `email`: `ASCII` writes a long name as one encoded-word longer than
+        75 characters where a word of at most 75 would hold only ASCII text.
+      - `email`: a non-ASCII name holding a literal encoded-word, like
+        `Jürgen =?utf-8?q?x?=`, is valid as quoted UTF-8, but its `ASCII`
+        form is refused. Python reads both forms as `Jürgenx` after
+        writing them, so no ASCII form keeps the name: refuse both or
+        accept both.
+      - `email`: an encoded-word within a word, like the one of
+        `x=?utf-8?q?=3Cevil=40evil.com=3E?= <ceo@corp.com>`, is decoded by
+        the parser to the name `x<evil@evil.com>`, while Python shows it as
+        written. The recipient is the same for both.
       - `email`: Python's lenient `getaddresses` reads a garbled duplicate of
         the same mailbox, like `<_x@x.de ""<_x@X.DE >`, as an extra entry.
         Same mailbox, so not a spoofing path, but `Validate` could refuse it.

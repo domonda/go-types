@@ -288,7 +288,8 @@ See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut.
   `"Really=?" <a@b.com>` normalizes to `"Really=\?" <a@b.com>`. `ASCII`
   writes a non-ASCII name with special characters in B encoded-words of at
   most 75 characters, or as one longer word where a word would hold only
-  ASCII text with one of `@"(<\` or `=?`.
+  ASCII text, which Python's email package writes unencoded, so that the
+  `;` of `(Vorstand; Finanzen)` ends the name.
 - **Breaking:** `email` normalization keeps the content of a quoted local
   part, only lower cased, instead of removing the quotes and turning spaces
   and commas into dots: `"Doe, John"@example.com` normalizes to
@@ -912,8 +913,8 @@ See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut.
     such an address only ends the name, so
     `Doe; =?utf-8?q?J=C3=BCrgen?= <ceo@corp.com>` stays valid;
   - an RFC 2047 encoded-word at the start of a word whose decoded text is
-    ASCII and contains an `@`, one of `"(<\` or an `=?` at the start of a
-    word, also inside a quoted name, because Python writes it back
+    ASCII and contains one of `"<\`, an `@` or `(` outside a comment that
+    it closes, or an `=?` at the start of a word, also inside a quoted name, because Python writes it back
     unencoded: `=?utf-8?q?x=40evil.com?= <ceo@corp.com>`; an `=?` at the
     start of a word of the decoded name, which Python decodes once it
     wrote the name: `=?utf-8?b?PT8=?=utf-8?q?x <y?=@corp.com>`; a quoted
@@ -928,7 +929,9 @@ See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut.
     with non-ASCII text stay valid, because Python encodes them again, and
     so do ASCII words with other specials, which only end the name for
     Python, like the last of the two words a mail client writes for
-    `Jürgen Müller, Buchhaltung und Finanzen (Abteilung Nord)`, and an `=?`
+    `Jürgen Müller, Buchhaltung und Finanzen (Abteilung Nord)`, ASCII words
+    with a closed comment, like the `und Buchhaltung (Zentrale)` that
+    `net/mail` and Python's `email.header` split off a long name, and an `=?`
     within a word, like in `"Really=?" <a@b.com>`;
   Quote such names: `"x@evil.com" <ceo@corp.com>` is valid.
   `ParseMIMEMessage` reports such an address header as an error and keeps
