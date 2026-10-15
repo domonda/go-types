@@ -555,9 +555,8 @@ func unescapeQuotedPairs(quoted string) string {
 }
 
 // maxAddressListErrors is the number of errors after which
-// ParseAddressList stops parsing a list, because every entry that
-// can't be parsed is matched against the rest of the list,
-// so a long list of garbage would take quadratic time.
+// ParseAddressList stops parsing a list,
+// so that the errors of a long list of garbage stay short.
 const maxAddressListErrors = 100
 
 // truncateForError returns s cut to at most 100 bytes for an error message,
@@ -614,6 +613,8 @@ func truncateForError(s string) string {
 // address of `Doe, John (john@corp) <j@x.com>` is still returned, and the
 // one in angle brackets after a quoted name that the first part opened,
 // like the one of `Support, "x\" <a@b.com>, y" <c@d.com>`.
+// Every entry is parsed within its end, so that parsing takes time linear
+// in the length of the list.
 func ParseAddressList(list string) (addrs []*mail.Address, err error) {
 	return parseAddressList(sanitizeAddr(list), nil)
 }
@@ -631,47 +632,75 @@ func parseAddressList(sanitized string, specs *[]specRange) (addrs []*mail.Addre
 	// angle bracket or comment
 	trailingComma := strings.Contains(sanitized[len(list):], ",")
 
-	var errList []error
+	var (
+		errList []error
+		// alone is the offset in list up to which every part is an entry
+		// of its own, see listEntryEnd
+		alone int
+	)
 	for remaining := list; remaining != ""; {
 		if len(errList) >= maxAddressListErrors {
 			errList = append(errList, errs.Errorf("stopped parsing email address list after %d errors", len(errList)))
 			break
 		}
-		parsed, ok := parseAddress(remaining)
+		offset := len(list) - len(remaining)
+		// end is the index of the comma where SplitAddressList ends the
+		// entry, -1 if the entry holds the rest of the list, and lastPart
+		// the index of the last part of an entry with an unquoted display
+		// name with commas. The address is parsed within the entry, so
+		// that the address pattern doesn't scan the rest of the list
+		// after every entry that it can't parse, which made parsing
+		// a long list of garbage take seconds.
+		var lastPart, end int
+		if offset < alone {
+			end = nextListSeparator(remaining)
+		} else {
+			var aloneParts int
+			lastPart, end, aloneParts = listEntryEnd(remaining)
+			alone = offset + aloneParts
+		}
+		entryText := remaining
+		if end >= 0 {
+			entryText = remaining[:end]
+		}
+		var (
+			parsed parsedAddress
+			ok     bool
+		)
+		// An entry without an @ has no address
+		// for the address pattern to find
+		if strings.IndexByte(entryText, '@') >= 0 {
+			parsed, ok = parseAddress(entryText)
+		}
 		unparsed := strings.TrimLeft(parsed.unparsed, " ")
-		entry := remaining[:len(remaining)-len(unparsed)]
+		entry := entryText[:len(entryText)-len(unparsed)]
 		// An address within a quoted string or a comment that the entry
 		// opened before it, like the one of `"x@evil.com" "<ceo@corp.com>`,
 		// is no address of the entry: other parsers read the rest of the
 		// entry within it, also if it isn't closed
-		within := ok && withinQuoteOrComment(remaining, parsed.specs)
-		// end is the index of the comma after which parsing continues
-		// after an error, -1 if the rest of the list belongs to the entry
-		var end int
-		if !ok || within {
+		within := ok && withinQuoteOrComment(entryText, parsed.specs)
+		switch {
+		case !ok || within:
 			if within {
 				errList = append(errList, errs.Errorf("email address %s within a quoted string or comment in email address list: %s", parsed.addr.Address, truncateForError(remaining)))
 			} else {
 				errList = append(errList, errs.Errorf("could not parse email address list, because of: could not parse email address: %s", truncateForError(remaining)))
 			}
-			// The comma where SplitAddressList ends the entry that can't
-			// be parsed, so that the parts of its unquoted display name
-			// are not parsed again, each with another error. But the
-			// last part of an entry with a display name with commas
-			// is parsed once without the parts before it, so that the
-			// address of a name with a comma and an @, which the address
-			// pattern can't read, is still found, like the one of
-			// `Doe, John (john@corp) <j@x.com>`, and the address in angle
-			// brackets after a quoted string, which an unquoted name
+			// After the entry that can't be parsed, so that the parts of
+			// its unquoted display name are not parsed again, each with
+			// another error. But the last part of an entry with a display
+			// name with commas is parsed once without the parts before it,
+			// so that the address of a name with a comma and an @, which
+			// the address pattern can't read, is still found, like the one
+			// of `Doe, John (john@corp) <j@x.com>`, and the address in
+			// angle brackets after a quoted string, which an unquoted name
 			// before it opened for the address pattern, like the one of
 			// `Support, "x\" <a@b.com>, y" <c@d.com>`.
-			var lastPart int
-			lastPart, end = listEntryEnd(remaining)
 			if lastPart > 0 {
 				remaining = strings.TrimLeft(remaining[lastPart:], " ")
 				continue
 			}
-		} else if !isSingleListEntry(entry) {
+		case !isSingleListEntry(entry):
 			// Like the leading comma of `,<a@example.com>`, which the
 			// address pattern reads as display name, while
 			// SplitAddressList skips the empty entry before it.
@@ -679,10 +708,9 @@ func parseAddressList(sanitized string, specs *[]specRange) (addrs []*mail.Addre
 			// at the first comma that separates entries.
 			errList = append(errList, errs.Errorf("',' within email address %s separates entries of email address list: %s", parsed.addr.Address, truncateForError(remaining)))
 			end = nextListSeparator(remaining)
-		} else {
+		default:
 			addrs = append(addrs, parsed.addr)
 			if specs != nil {
-				offset := len(list) - len(remaining)
 				for _, spec := range parsed.specs {
 					*specs = append(*specs, specRange{start: offset + spec.start, end: offset + spec.end})
 				}
@@ -699,19 +727,7 @@ func parseAddressList(sanitized string, specs *[]specRange) (addrs []*mail.Addre
 				// bracket can be open here, a quote or comment that isn't
 				// closed holds an address part, see within.
 				errList = append(errList, errs.Errorf("%s not closed before ',' after email address %s in email address list: %s", open, parsed.addr.Address, truncateForError(remaining)))
-			} else if unparsed == "" {
-				break
-			} else {
-				remaining = strings.TrimLeft(unparsed[1:], " ")
-				continue
 			}
-			// The comma where SplitAddressList ends the entry of the
-			// appended address, the first one after the parsed text:
-			// the first comma of remaining can be one of the unquoted
-			// display name of the address, like in
-			// `Doe, John <john@example.com> junk, b@example.com`,
-			// and continuing there appended the address again
-			_, end = listEntryEnd(remaining)
 		}
 		// Without a comma the rest of the list is part of this entry,
 		// like after a quote, angle bracket or comment that isn't closed.

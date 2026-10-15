@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 	"unicode/utf8"
 
 	"github.com/domonda/go-errs"
@@ -670,10 +671,12 @@ func TestParseAddressList_UnclosedQuoteOrAngle(t *testing.T) {
 		{list: `bad, a@b.cc, "e <e@f.com>, g@h.com`, want: []string{"a@b.cc"}, wantErr: true},
 		{list: `bad (x, y), a@b.cc, Jo"hn <c@d.ee>, e@f.gg`, want: []string{"a@b.cc"}, wantErr: true},
 		// A comma that separates entries for SplitAddressList between the
-		// quotes of the address in angle brackets, which the pattern reads
-		// as the address of the name `x@y.com "`, and which starts within
-		// the quoted string `"<"`. Neither entry is valid.
-		{list: `x@y.com "<"a,b"@x.com>`, want: nil, wantErr: true},
+		// quotes of the address in angle brackets, so the first entry is
+		// `x@y.com "<"a`, whose address is returned with an error like one
+		// with other text after it. The pattern read the address in angle
+		// brackets across the comma before each entry was parsed within
+		// its end, and returned no address.
+		{list: `x@y.com "<"a,b"@x.com>`, want: []string{"x@y.com"}, wantErr: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.list, func(t *testing.T) {
@@ -796,6 +799,14 @@ func TestParseAddressList_ErrorAfterDisplayNameWithCommas(t *testing.T) {
 			list:       `x@y.com,, a@b.com`,
 			want:       []string{"x@y.com", "a@b.com"},
 			wantErrors: 1,
+		},
+		{
+			// The parts without an @ before an address are entries of
+			// their own, the parts of a display name after it are not
+			name:       "invalid entry before address and display name with commas",
+			list:       `bad, worse, a@b.com, Doe, John <j@x.com>`,
+			want:       []string{"a@b.com", "j@x.com"},
+			wantErrors: 2,
 		},
 	}
 	for _, tt := range tests {
@@ -1217,6 +1228,66 @@ func TestParseAddressList_LongGarbageList(t *testing.T) {
 	for _, e := range errList {
 		msg := errs.UnwrapCallStack(e).Error()
 		assert.LessOrEqual(t, len(msg), 200, "error message: %s", msg)
+	}
+}
+
+// TestParseAddressList_LongInvalidListTakesLinearTime protects the parsing
+// of inbound mail, where ParseMIMEMessage parses every address header:
+// after every entry that it couldn't parse, the address pattern scanned the
+// rest of the list for an angle bracket or @, so lists like these of 1 MB
+// took 6 seconds each up to the error limit, and finding the end of each
+// entry scanned the rest of the list too. Every entry is parsed within its
+// end now, an entry without an @ not at all, and the parts that are entries
+// of their own are scanned once. Parsing these lists of 3 MB takes about
+// five times a single scan of the list with openAtEnd now, and more than
+// 40 times without any of these three. The time is compared to the scan,
+// so that the bound holds with the race detector and on slow machines,
+// and the fastest of three runs is taken against noise.
+func TestParseAddressList_LongInvalidListTakesLinearTime(t *testing.T) {
+	fastest := func(f func()) time.Duration {
+		var best time.Duration
+		for i := range 3 {
+			start := time.Now()
+			f()
+			if d := time.Since(start); i == 0 || d < best {
+				best = d
+			}
+		}
+		return best
+	}
+	for name, list := range map[string]string{
+		"entries without @":            strings.Repeat("x, ", 1_000_000),
+		"commas between two addresses": "a@b.com" + strings.Repeat(",", 3_000_000) + "c@d.com",
+		"one entry without @":          strings.Repeat("x", 3_000_000),
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := ParseAddressList(list)
+			require.Error(t, err)
+			scan := fastest(func() { openAtEnd(list) })
+			parse := fastest(func() { _, _ = ParseAddressList(list) })
+			assert.Less(t, parse, 30*scan, "ParseAddressList takes %v, a scan of the list %v", parse, scan)
+		})
+	}
+}
+
+// BenchmarkParseAddressList_Long measures ParseAddressList on lists of
+// 1 MB, invalid ones that the address pattern scanned to their end after
+// every entry, see TestParseAddressList_LongInvalidListTakesLinearTime,
+// and a valid one and one with an unquoted display name of 1 MB, whose
+// entries are scanned once by the pattern and once to find their end.
+func BenchmarkParseAddressList_Long(b *testing.B) {
+	for _, bc := range []struct{ name, list string }{
+		{name: "entries without @", list: strings.Repeat("x, ", 333_000)},
+		{name: "commas between two addresses", list: "a@b.com" + strings.Repeat(",", 1_000_000) + "c@d.com"},
+		{name: "no comma", list: strings.Repeat("x", 1_000_000)},
+		{name: "valid", list: strings.Repeat("a@b.com, ", 110_000)},
+		{name: "name with commas", list: strings.Repeat("Doe, ", 200_000) + "John <a@b.cc>"},
+	} {
+		b.Run(bc.name, func(b *testing.B) {
+			for b.Loop() {
+				_, _ = ParseAddressList(bc.list)
+			}
+		})
 	}
 }
 

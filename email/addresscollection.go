@@ -82,10 +82,10 @@ func SplitAddressList(list string) []Address {
 // separates two entries of an address list, outside quotes, angle
 // brackets and nested comments, with backslash escapes in quotes and
 // comments, or -1 if there is none. SplitAddressList splits at these
-// commas, and ParseAddressList skips to them after an invalid entry,
-// so that both find the same entries. An RFC 2047 encoded-word is read
-// like any other word, so a comma, quote, parenthesis or angle bracket
-// written unencoded in it is read like outside of it, like by net/mail.
+// commas, and ParseAddressList parses each entry up to them, so that both
+// find the same entries. An RFC 2047 encoded-word is read like any other
+// word, so a comma, quote, parenthesis or angle bracket written unencoded
+// in it is read like outside of it, like by net/mail.
 // list starts at the start of an entry and is sanitized by sanitizeAddr.
 func nextListSeparator(list string) int {
 	var state listState
@@ -173,11 +173,14 @@ func openAtEnd(entry string) string {
 // one with angle brackets, see joinDisplayNameParts, so the entry ends
 // after that part, which is its last part, like `John <john@example.com>`
 // of `Doe, John <john@example.com>`. Empty parts are joined too, like
-// SplitAddressList skips them.
-func listEntryEnd(list string) (lastPart, end int) {
+// SplitAddressList skips them. If no part with angle brackets follows,
+// every part up to the next one with an @ or the end of the list is an
+// entry of its own, and alone is the index where they end, so that
+// parseAddressList doesn't read them again for each of them, else 0.
+func listEntryEnd(list string) (lastPart, end, alone int) {
 	first := nextListSeparator(list)
 	if first < 0 || strings.ContainsAny(list[:first], "@<") {
-		return 0, first
+		return 0, first, 0
 	}
 	for start := first + 1; ; {
 		i := nextListSeparator(list[start:])
@@ -189,12 +192,14 @@ func listEntryEnd(list string) (lastPart, end int) {
 		case strings.Contains(part, "<"):
 			// The display name parts end at this part
 			if i < 0 {
-				return start, -1
+				return start, -1, 0
 			}
-			return start, start + i
-		case strings.Contains(part, "@") || i < 0:
+			return start, start + i, 0
+		case strings.Contains(part, "@"):
 			// No display name, the first part is an entry of its own
-			return 0, first
+			return 0, first, start
+		case i < 0:
+			return 0, first, len(list)
 		}
 		start += i + 1
 	}
