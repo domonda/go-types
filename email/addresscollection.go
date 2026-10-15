@@ -172,13 +172,11 @@ func openAtEnd(entry string) string {
 // angle brackets is joined with the following parts without them up to
 // one with angle brackets, see joinDisplayNameParts, so the entry ends
 // after that part, which is its last part, like `John <john@example.com>`
-// of `Doe, John <john@example.com>`. An empty first part is an entry of
-// its own here, unlike for SplitAddressList, which skips it:
-// ParseAddressList reads the empty entry before a doubled comma as invalid
-// entry and continues after it.
+// of `Doe, John <john@example.com>`. Empty parts are joined too, like
+// SplitAddressList skips them.
 func listEntryEnd(list string) (lastPart, end int) {
 	first := nextListSeparator(list)
-	if first < 0 || strings.ContainsAny(list[:first], "@<") || strutil.TrimSpace(list[:first]) == "" {
+	if first < 0 || strings.ContainsAny(list[:first], "@<") {
 		return 0, first
 	}
 	for start := first + 1; ; {
