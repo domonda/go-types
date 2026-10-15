@@ -61,9 +61,14 @@ func TestSplitAddressList(t *testing.T) {
 		{list: "Undisclosed recipients", want: nil},
 		// Non-ASCII names are kept
 		{list: "Jürgen Müller <j@example.com>, Zoë <z@example.com>", want: []Address{"Jürgen Müller <j@example.com>", "Zoë <z@example.com>"}},
-		// The commas of a display name of only encoded-words don't split,
-		// like ParseAddressList reads it as one name
-		{list: `=?utf-8?q?a@b,?= <a@example.com>, b@example.com`, want: []Address{`=?utf-8?q?a@b,?= <a@example.com>`, "b@example.com"}},
+		// A comma in an encoded-word splits like any other: net/mail and
+		// mail servers read =?utf-8?q?a@b as an address of its own, so
+		// keeping the name together hid that recipient
+		{list: `=?utf-8?q?a@b,?= <a@example.com>, b@example.com`, want: []Address{`=?utf-8?q?a@b`, `?= <a@example.com>`, "b@example.com"}},
+		{list: `=?utf-8?q?<a@b.com>,?= <c@x.com>`, want: []Address{`=?utf-8?q?<a@b.com>`, `?= <c@x.com>`}},
+		// Without an @ or angle brackets the parts are an unquoted
+		// display name of the address after them, like any other
+		{list: `=?utf-8?q?a,b?= <c@x.com>, d@x.com`, want: []Address{`=?utf-8?q?a,b?= <c@x.com>`, "d@x.com"}},
 		// A backslash escapes the next rune that ParseAddressList reads,
 		// not the zero width joiner that it drops, so the quote closes
 		{list: "\"x\\\u200d\" <a@example.com>, b@example.com", want: []Address{"\"x\\\u200d\" <a@example.com>", "b@example.com"}},
@@ -100,13 +105,10 @@ func TestAddressList_SplitRawMatchesSplitNormalized(t *testing.T) {
 		// A backslash escapes a rune that the parser drops, here a zero
 		// width joiner, so it doesn't escape the quote after it
 		"\"x\\\u200d\" <a@example.com>, b@example.com",
-		// The commas in an encoded-word name don't separate entries,
-		// also when the name is one only without the runes that the
-		// parser drops, so SplitRaw reads the list like the parser
-		`=?utf-8?q?a@b,?= <hidden@example.com>, =?utf-8?q?c?= <shown@example.com>`,
-		"=\u200d?utf-8?q?a@b,?= <hidden@example.com>, shown@example.com",
-		// Nor does a parenthesis in it open a comment
-		`=?utf-8?q?(Sales?= <a@example.com>, b@example.com`,
+		// An encoded-word name holds only the characters of a display name,
+		// a comma in it splits like in an unquoted name
+		`=?utf-8?q?J=C3=BCrgen_M=C3=BCller?= <j@example.de>, b@example.com`,
+		`=?utf-8?q?a,b?= <c@example.com>, d@example.com`,
 		// The no-break space in the unquoted name is read as space
 		"Müller,\u00a0Hans <hans@example.com>, b@example.com",
 		// A placeholder with a trailing comma is the empty list
@@ -139,6 +141,25 @@ func TestAddressList_SplitRawMatchesSplitNormalized(t *testing.T) {
 		`<a@b.cc,`,
 		`,<a@example.com>`,
 		`a@example.com,, <b@example.com>`,
+	} {
+		t.Run(string(list), func(t *testing.T) {
+			assert.False(t, list.Valid())
+			_, err := list.SplitNormalized()
+			assert.Error(t, err)
+		})
+	}
+
+	// These lists were valid with an encoded-word name read as one name
+	// up to the angle bracket, with the comma, @ or parenthesis in it,
+	// while net/mail and mail servers read its comma as separator and
+	// =?utf-8?q?a@b as another recipient, or don't read the list at all.
+	// An encoded-word in a name holds none of these characters now, so
+	// the comma separates the invalid address =?utf-8?q?a@b, and the
+	// parenthesis opens a comment that holds the rest of the list.
+	for _, list := range []AddressList{
+		`=?utf-8?q?a@b,?= <hidden@example.com>, =?utf-8?q?c?= <shown@example.com>`,
+		"=\u200d?utf-8?q?a@b,?= <hidden@example.com>, shown@example.com",
+		`=?utf-8?q?(Sales?= <a@example.com>, b@example.com`,
 	} {
 		t.Run(string(list), func(t *testing.T) {
 			assert.False(t, list.Valid())
@@ -226,6 +247,10 @@ func FuzzSplitRawMatchesParse(f *testing.F) {
 		`Doe, John <john@example.com>; Smith, Anna <anna@example.com>`,
 		`Doe, Jr., John <john@example.com>) , b@example.com`,
 		strings.Repeat("Doe, ", 200) + "John <a@b.cc> junk, b@c.dd",
+		// Encoded-word names with a comma and @, which net/mail reads as
+		// two addresses, see TestParseAddressList_EncodedWordNameHoldsNoAddress
+		`=?utf-8?q?spy@evil.example,?= <ceo@corp.example>`,
+		`=?utf-8?q?<a@b.com>,?= <c@x.com>`,
 	} {
 		f.Add(list)
 	}

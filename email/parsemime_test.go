@@ -96,8 +96,13 @@ func TestParseMIMEMessage_EncodedNameIsOneAddress(t *testing.T) {
 // headers gave: a name in a charset that can't be decoded drops only the
 // name, IANA charset labels like cp850 decode, a value encoded as a whole
 // is decoded as a whole, and a name written as comment is decoded too.
-// An encoded name holding a comma and @ must end at its own address
-// and not hide the one after it.
+//
+// A comma and @ written unencoded in an encoded-word of a name are not
+// part of the name, because net/mail and mail servers read the comma as
+// separator and =?utf-8?q?a@b as another recipient. Reading the name as
+// one hid that recipient, so the To header with it is an error now, while
+// the addresses that can be parsed are kept, like for other errors.
+// An encoded name holding an encoded comma and @ is one name.
 func TestParseMIMEMessage_AddressHeadersOfOtherSenders(t *testing.T) {
 	msg, err := email.ParseMessage(rawMessage(
 		`From: =?utf-8?B?TWF4IE11c3Rlcm1hbm4gPG1heEBleGFtcGxlLmNvbT4=?=`,
@@ -109,11 +114,24 @@ func TestParseMIMEMessage_AddressHeadersOfOtherSenders(t *testing.T) {
 		``,
 		`Body`,
 	))
-	require.NoError(t, err)
+	require.ErrorContains(t, err, "can't parse email header 'To'")
 	require.Equal(t, email.Address(`"Max Mustermann" <max@example.com>`), msg.From)
 	require.Equal(t, email.NullableAddress(`"Müller" <mueller@example.com>`), msg.ReplyTo)
-	require.Equal(t, email.AddressList(`"a@b," <hidden@example.com>, "c" <shown@example.com>`), msg.To)
+	require.Equal(t, email.AddressList(`"?=" <hidden@example.com>, "c" <shown@example.com>`), msg.To)
 	require.Equal(t, email.NullableAddressList(`"Müller" <cc1@example.com>, cc2@example.com, cc3@example.com`), msg.Cc)
+
+	// The encoded-word of a name without unencoded commas and @ is still
+	// one name, like the encoded comma and @ of the Müller, Jürgen name
+	msg, err = email.ParseMessage(rawMessage(
+		`From: sender@example.com`,
+		`To: =?utf-8?q?a=40b=2C?= <hidden@example.com>, =?UTF-8?Q?M=C3=BCller=2C_J=C3=BCrgen?= <j@example.de>`,
+		`Date: Thu, 22 Jan 2026 16:21:11 +0100`,
+		`Content-Type: text/plain; charset=utf-8`,
+		``,
+		`Body`,
+	))
+	require.NoError(t, err)
+	require.Equal(t, email.AddressList(`"a@b," <hidden@example.com>, "Müller, Jürgen" <j@example.de>`), msg.To)
 }
 
 // TestParseMIMEMessage_PartialResult verifies that a message with usable data

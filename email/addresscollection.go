@@ -21,9 +21,9 @@ import (
 // entry. Neither do the commas of an unquoted display name, which are
 // followed by an address in angle brackets, so `Doe, John <john@example.com>`
 // is one entry too, like for ParseAddressList: entries without an @ are
-// joined with a following entry that has angle brackets. The commas of a
-// display name of only RFC 2047 encoded-words, like in
-// `=?utf-8?q?a@b,?= <c@example.com>`, don't split either.
+// joined with a following entry that has angle brackets. A comma in an
+// RFC 2047 encoded-word splits like any other, because net/mail and mail
+// servers read `=?utf-8?q?a@b,?= <c@example.com>` as two addresses.
 // Empty entries are skipped.
 //
 // The commas are found in the list as ParseAddressList reads it, without
@@ -81,36 +81,21 @@ func SplitAddressList(list string) []Address {
 // nextListSeparator returns the index of the first comma in list that
 // separates two entries of an address list, outside quotes, angle
 // brackets and nested comments, with backslash escapes in quotes and
-// comments, and outside a display name of only RFC 2047 encoded-words
-// at the start of list, see encodedNameEnd, or -1 if there is none.
-// SplitAddressList splits at these commas, and ParseAddressList skips to
-// them after an invalid entry, so that both find the same entries.
+// comments, or -1 if there is none. SplitAddressList splits at these
+// commas, and ParseAddressList skips to them after an invalid entry,
+// so that both find the same entries. An RFC 2047 encoded-word of a
+// display name holds none of these characters, see phraseEncodedWord,
+// so the address pattern and nextListSeparator read it alike.
 // list starts at the start of an entry and is sanitized by sanitizeAddr.
 func nextListSeparator(list string) int {
 	var state listState
-	for i := encodedNameEnd(list); i < len(list); i++ {
+	for i := 0; i < len(list); i++ {
 		// All delimiters are ASCII, so iterating bytes is safe for UTF-8
 		if state.read(list[i]) {
 			return i
 		}
 	}
 	return -1
-}
-
-// encodedNameEnd returns the index of the '<' after a display name of
-// only RFC 2047 encoded-words at the start of the address list entry,
-// or 0 if entry doesn't start with one. The address pattern reads such
-// a name as one name, also with commas, quotes or parentheses in its
-// encoded-words, like =?utf-8?q?a@b,?= <c@example.com>, so they don't
-// separate entries or open a quote or comment.
-func encodedNameEnd(entry string) int {
-	if !strings.HasPrefix(strings.TrimLeft(entry, " "), "=?") {
-		return 0
-	}
-	if loc := encodedNameRegexp.FindStringIndex(entry); loc != nil {
-		return loc[1] - 1
-	}
-	return 0
 }
 
 // listState is the state of reading an address list byte by byte
@@ -165,7 +150,7 @@ func (s *listState) read(c byte) (separator bool) {
 // separates it from the next entry for SplitAddressList.
 func openAtEnd(entry string) string {
 	var state listState
-	for i := encodedNameEnd(entry); i < len(entry); i++ {
+	for i := 0; i < len(entry); i++ {
 		state.read(entry[i])
 	}
 	switch {

@@ -581,6 +581,48 @@ func TestParseAddressList_ErrorAfterDisplayNameWithCommas(t *testing.T) {
 	}
 }
 
+// TestParseAddressList_EncodedWordNameHoldsNoAddress protects the recipients
+// of a message: an RFC 2047 encoded-word was read up to its closing "?=",
+// also with an unencoded comma or @ in it, so that the list below validated
+// with the one recipient ceo@corp.example, and SplitAddressList kept it as
+// one entry, while net/mail and mail servers read the comma as separator and
+// =?utf-8?q?spy@evil.example as another recipient. An encoded-word in a
+// display name holds only the characters that RFC 2047 allows there, so
+// the parser reads the recipients that net/mail reads.
+func TestParseAddressList_EncodedWordNameHoldsNoAddress(t *testing.T) {
+	for _, list := range []string{
+		`=?utf-8?q?spy@evil.example,?= <ceo@corp.example>`,
+		`=?utf-8?q?<a@b.com>,?= <c@x.com>`,
+	} {
+		t.Run(list, func(t *testing.T) {
+			parsed, err := ParseAddressList(list)
+			require.NoError(t, err)
+			stdlib, err := mail.ParseAddressList(list)
+			require.NoError(t, err)
+			require.Len(t, parsed, len(stdlib), "the recipients of net/mail")
+			for i := range stdlib {
+				assert.Equal(t, strings.ToLower(stdlib[i].Address), parsed[i].Address)
+			}
+			assert.Len(t, SplitAddressList(list), len(stdlib), "SplitAddressList finds every recipient")
+		})
+	}
+
+	// Encoded-words that hold only the characters of a display name,
+	// with commas and @ encoded, are still one name
+	for addr, wantName := range map[string]string{
+		`=?utf-8?q?J=C3=BCrgen_M=C3=BCller?= <j@x.de>`:    "Jürgen Müller",
+		`=?utf-8?q?a=40b=2C?= <j@x.de>`:                   "a@b,",
+		`=?utf-8?b?wqFIb2xhLCBzZcOxb3Ih?= <j@x.de>`:       "¡Hola, señor!",
+		`=?utf-8?q?J=C3=BCrgen?= =?utf-8?q?_M?= <j@x.de>`: "Jürgen M",
+	} {
+		parsed, err := ParseAddressList(addr)
+		require.NoError(t, err, addr)
+		require.Len(t, parsed, 1, addr)
+		assert.Equal(t, wantName, parsed[0].Name, addr)
+		assert.Equal(t, "j@x.de", parsed[0].Address, addr)
+	}
+}
+
 // TestParseAddressList_EscapedDroppedRune protects that a backslash in a
 // quoted name escapes the rune after it also when the parser drops that
 // rune, like a zero width joiner: it escaped the next rune instead, so

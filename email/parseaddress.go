@@ -34,12 +34,22 @@ const (
 
 	quotedNamePart         = `"((?:[^"\\]|\\.)*)"[ \t]*<?` // with quoted-pairs like \" and \\
 	unquotedNamePart       = `([^<@]*[^<@\s]|[^<,]*[^<,\s])[ \t]*<`
-	rfc2047EncodedNamePart = `((?:` + encodedWord + `[ \t]*)+)<` // Example: =?utf-8?b?wqFIb2xhLCBzZcOxb3Ih?= <
+	rfc2047EncodedNamePart = `((?:` + phraseEncodedWord + `[ \t]*)+)<` // Example: =?utf-8?b?wqFIb2xhLCBzZcOxb3Ih?= <
 	encodedWord            = `=\?[^?\s]+\?[bBqQ]\?[^?\s]*\?=`
 	emptyNamePart          = `<?`
 	namePart               = `(?:` + quotedNamePart + `|` + unquotedNamePart + `|` + rfc2047EncodedNamePart + `|` + emptyNamePart + `)`
 	nameAddressRegex       = `^` + namePart + localPart + `@` + domainPart + `\s?'?>?`
 )
+
+// phraseEncodedWord is an RFC 2047 encoded-word of a display name, which
+// RFC 2047 section 5 (3) allows to hold only some characters: none that
+// net/mail or SplitAddressList read as part of an address, a separator,
+// a quoted string or a comment. So a display name like the one of
+// `=?utf-8?q?spy@evil.example,?= <ceo@corp.example>` is not read as one
+// encoded name with the address after it, while net/mail and mail
+// servers read the two recipients =?utf-8?q?spy@evil.example and
+// ceo@corp.example. encodedWord of a whole header value is not limited.
+const phraseEncodedWord = `=\?[^?\s,<>@"()\\]+\?[bBqQ]\?[^?\s,<>@"()\\]*\?=`
 
 var (
 	// AddressRegexp is a compiled regular expression for an email address without name part
@@ -55,11 +65,6 @@ var (
 	// encodedWordsRegexp matches a header value that is only
 	// RFC 2047 encoded-words separated by whitespace
 	encodedWordsRegexp = regexp.MustCompile(`^(?:\s*` + encodedWord + `)+\s*$`)
-
-	// encodedNameRegexp matches the display name of only RFC 2047
-	// encoded-words at the start of an address list entry, which
-	// rfc2047EncodedNamePart reads, up to and including its '<'
-	encodedNameRegexp = regexp.MustCompile(`^ *` + rfc2047EncodedNamePart)
 
 	// placeholderListRegexp matches a whole lower case list that is only
 	// a placeholder for hidden recipients, like "undisclosed-recipients:;",
@@ -158,7 +163,11 @@ func UniqueNormalizedAddressSlice(addrs []Address) []Address {
 // of the name: a stray quote of a malformed name or the backslash of an
 // escaped parenthesis. RFC 2047 encoded-words are decoded after that,
 // their text keeps its quotes and backslashes. Runes that are not graphic
-// are removed from the name.
+// are removed from the name. Like for net/mail, a comma, @, quote,
+// parenthesis, angle bracket or backslash written unencoded in an
+// encoded-word is no part of a display name, which RFC 2047 doesn't allow
+// there: `=?utf-8?q?a@b,?= <c@example.com>` starts with the address
+// =?utf-8?q?a@b, so it is no single address.
 //
 // An address without name can be followed by an RFC 5322 comment,
 // which becomes the name, like in "mike@doe.com (Mike Doe)".
