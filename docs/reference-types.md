@@ -93,13 +93,13 @@ Entry points:
 | `ValidOr[T Validator](val, def T) T`               | `val` if `val.Valid()` is true, else `def`, which is not validated. |
 | `ValidatedOr[T Validatable](val, def T) T`         | `val` if `val.Validate()` returns nil, else `def`, which is not validated. The error is discarded. |
 
-`ValidOr` and `ValidatedOr` call the method directly, so unlike `Validate`, which skips the values of rule 3 below, they panic for a nil func like `ValidatorFunc(nil)`, a nil interface value, or a nil pointer to a type with a value receiver method.
+`ValidOr` and `ValidatedOr` call the method directly, so unlike `Validate`, which returns nil for a nil `v` and skips the values of rule 3 below, they panic for a nil func like `ValidatorFunc(nil)`, a nil interface value, or a nil pointer to a type with a value receiver method.
 
 `Validate` and `TryValidate` follow these rules:
 
 1. If `v` implements `Validatable`, only `Validate()` is called and its error is returned unchanged, even if `v` also implements `Validator`.
 2. Otherwise, if `v` implements `Validator` and `Valid()` is false, the error is `fmt.Errorf("invalid %T value: %#v", v, v)`, like `invalid main.Status value: "bad"`. The whole value is part of the message, so implement `Validatable` for a value that must not be logged, like a password, or that can be large.
-3. A nil pointer whose element type implements the method with a value receiver is not validated: `Validate` returns nil and `TryValidate` returns `true, nil`. A method with a pointer receiver is called with the nil pointer, so it can report nil itself. A struct whose method is promoted from an embedded nil pointer or interface, like `struct{ *T }` with a nil `*T` and a value receiver on `T`, or `struct{ types.Validatable }` with a nil `Validatable`, is not validated either. A panic in a method that the struct declares itself is passed on.
+3. A nil pointer whose element type implements the method with a value receiver is not validated: `Validate` returns nil and `TryValidate` returns `true, nil`. A method with a pointer receiver is called with the nil pointer, so it can report nil itself. The same goes for a nil func like `ValidatorFunc(nil)`, whose method would call the nil func. A struct whose method is promoted from an embedded nil pointer or interface, like `struct{ *T }` with a nil `*T` and a value receiver on `T`, or `struct{ types.Validatable }` with a nil `Validatable`, is not validated either. A panic in a method that the struct declares itself is passed on.
 
 `DeepValidate` walks `v` with reflection:
 
