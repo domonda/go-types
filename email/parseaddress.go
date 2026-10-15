@@ -548,8 +548,8 @@ func unquotedNameProblem(text string) string {
 var encodedWordStartRegexp = regexp.MustCompile(`^` + encodedWord)
 
 // readEncodedWords reads the RFC 2047 encoded-words of text, a display name
-// without the quotes and quoted-pairs that the parser removes before it
-// decodes the name. undecodable reports an =? that doesn't start an
+// as the parser or Python's email package decodes it, with or without its
+// quotes and quoted-pairs. undecodable reports an =? that doesn't start an
 // encoded-word that the parser decodes, like one in a charset that the
 // parser doesn't know, with an invalid encoding, or with a space in it,
 // which Python's email package can still decode, and an encoded-word with
@@ -557,11 +557,10 @@ var encodedWordStartRegexp = regexp.MustCompile(`^` + encodedWord)
 // parser reads the quote as the start or end of a quoted string, like in
 // `"=?utf-8?q?J"=C3=BCrgen?= <a@b.com>`. asciiSpecial reports an
 // encoded-word whose text is ASCII with one of the specials @"()<>[];\,
-// of RFC 5322 other than the dot and the colon, which Python reads as
-// the start of a group without changing its recipients. Python writes
-// such text unencoded and
-// unquoted when it writes the header, where it is an address, a quoted
-// string, a comment or the end of the name: for
+// of RFC 5322 other than the dot and the colon, which Python reads as the
+// start of a group without changing its recipients. Python writes such
+// text unencoded and unquoted when it writes the header, where it is an
+// address, a quoted string, a comment or the end of the name: for
 // `=?utf-8?q?x=40evil.com?= <ceo@corp.com>` it writes
 // `x@evil.com <ceo@corp.com>`, which is sent to x@evil.com when the
 // message is read again. Text with other runes or bytes it encodes again,
