@@ -483,6 +483,8 @@ func TestParseAddress_EncodedWordThatPythonReadsAsAddress(t *testing.T) {
 		// Python decodes an encoded-word right after another one too and
 		// writes `ax@evil.com <ceo@corp.com>`
 		`=?utf-8?q?a?==?utf-8?q?x=40evil.com?= <ceo@corp.com>`,
+		// An @ after a comment that the text closes is outside it
+		`=?utf-8?q?=C3=A4?= =?utf-8?q?(a)_x=40evil.com?= <ceo@corp.com>`,
 		`=?utf-8?q?=3Cx=40evil.com=3E?= <ceo@corp.com>`,
 		`"x@evil.com" =?utf-8?q?=3B?= <ceo@corp.com>`,
 		`"x@evil.com" =?utf-8?q?=29?= <ceo@corp.com>`,
@@ -628,6 +630,12 @@ func TestParseAddress_OrdinaryEncodedNames(t *testing.T) {
 		`[Ext] =?utf-8?q?J=C3=BCrgen?= <j@x.de>`:      `"[Ext] Jürgen" <j@x.de>`,
 		// The first name as Python's email package encodes it
 		`=?utf-8?q?J=C3=BCrgen_M=C3=BCller=2C_Buchhaltung_und_Finanzen_=28Abteilung_Nord=29?= <j.mueller@example.com>`: `"Jürgen Müller, Buchhaltung und Finanzen (Abteilung Nord)" <j.mueller@example.com>`,
+		// A long name as mail.Address.String and Python's email.header
+		// split it into words, the last of which holds only ASCII text
+		// with a comment that it closes, which Python reads as comment
+		// once it wrote the text unencoded
+		`=?utf-8?b?w4RyenRla2FtbWVyIGbDvHIgV2llbiDigJMgQWJ0ZWlsdW5nIFJlY2hudW5n?= =?utf-8?b?c3dlc2VuIHVuZCBCdWNoaGFsdHVuZyAoWmVudHJhbGUp?= <r@aekwien.at>`: `"Ärztekammer für Wien – Abteilung Rechnungswesen und Buchhaltung (Zentrale)" <r@aekwien.at>`,
+		`=?utf-8?q?=C3=84rztekammer_f=C3=BCr_Wien_=E2=80=93_Abteilung_Rechnungswesen_?= =?utf-8?q?und_Buchhaltung_=28Zentrale=29?= <r@aekwien.at>`:         `"Ärztekammer für Wien – Abteilung Rechnungswesen und Buchhaltung (Zentrale)" <r@aekwien.at>`,
 	} {
 		t.Run(addr, func(t *testing.T) {
 			require.NoError(t, Address(addr).Validate(), "Address.Validate")

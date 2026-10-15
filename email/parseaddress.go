@@ -541,7 +541,7 @@ func unquotedNameProblem(text string) string {
 func encodedNameProblem(decoded string, texts ...string) string {
 	for _, text := range texts {
 		if undecodable, special := readEncodedWords(text); undecodable || special {
-			return `encoded-word that can't be decoded or decodes to ASCII with one of @"(<\ or an encoded-word`
+			return `encoded-word that can't be decoded or decodes to ASCII with one of "<\, an @ or ( outside a comment or an encoded-word`
 		}
 	}
 	if hasEncodedWordStart(decoded) {
@@ -623,17 +623,21 @@ var encodedWordStartRegexp = regexp.MustCompile(`^` + encodedWord)
 // with a quote written in it, which Python reads across the quote, while
 // the parser reads the quote as the start or end of a quoted string, like
 // in `"=?utf-8?q?J"=C3=BCrgen?= <a@b.com>`. special reports an encoded-word
-// whose text is ASCII with an @, a quote, an opening parenthesis or angle
-// bracket, a backslash or an =? at the start of a word. Python writes such
+// whose text is ASCII with a quote, an angle bracket, a backslash, an @
+// or an opening parenthesis outside a comment that the text closes, or
+// an =? at the start of a word, see plainTextSpecial. Python writes such
 // text unencoded and unquoted when it writes the header, where it is an
 // address, opens a quoted string, a comment or an address that reaches
 // into the next entry of the list, escapes a quote or is an encoded-word
 // that Python decodes once the message is read again: for
 // `=?utf-8?q?x=40evil.com?= <ceo@corp.com>` it writes
-// `x@evil.com <ceo@corp.com>`, which is sent to x@evil.com. Other text
-// that Python writes unencoded only ends the name, see
-// addressBeforePhraseEnd. Text with other runes or bytes Python encodes
-// again, so `=?utf-8?q?J=C3=BCrgen_=28j=40x.de=29?=` is no such word.
+// `x@evil.com <ceo@corp.com>`, which is sent to x@evil.com. A closed
+// comment, like the "und Buchhaltung (Zentrale)" or "(ivan@example.org)"
+// of a long name that net/mail or Python split into several words, is
+// only a comment then. Other text that Python writes unencoded only ends
+// the name, see addressBeforePhraseEnd. Text with other runes or bytes
+// Python encodes again, so `=?utf-8?q?J=C3=BCrgen_=28j=40x.de=29?=` is no
+// such word.
 func readEncodedWords(text string) (undecodable, special bool) {
 	wordEnd := -1 // the end of the last encoded-word
 	for i := 0; i+1 < len(text); i++ {
@@ -648,13 +652,37 @@ func readEncodedWords(text string) (undecodable, special bool) {
 		if err != nil {
 			return true, special
 		}
-		if isASCII(decoded) && (strings.ContainsAny(decoded, `@"(<\`) || hasEncodedWordStart(decoded)) {
+		if isASCII(decoded) && (plainTextSpecial(decoded) || hasEncodedWordStart(decoded)) {
 			special = true
 		}
 		i += len(word) - 1
 		wordEnd = i + 1
 	}
 	return false, special
+}
+
+// plainTextSpecial reports whether text, written unencoded and unquoted,
+// has a quote, an angle bracket or a backslash, an opening parenthesis
+// that it doesn't close, or an @ outside its comments, see
+// readEncodedWords. A closing parenthesis without an opening one only
+// ends the name, see addressBeforePhraseEnd.
+func plainTextSpecial(text string) bool {
+	comment := 0
+	for i := 0; i < len(text); i++ {
+		switch text[i] {
+		case '"', '<', '\\':
+			return true
+		case '@':
+			if comment == 0 {
+				return true
+			}
+		case '(':
+			comment++
+		case ')':
+			comment = max(comment-1, 0)
+		}
+	}
+	return comment > 0
 }
 
 // isWordStart reports whether the byte at index i of text starts a word
