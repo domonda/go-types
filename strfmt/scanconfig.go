@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/domonda/go-types"
@@ -41,6 +42,8 @@ type ScanConfig struct {
 	// TimeFormats are the layouts that ParseTime tries in order to parse
 	// a source string as time.Time or nullable.Time, so they have to be
 	// ordered from the most to the least specific one.
+	// A layout with a zone abbreviation like "MST" but no numeric offset
+	// only matches abbreviations with a known offset, see ParseTime.
 	TimeFormats []string `json:"timeFormats"`
 
 	// AcceptedMoneyAmountDecimals are the numbers of decimal digits that
@@ -99,10 +102,21 @@ type ScanConfig struct {
 // function as ValidateFunc.
 // Type-specific scanners for time.Time, nullable.Time
 // and time.Duration are pre-registered.
+//
+// The defaults accept the bool and time strings written by
+// NewFormatConfig, NewUSFormatConfig and NewGermanFormatConfig,
+// like "ja" and "nein", so that what those presets format can be
+// scanned back.
+//
+// The time layout "01/02/2006 15:04:05 MST" of NewUSFormatConfig is
+// month first, like date.Date reads "03/04/2024" as 4 March without a
+// language hint, so a British day first time like "03/04/2024 10:00:00
+// UTC" is read as 4 March without an error. Replace it in TimeFormats with
+// "02/01/2006 15:04:05 MST" to scan British times.
 func NewScanConfig() *ScanConfig {
 	c := &ScanConfig{
-		TrueStrings:  []string{"true", "True", "TRUE", "yes", "Yes", "YES", "1"},
-		FalseStrings: []string{"false", "False", "FALSE", "no", "No", "NO", "0"},
+		TrueStrings:  []string{"true", "True", "TRUE", "yes", "Yes", "YES", "ja", "Ja", "JA", "1"},
+		FalseStrings: []string{"false", "False", "FALSE", "no", "No", "NO", "nein", "Nein", "NEIN", "0"},
 		NilStrings:   []string{"", "nil", "<nil>", "null", "NULL"},
 		TimeFormats: []string{
 			time.RFC3339Nano,
@@ -110,7 +124,9 @@ func NewScanConfig() *ScanConfig {
 			time.DateOnly + " 15:04:05.999999999 -0700 MST", // Used by time.Time.String()
 			time.DateTime,
 			time.DateOnly + " 15:04",
-			time.DateOnly + "T15:04", // Used by browser datetime-local input type
+			time.DateOnly + "T15:04",  // Used by browser datetime-local input type
+			"01/02/2006 15:04:05 MST", // Used by NewUSFormatConfig
+			"02.01.2006 15:04:05 MST", // Used by NewGermanFormatConfig
 			time.DateOnly,
 		},
 		AcceptedMoneyAmountDecimals: []int{0, 2, 4},
@@ -138,7 +154,12 @@ func (c *ScanConfig) initTypeScanners() {
 // for a destination of that type, including the handling of a nil source
 // string, which it therefore has to handle itself if the default of
 // ScanConfig.StrictEmptyStringParsing is not what it wants.
+// The TypeScanners map is allocated if it is nil, like for a ScanConfig
+// that was not created by NewScanConfig.
 func (c *ScanConfig) SetTypeScanner(t reflect.Type, s Scanner) {
+	if c.TypeScanners == nil {
+		c.TypeScanners = make(map[reflect.Type]Scanner)
+	}
 	c.TypeScanners[t] = s
 }
 
@@ -160,14 +181,37 @@ func (c *ScanConfig) IsNil(str string) bool {
 // ParseTime tries to parse str using each of the configured TimeFormats in order,
 // returning the first successfully parsed time.Time and ok=true.
 // If no format matches, it returns the zero time.Time and ok=false.
+//
+// A format with a zone abbreviation like "MST" but no numeric offset
+// does not match an abbreviation whose offset is unknown. time.Parse
+// would silently give it a zero offset, so "05.03.2024 10:00:00 CET"
+// would be 10:00 UTC on a server whose local zone has no "CET".
+// Known are "UTC", "GMT", and the abbreviations of time.Local.
+// "GMT+1" is not, because time.Parse ignores its offset for the instant.
 func (c *ScanConfig) ParseTime(str string) (t time.Time, ok bool) {
 	for _, format := range c.TimeFormats {
 		t, err := time.Parse(format, str)
-		if err == nil {
+		if err == nil && !hasUnknownZoneAbbreviation(format, t) {
 			return t, true
 		}
 	}
 	return time.Time{}, false
+}
+
+// hasUnknownZoneAbbreviation reports whether time.Parse put t in a
+// fabricated location because the zone abbreviation of layout is neither
+// "UTC", "GMT", nor known in time.Local. The instant of such a time is the
+// parsed wall clock in UTC, whatever the abbreviation, also for "GMT+1".
+func hasUnknownZoneAbbreviation(layout string, t time.Time) bool {
+	if !strings.Contains(layout, "MST") || strings.Contains(layout, "-07") || strings.Contains(layout, "Z07") {
+		// No abbreviation, or a numeric offset that time.Parse uses instead
+		return false
+	}
+	if loc := t.Location(); loc == time.UTC || loc == time.Local {
+		return false
+	}
+	name, _ := t.Zone()
+	return name != "GMT"
 }
 
 // scanNilStringToNonOptional applies the nil source string handling of Scan

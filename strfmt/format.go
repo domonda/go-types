@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"reflect"
 	"strconv"
+	"sync"
 	"unsafe"
 
 	"github.com/domonda/go-types/float"
@@ -12,6 +13,8 @@ import (
 )
 
 // Format the passed value following the format config.
+// A nil config formats with the defaults of NewFormatConfig,
+// like Scan scans with DefaultScanConfig for a nil ScanConfig.
 // If the value implements encoding.TextMarshaler and MarshalText
 // does not return an error, then this string is returned instead
 // of more generic type conversions.
@@ -23,7 +26,13 @@ func Format(value any, config *FormatConfig) string {
 	return FormatValue(val, config)
 }
 
+// defaultFormatConfig is the config for a nil config, built once
+// instead of on every call. FormatValue and the default formatters
+// only read it.
+var defaultFormatConfig = sync.OnceValue(NewFormatConfig)
+
 // FormatValue formats the passed reflect.Value following the format config.
+// A nil config formats with the defaults of NewFormatConfig.
 // If the value implements encoding.TextMarshaler and MarshalText
 // does not return an error, then this string is returned instead
 // of more generic type conversions.
@@ -34,6 +43,9 @@ func Format(value any, config *FormatConfig) string {
 // a struct that was not passed as a pointer, is limited to the
 // conversions based on its kind and fmt.Sprint.
 func FormatValue(val reflect.Value, config *FormatConfig) string {
+	if config == nil {
+		config = defaultFormatConfig()
+	}
 	if !val.IsValid() {
 		return config.Nil
 	}
@@ -93,7 +105,19 @@ func FormatValue(val reflect.Value, config *FormatConfig) string {
 	case reflect.String:
 		return derefVal.String()
 
-	case reflect.Float32, reflect.Float64:
+	case reflect.Float32:
+		// Format with float32 precision because the shortest float64
+		// representation of a float32 shows its binary noise,
+		// like 0.10000000149011612 for float32(0.1)
+		return float.Format(
+			float32(derefVal.Float()),
+			config.Float.ThousandsSep,
+			config.Float.DecimalSep,
+			config.Float.Precision,
+			config.Float.PadPrecision,
+		)
+
+	case reflect.Float64:
 		return float.Format(
 			derefVal.Float(),
 			config.Float.ThousandsSep,
@@ -129,12 +153,49 @@ func FormatValue(val reflect.Value, config *FormatConfig) string {
 		return s.String()
 	}
 
+	// A nullable.Type[T] has no String or MarshalText method, so a non-null
+	// one is formatted like the T it wraps instead of as a struct
+	if _, ok := nullSetableValueType(derefType); ok {
+		if get := derefVal.MethodByName("Get"); get.IsValid() {
+			return FormatValue(get.Call(nil)[0], config)
+		}
+	}
+
 	switch x := derefVal.Interface().(type) {
 	case []byte:
 		return string(x)
 	default:
 		return fmt.Sprint(val.Interface())
 	}
+}
+
+// nullSetableMethods are the methods of nullable.NullSetable[T]
+// that don't depend on T.
+var nullSetableMethods = reflect.TypeFor[interface {
+	nullable.Nullable
+	SetNull()
+}]()
+
+// nullSetableValueType returns the type T if the pointer type of t has the
+// methods of nullable.NullSetable[T], like nullable.Type[T] and the
+// money.NullableAmount alias of it. The generic interface can't be asserted
+// without knowing T, so the methods depending on T are checked by reflection.
+func nullSetableValueType(t reflect.Type) (valueType reflect.Type, ok bool) {
+	ptrType := reflect.PointerTo(t)
+	if !ptrType.Implements(nullSetableMethods) {
+		return nil, false
+	}
+	// The method types of a reflect.Type have the receiver as first argument
+	get, ok := ptrType.MethodByName("Get")
+	if !ok || get.Type.NumIn() != 1 || get.Type.NumOut() != 1 {
+		return nil, false
+	}
+	valueType = get.Type.Out(0)
+	set, ok := ptrType.MethodByName("Set")
+	if !ok || set.Type.NumIn() != 2 || set.Type.NumOut() != 0 || set.Type.In(1) != valueType {
+		return nil, false
+	}
+	return valueType, true
 }
 
 // derefValueAndType dereferences v through any non-nil pointers and returns

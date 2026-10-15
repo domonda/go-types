@@ -9,8 +9,12 @@ import (
 
 // LenString holds a string together with a minimum and maximum length constraints.
 // It implements validation to ensure the string length falls within the specified bounds.
-// LenString implements the encoding.UnmarshalText, json.Unmarshaler,
-// and strfmt.StringAssignable interfaces that will perform length validation.
+// The length is counted in bytes, not runes.
+// All methods have pointer receivers, so a LenString value that is not
+// addressable, like a field of a struct marshalled by value, is encoded
+// by encoding/json as an empty object.
+// LenString implements the encoding.TextUnmarshaler, json.Unmarshaler,
+// and strfmt.Scannable interfaces that will perform length validation.
 type LenString struct {
 	str string
 	min int
@@ -42,7 +46,7 @@ func MustLenString(str string, min, max int) LenString {
 	return s
 }
 
-// Validate implements the ValidatErr interface.
+// Validate implements the Validatable interface.
 // It checks that the minimum and maximum lengths are valid and that the string
 // length falls within the specified bounds.
 func (s *LenString) Validate() error {
@@ -125,13 +129,15 @@ func (s *LenString) MarshalJSON() (text []byte, err error) {
 }
 
 // UnmarshalJSON implements the json.Unmarshaler interface.
-// It validates the string length after unmarshaling from JSON.
+// It validates the string length after unmarshaling from JSON
+// and leaves the value unchanged if the length is not valid.
+// JSON null leaves the value unchanged too.
 func (s *LenString) UnmarshalJSON(text []byte) error {
 	if bytes.Equal(text, []byte("null")) {
 		return nil // no-op
 	}
 	var str string
-	err := json.Unmarshal(text, &s.str)
+	err := json.Unmarshal(text, &str)
 	if err != nil {
 		return fmt.Errorf("can't unmarshal JSON to LenString because of: %w", err)
 	}

@@ -1,19 +1,8 @@
-// Package date provides comprehensive date handling and validation utilities
-// for Go applications with support for multiple date formats and internationalization.
-//
-// The package includes:
-// - Date type with ISO 8601 format (YYYY-MM-DD) support
-// - Flexible date parsing with language hints
-// - Date arithmetic and comparison operations
-// - Period range calculations (year, quarter, month, week)
-// - Database integration (Scanner/Valuer interfaces)
-// - JSON marshalling/unmarshalling
-// - Nullable date support
-// - Time zone handling
 package date
 
 import (
 	"database/sql/driver"
+	"encoding/xml"
 	"fmt"
 	"strconv"
 	"strings"
@@ -22,21 +11,29 @@ import (
 
 	"github.com/invopop/jsonschema"
 
+	"github.com/domonda/go-errs"
+
+	types "github.com/domonda/go-types"
+	"github.com/domonda/go-types/internal"
 	"github.com/domonda/go-types/language"
 	"github.com/domonda/go-types/strutil"
 )
 
-// Note: Date does not implement types.NormalizableValidator[Date] because
-// its Normalized() method accepts optional language.Code parameters.
-// This is intentional as it provides more functionality than the interface requires.
-
 // Normalize returns str as a Date in the canonical YYYY-MM-DD form,
 // or an error if the input cannot be parsed.
 //
-// The first lang argument, if present, is used as a hint to
-// disambiguate dd/mm vs mm/dd ordering when both parts are numeric and
-// both are valid day and month values (e.g. "05/06/2024"). Pass
-// language.EN to bias toward US ordering.
+// A numeric date with the year last is ambiguous when both of its first
+// numbers are valid months, like "05/06/2024". The separators decide:
+// dots are read day first like in Germany, "05.06.2024" is 2024-06-05,
+// and so are other separators, like "05-06-2024", with any language
+// hint. Slashes are written month first in the US and day first in
+// Britain, so for slashes the first lang argument, if present, is a
+// hint: language.EN reads month first, every other language day first,
+// so "05/06/2024" with language.DE is 2024-06-05. Without a hint
+// slashes are read month first like in the US, "05/06/2024" is
+// 2024-05-06. An English ordinal suffix marks the day and wins over
+// the separators and the hint: "1st 02 2003" is 2003-02-01 also with
+// language.EN.
 //
 // Accepted input shapes (case-insensitive, lenient whitespace):
 //
@@ -56,8 +53,8 @@ import (
 //   - With weekday prefix (dropped): "Mon Jan 02 2006",
 //     "Fri, 03 Jul 2015", "Wednesday, 28 Feb 2018"
 //   - CJK separators: "2014年04月08日"
-//   - French / Italian / Spanish month abbreviations:
-//     "2 janv. 2019", "23/gen/2019"
+//   - French, Italian and Spanish month names and abbreviations:
+//     "2 janv. 2019", "23/gen/2019", "12 enero 2020", "2 févr. 2019"
 //
 // 2-digit years map to 2000..2044 (< 45) or 1900..1999 (>= 45).
 //
@@ -72,7 +69,7 @@ import (
 //   - Locale-specific written forms beyond the abbreviations above
 //     (e.g. Arabic numerals, full Russian months)
 func Normalize(str string, lang ...language.Code) (Date, error) {
-	return Date(str).Normalized(lang...)
+	return Date(str).NormalizedLang(getLangHint(lang))
 }
 
 // StringIsDate returns if a string can be parsed as Date.
@@ -100,9 +97,24 @@ const (
 )
 
 // Date represents a calendar date in ISO 8601 format (YYYY-MM-DD).
-// Date implements the database/sql.Scanner and database/sql/driver.Valuer interfaces,
-// and treats empty string or zero dates ("0000-00-00" and "0001-01-01") as SQL NULL.
+// See NullableDate for a nullable version of this type.
+//
+// A Date is zero, see IsZero, if it is empty, whitespace only, or one of
+// the zero dates "0000-00-00" and "0001-01-01" in any spelling, which have
+// no practical use as a date. A zero Date is not valid.
+//
+// Scan, UnmarshalJSON, UnmarshalXML and ScanString store a valid date
+// normalized, a zero one as "" and an invalid one unchanged. Value writes
+// the normalized date, SQL NULL for a zero one, and returns an error for
+// an invalid one. MarshalJSON and MarshalText write the normalized date,
+// "" for a zero one, or an invalid one unchanged, and fmt prints the date
+// as stored. Date has no UnmarshalText, so encoding/json reads and writes
+// the keys of a map[Date]V as given. See "Reading and writing values"
+// in the README of the module.
 type Date string
+
+// Compile-time check that Date implements types.NormalizableValidator[Date]
+var _ types.NormalizableValidator[Date] = Date("")
 
 // Must returns str as normalized Date or panics if str is not a valid Date.
 func Must(str string) Date {
@@ -173,21 +185,23 @@ func Parse(layout, value string) (Date, error) {
 }
 
 // PeriodRange returns the dates [from, until] for a period defined in one of the following formats:
-// - period of a ISO 8601 week of a year: YYYY-Wnn
-// - period of a month of a year: YYYY-MM
-// - period of a quarter of a year: YYYY-Qn
-// - period of a half year: YYYY-Hn
-// - period of full year: YYYY
+//   - period of a ISO 8601 week of a year: YYYY-Wnn
+//   - period of a month of a year: YYYY-MM
+//   - period of a quarter of a year: YYYY-Qn
+//   - period of a half year: YYYY-Hn
+//   - period of full year: YYYY
 //
-// The returned from Date is the first day of the month of the period,
-// the returned until Date is the last day of the month of the period.
+// The returned from Date is the first day of the period,
+// the returned until Date is the last day of the period.
+// For a week these are the Monday and the Sunday of the ISO 8601 week,
+// which can fall into the previous or next year.
 //
 // Examples:
-// - Period of June 2018: PeriodRange("2018-06") == Date("2018-06-01"), Date("2018-06-30"), nil
-// - Period of Q3 2018: PeriodRange("2018-Q3") == Date("2018-07-01"), Date("2018-09-30"), nil
-// - Period of second half of 2018: PeriodRange("2018-H2") == Date("2018-07-01"), Date("2018-12-31"), nil
-// - Period of year 2018: PeriodRange("2018") == Date("2018-01-01"), Date("2018-12-31"), nil
-// - Period of week 1 2019: PeriodRange("2019-W01") == Date("2018-12-31"), Date("2019-01-06"), nil
+//   - Period of June 2018: PeriodRange("2018-06") == Date("2018-06-01"), Date("2018-06-30"), nil
+//   - Period of Q3 2018: PeriodRange("2018-Q3") == Date("2018-07-01"), Date("2018-09-30"), nil
+//   - Period of second half of 2018: PeriodRange("2018-H2") == Date("2018-07-01"), Date("2018-12-31"), nil
+//   - Period of year 2018: PeriodRange("2018") == Date("2018-01-01"), Date("2018-12-31"), nil
+//   - Period of week 1 2019: PeriodRange("2019-W01") == Date("2018-12-31"), Date("2019-01-06"), nil
 func PeriodRange(period string) (from, until Date, err error) {
 	if len(period) != 4 && len(period) != 7 && len(period) != 8 {
 		return "", "", fmt.Errorf("invalid period format length: %q", period)
@@ -217,6 +231,11 @@ func PeriodRange(period string) (from, until Date, err error) {
 		week, err := strconv.Atoi(period[6:])
 		if err != nil || week < 1 || week > 53 {
 			return "", "", fmt.Errorf("invalid period format, can't parse week: %q", period)
+		}
+		// December 28th is always in the last ISO week of its year,
+		// a year with 52 weeks has no week 53
+		if _, lastWeek := time.Date(year, 12, 28, 0, 0, 0, 0, time.UTC).ISOWeek(); week > lastWeek {
+			return "", "", fmt.Errorf("invalid period, year %d has no ISO week %d: %q", year, week, period)
 		}
 		from, until = YearWeekRange(year, week)
 		return from, until, nil
@@ -259,11 +278,12 @@ func YearRange(year int) (from, until Date) {
 
 // YearWeekMonday returns the date of Monday of an ISO 8601 week.
 func YearWeekMonday(year, week int) (monday Date) {
-	// January 1st of the year
-	t := time.Date(year, 1, 1, 0, 0, 0, 0, time.UTC)
+	// January 4th is always in week 1 of the ISO 8601 year
+	t := time.Date(year, 1, 4, 0, 0, 0, 0, time.UTC)
 
-	// Go back to Monday of week
-	t = t.AddDate(0, 0, int(time.Monday-t.Weekday()))
+	// Go back to Monday of week 1
+	daysSinceMonday := (int(t.Weekday()) + 6) % 7
+	t = t.AddDate(0, 0, -daysSinceMonday)
 
 	// Add week days
 	t = t.AddDate(0, 0, (week-1)*7)
@@ -315,30 +335,27 @@ func FromUntilFromYearAndMonths(year, months string) (fromDate, untilDate Date, 
 	return fromDate, untilDate, nil
 }
 
-// ScanString tries to parse and assign the passed source string as value of the Date.
-//
-// If validate is true, the source string is checked for validity before it is assigned.
-// If validate is false and the source string can still be assigned in some non-normalized way,
-// it will be assigned without returning an error.
-//
-// This method is part of the types.StringScanner interface.
+// ScanString implements the strfmt.Scannable interface.
+// Without validate it stores source like Scan, with validate it stores
+// the normalized date or returns the error of Normalized,
+// also for a blank source.
 func (date *Date) ScanString(source string, validate bool) error {
-	newDate, err := Date(source).Normalized()
-	if err != nil {
-		if validate {
-			return err
-		}
-		newDate = Date(source)
-	}
-	*date = newDate
-	return nil
+	return internal.ScanStringNormalized(date, source, validate, false, Date.Normalized, Date.IsZero)
 }
 
 // ScanStringWithLang parses and assigns the source string as a Date using the given language hint.
 // Returns wasNormalized to indicate if the source was already in normalized form,
 // monthMustBeFirst to indicate if the date format requires month-first ordering,
-// and an error if parsing fails.
+// and an error if parsing fails, also for a blank source. A zero date in
+// any spelling, see IsZero, is assigned as "" like by Scan.
+// monthMustBeFirst is only true if month first is the only valid reading,
+// like for "12/25/2023", not for an ambiguous date like "05/06/2024"
+// that is read month first because of its slashes or the hint.
 func (date *Date) ScanStringWithLang(source string, lang language.Code) (wasNormalized bool, monthMustBeFirst bool, err error) {
+	if strutil.TrimSpace(source) != "" && Date(source).IsZero() {
+		*date = ""
+		return false, false, nil
+	}
 	newDate, monthMustBeFirst, err := normalizeAndCheckDate(source, lang)
 	if err != nil {
 		return false, false, err
@@ -347,28 +364,28 @@ func (date *Date) ScanStringWithLang(source string, lang language.Code) (wasNorm
 	return newDate == Date(source), monthMustBeFirst, nil
 }
 
-// String returns the normalized date if possible, otherwise returns the unchanged string.
-// String implements the fmt.Stringer interface.
-func (date Date) String() string {
-	norm, err := date.Normalized()
-	if err != nil {
-		return string(date)
-	}
-	return string(norm)
-}
-
 // WithinIncl returns true if the date is within the inclusive range [from, until].
+// Returns false if any of the dates is not valid, see After.
 func (date Date) WithinIncl(from, until Date) bool {
-	t := date.MidnightUTC()
-	tFrom := from.MidnightUTC()
-	tUntil := until.MidnightUTC()
+	t, valid := date.midnightInLocation(time.UTC)
+	tFrom, fromValid := from.midnightInLocation(time.UTC)
+	tUntil, untilValid := until.midnightInLocation(time.UTC)
+	if !valid || !fromValid || !untilValid {
+		return false
+	}
 	return (t.Equal(tFrom) || t.After(tFrom)) && (t.Equal(tUntil) || t.Before(tUntil))
 }
 
 // BetweenExcl returns true if the date is strictly between (exclusive) after and before.
+// Returns false if any of the dates is not valid, see After.
 func (date Date) BetweenExcl(after, before Date) bool {
-	t := date.MidnightUTC()
-	return t.After(after.MidnightUTC()) && t.Before(before.MidnightUTC())
+	t, valid := date.midnightInLocation(time.UTC)
+	tAfter, afterValid := after.midnightInLocation(time.UTC)
+	tBefore, beforeValid := before.midnightInLocation(time.UTC)
+	if !valid || !afterValid || !beforeValid {
+		return false
+	}
+	return t.After(tAfter) && t.Before(tBefore)
 }
 
 // Nullable returns the date as a NullableDate.
@@ -380,11 +397,61 @@ func (date Date) Nullable() NullableDate {
 	return NullableDate(date)
 }
 
-// IsZero returns true when the date is any of ["", "0000-00-00", "0001-01-01"].
-// "0001-01-01" is treated as zero because it's the zero value of time.Time.
-// "0000-00-00" may be the zero value of other date implementations.
+// zeroDate is the normalized form of the zero value of time.Time
+const zeroDate Date = "0001-01-01"
+
+// IsZero returns true if the date is empty or whitespace only, or one of the
+// zero dates "0000-00-00" and "0001-01-01" in any spelling, like "01.01.0001",
+// "0001-01-01T00:00:00Z", "00.00.0000" or "0000-00-00 00:00:00".
+// "0001-01-01" is the zero value of time.Time, "0000-00-00" may be the zero
+// value of other date implementations, like MySQL.
+// A zero date has no practical use as a date: reading stores it as "",
+// Value writes it as SQL NULL, and it is not a valid Date.
 func (date Date) IsZero() bool {
-	return date == "" || date == "0001-01-01" || date == "0000-00-00"
+	switch date {
+	case "", zeroDate, "0000-00-00":
+		return true
+	}
+	if strutil.TrimSpace(date) == "" {
+		return true
+	}
+	// Every spelling of a zero date has the year 0000 or 0001 in its date
+	// part, so other dates are told apart without parsing them, which the
+	// reading methods would do again to normalize the date. The time part
+	// is left out, because its fractional seconds often contain "0000".
+	if part := datePart(string(date)); !strings.Contains(part, "0000") && !strings.Contains(part, "0001") {
+		return false
+	}
+	if isZerosDate(string(date)) {
+		return true
+	}
+	norm, _, err := normalizeAndCheckDate(string(date), "")
+	return err == nil && norm == zeroDate
+}
+
+// isZerosDate reports if the date part of str, see datePart, is the zero
+// date "0000-00-00" in any order of its parts and with any separators,
+// like "00.00.0000", which normalizeDate rejects because it has no valid
+// month and day.
+func isZerosDate(str string) bool {
+	parts := strings.FieldsFunc(datePart(str), isDateSeparatorRune)
+	if len(parts) != 3 {
+		return false
+	}
+	years := 0
+	for _, part := range parts {
+		if strings.Trim(part, "0") != "" {
+			return false
+		}
+		switch len(part) {
+		case 4:
+			years++
+		case 1, 2:
+		default:
+			return false
+		}
+	}
+	return years == 1
 }
 
 // Validate returns an error if the date is not in a valid, normalizable format.
@@ -400,12 +467,20 @@ func (date Date) Valid() bool {
 
 // ValidAndNormalized returns true if the date is both valid and already in normalized form (YYYY-MM-DD).
 func (date Date) ValidAndNormalized() bool {
-	_, err := time.Parse(Layout, string(date))
-	return err == nil
+	// The shape check saves the failed time.Parse of every other format,
+	// which NormalizedLang calls first and which allocates its error
+	if len(date) != len(Layout) || date[4] != '-' || date[7] != '-' || date == zeroDate {
+		return false
+	}
+	t, err := time.Parse(Layout, string(date))
+	// time.Parse accepts the year 0, which Valid rejects
+	return err == nil && validYear(t.Year())
 }
 
 // Time returns a time.Time for the date at the specified hour, minute, and second in the given location.
-// Returns a zero time.Time if the date is zero or invalid.
+// Returns a zero time.Time if the date is zero.
+// An invalid date is not detected and results in a meaningless time
+// before year 1 (from time.Date(0, 0, 0, ...)), use Valid to check the date first.
 func (date Date) Time(hour, minute, second int, location *time.Location) time.Time {
 	if date.IsZero() {
 		return time.Time{}
@@ -415,29 +490,22 @@ func (date Date) Time(hour, minute, second int, location *time.Location) time.Ti
 }
 
 // TimeLocal returns a time.Time for the date at the specified hour, minute, and second in local time.
-// Returns a zero time.Time if the date is zero or invalid.
+// Returns a zero time.Time if the date is zero, see Time for invalid dates.
 func (date Date) TimeLocal(hour, minute, second int) time.Time {
 	return date.Time(hour, minute, second, time.Local)
 }
 
 // TimeUTC returns a time.Time for the date at the specified hour, minute, and second in UTC.
-// Returns a zero time.Time if the date is zero or invalid.
+// Returns a zero time.Time if the date is zero, see Time for invalid dates.
 func (date Date) TimeUTC(hour, minute, second int) time.Time {
 	return date.Time(hour, minute, second, time.UTC)
 }
 
 // MidnightUTC returns the midnight (00:00) time.Time of the date in UTC,
-// or a zero time.Time value if the date is not valid.
+// or a zero time.Time value if the date is zero or not valid.
+// A valid date that is not in the normalized form is normalized first.
 func (date Date) MidnightUTC() time.Time {
-	if date.IsZero() {
-		return time.Time{}
-	}
-	// time.Parse uses UTC
-	t, err := time.Parse(Layout, string(date))
-	if err != nil {
-		return time.Time{}
-	}
-	return t
+	return date.MidnightInLocation(time.UTC)
 }
 
 // Midnight returns the midnight (00:00) time.Time of the date in the local time zone.
@@ -447,35 +515,60 @@ func (date Date) Midnight() time.Time {
 }
 
 // MidnightInLocation returns the midnight (00:00) time.Time of the date in the given location.
-// Returns a zero time.Time if the date is not valid.
+// Returns a zero time.Time if the date is zero or not valid.
+// A valid date that is not in the normalized form is normalized first.
 func (date Date) MidnightInLocation(loc *time.Location) time.Time {
-	if date.IsZero() {
-		return time.Time{}
-	}
-	t, err := time.ParseInLocation(Layout, string(date), loc)
-	if err != nil {
-		return time.Time{}
-	}
+	t, _ := date.midnightInLocation(loc)
 	return t
 }
 
+// midnightInLocation returns MidnightInLocation(loc) and Valid()
+// with a single parse for a date in the normalized form.
+func (date Date) midnightInLocation(loc *time.Location) (t time.Time, valid bool) {
+	if date.IsZero() {
+		// A zero date is no date, so it is not valid
+		return time.Time{}, false
+	}
+	t, err := time.ParseInLocation(Layout, string(date), loc)
+	if err != nil {
+		// Not in the normalized YYYY-MM-DD form, but might still be valid
+		norm, err := date.Normalized()
+		if err != nil {
+			return time.Time{}, false
+		}
+		return norm.midnightInLocation(loc)
+	}
+	// time.Parse accepts the year 0 that Normalized rejects
+	if !validYear(t.Year()) {
+		return time.Time{}, false
+	}
+	return t, true
+}
+
 // Format formats the date using the given layout string (see time.Time.Format).
-// Returns an empty string if date or layout are empty.
-// If layout equals Layout constant, returns the date as-is for efficiency.
+// Returns an empty string if the date is zero (see IsZero) or layout is empty.
+// If layout equals Layout constant, returns the normalized date
+// without a time conversion.
+// A date that is not valid is returned unchanged for every layout
+// instead of formatting the zero time.Time like "01.01.0001".
 func (date Date) Format(layout string) string {
-	if date == "" || layout == "" {
+	if date.IsZero() || layout == "" {
 		return ""
 	}
 	if layout == Layout {
+		return string(date.NormalizedOrUnchanged())
+	}
+	t, ok := date.midnightInLocation(time.UTC)
+	if !ok {
 		return string(date)
 	}
-	return date.MidnightUTC().Format(layout)
+	return t.Format(layout)
 }
 
 // NormalizedOrUnchanged returns the normalized date if possible, otherwise returns the date unchanged.
 // The first given lang argument is used as language hint for parsing.
 func (date Date) NormalizedOrUnchanged(lang ...language.Code) Date {
-	normalized, err := date.Normalized(lang...)
+	normalized, err := date.NormalizedLang(getLangHint(lang))
 	if err != nil {
 		return date
 	}
@@ -485,7 +578,7 @@ func (date Date) NormalizedOrUnchanged(lang ...language.Code) Date {
 // NormalizedOrNull returns the normalized date as NullableDate if possible, otherwise returns Null.
 // The first given lang argument is used as language hint for parsing.
 func (date Date) NormalizedOrNull(lang ...language.Code) NullableDate {
-	normalized, err := date.Normalized(lang...)
+	normalized, err := date.NormalizedLang(getLangHint(lang))
 	if err != nil {
 		return Null
 	}
@@ -493,23 +586,34 @@ func (date Date) NormalizedOrNull(lang ...language.Code) NullableDate {
 }
 
 // NormalizedEqual returns true if two dates are equal after normalization.
+// An invalid date (including "") has no normalized value and is not equal
+// to any date, not even to an identical invalid string.
 func (date Date) NormalizedEqual(other Date) bool {
-	a, _ := date.Normalized()
-	b, _ := other.Normalized()
-	return a == b
+	a, err := date.Normalized()
+	if err != nil {
+		return false
+	}
+	b, err := other.Normalized()
+	return err == nil && a == b
 }
 
 // Compare compares the date with another Date.
 // Returns -1 if date is before other, +1 if after, 0 if equal.
+// An invalid date compares like the empty string: equal to any other
+// invalid date and before every valid date, so Compare is a consistent
+// sort order for slices.SortFunc also for invalid dates.
 func (date Date) Compare(other Date) int {
-	a, _ := date.Normalized()
-	b, _ := other.Normalized()
-	return strings.Compare(string(a), string(b))
+	return strings.Compare(string(date.NormalizedOrNull()), string(other.NormalizedOrNull()))
 }
 
 // After returns true if the date is after the other date.
+// An invalid date (including "") has no position in time,
+// so After returns false if either date is not valid,
+// like NormalizedEqual returns false for an invalid date.
 func (date Date) After(other Date) bool {
-	return date.MidnightUTC().After(other.MidnightUTC())
+	t, valid := date.midnightInLocation(time.UTC)
+	tOther, otherValid := other.midnightInLocation(time.UTC)
+	return valid && otherValid && t.After(tOther)
 }
 
 // EqualOrAfter returns true if the date is equal to or after the other date.
@@ -518,8 +622,11 @@ func (date Date) EqualOrAfter(other Date) bool {
 }
 
 // Before returns true if the date is before the other date.
+// Returns false if either date is not valid, see After.
 func (date Date) Before(other Date) bool {
-	return date.MidnightUTC().Before(other.MidnightUTC())
+	t, valid := date.midnightInLocation(time.UTC)
+	tOther, otherValid := other.midnightInLocation(time.UTC)
+	return valid && otherValid && t.Before(tOther)
 }
 
 // EqualOrBefore returns true if the date is equal to or before the other date.
@@ -528,13 +635,17 @@ func (date Date) EqualOrBefore(other Date) bool {
 }
 
 // AfterTime returns true if midnight of the date (in the location of the passed time) is after the time.
+// Returns false if the date is not valid, see After.
 func (date Date) AfterTime(other time.Time) bool {
-	return date.MidnightInLocation(other.Location()).After(other)
+	t, valid := date.midnightInLocation(other.Location())
+	return valid && t.After(other)
 }
 
 // BeforeTime returns true if midnight of the date (in the location of the passed time) is before the time.
+// Returns false if the date is not valid, see After.
 func (date Date) BeforeTime(other time.Time) bool {
-	return date.MidnightInLocation(other.Location()).Before(other)
+	t, valid := date.midnightInLocation(other.Location())
+	return valid && t.Before(other)
 }
 
 // AddDate returns a new date with the specified years, months, and days added.
@@ -715,13 +826,19 @@ func (date Date) ISOWeek() (year, week int) {
 }
 
 // IsToday returns true if the date is today in local time.
+// A valid date that is not in the normalized form is normalized first.
 func (date Date) IsToday() bool {
-	return date == OfToday()
+	// OfToday is normalized, so only the receiver needs normalization
+	norm, err := date.Normalized()
+	return err == nil && norm == OfToday()
 }
 
 // IsTodayInUTC returns true if the date is today in UTC time.
+// A valid date that is not in the normalized form is normalized first.
 func (date Date) IsTodayInUTC() bool {
-	return date == OfNowInUTC()
+	// OfNowInUTC is normalized, so only the receiver needs normalization
+	norm, err := date.Normalized()
+	return err == nil && norm == OfNowInUTC()
 }
 
 // AfterToday returns true if the date is after today in local time.
@@ -745,44 +862,65 @@ func (date Date) BeforeTodayInUTC() bool {
 }
 
 // Scan implements the database/sql.Scanner interface.
-// Accepts string, time.Time, or nil values.
-// Empty strings and zero dates ("0000-00-00", "0001-01-01") are treated as empty Date.
-func (date *Date) Scan(value any) (err error) {
-	switch x := value.(type) {
-	case string:
-		d := Date(x)
-		if !d.IsZero() {
-			d, err = d.Normalized()
-			if err != nil {
-				return err
-			}
-		}
-		*date = d
-		return nil
-
-	case time.Time:
-		*date = OfTime(x)
-		return nil
-
-	case nil:
-		*date = ""
-		return nil
+// A valid date from a string or []byte is stored normalized, a time.Time
+// as its date, SQL NULL and a zero date (see IsZero) as "", and a date
+// that can't be normalized unchanged without an error, so that one
+// invalid value doesn't fail a whole query; Validate reports it.
+func (date *Date) Scan(value any) error {
+	if t, ok := value.(time.Time); ok {
+		value = string(OfTime(t))
 	}
-
-	return fmt.Errorf("can't scan value '%#v' of type %T as date.Date", value, value)
+	return internal.ScanNormalized(date, value, Date.Normalized, Date.IsZero)
 }
 
 // Value implements the database/sql/driver.Valuer interface.
-// Returns nil for zero dates, otherwise returns the normalized date string.
+// It returns the normalized date, SQL NULL for a zero date (see IsZero),
+// or the error of Normalized for a date that can't be normalized.
 func (date Date) Value() (driver.Value, error) {
-	if date.IsZero() {
-		return nil, nil
-	}
-	normalized, err := date.Normalized()
-	if err != nil {
-		return nil, err
-	}
-	return string(normalized), nil
+	return internal.ValueNormalized(date, Date.Normalized, Date.IsZero)
+}
+
+// MarshalJSON implements encoding/json.Marshaler by writing the
+// normalized date, "" for a zero date (see IsZero),
+// or the date unchanged if it can't be normalized.
+func (date Date) MarshalJSON() ([]byte, error) {
+	return internal.MarshalJSONNormalized(date, false, Date.Normalized, Date.IsZero)
+}
+
+// UnmarshalJSON implements encoding/json.Unmarshaler.
+// A JSON string is stored like Scan stores it, JSON null leaves the Date
+// unchanged like encoding/json does for a string type, and any other
+// JSON value is an error.
+func (date *Date) UnmarshalJSON(data []byte) error {
+	return internal.UnmarshalJSONNormalized(date, data, false, Date.Normalized, Date.IsZero)
+}
+
+// MarshalText implements encoding.TextMarshaler like MarshalJSON,
+// so that encoding/xml and strfmt write the normalized date.
+// encoding/json writes map keys of string types as they are
+// and doesn't call MarshalText for them.
+func (date Date) MarshalText() ([]byte, error) {
+	return internal.MarshalTextNormalized(date, Date.Normalized, Date.IsZero)
+}
+
+// MarshalXMLAttr implements encoding/xml.MarshalerAttr by writing the
+// text of MarshalText, and no attribute for a nil pointer, because
+// encoding/xml calls MarshalText through a nil pointer attribute field
+// and panics.
+func (date *Date) MarshalXMLAttr(name xml.Name) (xml.Attr, error) {
+	return internal.MarshalXMLAttrText(date, name)
+}
+
+// UnmarshalXML implements encoding/xml.Unmarshaler
+// by storing the text of the element like Scan stores it.
+func (date *Date) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	return internal.UnmarshalXMLNormalized(date, d, start, Date.Normalized, Date.IsZero)
+}
+
+// UnmarshalXMLAttr implements encoding/xml.UnmarshalerAttr
+// by storing the attribute value like Scan stores it.
+func (date *Date) UnmarshalXMLAttr(attr xml.Attr) error {
+	return internal.UnmarshalXMLAttrNormalized(date, attr, Date.Normalized, Date.IsZero)
 }
 
 // JSONSchema returns the JSON schema definition for the Date type.
@@ -806,11 +944,36 @@ func isDateTrimRune(r rune) bool {
 }
 
 // Normalized returns the date in normalized form,
-// or an error if the format can't be detected.
-// The first given lang argument is used as language hint.
-func (date Date) Normalized(lang ...language.Code) (Date, error) {
-	normalized, _, err := normalizeAndCheckDate(string(date), getLangHint(lang))
-	return normalized, err
+// or an error if the format can't be detected or the date is zero,
+// see IsZero. Returns the Date unchanged in case of an error.
+// Normalized implements types.Normalizable[Date],
+// use NormalizedLang to pass a language hint.
+func (date Date) Normalized() (Date, error) {
+	return date.NormalizedLang("")
+}
+
+// NormalizedLang returns the date in normalized form like Normalized,
+// with lang as hint for the order of day and month in an ambiguous
+// numeric date with slashes: language.EN reads "05/06/2024" month first
+// and every other language day first. Other separators, like in
+// "05.06.2024", are read day first with any hint.
+// An empty lang or one that can't be normalized gives no hint,
+// then slashes are read month first, see Normalize.
+// Returns the Date unchanged in case of an error.
+func (date Date) NormalizedLang(lang language.Code) (Date, error) {
+	if date.ValidAndNormalized() {
+		// Every reading and writing method normalizes, mostly a date
+		// that already is, which this checks without normalizeDate
+		return date, nil
+	}
+	normalized, _, err := normalizeAndCheckDate(string(date), langHint(lang))
+	if err != nil {
+		return date, err
+	}
+	if normalized == zeroDate {
+		return date, errs.Errorf("zero date: %q", string(date))
+	}
+	return normalized, nil
 }
 
 func normalizeAndCheckDate(str string, langHint language.Code) (Date, bool, error) {
@@ -818,28 +981,39 @@ func normalizeAndCheckDate(str string, langHint language.Code) (Date, bool, erro
 	if err != nil {
 		return "", monthMustBeFirst, err
 	}
-	_, err = time.Parse(Layout, normalized)
+	t, err := time.Parse(Layout, normalized)
 	if err != nil {
 		return "", monthMustBeFirst, err
+	}
+	// time.Parse accepts the year 0, which Date rejects
+	if !validYear(t.Year()) {
+		return "", monthMustBeFirst, errs.Errorf("invalid year 0 in date: %q", str)
 	}
 	return Date(normalized), monthMustBeFirst, nil
 }
 
-func normalizeDate(str string, langHint language.Code) (string, bool, error) {
-	trimmed := strings.TrimSuffix(str, "00:00:00") // Trim zero time part
-	trimmed = strings.TrimFunc(trimmed, isDateTrimRune)
+// datePart returns str without the surrounding characters that are
+// no letters or digits, and without its time part: the time of an
+// ISO 8601 date-time like "2006-01-02T15:04:05Z", or "00:00:00".
+func datePart(str string) string {
+	trimmed := strings.TrimFunc(str, isDateTrimRune)
+	if len(trimmed) > 11 && trimmed[10] == 'T' && trimmed[11] >= '0' && trimmed[11] <= '9' {
+		// Use date part of this date-time format: "2006-01-02T15:04:05",
+		// but not of a word like "2023-12-25TOTAL". Cut before trimming
+		// "00:00:00", which would leave "2023-12-25T" of "2023-12-25T00:00:00".
+		return trimmed[:10]
+	}
+	trimmed = strings.TrimSuffix(trimmed, "00:00:00") // Trim zero time part
+	return strings.TrimFunc(trimmed, isDateTrimRune)
+}
+
+func normalizeDate(str string, lang language.Code) (string, bool, error) {
+	trimmed := datePart(str)
 	if len(trimmed) < MinLength {
 		return "", false, fmt.Errorf("too short for a date: %q", str)
 	}
 
-	if len(trimmed) > 10 && trimmed[10] == 'T' {
-		// Use date part of this date-time format: "2006-01-02T15:04:05"
-		trimmed = trimmed[:10]
-	}
-
 	trimmed = strings.ToLower(trimmed)
-
-	langHint, _ = langHint.Normalized()
 
 	parts := strings.FieldsFunc(trimmed, isDateSeparatorRune)
 	if len(parts) == 4 {
@@ -857,19 +1031,23 @@ func normalizeDate(str string, langHint language.Code) (string, bool, error) {
 	}
 	dayHint := -1
 	totalLen := 0
+	// A single digit is padded to two, but can't be a year,
+	// so that text like "set 6 4" is not the date 2004-09-06
+	var singleDigit [3]bool
 	for i := range parts {
 		l := len(parts[i])
 		totalLen += l
 		if l == 1 {
 			parts[i] = "0" + parts[i]
+			singleDigit[i] = true
 			continue
 		}
 		// Strip English ordinal suffixes (1st, 2nd, 3rd, 4th, 21st,
 		// 22nd, 23rd, 31st, …). The suffix is always at the end and
-		// the preceding characters must be digits — verified via the
-		// validDay()/validMonth() checks downstream.
+		// the preceding characters must be digits, so that a month
+		// name like "august" keeps its "st".
 		for _, suf := range [4]string{"st", "nd", "rd", "th"} {
-			if before, ok := strings.CutSuffix(parts[i], suf); ok && len(before) > 0 {
+			if before, ok := strings.CutSuffix(parts[i], suf); ok && before != "" && strings.Trim(before, "0123456789") == "" {
 				parts[i] = before
 				if len(parts[i]) == 1 {
 					parts[i] = "0" + parts[i]
@@ -893,12 +1071,12 @@ func normalizeDate(str string, langHint language.Code) (string, bool, error) {
 	month1, _ := monthNameMap[parts[1]]
 	month2, _ := monthNameMap[parts[2]]
 
-	// fmt.Println(len0, len1, len2)
-	// fmt.Println(val0, val1, val2)
-
-	expandVal2ToFullYear := func() {
+	expandVal2ToFullYear := func() bool {
 		if len2 != 2 {
 			panic("len2")
+		}
+		if singleDigit[2] {
+			return false
 		}
 		if val2 < 45 {
 			parts[2] = "20" + parts[2]
@@ -908,12 +1086,13 @@ func normalizeDate(str string, langHint language.Code) (string, bool, error) {
 			val2 = 1900 + val2
 		}
 		len2 = 4
+		return true
 	}
 
 	switch {
 	case month0 != 0:
-		if len2 == 2 {
-			expandVal2ToFullYear()
+		if len2 == 2 && !expandVal2ToFullYear() {
+			return "", false, fmt.Errorf("invalid date: %q", str)
 		}
 		if !validDay(val1) || !validYear(val2) {
 			return "", false, fmt.Errorf("invalid date: %q", str)
@@ -926,9 +1105,12 @@ func normalizeDate(str string, langHint language.Code) (string, bool, error) {
 			// YY m DD
 			parts[0], parts[2] = parts[2], parts[0]
 			val0, val2 = val2, val0
+			singleDigit[0], singleDigit[2] = singleDigit[2], singleDigit[0]
 			// DD m YY
 		}
-		expandVal2ToFullYear()
+		if !expandVal2ToFullYear() {
+			return "", false, fmt.Errorf("invalid date: %q", str)
+		}
 		fallthrough
 
 	case len0 == 2 && month1 != 0 && len2 == 4:
@@ -946,6 +1128,9 @@ func normalizeDate(str string, langHint language.Code) (string, bool, error) {
 		return fmt.Sprintf("%s-%02d-%s", parts[0], month1, parts[2]), false, nil
 
 	case month2 != 0:
+		if singleDigit[0] {
+			return "", false, fmt.Errorf("invalid date: %q", str)
+		}
 		if len0 == 2 {
 			// YY DD m
 			if val0 < 45 {
@@ -967,12 +1152,22 @@ func normalizeDate(str string, langHint language.Code) (string, bool, error) {
 		return strings.Join(parts, "-"), false, nil
 
 	case len0 == 2 && len1 == 2 && len2 == 2:
-		expandVal2ToFullYear()
+		if !expandVal2ToFullYear() {
+			return "", false, fmt.Errorf("invalid date: %q", str)
+		}
 		fallthrough
 
 	case len0 == 2 && len1 == 2 && len2 == 4:
 		monthMustBeFirst := validMonth(val0) && !validMonth(val1)
-		if (!validMonth(val1) && validMonth(val0)) || dayHint == 1 || langHint == "en" {
+		// The ordinal day hint, the language hint and the separators
+		// only decide the order if both numbers could be the month
+		ambiguous := validMonth(val0) && validMonth(val1)
+		monthFirst := monthMustBeFirst || (ambiguous && ambiguousMonthFirst(trimmed, dayHint, lang))
+		// A number with an ordinal suffix can't be the month
+		if (monthFirst && dayHint == 0) || (!monthFirst && dayHint == 1) {
+			return "", false, fmt.Errorf("invalid date: %q", str)
+		}
+		if monthFirst {
 			// MM DD YYYY
 			parts[0], parts[1] = parts[1], parts[0]
 			val0, val1 = val1, val0
@@ -990,6 +1185,53 @@ func normalizeDate(str string, langHint language.Code) (string, bool, error) {
 	return "", false, fmt.Errorf("invalid date: %q", str)
 }
 
+// ambiguousMonthFirst reports if a numeric date with the year last,
+// whose first two numbers can both be the month, is read month first.
+// str is the date part of the date, see datePart, and dayHint the index
+// of the number with an ordinal suffix, or -1.
+//
+// An ordinal suffix marks the day explicitly, so it decides first.
+// Then the separators decide: "03.04.2024" with dots is German style and
+// read day first, and so are other separators like "03-04-2024", which
+// have no month first convention, also with an English hint.
+// Only "03/04/2024" with slashes is written in both orders, US month
+// first and British day first, so for slashes a language hint decides,
+// because it knows the convention of the whole document: English reads
+// month first, every other language day first. Without a hint slashes
+// are read month first, because JSON, XML and SQL can't pass a hint and
+// read a US date day first as 3 April otherwise.
+func ambiguousMonthFirst(str string, dayHint int, lang language.Code) bool {
+	if dayHint != -1 {
+		return dayHint == 1
+	}
+	if !slashSeparated(str) {
+		return false
+	}
+	if hint := langHint(lang); hint != "" {
+		return hint == language.EN
+	}
+	return true
+}
+
+// slashSeparated reports if both separators between the last three
+// parts of the date str have a '/', like in "03/04/2024", "3 / 4 / 24",
+// "03/04/'24" and "Mon, 03/04/2024", but not "03/04.2024".
+func slashSeparated(str string) bool {
+	for range 2 {
+		// Cut the last part, then the separators before it
+		withSeparators := strings.TrimRightFunc(str, isNoDateSeparatorRune)
+		str = strings.TrimRightFunc(withSeparators, isDateSeparatorRune)
+		if !strings.Contains(withSeparators[len(str):], "/") {
+			return false
+		}
+	}
+	return true
+}
+
+func isNoDateSeparatorRune(r rune) bool {
+	return !isDateSeparatorRune(r)
+}
+
 func validYear(year int) bool {
 	return year > 0
 }
@@ -1002,9 +1244,27 @@ func validDay(day int) bool {
 	return day >= 1 && day <= 31
 }
 
+// getLangHint returns the first hint normalized by langHint,
+// or "" if there is none.
 func getLangHint(lang []language.Code) language.Code {
-	if len(lang) == 0 || len(lang[0]) < 2 {
+	if len(lang) == 0 {
 		return ""
 	}
-	return lang[0][:2]
+	return langHint(lang[0])
+}
+
+// langHint returns lang normalized, or "" if it can't be normalized.
+// It is normalized instead of cut to two bytes,
+// because language.Code.Validate accepts hints like " en" and "EN-us".
+func langHint(lang language.Code) language.Code {
+	if lang == "" {
+		// No hint, which every Normalized call passes, without building
+		// the error of an invalid language.Code
+		return ""
+	}
+	hint, err := lang.Normalized()
+	if err != nil {
+		return ""
+	}
+	return hint
 }

@@ -1,6 +1,7 @@
 package money
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
 	"math/big"
@@ -34,7 +35,10 @@ func NullableRateFromPtr(ptr *Rate) NullableRate {
 }
 
 // ParseRate parses a rate from str accepting only certain decimal digit counts.
-// If no acceptedDecimals are passed, then any decimal digit count is accepted.
+// If no acceptedDecimals are passed, then any decimal digit count is accepted
+// and infinity and NaN are parsed and returned without error.
+// If acceptedDecimals are passed, then infinity and NaN are errors
+// because they have no decimals that could be accepted.
 // If a string ends with '%' then the parsed number part will be divided by 100.
 func ParseRate(str string, acceptedDecimals ...int) (Rate, error) {
 	var (
@@ -55,13 +59,16 @@ func ParseRate(str string, acceptedDecimals ...int) (Rate, error) {
 	if percent {
 		f /= 100
 	}
-	if len(acceptedDecimals) == 0 || math.IsNaN(f) || math.IsInf(f, 0) {
+	if len(acceptedDecimals) == 0 {
 		return Rate(f), nil
+	}
+	if math.IsNaN(f) || math.IsInf(f, 0) {
+		return 0, errNonFiniteNotAccepted(str, acceptedDecimals)
 	}
 	if slices.Contains(acceptedDecimals, decimals) {
 		return Rate(f), nil
 	}
-	return 0, fmt.Errorf("parsing %q returned %d decimals wich is not in accepted list of %v", s, decimals, acceptedDecimals)
+	return 0, fmt.Errorf("parsing %q returned %d decimals which is not in accepted list of %v", s, decimals, acceptedDecimals)
 }
 
 // RateFromPtr dereferences ptr or returns defaultVal if it is nil.
@@ -88,15 +95,18 @@ func (r Rate) Ptr() *Rate {
 // If validate is false and the source string
 // can still be assigned in some non-normalized way
 // it will be assigned without returning an error.
+//
+// The source string is parsed with ParseRate,
+// so a trailing '%' divides the number by 100.
 func (r *Rate) ScanString(source string, validate bool) error {
-	f, err := float.Parse(source)
+	rate, err := ParseRate(source)
 	if err != nil {
 		return err
 	}
-	if validate && !Rate(f).Valid() {
+	if validate && !rate.Valid() {
 		return fmt.Errorf("invalid rate: %q", source)
 	}
-	*r = Rate(f)
+	*r = rate
 	return nil
 }
 
@@ -111,11 +121,16 @@ func (r Rate) RoundToInt() Rate {
 	return Rate(math.Round(float64(r)))
 }
 
-// RoundToDecimals returns the value rounded
+// RoundToDecimals returns the value rounded half away from zero
 // to the passed number of decimal places.
+// Negative decimals round to tens, hundreds, and so on.
+// Like Amount.RoundToDecimals it rounds the shortest decimal
+// representation of the float64 value, so Rate(0.145).RoundToDecimals(2)
+// is 0.15 and not the 0.14 of its binary value.
+// NaN and infinite rates are returned unchanged.
+// See float.RoundToDecimals.
 func (r Rate) RoundToDecimals(decimals int) Rate {
-	pow := math.Pow10(decimals)
-	return Rate(math.Round(float64(r)*pow) / pow)
+	return float.RoundToDecimals(r, decimals)
 }
 
 // FormatSep formats the Rate similar to strconv.FormatFloat with the 'f' format option,
@@ -124,12 +139,14 @@ func (r Rate) RoundToDecimals(decimals int) Rate {
 // Valid values for decimalSep are '.' and ','.
 // If thousandsSep is not zero, then the integer part of the number is grouped
 // with thousandsSep between every group of 3 digits.
-// Valid values for thousandsSep are [0, ',', '.']
+// Valid values for thousandsSep are 0 (no grouping), ',', '.', ' '
+// and the apostrophe,
 // and thousandsSep must be different from decimalSep.
-// The precision argument controls the number of digits (excluding the exponent).
-// Note that the last digit is not rounded!
+// The precision argument is the number of decimal places, padded with zeros.
+// The rate is rounded to them half away from zero like Rate.RoundToDecimals
+// does, so Rate(0.145) formats as "0.15" with precision 2, see float.Format.
 // The special precision -1 uses the smallest number of digits
-// necessary such that ParseFloat will return f exactly.
+// necessary such that ParseFloat will return the rate exactly.
 func (r Rate) FormatSep(thousandsSep, decimalSep rune, precision int) string {
 	return float.Format(float64(r), thousandsSep, decimalSep, precision, true)
 }
@@ -291,9 +308,13 @@ func (r *Rate) UnmarshalJSON(j []byte) error {
 		return nil
 	}
 
-	// Strip quotes
-	if l := len(s); l > 2 && s[0] == '"' && s[l-1] == '"' {
-		s = s[1 : l-1]
+	// Decode a JSON string through the standard library so \uXXXX and other
+	// escape sequences are resolved, not just the surrounding quotes stripped.
+	if len(s) > 0 && s[0] == '"' {
+		err := json.Unmarshal(j, &s)
+		if err != nil {
+			return fmt.Errorf("can't unmarshal JSON(%s) as money.Rate because of: %w", j, err)
+		}
 	}
 
 	rate, err := ParseRate(s)

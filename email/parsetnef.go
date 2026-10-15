@@ -13,6 +13,8 @@ import (
 
 // ParseTNEFMessageBytes parses a TNEF (Transport Neutral Encapsulation
 // Format) email message from the passed bytes.
+// If the plain text body is not longer than one byte but there is an
+// HTML body, then the Body is set to the plain text converted from the HTML.
 func ParseTNEFMessageBytes(messageBytes []byte) (msg *Message, err error) {
 	defer errs.WrapWithFuncParams(&err, messageBytes)
 
@@ -31,11 +33,11 @@ func ParseTNEFMessageBytes(messageBytes []byte) (msg *Message, err error) {
 		ExtraHeader: make(Header),
 	}
 	if len(t.Body) <= 1 && len(t.BodyHTML) > len(t.Body) {
-		html, err := html2text.FromReader(bytes.NewReader(t.BodyHTML))
+		text, err := html2text.FromReader(bytes.NewReader(t.BodyHTML))
 		if err != nil {
 			return nil, err
 		}
-		msg.BodyHTML.Set(html)
+		msg.Body = text
 	}
 	for i, attachment := range t.Attachments {
 		msg.Attachments = append(msg.Attachments, &Attachment{

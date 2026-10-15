@@ -3,8 +3,8 @@ package date
 import "github.com/domonda/go-types/language"
 
 // Formatter is a date layout string (compatible with time.Time.Format) that can
-// format Date values and parse date strings. It implements the strfmt.Formatter
-// interface so it can be used with generic formatting/parsing pipelines.
+// format Date values and parse date strings. It implements the strfmt.Parser
+// interface (but not strfmt.Formatter) so it can be used with generic parsing pipelines.
 type Formatter string
 
 // Format formats date using f as the layout string (see time.Time.Format).

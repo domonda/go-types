@@ -1,10 +1,15 @@
 package date
 
 import (
+	"encoding/json"
+	"regexp"
 	"testing"
 	"time"
 
+	"github.com/invopop/jsonschema"
 	"github.com/stretchr/testify/require"
+
+	"github.com/domonda/go-types/internal/normtest"
 )
 
 // Constructor tests
@@ -71,6 +76,8 @@ func TestYearMonth_Validate(t *testing.T) {
 		{name: "valid", ym: "2023-03", wantErr: false},
 		{name: "valid january", ym: "2020-01", wantErr: false},
 		{name: "valid december", ym: "2021-12", wantErr: false},
+		{name: "surrounding whitespace", ym: " 2023-03\t", wantErr: false},
+		{name: "whitespace only", ym: "  ", wantErr: true},
 		{name: "empty", ym: "", wantErr: true},
 		{name: "too short", ym: "2023-3", wantErr: true},
 		{name: "too long", ym: "2023-123", wantErr: true},
@@ -78,7 +85,12 @@ func TestYearMonth_Validate(t *testing.T) {
 		{name: "invalid month 0", ym: "2023-00", wantErr: true},
 		{name: "invalid month 13", ym: "2023-13", wantErr: true},
 		{name: "invalid year", ym: "abcd-03", wantErr: true},
-		{name: "year too large", ym: "3001-03", wantErr: true},
+		// Every year of a Date is valid, so that the year-month of every
+		// valid Date can be written, up to "9999-12-31"
+		{name: "year after 3000", ym: "3001-03", wantErr: false},
+		{name: "last year of Date", ym: "9999-12", wantErr: false},
+		{name: "5 digit year", ym: "10000-01", wantErr: true},
+		{name: "year 0", ym: "0000-05", wantErr: true},
 		{name: "invalid format", ym: "2023/03", wantErr: true},
 	}
 	for _, tt := range tests {
@@ -122,6 +134,8 @@ func TestYearMonth_IsZero(t *testing.T) {
 		{name: "0001-01", ym: "0001-01", want: true},
 		{name: "valid date", ym: "2023-03", want: false},
 		{name: "0001-02", ym: "0001-02", want: false},
+		{name: "whitespace only", ym: "  ", want: true},
+		{name: "padded 0001-01", ym: " 0001-01 ", want: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -148,6 +162,12 @@ func TestYearMonth_Year(t *testing.T) {
 		{name: "different year", ym: "1999-12", want: 1999},
 		{name: "zero year", ym: "0000-00", want: 0},
 		{name: "invalid", ym: "invalid", want: 0},
+		// Documented to return 0 for invalid values, so calling it
+		// on unvalidated input must not panic on a short string.
+		{name: "empty", ym: "", want: 0},
+		{name: "too short", ym: "2023-1", want: 0},
+		{name: "year only", ym: "2023", want: 0},
+		{name: "invalid month", ym: "2023-13", want: 0},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -167,6 +187,11 @@ func TestYearMonth_Month(t *testing.T) {
 		{name: "january", ym: "2023-01", want: time.January},
 		{name: "december", ym: "2023-12", want: time.December},
 		{name: "invalid", ym: "invalid", want: 0},
+		// Documented to return 0 for invalid values, so calling it
+		// on unvalidated input must not panic on a short string.
+		{name: "empty", ym: "", want: 0},
+		{name: "too short", ym: "2023-1", want: 0},
+		{name: "invalid month", ym: "2023-13", want: 0},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -210,18 +235,37 @@ func TestYearMonth_DateRange(t *testing.T) {
 		wantFrom  Date
 		wantUntil Date
 	}{
-		{name: "march 2023", ym: "2023-03", wantFrom: "2023-03-01", wantUntil: "2023-03"},
-		{name: "february 2020 (leap)", ym: "2020-02", wantFrom: "2020-02-01", wantUntil: "2020-02"},
-		{name: "february 2021", ym: "2021-02", wantFrom: "2021-02-01", wantUntil: "2021-02"},
-		{name: "december", ym: "2023-12", wantFrom: "2023-12-01", wantUntil: "2023-12"},
+		{name: "march 2023", ym: "2023-03", wantFrom: "2023-03-01", wantUntil: "2023-03-31"},
+		{name: "february 2020 (leap)", ym: "2020-02", wantFrom: "2020-02-01", wantUntil: "2020-02-29"},
+		{name: "february 2021", ym: "2021-02", wantFrom: "2021-02-01", wantUntil: "2021-02-28"},
+		{name: "april", ym: "2023-04", wantFrom: "2023-04-01", wantUntil: "2023-04-30"},
+		{name: "december", ym: "2023-12", wantFrom: "2023-12-01", wantUntil: "2023-12-31"},
+		// The first and last month of the years of Date
+		{name: "first", ym: "0001-02", wantFrom: "0001-02-01", wantUntil: "0001-02-28"},
+		{name: "last", ym: "9999-12", wantFrom: "9999-12-01", wantUntil: "9999-12-31"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			gotFrom, gotUntil := tt.ym.DateRange()
 			require.Equal(t, tt.wantFrom, gotFrom)
-			// Note: DateRange implementation has an issue, it returns "YYYY-MM" instead of last day
-			// This test documents the actual behavior
-			require.True(t, gotUntil.Valid() || len(gotUntil) == 7)
+			// Both ends of the range are used as inclusive Date bounds
+			// (e.g. in SQL BETWEEN), so untilDate must be a full valid Date
+			// of the last day of the month, not the "YYYY-MM" year-month.
+			require.Equal(t, tt.wantUntil, gotUntil)
+			require.True(t, gotUntil.ValidAndNormalized())
+		})
+	}
+}
+
+func TestYearMonth_DateRange_Invalid(t *testing.T) {
+	// An invalid year-month has no month to span, so like
+	// YearQuarter.DateRange it must give an empty range instead of
+	// dates computed from non-existent months that look like real bounds.
+	for _, ym := range []YearMonth{"2023-13", "2023-00", "bad", ""} {
+		t.Run(string(ym), func(t *testing.T) {
+			gotFrom, gotUntil := ym.DateRange()
+			require.Equal(t, Date(""), gotFrom)
+			require.Equal(t, Date(""), gotUntil)
 		})
 	}
 }
@@ -259,6 +303,14 @@ func TestYearMonth_AddYears(t *testing.T) {
 		{name: "add 5 years", ym: "2020-06", years: 5, want: "2025-06"},
 		{name: "subtract 1 year", ym: "2023-03", years: -1, want: "2022-03"},
 		{name: "add 0 years", ym: "2023-03", years: 0, want: "2023-03"},
+		{name: "to the last year", ym: "2023-03", years: 9999 - 2023, want: "9999-03"},
+		// Past the years of Date the result is invalid, so that Value refuses it
+		{name: "after the last year", ym: "9999-03", years: 1, want: "10000-03"},
+		// An invalid year-month has no year to add to. It must stay
+		// unchanged, so it stays invalid and Validate reports the original
+		// value, instead of becoming a bogus year-month like "0001-00".
+		{name: "invalid unchanged", ym: "bad", years: 1, want: "bad"},
+		{name: "invalid month unchanged", ym: "2023-13", years: 1, want: "2023-13"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -281,6 +333,19 @@ func TestYearMonth_AddMonths(t *testing.T) {
 		{name: "subtract 1 month", ym: "2023-03", months: -1, want: "2023-02"},
 		{name: "month underflow", ym: "2023-01", months: -1, want: "2022-12"},
 		{name: "add 0 months", ym: "2023-03", months: 0, want: "2023-03"},
+		{name: "add many months", ym: "2023-03", months: 12*100 + 10, want: "2124-01"},
+		{name: "subtract many months", ym: "2023-03", months: -(12*100 + 3), want: "1922-12"},
+		{name: "last month", ym: "9999-11", months: 1, want: "9999-12"},
+		{name: "first month after the zero", ym: "0001-03", months: -1, want: "0001-02"},
+		// Past the years of Date the result is invalid, so that Value
+		// refuses it, and never "" or the zero "0000-00", which Value
+		// writes as SQL NULL, or a wrapped around year
+		{name: "after the last month", ym: "9999-12", months: 1, want: "10000-01"},
+		{name: "before the year 1", ym: "0001-02", months: -2, want: "0000-12"},
+		{name: "before the year 0", ym: "0001-02", months: -14, want: "-001-12"},
+		// Invalid stays unchanged like in AddYears, not "0001-02"
+		{name: "invalid unchanged", ym: "bad", months: 1, want: "bad"},
+		{name: "invalid month unchanged", ym: "2023-13", months: 1, want: "2023-13"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -348,11 +413,241 @@ func TestYearMonth_Compare(t *testing.T) {
 		{name: "after", ym: "2023-07", other: "2023-03", want: 1},
 		{name: "equal", ym: "2023-07", other: "2023-07", want: 0},
 		{name: "different years", ym: "2022-12", other: "2023-01", want: -1},
+		{name: "equal when normalized", ym: " 2023-07", other: "2023-07", want: 0},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := tt.ym.Compare(tt.other)
 			require.Equal(t, tt.want, got)
 		})
+	}
+}
+
+// TestYearMonth_CompareFastPath protects the order of Compare: it skips
+// normalizing a year-month that isNormalized reports as normalized, so
+// isNormalized must agree with ValidAndNormalized for every year-month,
+// or Compare would order an invalid, zero or padded one as it is
+// instead of like Normalized and IsZero do.
+func TestYearMonth_CompareFastPath(t *testing.T) {
+	const chars = "0123456789-Q :"
+	for _, year := range []string{"0000", "0001", "2023", "9999", "20a3", " 202", "202 "} {
+		for _, m0 := range chars {
+			for _, m1 := range chars {
+				for _, sep := range []string{"-", "/"} {
+					ym := YearMonth(year + sep + string(m0) + string(m1))
+					require.Equal(t, ym.ValidAndNormalized(), ym.isNormalized(), "%q", ym)
+				}
+			}
+		}
+	}
+	for _, ym := range []YearMonth{"", "2023-7", "10000-01", " 2023-07", "2023-07 "} {
+		require.False(t, ym.isNormalized(), "%q", ym)
+	}
+
+	// The fast path and the normalizing path order alike
+	require.Equal(t, -1, YearMonth("2023-07").Compare("2023-08"))
+	require.Equal(t, 0, YearMonth("2023-07").Compare(" 2023-07"))
+	require.Equal(t, -1, YearMonth("0001-01").Compare("0001-02"), "the zero year-month compares as \"\"")
+	require.Equal(t, 1, YearMonth("2023-13").Compare("2023-12"), "an invalid year-month compares as it is")
+}
+
+// BenchmarkYearMonth_Compare measures Compare as a comparator of
+// slices.SortFunc, which calls it about n*log(n) times, mostly with
+// year-months that were read normalized from SQL or JSON.
+func BenchmarkYearMonth_Compare(b *testing.B) {
+	for name, operands := range map[string][2]YearMonth{
+		"normalized":     {"2023-07", "2023-08"},
+		"not normalized": {" 2023-07", "2023-08"},
+		"invalid":        {"2023-13", "2023-08"},
+	} {
+		b.Run(name, func(b *testing.B) {
+			for b.Loop() {
+				_ = operands[0].Compare(operands[1])
+			}
+		})
+	}
+}
+
+// TestYearMonth_ValidateRejectsYearZero protects that a YearMonth is only
+// valid if its dates are: Date has no year 0, so "0000-05" would add months
+// through an invalid date and give "0001-02" for AddMonths(1).
+func TestYearMonth_ValidateRejectsYearZero(t *testing.T) {
+	require.Error(t, YearMonth("0000-05").Validate())
+	require.NoError(t, YearMonth("0001-05").Validate())
+	require.Equal(t, YearMonth("0000-05"), YearMonth("0000-05").AddMonths(1), "invalid stays unchanged")
+}
+
+// TestYearMonth_ValueOfAValidDate protects writing the year-month of a
+// valid Date: YearMonth accepted only the years up to 3000, so Value
+// failed for the year-month of a valid Date like "9999-12-31", which a
+// database column or report period can hold. Only the zero year-month
+// "0001-01" of the dates "0001-01-02" to "0001-01-31" is written as NULL.
+func TestYearMonth_ValueOfAValidDate(t *testing.T) {
+	for _, d := range []Date{"0001-02-01", "3001-01-01", "9999-12-31"} {
+		ym := YearMonthOfTime(d.Midnight())
+		v, err := ym.Value()
+		require.NoError(t, err, "YearMonth(%q).Value()", ym)
+		require.Equal(t, string(d[:7]), v)
+		require.True(t, ym.ContainsDate(d), "ContainsDate(%q)", d)
+	}
+
+	ym := YearMonthFrom(9999, time.December)
+	require.Equal(t, YearMonth("9999-12"), ym)
+	require.Equal(t, 9999, ym.Year())
+	require.Equal(t, time.December, ym.Month())
+	v, err := ym.Nullable().Value()
+	require.NoError(t, err, "NullableYearMonth.Value")
+	require.Equal(t, "9999-12", v)
+
+	// A year-month after the years of Date is still refused
+	_, err = YearMonthFrom(10000, time.January).Value()
+	require.Error(t, err)
+}
+
+// Normalized trims the surrounding whitespace, which a typed or OCR read
+// period often has, and returns an invalid value unchanged with an error,
+// like the other normalizing types, so the error can name the input.
+func TestYearMonth_Normalized(t *testing.T) {
+	for input, want := range map[YearMonth]YearMonth{
+		"2023-07":    "2023-07",
+		" 2023-07\t": "2023-07",
+	} {
+		got, err := input.Normalized()
+		require.NoError(t, err, "%q", input)
+		require.Equal(t, want, got, "%q", input)
+		require.Equal(t, input == want, input.ValidAndNormalized(), "%q", input)
+	}
+	for _, input := range []YearMonth{"", "  ", "2023-13", "0000-05", "2023-7", "07/2023"} {
+		got, err := input.Normalized()
+		require.Error(t, err, "%q", input)
+		require.Equal(t, input, got, "%q unchanged", input)
+		require.False(t, input.ValidAndNormalized(), "%q", input)
+	}
+}
+
+// The accessors work on the normalized year-month,
+// because Valid accepts the spellings that Normalized accepts.
+func TestYearMonth_AccessorsNormalize(t *testing.T) {
+	ym := YearMonth(" 2023-07 ")
+	require.Equal(t, 2023, ym.Year())
+	require.Equal(t, time.July, ym.Month())
+	require.Equal(t, Date("2023-07-15"), ym.Date(15))
+	require.Equal(t, "2023-07", ym.Format(YearMonthLayout))
+	require.Equal(t, YearMonth("2023-09"), ym.AddMonths(2))
+}
+
+// Reading JSON normalizes like Date.UnmarshalJSON, so a value read from
+// JSON is canonical if it is valid and compares with ==. An invalid value
+// is kept without an error, so one bad period doesn't fail a whole
+// document, and Validate reports it.
+func TestYearMonth_UnmarshalJSON(t *testing.T) {
+	for data, want := range map[string]YearMonth{
+		`"2023-07"`:   "2023-07",
+		`" 2023-07 "`: "2023-07",
+		`"2023-13"`:   "2023-13",
+		`"bad"`:       "bad",
+		`""`:          "",
+		`"  "`:        "",
+	} {
+		ym := YearMonth("2024-01")
+		require.NoError(t, json.Unmarshal([]byte(data), &ym), "json.Unmarshal(%s)", data)
+		require.Equal(t, want, ym, "json.Unmarshal(%s)", data)
+	}
+
+	// JSON null leaves a non-nullable value unchanged like encoding/json
+	// does for a string type, any other JSON value is an error
+	ym := YearMonth("2024-01")
+	require.NoError(t, json.Unmarshal([]byte(`null`), &ym))
+	require.Equal(t, YearMonth("2024-01"), ym)
+	require.Error(t, json.Unmarshal([]byte(`202307`), &ym))
+	require.Equal(t, YearMonth("2024-01"), ym)
+}
+
+// TestYearMonth_ReadingAndWriting checks the reading and writing contract
+// shared by the normalizing types, like for Date: every reading path stores
+// a valid year-month normalized, a zero one as "" and an invalid one
+// unchanged, Value refuses an invalid year-month, and fmt prints it as stored.
+func TestYearMonth_ReadingAndWriting(t *testing.T) {
+	normtest.Run(t, normtest.Spec[YearMonth]{
+		Canonical:    "2023-07",
+		Variants:     []YearMonth{" 2023-07 ", "\t2023-07\n"},
+		Invalid:      []YearMonth{"2023-13", "2023-7", "0000-05", "07/2023", "bad"},
+		Blank:        []YearMonth{"0001-01", "0000-00", " 0001-01 "},
+		StoredString: true,
+	})
+}
+
+// A date or timestamp column scans as its year-month, like Date.Scan
+// scans it as its date, and the zero time as the zero value "".
+func TestYearMonth_ScanTime(t *testing.T) {
+	var ym YearMonth
+	require.NoError(t, ym.Scan(time.Date(2023, 7, 15, 10, 0, 0, 0, time.UTC)))
+	require.Equal(t, YearMonth("2023-07"), ym)
+	require.NoError(t, ym.Scan(time.Time{}))
+	require.Equal(t, YearMonth(""), ym)
+}
+
+// A zero year-month is blank like a zero Date, so Format returns ""
+// for every layout, like Date.Format and NullableYearMonth.Format.
+func TestYearMonth_FormatZero(t *testing.T) {
+	for _, ym := range []YearMonth{"", "  ", "0001-01", "0000-00", " 0001-01 "} {
+		require.Equal(t, "", ym.Format(YearMonthLayout), "%q", ym)
+		require.Equal(t, "", ym.Format("01/2006"), "%q", ym)
+	}
+}
+
+// Every spelling of the blank value is the same "no value" for IsZero,
+// Value and MarshalJSON, so Compare must not order them apart,
+// like Date.Compare doesn't order the zero dates apart.
+func TestYearMonthAndYearQuarter_CompareBlank(t *testing.T) {
+	require.Equal(t, 0, YearMonth("").Compare("0001-01"))
+	require.Equal(t, 0, YearMonth(" ").Compare(""))
+	require.Equal(t, 0, YearMonth("0000-00").Compare("0001-01"))
+	require.Equal(t, 0, YearQuarter("0001-q1").Compare("0001-Q1"))
+	require.Equal(t, 0, YearQuarter("0000-Q0").Compare(""))
+	require.Equal(t, 0, YearQuarter(" ").Compare(""))
+	require.Equal(t, -1, YearMonth("").Compare("2023-01"))
+	require.Equal(t, -1, YearQuarter("0000-Q0").Compare("2023-Q1"))
+}
+
+// Like Date.Scan, a time.Time is read in its own location, not in UTC,
+// so a TIMESTAMPTZ returned in the session time zone gives the period
+// of that zone.
+func TestYearMonthAndYearQuarter_ScanTimeLocation(t *testing.T) {
+	loc := time.FixedZone("UTC-5", -5*60*60)
+	tm := time.Date(2023, 7, 1, 2, 0, 0, 0, time.UTC).In(loc)
+	var ym YearMonth
+	require.NoError(t, ym.Scan(tm))
+	require.Equal(t, YearMonth("2023-06"), ym)
+	var yq YearQuarter
+	require.NoError(t, yq.Scan(tm))
+	require.Equal(t, YearQuarter("2023-Q2"), yq)
+}
+
+// The schemas document the canonical form that MarshalJSON writes,
+// and the nullable ones also null, which is their default,
+// like TestNullableDate_JSONSchema checks for NullableDate.
+func TestYearMonthAndYearQuarter_JSONSchema(t *testing.T) {
+	re := regexp.MustCompile(YearMonth("").JSONSchema().Pattern)
+	require.True(t, re.MatchString("2023-07"))
+	require.False(t, re.MatchString("2023-13"))
+	re = regexp.MustCompile(YearQuarter("").JSONSchema().Pattern)
+	require.True(t, re.MatchString("2023-Q3"))
+	require.False(t, re.MatchString("2023-Q5"))
+
+	for name, schema := range map[string]interface {
+		JSONSchema() *jsonschema.Schema
+	}{
+		"NullableYearMonth":   NullableYearMonth(""),
+		"NullableYearQuarter": NullableYearQuarter(""),
+	} {
+		s := schema.JSONSchema()
+		require.Len(t, s.OneOf, 2, name)
+		require.Equal(t, "null", s.OneOf[1].Type, "%s: null must be allowed", name)
+		data, err := json.Marshal(s.Default)
+		require.NoError(t, err)
+		require.Equal(t, "null", string(data), "%s: the default is JSON null", name)
+		re := regexp.MustCompile(s.OneOf[0].Pattern)
+		require.True(t, re.MatchString(map[string]string{"NullableYearMonth": "2023-07", "NullableYearQuarter": "2023-Q3"}[name]), name)
 	}
 }

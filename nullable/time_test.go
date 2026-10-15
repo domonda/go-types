@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/domonda/go-types/internal/xmlattrtest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -267,4 +268,11 @@ func Test_Time_PrettyPrint(t *testing.T) {
 	_, err = TimeFrom(refTime).PrettyPrint(&buf)
 	require.NoError(t, err)
 	assert.NotEmpty(t, buf.String())
+}
+
+// TestTime_MarshalXMLAttr protects against a panic: encoding/xml calls the value
+// receiver MarshalText through a nil *Time attribute field. MarshalXMLAttr
+// leaves the attribute out instead and writes a non-nil one like MarshalText.
+func TestTime_MarshalXMLAttr(t *testing.T) {
+	xmlattrtest.NilPointer(t, TimeNull, TimeFrom(time.Date(2024, 3, 5, 6, 7, 8, 0, time.UTC)))
 }

@@ -8,6 +8,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/domonda/go-types/internal/xmlattrtest"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -107,6 +108,9 @@ func TestIDSlice_Scan(t *testing.T) {
 		{name: "nil", value: nil, want: nil, wantErr: false},
 		{name: "empty", value: ``, want: nil, wantErr: false},
 		{name: "xxx", value: `xxx`, want: nil, wantErr: true},
+		// The array literal is text, a 16 character element
+		// must not be taken as raw binary UUID bytes
+		{name: "16 character element", value: `{abcdefghijklmnop}`, want: nil, wantErr: true},
 		{
 			name:  "21e70a0c-7f0e-44d8-8ae5-48992b89d0c5",
 			value: `{"21e70a0c-7f0e-44d8-8ae5-48992b89d0c5"}`,
@@ -418,6 +422,10 @@ func TestIDSlice_MarshalAndUnmarshalText(t *testing.T) {
 	if err := parsed.UnmarshalText([]byte("[not-an-uuid]")); err == nil {
 		t.Error("UnmarshalText of an invalid ID returned no error")
 	}
+	// A 16 character element must not be taken as raw binary UUID bytes
+	if err := parsed.UnmarshalText([]byte("[abcdefghijklmnop]")); err == nil {
+		t.Error("UnmarshalText of a 16 character element returned no error")
+	}
 }
 
 func TestIDSlice_ScanBytes(t *testing.T) {
@@ -460,6 +468,13 @@ func TestIDSlice_UnmarshalJSON_Errors(t *testing.T) {
 		{name: "not an array", data: `{"a":1}`},
 		{name: "not a string array", data: `[1,2]`},
 		{name: "invalid ID", data: `["not-an-uuid"]`},
+		// A JSON string is text, a 16 character string
+		// must not be taken as raw binary UUID bytes
+		{name: "16 character string", data: `["abcdefghijklmnop"]`},
+		// Accepting whitespace must not accept missing elements
+		{name: "only a comma", data: `[ , ]`},
+		{name: "trailing comma", data: `["9256978d-18e6-4435-ad16-d7046d41b71a", ]`},
+		{name: "invalid ID between whitespace", data: "[ \"not-an-uuid\" ]"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -471,11 +486,47 @@ func TestIDSlice_UnmarshalJSON_Errors(t *testing.T) {
 	}
 }
 
+// TestIDSlice_UnmarshalJSON_Whitespace checks that IDSlice and IDSet accept
+// every valid JSON array of UUID strings, because JSON allows whitespace
+// around the array elements and pretty printed JSON from other systems,
+// like an empty array formatted as "[ ]" or one element per line,
+// must unmarshal like the compact form instead of failing.
+func TestIDSlice_UnmarshalJSON_Whitespace(t *testing.T) {
+	tests := []struct {
+		name string
+		data string
+		want IDSlice
+	}{
+		{name: "empty with space", data: `[ ]`, want: IDSlice{}},
+		{name: "empty with newline", data: "[\n]", want: IDSlice{}},
+		{name: "empty with tab and CR", data: "[\t\r\n ]", want: IDSlice{}},
+		{name: "spaces around elements", data: `[ "9256978d-18e6-4435-ad16-d7046d41b71a" , "a92bb308-f0f9-43d2-b31d-c0962198c31c" ]`, want: IDSlice{testIDA, testIDB}},
+		{name: "one element per line", data: "[\n  \"9256978d-18e6-4435-ad16-d7046d41b71a\",\n  \"a92bb308-f0f9-43d2-b31d-c0962198c31c\"\n]", want: IDSlice{testIDA, testIDB}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var s IDSlice
+			if err := json.Unmarshal([]byte(tt.data), &s); err != nil {
+				t.Fatalf("json.Unmarshal(%q) into IDSlice returned %v", tt.data, err)
+			}
+			if s == nil || !s.Equal(tt.want) {
+				t.Errorf("json.Unmarshal(%q) into IDSlice = %#v, want %#v", tt.data, s, tt.want)
+			}
+
+			var set IDSet
+			if err := json.Unmarshal([]byte(tt.data), &set); err != nil {
+				t.Fatalf("json.Unmarshal(%q) into IDSet returned %v", tt.data, err)
+			}
+			if set == nil || !set.Equal(tt.want.AsSet()) {
+				t.Errorf("json.Unmarshal(%q) into IDSet = %s, want %s", tt.data, set, tt.want.AsSet())
+			}
+		})
+	}
+}
+
 func TestIDSlice_AsSet(t *testing.T) {
-	// AsSet is the only behavioural line changed in idslice.go on this branch
-	// (AddSlice -> InsertAll). It is otherwise only reached transitively via
-	// MakeIDSet and IDSet.Scan, so the deduplication it must perform is
-	// asserted here directly.
+	// AsSet is only reached transitively via MakeIDSet and IDSet.Scan,
+	// so the deduplication it must perform is asserted here directly.
 	got := IDSlice{testIDA, testIDB, testIDA}.AsSet()
 	if want := MakeIDSet(testIDA, testIDB); !got.Equal(want) {
 		t.Errorf("AsSet() = %s, want %s", got, want)
@@ -537,4 +588,11 @@ func TestIDSlice_JSONNullVsEmpty(t *testing.T) {
 			t.Errorf("IDSet.UnmarshalJSON([]) = %v, want an allocated empty set", set)
 		}
 	})
+}
+
+// TestIDSlice_MarshalXMLAttr protects against a panic: encoding/xml calls the value
+// receiver MarshalText through a nil *IDSlice attribute field. MarshalXMLAttr
+// leaves the attribute out instead and writes a non-nil one like MarshalText.
+func TestIDSlice_MarshalXMLAttr(t *testing.T) {
+	xmlattrtest.NilPointer(t, IDSlice(nil), IDSlice{IDMustFromString("6ba7b810-9dad-11d1-80b4-00c04fd430c8")})
 }

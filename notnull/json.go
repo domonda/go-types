@@ -10,8 +10,8 @@ import (
 
 // JSON is a []byte slice containing JSON text.
 // JSON(nil) is interpreted as an empty json object: {}
-// Implements the interfaces:
-// json.Marshaler, json.Unmarshaler, driver.Value, sql.Scanner.
+// Implements the interfaces
+// json.Marshaler, json.Unmarshaler, driver.Valuer and sql.Scanner.
 // Use nullable.JSON if the JSON(nil) value should be
 // interpreted as JSON "null" and SQL "NULL".
 type JSON []byte
@@ -21,7 +21,7 @@ func MarshalJSON(source any) (JSON, error) {
 	return json.Marshal(source)
 }
 
-// MarshalFrom marshalles source as JSON and sets it
+// MarshalFrom marshals source as JSON and sets it
 // at j when there was no error.
 func (j *JSON) MarshalFrom(source any) error {
 	jsonBytes, err := json.Marshal(source)
@@ -31,28 +31,31 @@ func (j *JSON) MarshalFrom(source any) error {
 	return err
 }
 
-// UnmarshalTo unmashalles the JSON of j to dest
+// UnmarshalTo unmarshals the JSON of j to dest.
+// A nil or empty j is unmarshalled as the empty object {}.
 func (j JSON) UnmarshalTo(dest any) error {
-	if j == nil {
+	if len(j) == 0 {
 		return json.Unmarshal([]byte("{}"), dest)
 	}
 	return json.Unmarshal(j, dest)
 }
 
 // MarshalJSON returns j as the JSON encoding of j.
+// A nil or empty j holds no JSON text and returns {}.
 // MarshalJSON implements encoding/json.Marshaler
 // See the package function MarshalJSON to marshal
 // a struct into JSON
 func (j JSON) MarshalJSON() ([]byte, error) {
-	if j == nil {
+	if len(j) == 0 {
 		return []byte("{}"), nil
 	}
 	return j, nil
 }
 
 // UnmarshalJSON sets *j to a copy of sourceJSON.
-// UnarshalJSON implements encoding/json.Unmarshaler
-// See method Unmarshal for unmarshalling into a struct.
+// The JSON null value is stored as the text null, not as nil.
+// UnmarshalJSON implements encoding/json.Unmarshaler
+// See method UnmarshalTo for unmarshalling into a struct.
 func (j *JSON) UnmarshalJSON(sourceJSON []byte) error {
 	if j == nil {
 		return errors.New("UnmarshalJSON on nil pointer")
@@ -63,16 +66,16 @@ func (j *JSON) UnmarshalJSON(sourceJSON []byte) error {
 }
 
 // Valid reports whether j is a valid JSON encoding.
+// A nil or empty j is valid because it stands for
+// the empty object {} that MarshalJSON and Value write.
 func (j JSON) Valid() bool {
-	if j == nil {
-		return false
-	}
-	return json.Valid(j)
+	return len(j) == 0 || json.Valid(j)
 }
 
 // Value returns j as a SQL value.
+// A nil or empty JSON is written as the empty object {} like MarshalJSON writes it.
 func (j JSON) Value() (driver.Value, error) {
-	if j == nil {
+	if len(j) == 0 {
 		return []byte("{}"), nil
 	}
 	return []byte(j), nil
@@ -88,19 +91,29 @@ func (j JSON) IsEmpty() bool {
 }
 
 // Scan stores the src in *j. No validation is done.
+// SQL NULL and an empty string or []byte, which hold
+// no JSON text, store the empty object {}.
 func (j *JSON) Scan(src any) error {
 	switch x := src.(type) {
 	case nil:
 		*j = JSON("{}") // should we do this, set nil or error?
 
 	case string:
-		// Converting from string does a copy
-		*j = JSON(x)
+		if x == "" {
+			*j = JSON("{}")
+		} else {
+			// Converting from string does a copy
+			*j = JSON(x)
+		}
 
 	case []byte:
-		// Need to copy because, src will be gone after call.
-		// Use append trick to make a copy of src bytes
-		*j = append(JSON(nil), x...)
+		if len(x) == 0 {
+			*j = JSON("{}")
+		} else {
+			// Need to copy because, src will be gone after call.
+			// Use append trick to make a copy of src bytes
+			*j = append(JSON(nil), x...)
+		}
 
 	default:
 		return errors.New("Incompatible type for JSON")
@@ -108,10 +121,11 @@ func (j *JSON) Scan(src any) error {
 	return nil
 }
 
-// String returns the JSON as string.
+// String returns the JSON as string,
+// or {} for a nil or empty j.
 // String implements the fmt.Stringer interface.
 func (j JSON) String() string {
-	if j == nil {
+	if len(j) == 0 {
 		return "{}"
 	}
 	return string(j)
@@ -129,8 +143,12 @@ func (j JSON) PrettyPrint(w io.Writer) (int, error) {
 	return fmt.Fprintf(w, "`%s`", j.String())
 }
 
-// Clone returns a copy of j
+// Clone returns a copy of j.
+// A nil j returns nil, so the clone also encodes as {}.
 func (j JSON) Clone() JSON {
+	if j == nil {
+		return nil
+	}
 	clone := make(JSON, len(j))
 	copy(clone, j)
 	return clone

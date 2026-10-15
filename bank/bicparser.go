@@ -9,5 +9,5 @@ type BICParser struct{}
 // Unlike full normalization, it does not remove spaces or append "XXX" for 8-character BICs.
 func (BICParser) Parse(str string, langHints ...language.Code) (normalized string, err error) {
 	// Don't normalize by removing spaces and appending "XXX" in case of a valid length of 8 charaters.
-	return str, BIC(str).Validate()
+	return str, BIC(str).validateCompact()
 }

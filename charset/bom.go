@@ -113,27 +113,21 @@ func SplitBOM(b []byte) (BOM, []byte) {
 // DecodeWithBOM detects the BOM at the beginning of b and decodes the remaining
 // bytes to UTF-8. Returns an error if the BOM indicates an unsupported encoding.
 func DecodeWithBOM(b []byte) ([]byte, error) {
-	bom, data := SplitBOM(b)
-	return bom.Decode(data)
+	// BOM.Decode strips the one BOM itself
+	return BOMOfBytes(b).Decode(b)
 }
 
 // DecodeStringWithBOM detects the BOM at the beginning of b and decodes the remaining
 // bytes to a UTF-8 string. Returns an error if the BOM indicates an unsupported encoding.
 func DecodeStringWithBOM(b []byte) (string, error) {
-	bom, data := SplitBOM(b)
-	return bom.DecodeString(data)
+	// BOM.DecodeString strips the one BOM itself
+	return BOMOfBytes(b).DecodeString(b)
 }
 
 // trimExpectedBOM strips a leading bom from data and returns the rest.
-//
-// bom is what the caller already knows the encoding to be, so it is matched
-// before falling back to BOMOfBytes detection. That order matters for the
-// UTF-16LE/UTF-32LE overlap: the valid UTF-16LE sequence FF FE 00 00 (BOM
-// followed by U+0000) is indistinguishable from the UTF-32LE BOM, and
-// detection resolves it to UTF-32LE. A caller passing BOMUTF16LE has already
-// resolved that ambiguity and must not be second-guessed.
-//
 // Returns an error if data carries a different BOM than the expected one.
+// Decode and DecodeString only call it for the BOMs other than UTF-16 and
+// UTF-32, whose BOM DecodeUTF16 and DecodeUTF32 validate themselves.
 func trimExpectedBOM(data []byte, bom BOM) ([]byte, error) {
 	if bom != NoBOM && bytes.HasPrefix(data, []byte(bom)) {
 		return data[len(bom):], nil
@@ -166,20 +160,24 @@ func (bom BOM) Encoding() (Encoding, error) {
 // An optional leading BOM in data is validated against bom and then stripped.
 // Returns an error if the BOM does not match or the encoding is unsupported.
 func (bom BOM) Decode(data []byte) ([]byte, error) {
-	data, err := trimExpectedBOM(data, bom)
-	if err != nil {
-		return nil, err
-	}
-
+	// DecodeUTF16 and DecodeUTF32 validate and strip one leading BOM
+	// themselves, stripping it here too would remove a U+FEFF
+	// that belongs to the text after the BOM
 	switch bom {
-	case NoBOM, BOMUTF8:
-		return data, nil
-
 	case BOMUTF16LE, BOMUTF16BE:
 		return DecodeUTF16(data, bom.Endian())
 
 	case BOMUTF32LE, BOMUTF32BE:
 		return DecodeUTF32(data, bom.Endian())
+	}
+
+	data, err := trimExpectedBOM(data, bom)
+	if err != nil {
+		return nil, err
+	}
+	switch bom {
+	case NoBOM, BOMUTF8:
+		return data, nil
 	}
 
 	return nil, fmt.Errorf("unsupported BOM: %v", []byte(bom))
@@ -189,20 +187,22 @@ func (bom BOM) Decode(data []byte) ([]byte, error) {
 // An optional leading BOM in data is validated against bom and then stripped.
 // Returns an error if the BOM does not match or the encoding is unsupported.
 func (bom BOM) DecodeString(data []byte) (string, error) {
-	data, err := trimExpectedBOM(data, bom)
-	if err != nil {
-		return "", err
-	}
-
+	// See Decode about the BOM of UTF-16 and UTF-32
 	switch bom {
-	case NoBOM, BOMUTF8:
-		return string(data), nil
-
 	case BOMUTF16LE, BOMUTF16BE:
 		return DecodeUTF16String(data, bom.Endian())
 
 	case BOMUTF32LE, BOMUTF32BE:
 		return DecodeUTF32String(data, bom.Endian())
+	}
+
+	data, err := trimExpectedBOM(data, bom)
+	if err != nil {
+		return "", err
+	}
+	switch bom {
+	case NoBOM, BOMUTF8:
+		return string(data), nil
 	}
 
 	return "", fmt.Errorf("unsupported BOM: %v", []byte(bom))

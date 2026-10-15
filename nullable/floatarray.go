@@ -2,10 +2,12 @@ package nullable
 
 import (
 	"database/sql/driver"
+	"fmt"
 	"slices"
 	"strconv"
 	"strings"
 
+	"github.com/domonda/go-types/internal"
 	"github.com/domonda/go-types/notnull"
 )
 
@@ -72,11 +74,28 @@ func (a FloatArray) Value() (driver.Value, error) {
 // scans to a non-nil slice: {} to an empty slice, otherwise the
 // parsed PostgreSQL float array literal like {1.5,2,3}.
 func (a *FloatArray) Scan(src any) error {
-	if src == nil {
+	switch src := src.(type) {
+	case []byte:
+		return a.scanBytes(src)
+
+	case string:
+		return a.scanBytes([]byte(src))
+
+	case nil:
 		*a = nil
 		return nil
 	}
-	return (*notnull.FloatArray)(a).Scan(src)
+
+	return fmt.Errorf("can't convert %T to nullable.FloatArray", src)
+}
+
+func (a *FloatArray) scanBytes(src []byte) error {
+	array, err := internal.ParseFloatArray(src, "nullable.FloatArray")
+	if err != nil {
+		return err
+	}
+	*a = array
+	return nil
 }
 
 // Len is the number of elements in the collection.

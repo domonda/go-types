@@ -74,8 +74,12 @@ func Test_JSON_UnmarshalTo(t *testing.T) {
 	assert.Equal(t, map[string]int{}, dest)
 }
 
+// A nil or empty JSON is written as {}, so it is valid. Else the zero
+// value of a struct with a JSON field would fail types.DeepValidate
+// while it marshals to valid JSON.
 func Test_JSON_Valid(t *testing.T) {
-	assert.False(t, JSON(nil).Valid(), "nil JSON is not considered valid")
+	assert.True(t, JSON(nil).Valid(), "nil JSON stands for {}")
+	assert.True(t, JSON{}.Valid(), "empty JSON stands for {}")
 	assert.True(t, JSON(`{"a":1}`).Valid())
 	assert.True(t, JSON(`[1,2,3]`).Valid())
 	assert.True(t, JSON(`"hello"`).Valid())
@@ -148,6 +152,59 @@ func Test_JSON_Clone(t *testing.T) {
 	assert.Equal(t, JSON(`{"a":1}`), original)
 }
 
+// A clone must encode exactly like its original. JSON(nil) stands for
+// the empty object {}, but a non-nil empty clone of it marshalled to
+// zero bytes, which is invalid JSON and made json.Marshal fail.
+func Test_JSON_Clone_Nil(t *testing.T) {
+	clone := JSON(nil).Clone()
+	assert.Nil(t, clone)
+
+	b, err := clone.MarshalJSON()
+	require.NoError(t, err)
+	assert.Equal(t, "{}", string(b))
+
+	b, err = json.Marshal(struct{ J JSON }{J: clone})
+	require.NoError(t, err)
+	assert.Equal(t, `{"J":{}}`, string(b))
+
+	val, err := clone.Value()
+	require.NoError(t, err)
+	assert.Equal(t, []byte("{}"), val)
+	assert.Equal(t, "{}", clone.String())
+}
+
+// An empty database value holds no JSON text. It must scan like SQL NULL to
+// the empty object {} that JSON(nil) stands for, and any empty JSON must
+// marshal like JSON(nil), because zero bytes are invalid JSON and made
+// json.Marshal of a struct holding the scanned value fail with
+// "unexpected end of JSON input".
+func Test_JSON_EmptyLikeNil(t *testing.T) {
+	for _, src := range []any{"", []byte{}} {
+		j := JSON(`{"old":1}`)
+		require.NoError(t, j.Scan(src), "Scan(%#v)", src)
+		assert.Equal(t, JSON("{}"), j, "Scan(%#v) stores {} like Scan(nil)", src)
+	}
+
+	b, err := JSON{}.MarshalJSON()
+	require.NoError(t, err)
+	assert.Equal(t, "{}", string(b), "non-nil empty JSON marshals like JSON(nil)")
+
+	b, err = json.Marshal(struct{ J JSON }{J: JSON("")})
+	require.NoError(t, err)
+	assert.Equal(t, `{"J":{}}`, string(b))
+
+	// The other methods treat empty JSON like nil as well,
+	// so they agree with what MarshalJSON and Value write
+	assert.Equal(t, "{}", JSON{}.String())
+	var buf bytes.Buffer
+	_, err = JSON{}.PrettyPrint(&buf)
+	require.NoError(t, err)
+	assert.Equal(t, "`{}`", buf.String())
+	var dest map[string]int
+	require.NoError(t, JSON{}.UnmarshalTo(&dest))
+	assert.Equal(t, map[string]int{}, dest)
+}
+
 func Test_MarshalJSON_Package(t *testing.T) {
 	j, err := MarshalJSON(map[string]int{"a": 1})
 	require.NoError(t, err)
@@ -155,4 +212,12 @@ func Test_MarshalJSON_Package(t *testing.T) {
 
 	_, err = MarshalJSON(make(chan int))
 	assert.Error(t, err)
+}
+
+// A non-nil empty JSON is marshalled as {} like nil, so it must also be
+// written as '{}': empty bytes are rejected by a PostgreSQL json column.
+func Test_JSON_EmptyValueIsEmptyObject(t *testing.T) {
+	v, err := JSON("").Value()
+	require.NoError(t, err)
+	require.Equal(t, []byte("{}"), v)
 }

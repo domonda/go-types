@@ -2,13 +2,16 @@ package date
 
 import (
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/domonda/go-types/internal/normtest"
 	"github.com/domonda/go-types/language"
 )
 
@@ -51,17 +54,21 @@ func Test_Normalize(t *testing.T) {
 		"2 janv. 2019":  "2019-01-02",
 		"30 janv. 2019": "2019-01-30",
 		"23/gen/2019":   "2019-01-23",
+		// French also abbreviates juillet as juill. and février as fév.
+		"5 juill. 2021": "2021-07-05",
+		"15 fév. 2020":  "2020-02-15",
+		"15 fev 2020":   "2020-02-15",
 
 		// US "Month Day, Year" — comma is now a separator and
 		// abbreviated months may end in '.' (also a separator).
 		// Test data adapted from github.com/araddon/dateparse.
-		"oct 7, 1970":  "1970-10-07",
-		"oct 7, '70":   "1970-10-07",
-		"Oct 7, '70":   "1970-10-07",
-		"Oct. 7, '70":  "1970-10-07",
-		"oct. 7, '70":  "1970-10-07",
-		"oct. 7, 1970": "1970-10-07",
-		"Sept. 7, '70": "1970-09-07",
+		"oct 7, 1970":   "1970-10-07",
+		"oct 7, '70":    "1970-10-07",
+		"Oct 7, '70":    "1970-10-07",
+		"Oct. 7, '70":   "1970-10-07",
+		"oct. 7, '70":   "1970-10-07",
+		"oct. 7, 1970":  "1970-10-07",
+		"Sept. 7, '70":  "1970-09-07",
 		"sept. 7, 1970": "1970-09-07",
 		"Feb 8, 2009":   "2009-02-08",
 
@@ -71,6 +78,14 @@ func Test_Normalize(t *testing.T) {
 		"7 Sep 1970":       "1970-09-07",
 		"7 June 1970":      "1970-06-07",
 		"7 September 1970": "1970-09-07",
+
+		// "august" ends in the ordinal suffix "st", which must only be
+		// stripped after digits, else the month name becomes "augu".
+		"17 August 2012":   "2012-08-17",
+		"August 17, 2012":  "2012-08-17",
+		"1. August 2016":   "2016-08-01",
+		"1st August 2020":  "2020-08-01",
+		"21st August 2020": "2020-08-21",
 
 		// Leading weekday name is now skipped when present.
 		"Mon Jan 02 2006": "2006-01-02",
@@ -266,6 +281,11 @@ func Test_PeriodRange(t *testing.T) {
 		"2019-W1":  {"2018-12-31", "2019-01-06"},
 		"2019-W01": {"2018-12-31", "2019-01-06"},
 		"2019-W02": {"2019-01-07", "2019-01-13"},
+		// January 1st on a Friday or Saturday belongs to the last
+		// week of the previous year, so week 1 starts after it.
+		"2020-W53": {"2020-12-28", "2021-01-03"},
+		"2021-W01": {"2021-01-04", "2021-01-10"},
+		"2022-W01": {"2022-01-03", "2022-01-09"},
 	}
 
 	for period, expected := range periodDates {
@@ -295,6 +315,10 @@ func Test_PeriodRange(t *testing.T) {
 		"2018-Q5",
 		"2018-H0",
 		"2018-H3",
+		// 2021 has only 52 ISO weeks, its "week 53" would be 2022-W01
+		"2021-W53",
+		"2021-W54",
+		"2021-W00",
 		"2018-H03",
 		"2018-W0",
 		"2018-W00",
@@ -381,23 +405,23 @@ func TestDate_Normalized(t *testing.T) {
 	tests := []struct {
 		name    string
 		date    Date
-		lang    []language.Code
+		lang    language.Code
 		want    Date
 		wantErr bool
 	}{
 		// Valid:
-		{name: "earliest", date: "0001-01-01", lang: nil, want: "0001-01-01"},
-		{name: "3000-01-01", date: "3000-01-01", lang: nil, want: "3000-01-01"},
-		{name: "3000/01/01", date: "3000/01/01", lang: nil, want: "3000-01-01"},
-		{name: "3000.01.01", date: "3000.01.01", lang: nil, want: "3000-01-01"},
-		// Invalid:
-		{name: "empty", date: "", lang: nil, wantErr: true},
-		{name: "invalid year", date: "0000-01-01", lang: nil, wantErr: true},
-		{name: "invalid month", date: "2020-00-01", lang: nil, wantErr: true},
+		{name: "earliest", date: "0001-01-02", want: "0001-01-02"},
+		{name: "3000-01-01", date: "3000-01-01", want: "3000-01-01"},
+		{name: "3000/01/01", date: "3000/01/01", want: "3000-01-01"},
+		{name: "3000.01.01", date: "3000.01.01", want: "3000-01-01"},
+		// Invalid, returned unchanged with the error:
+		{name: "empty", date: "", want: "", wantErr: true},
+		{name: "invalid year", date: "0000-01-01", want: "0000-01-01", wantErr: true},
+		{name: "invalid month", date: "2020-00-01", want: "2020-00-01", wantErr: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := tt.date.Normalized(tt.lang...)
+			got, err := tt.date.NormalizedLang(tt.lang)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Date.Normalized() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -405,6 +429,28 @@ func TestDate_Normalized(t *testing.T) {
 			if got != tt.want {
 				t.Errorf("Date.Normalized() = %v, want %v", got, tt.want)
 			}
+		})
+	}
+}
+
+func TestDate_NormalizedErrorReturnsReceiver(t *testing.T) {
+	// The normalization contract of the module (see
+	// docs/explanation-validation-and-normalization.md): on error the
+	// receiver comes back unchanged, so a caller that ignores or logs the
+	// error still has the input instead of an empty date.
+	for _, d := range []Date{"foo", "", "  ", "2020-13-01", "0000-00-00"} {
+		t.Run(string(d), func(t *testing.T) {
+			got, err := d.Normalized()
+			require.Error(t, err)
+			assert.Equal(t, d, got)
+
+			got, err = d.NormalizedLang(language.EN)
+			require.Error(t, err)
+			assert.Equal(t, d, got, "with language hint")
+
+			got, err = Normalize(string(d))
+			require.Error(t, err)
+			assert.Equal(t, d, got, "Normalize")
 		})
 	}
 }
@@ -420,8 +466,11 @@ func TestYearWeekRange(t *testing.T) {
 		wantMonday Date
 		wantSunday Date
 	}{
-		{name: "2021/-1", args: args{year: 2021, week: -1}, wantMonday: "2020-12-14", wantSunday: "2020-12-20"},
-		{name: "2021/0", args: args{year: 2021, week: 0}, wantMonday: "2020-12-21", wantSunday: "2020-12-27"},
+		// Weeks outside of 1..53 count from the Monday of ISO week 1 (2021-01-04),
+		// so week 0 of 2021 is ISO week 2020-W53.
+		{name: "2021/-1", args: args{year: 2021, week: -1}, wantMonday: "2020-12-21", wantSunday: "2020-12-27"},
+		{name: "2021/0", args: args{year: 2021, week: 0}, wantMonday: "2020-12-28", wantSunday: "2021-01-03"},
+		{name: "2021/1", args: args{year: 2021, week: 1}, wantMonday: "2021-01-04", wantSunday: "2021-01-10"},
 		{name: "2020/52", args: args{year: 2020, week: 52}, wantMonday: "2020-12-21", wantSunday: "2020-12-27"},
 		{name: "2020/53", args: args{year: 2020, week: 53}, wantMonday: "2020-12-28", wantSunday: "2021-01-03"},
 		{name: "2020/54", args: args{year: 2020, week: 54}, wantMonday: "2021-01-04", wantSunday: "2021-01-10"},
@@ -596,11 +645,76 @@ func TestDate_IsZero(t *testing.T) {
 		{name: "0000-00-00", date: "0000-00-00", want: true},
 		{name: "0001-01-01", date: "0001-01-01", want: true},
 		{name: "valid date", date: "2023-12-25", want: false},
+		{name: "zero date-time", date: "0000-00-00 00:00:00", want: true},
+		{name: "zero ISO date-time", date: "0000-00-00T00:00:00Z", want: true},
+		{name: "zero German", date: "00.00.0000", want: true},
+		{name: "zero US", date: "00/00/0000", want: true},
+		{name: "year 0 with month and day", date: "0000-01-00", want: false},
+		{name: "unpadded day", date: "0001-01-1 ", want: true},
+		{name: "month name", date: "Jan 1, 0001", want: true},
+		{name: "year 2000", date: "01.01.2000", want: false},
+		{name: "year 1000", date: "1000-01-01", want: false},
+		// Zeros of a time part are no zero date
+		{name: "fractional zero seconds", date: "2024-05-17T10:30:00.0000000Z", want: false},
+		// Zero-like strings that are no date stay invalid values that
+		// Validate reports, instead of being read as ""
+		{name: "only a zero year", date: "0000", want: false},
+		{name: "two parts", date: "00.0000", want: false},
+		{name: "year and month", date: "0000-00", want: false},
+		{name: "five digit year", date: "00000-00-00", want: false},
+		{name: "three digit year", date: "000-00-0000", want: false},
+		{name: "three digit month", date: "0000.000.00", want: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			require.Equal(t, tt.want, tt.date.IsZero())
+			if !tt.want && tt.date != "" {
+				var scanned Date
+				require.NoError(t, scanned.Scan(string(tt.date)))
+				require.NotEqual(t, Date(""), scanned, "Scan must not read a non-zero value as blank")
+			}
 		})
+	}
+}
+
+// TestDate_IsZeroYearShortcut protects the shortcut of IsZero that tells
+// a date whose date part has no "0000" or "0001" apart from the zero dates
+// without parsing it: a spelling of the zero date 0001-01-01 that Normalize accepts without
+// one of them would not be zero anymore, so reading would store it unchanged
+// and Value would fail on it.
+func TestDate_IsZeroYearShortcut(t *testing.T) {
+	var spellings []string
+	for _, year := range []string{"1", "01", "001", "0001", "'01"} {
+		for _, month := range []string{"1", "01", "jan", "Jan.", "January", "I"} {
+			for _, day := range []string{"1", "01", "1st"} {
+				for _, sep := range []string{"-", ".", "/", " ", ", "} {
+					spellings = append(spellings,
+						year+sep+month+sep+day,
+						day+sep+month+sep+year,
+						month+sep+day+sep+year,
+						year+sep+day+sep+month,
+					)
+				}
+			}
+		}
+	}
+	spellings = append(spellings, "00010101", "0001-01-01T00:00:00Z", "0001-01-01 00:00:00")
+	zeros := 0
+	for _, spelling := range spellings {
+		norm, _, err := normalizeAndCheckDate(spelling, "")
+		if err != nil || norm != zeroDate {
+			continue
+		}
+		zeros++
+		if part := datePart(spelling); !strings.Contains(part, "0000") && !strings.Contains(part, "0001") {
+			t.Errorf("%q normalizes to the zero date without the year 0000 or 0001 in its date part", spelling)
+		}
+		if !Date(spelling).IsZero() {
+			t.Errorf("Date(%q).IsZero() = false, want true", spelling)
+		}
+	}
+	if zeros < 100 {
+		t.Errorf("only %d of the spellings normalize to the zero date", zeros)
 	}
 }
 
@@ -650,6 +764,15 @@ func TestDate_Compare(t *testing.T) {
 		{name: "before", date1: "2023-12-24", date2: "2023-12-25", want: -1},
 		{name: "after", date1: "2023-12-26", date2: "2023-12-25", want: 1},
 		{name: "equal", date1: "2023-12-25", date2: "2023-12-25", want: 0},
+		{name: "equal non-normalized", date1: "25.12.2023", date2: "2023-12-25", want: 0},
+		// Compare is a sort order, so invalid dates must still be ordered
+		// consistently: like the empty string, before every valid date and
+		// equal to each other. Compare must not use the invalid input that
+		// Normalized returns with its error.
+		{name: "invalid before valid", date1: "bad", date2: "0001-01-02", want: -1},
+		{name: "valid after invalid", date1: "2023-12-25", date2: "bad", want: 1},
+		{name: "invalid equals invalid", date1: "bad", date2: "worse", want: 0},
+		{name: "invalid equals empty", date1: "zzz", date2: "", want: 0},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -708,6 +831,47 @@ func TestDate_BetweenExcl(t *testing.T) {
 			require.Equal(t, tt.want, tt.date.BetweenExcl(tt.after, tt.before))
 		})
 	}
+}
+
+func TestDate_ComparisonWithInvalidDate(t *testing.T) {
+	// An invalid date has no position in time, so every comparison with
+	// it must be false in both directions, like NormalizedEqual. Treating
+	// it as the zero time made "2020-01-01" equal to or after "bad", so an
+	// unparsable deadline passed every "is it reached yet" check.
+	valid := Date("2020-01-01")
+	tm := time.Date(2020, 1, 1, 12, 0, 0, 0, time.UTC)
+	for _, invalid := range []Date{"bad", "", "0000-00-00", "2020-13-01"} {
+		t.Run(string(invalid), func(t *testing.T) {
+			assert.False(t, valid.After(invalid), "valid.After")
+			assert.False(t, valid.Before(invalid), "valid.Before")
+			assert.False(t, invalid.After(valid), "invalid.After")
+			assert.False(t, invalid.Before(valid), "invalid.Before")
+			assert.False(t, valid.EqualOrAfter(invalid), "valid.EqualOrAfter")
+			assert.False(t, valid.EqualOrBefore(invalid), "valid.EqualOrBefore")
+			assert.False(t, invalid.EqualOrAfter(valid), "invalid.EqualOrAfter")
+			assert.False(t, invalid.EqualOrBefore(valid), "invalid.EqualOrBefore")
+			assert.False(t, invalid.EqualOrAfter(invalid), "invalid.EqualOrAfter(invalid)")
+
+			assert.False(t, valid.WithinIncl(invalid, "2030-01-01"), "WithinIncl invalid from")
+			assert.False(t, valid.WithinIncl("2010-01-01", invalid), "WithinIncl invalid until")
+			assert.False(t, invalid.WithinIncl("0001-01-01", "9999-12-31"), "invalid.WithinIncl")
+			assert.False(t, valid.BetweenExcl(invalid, "2030-01-01"), "BetweenExcl invalid after")
+			assert.False(t, valid.BetweenExcl("2010-01-01", invalid), "BetweenExcl invalid before")
+			assert.False(t, invalid.BetweenExcl("0001-01-01", "9999-12-31"), "invalid.BetweenExcl")
+
+			assert.False(t, invalid.AfterTime(tm), "AfterTime")
+			assert.False(t, invalid.BeforeTime(tm), "BeforeTime")
+			assert.False(t, invalid.AfterToday(), "AfterToday")
+			assert.False(t, invalid.BeforeToday(), "BeforeToday")
+		})
+	}
+	// The zero date "0001-01-01" is no date, like the empty Date,
+	// while the day after it is the earliest comparable date
+	assert.False(t, Date("0001-01-01").Before(valid))
+	assert.False(t, valid.After("0001-01-01"))
+	assert.False(t, Date("0001-01-01").BeforeTime(tm))
+	assert.True(t, Date("0001-01-02").Before(valid))
+	assert.True(t, valid.After("0001-01-02"))
 }
 
 // Arithmetic tests
@@ -778,7 +942,20 @@ func TestDate_Scan(t *testing.T) {
 		wantErr bool
 	}{
 		{name: "string", value: "2023-12-25", want: "2023-12-25"},
+		// Several SQL drivers return DATE and text columns as []byte,
+		// which must scan exactly like the same string.
+		{name: "[]byte", value: []byte("2023-12-25"), want: "2023-12-25"},
+		{name: "[]byte is normalized", value: []byte("25.12.2023"), want: "2023-12-25"},
+		// Scan never fails on content, so one invalid value doesn't
+		// fail a whole query; it is kept for Validate to report
+		{name: "invalid []byte", value: []byte("invalid"), want: "invalid"},
+		{name: "invalid string", value: "invalid", want: "invalid"},
+		// Zero dates written by other systems are read as the empty Date
+		{name: "zero date 0001-01-01", value: "0001-01-01", want: ""},
+		{name: "zero date 0000-00-00", value: []byte("0000-00-00"), want: ""},
+		{name: "zero date in another format", value: "01.01.0001", want: ""},
 		{name: "time.Time", value: time.Date(2023, 12, 25, 0, 0, 0, 0, time.UTC), want: "2023-12-25"},
+		{name: "zero time.Time", value: time.Time{}, want: ""},
 		{name: "nil", value: nil, want: ""},
 		{name: "invalid type", value: 123, wantErr: true},
 	}
@@ -804,7 +981,9 @@ func TestDate_Value(t *testing.T) {
 		wantErr bool
 	}{
 		{name: "valid date", date: "2023-12-25", want: "2023-12-25"},
-		{name: "zero date", date: "", want: nil},
+		{name: "empty date", date: "", want: nil},
+		{name: "zero date", date: "0001-01-01", want: nil},
+		{name: "zero date in another format", date: "01.01.0001", want: nil},
 		{name: "invalid date", date: "invalid", wantErr: true},
 	}
 	for _, tt := range tests {
@@ -818,6 +997,52 @@ func TestDate_Value(t *testing.T) {
 			}
 		})
 	}
+}
+
+// MarshalJSON writes a Date normalized like Value, because Validate accepts
+// other formats like "25.12.2023": without normalization API consumers
+// would get dates that are not in the "date" format of the JSON schema.
+// A date that can't be normalized is written unchanged instead of failing
+// the write, and a zero date as "".
+func TestDate_MarshalJSON(t *testing.T) {
+	tests := []struct {
+		date Date
+		want string
+	}{
+		{date: "2023-12-25", want: `"2023-12-25"`},
+		{date: "25.12.2023", want: `"2023-12-25"`},
+		{date: "December 25, 2023", want: `"2023-12-25"`},
+		{date: "invalid", want: `"invalid"`},
+		{date: "", want: `""`},
+	}
+	for _, tt := range tests {
+		j, err := json.Marshal(tt.date)
+		require.NoError(t, err)
+		assert.Equal(t, tt.want, string(j), "json.Marshal(Date(%q))", string(tt.date))
+	}
+}
+
+// MarshalText must write the normalized date like Value and MarshalJSON,
+// because encoding/xml uses it: without it XML output would carry
+// whatever spelling Validate accepted, like "25.12.2023". A date that
+// can't be normalized is written unchanged instead of failing the write.
+func TestDate_MarshalText(t *testing.T) {
+	for _, tt := range []struct {
+		date Date
+		want string
+	}{
+		{date: "25.12.2023", want: "2023-12-25"},
+		{date: "invalid", want: "invalid"},
+	} {
+		text, err := tt.date.MarshalText()
+		require.NoError(t, err)
+		assert.Equal(t, tt.want, string(text), "Date(%q).MarshalText()", string(tt.date))
+	}
+
+	type row struct{ D Date }
+	data, err := xml.Marshal(row{D: "25.12.2023"})
+	require.NoError(t, err)
+	assert.Equal(t, `<row><D>2023-12-25</D></row>`, string(data))
 }
 
 // Additional constructor function tests
@@ -851,20 +1076,49 @@ func TestOfTomorrow(t *testing.T) {
 }
 
 func TestYearWeekMonday(t *testing.T) {
+	// ISO 8601 week 1 is the week containing January 4th. Depending on the
+	// weekday of January 1st its Monday is in December of the previous year
+	// or in the first days of January. A wrong Monday shifts every week
+	// period of the year (YearWeekRange, PeriodRange("YYYY-Wnn")) by a week.
 	tests := []struct {
 		name string
 		year int
 		week int
 		want Date
 	}{
-		{name: "2021 week 1", year: 2021, week: 1, want: "2020-12-28"},
+		{name: "2018 week 1, Jan 1 is a Monday", year: 2018, week: 1, want: "2018-01-01"},
+		{name: "2019 week 1, Jan 1 is a Tuesday", year: 2019, week: 1, want: "2018-12-31"},
+		{name: "2020 week 1, Jan 1 is a Wednesday", year: 2020, week: 1, want: "2019-12-30"},
+		{name: "2015 week 1, Jan 1 is a Thursday", year: 2015, week: 1, want: "2014-12-29"},
+		{name: "2021 week 1, Jan 1 is a Friday", year: 2021, week: 1, want: "2021-01-04"},
+		{name: "2022 week 1, Jan 1 is a Saturday", year: 2022, week: 1, want: "2022-01-03"},
+		{name: "2023 week 1, Jan 1 is a Sunday", year: 2023, week: 1, want: "2023-01-02"},
 		{name: "2020 week 53", year: 2020, week: 53, want: "2020-12-28"},
+		{name: "2021 week 52", year: 2021, week: 52, want: "2021-12-27"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := YearWeekMonday(tt.year, tt.week)
 			assert.Equal(t, tt.want, got)
+			assert.Equal(t, time.Monday, got.Weekday())
+			year, week := got.MidnightUTC().ISOWeek()
+			assert.Equal(t, tt.year, year, "time.Time.ISOWeek year")
+			assert.Equal(t, tt.week, week, "time.Time.ISOWeek week")
 		})
+	}
+
+	// Cross-check every week of a range of years covering all weekdays
+	// of January 1st (and leap years) against the standard library.
+	for year := 1999; year <= 2040; year++ {
+		// December 28th is always in the last ISO week of its year
+		_, lastWeek := time.Date(year, 12, 28, 0, 0, 0, 0, time.UTC).ISOWeek()
+		for week := 1; week <= lastWeek; week++ {
+			monday := YearWeekMonday(year, week)
+			gotYear, gotWeek := monday.MidnightUTC().ISOWeek()
+			if gotYear != year || gotWeek != week || monday.Weekday() != time.Monday {
+				t.Errorf("YearWeekMonday(%d, %d) = %s which is a %s in ISO week %d-W%02d", year, week, monday, monday.Weekday(), gotYear, gotWeek)
+			}
+		}
 	}
 }
 
@@ -903,11 +1157,13 @@ func TestFromUntilFromYearAndMonths(t *testing.T) {
 	}
 }
 
-// String and conversion tests
-func TestDate_String(t *testing.T) {
-	assert.Equal(t, "2023-12-25", Date("2023-12-25").String())
-	assert.Equal(t, "2023-12-25", Date("25.12.2023").String())
-	assert.Equal(t, "invalid", Date("invalid").String())
+// Date has no String method, so fmt prints the date as stored: a valid
+// date in another spelling is not shown as if it were normalized, and
+// invalid input is shown exactly as given so it can be corrected.
+func TestDate_FormatsAsStored(t *testing.T) {
+	assert.Equal(t, "2023-12-25", fmt.Sprint(Date("2023-12-25")))
+	assert.Equal(t, "25.12.2023", fmt.Sprint(Date("25.12.2023")))
+	assert.Equal(t, "invalid", fmt.Sprint(Date("invalid")))
 }
 
 func TestDate_Nullable(t *testing.T) {
@@ -987,6 +1243,40 @@ func TestDate_MidnightUTC(t *testing.T) {
 	d2 := Date("invalid")
 	tm2 := d2.MidnightUTC()
 	assert.True(t, tm2.IsZero())
+
+	// time.Parse accepts the year 0 that Valid rejects,
+	// an invalid date must still return the zero time.
+	assert.False(t, Date("0000-01-01").Valid())
+	assert.True(t, Date("0000-01-01").MidnightUTC().IsZero(), "year 0")
+	assert.True(t, Date("0000-01-01").MidnightInLocation(time.Local).IsZero(), "year 0 local")
+	assert.True(t, NullableDate("0000-05-05").MidnightUTC().IsNull(), "NullableDate year 0")
+}
+
+// TestDate_ComparisonsMatchValid protects that the comparison methods,
+// which parse each date only once, return false for exactly the dates
+// that Valid rejects and compare the same instants as MidnightUTC.
+func TestDate_ComparisonsMatchValid(t *testing.T) {
+	dates := []Date{
+		"", "invalid", "0000-00-00", "0000-01-01", "0001-01-01", "0001-01-02",
+		"2023-02-30", "2023-12-24", "2023-12-25", "25.12.2023", "12/26/2023",
+		" 2023-12-25 ", "1st August 2020",
+	}
+	for _, a := range dates {
+		for _, b := range dates {
+			valid := a.Valid() && b.Valid()
+			ta, tb := a.MidnightUTC(), b.MidnightUTC()
+			assert.Equal(t, valid && ta.After(tb), a.After(b), "Date(%q).After(%q)", a, b)
+			assert.Equal(t, valid && ta.Before(tb), a.Before(b), "Date(%q).Before(%q)", a, b)
+			assert.Equal(t, a.Valid() && ta.After(tb), a.AfterTime(tb), "Date(%q).AfterTime(%s)", a, tb)
+			assert.Equal(t, a.Valid() && ta.Before(tb), a.BeforeTime(tb), "Date(%q).BeforeTime(%s)", a, tb)
+			for _, c := range dates {
+				tc := c.MidnightUTC()
+				valid3 := valid && c.Valid()
+				assert.Equal(t, valid3 && !ta.Before(tb) && !ta.After(tc), a.WithinIncl(b, c), "Date(%q).WithinIncl(%q, %q)", a, b, c)
+				assert.Equal(t, valid3 && ta.After(tb) && ta.Before(tc), a.BetweenExcl(b, c), "Date(%q).BetweenExcl(%q, %q)", a, b, c)
+			}
+		}
+	}
 }
 
 func TestDate_Midnight(t *testing.T) {
@@ -1018,6 +1308,15 @@ func TestDate_NormalizedOrNull(t *testing.T) {
 func TestDate_NormalizedEqual(t *testing.T) {
 	assert.True(t, Date("2023-12-25").NormalizedEqual("25.12.2023"))
 	assert.False(t, Date("2023-12-25").NormalizedEqual("2023-12-26"))
+	// An invalid date has no normalized value, so it must not be equal
+	// to anything: two different garbage strings are not the same date,
+	// and neither is an identical invalid string (like NaN != NaN).
+	assert.False(t, Date("bad").NormalizedEqual("worse"))
+	assert.False(t, Date("bad").NormalizedEqual("bad"))
+	assert.False(t, Date("bad").NormalizedEqual("2023-12-25"))
+	assert.False(t, Date("2023-12-25").NormalizedEqual("bad"))
+	// "" is Invalid for Date, see NullableDate for a valid empty date
+	assert.False(t, Date("").NormalizedEqual(""))
 }
 
 // Additional comparison tests
@@ -1144,11 +1443,22 @@ func TestDate_IsToday(t *testing.T) {
 	today := OfToday()
 	assert.True(t, today.IsToday())
 	assert.False(t, Date("2020-01-01").IsToday())
+	// Like After and Before, IsToday compares the date, not its spelling:
+	// a valid but non-normalized today is still today.
+	assert.True(t, Date(today.Format("02.01.2006")).IsToday())
+	assert.False(t, Date("invalid").IsToday())
 }
 
 func TestDate_IsTodayInUTC(t *testing.T) {
 	today := OfNowInUTC()
 	assert.True(t, today.IsTodayInUTC())
+	// A valid but non-normalized today is still today, see TestDate_IsToday
+	assert.True(t, Date(today.Format("02.01.2006")).IsTodayInUTC())
+	// Normalizing first must not make other days or a parse error count
+	// as today, like IsToday in TestDate_IsToday.
+	assert.False(t, Date("2020-01-01").IsTodayInUTC())
+	assert.False(t, Date("invalid").IsTodayInUTC())
+	assert.False(t, today.AddDays(1).IsTodayInUTC())
 }
 
 func TestDate_AfterToday(t *testing.T) {
@@ -1180,4 +1490,460 @@ func TestDate_JSONSchema(t *testing.T) {
 	assert.Equal(t, "Date", schema.Title)
 	assert.Equal(t, "string", schema.Type)
 	assert.Equal(t, "date", schema.Format)
+}
+
+func TestDate_ScanStringWithLang(t *testing.T) {
+	tests := []struct {
+		name                 string
+		source               string
+		lang                 language.Code
+		want                 Date
+		wantNormalized       bool
+		wantMonthMustBeFirst bool
+		wantErr              bool
+	}{
+		{name: "already normalized", source: "2023-12-25", want: "2023-12-25", wantNormalized: true},
+		{name: "German day first", source: "25.12.2023", lang: language.DE, want: "2023-12-25"},
+		// 25 can't be a month, so the input proves month-first ordering
+		// which callers use to detect the date format of a whole document.
+		{name: "unambiguous US order", source: "12/25/2023", lang: language.DE, want: "2023-12-25", wantMonthMustBeFirst: true},
+		{name: "ambiguous with EN hint", source: "05/06/2024", lang: language.EN, want: "2024-05-06"},
+		{name: "ambiguous with DE hint", source: "05/06/2024", lang: language.DE, want: "2024-06-05"},
+		{name: "ambiguous with upper case EN hint", source: "05/06/2024", lang: "EN", want: "2024-05-06"},
+		// The EN hint only decides slashes, dots stay day first
+		{name: "ambiguous dots with EN hint", source: "05.06.2024", lang: language.EN, want: "2024-06-05"},
+		// but a date with dots that can only be read month first
+		// still proves the order of its document
+		{name: "unambiguous US order with dots and EN hint", source: "12.25.2023", lang: language.EN, want: "2023-12-25", wantMonthMustBeFirst: true},
+		// The EN hint must not reinterpret a day that can't be a month
+		{name: "unambiguous day first with EN hint", source: "15.06.2024", lang: language.EN, want: "2024-06-15"},
+		{name: "unambiguous US order with EN hint", source: "06/15/2024", lang: language.EN, want: "2024-06-15", wantMonthMustBeFirst: true},
+		// Without a hint slashes read an ambiguous date month first, but
+		// monthMustBeFirst stays false: the date could be read day first,
+		// so it can't prove the order of a whole document.
+		{name: "ambiguous slashes without hint", source: "05/06/2024", want: "2024-05-06"},
+		{name: "ambiguous dots without hint", source: "05.06.2024", want: "2024-06-05"},
+		{name: "unambiguous US order without hint", source: "12/25/2023", want: "2023-12-25", wantMonthMustBeFirst: true},
+		{name: "unambiguous US order with dots", source: "12.25.2023", want: "2023-12-25", wantMonthMustBeFirst: true},
+		{name: "empty", source: "", wantErr: true},
+		{name: "invalid", source: "invalid", wantErr: true},
+		// Every spelling of a zero date is assigned as "" like Scan does,
+		// also those that normalizeDate rejects for their month and day 0
+		{name: "zero date", source: "0001-01-01", lang: language.EN, want: ""},
+		{name: "zero date DE", source: "01.01.0001", lang: language.DE, want: ""},
+		{name: "zeros date", source: "0000-00-00", lang: language.EN, want: ""},
+		{name: "zeros date DE", source: "00.00.0000", lang: language.DE, want: ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			d := Date("2000-01-01")
+			wasNormalized, monthMustBeFirst, err := d.ScanStringWithLang(tt.source, tt.lang)
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.Equal(t, Date("2000-01-01"), d, "unchanged on error")
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, d)
+			assert.Equal(t, tt.wantNormalized, wasNormalized, "wasNormalized")
+			assert.Equal(t, tt.wantMonthMustBeFirst, monthMustBeFirst, "monthMustBeFirst")
+		})
+	}
+}
+
+func TestNormalize_HintOnlyDecidesAmbiguousOrder(t *testing.T) {
+	// A language hint (or an ordinal suffix marking the day) can only
+	// choose between dd/mm and mm/dd when both numbers are valid months.
+	// If only one ordering is a valid date, that date must be returned
+	// no matter the language hint, a hint must never turn a valid date
+	// into an error. An ordinal suffix is no guess but part of the input,
+	// a number with one is never read as the month.
+	tests := []struct {
+		name    string
+		str     string
+		lang    []language.Code
+		want    Date
+		wantErr bool
+	}{
+		{name: "EN hint, unambiguous day first", str: "15.06.2024", lang: []language.Code{language.EN}, want: "2024-06-15"},
+		{name: "EN hint, unambiguous day first, short year", str: "15.06.24", lang: []language.Code{language.EN}, want: "2024-06-15"},
+		{name: "EN hint, unambiguous month first", str: "06/15/2024", lang: []language.Code{language.EN}, want: "2024-06-15"},
+		{name: "EN hint, ambiguous", str: "05/06/2024", lang: []language.Code{language.EN}, want: "2024-05-06"},
+		{name: "DE hint, unambiguous day first", str: "15.06.2024", lang: []language.Code{language.DE}, want: "2024-06-15"},
+		{name: "DE hint, unambiguous month first", str: "06/15/2024", lang: []language.Code{language.DE}, want: "2024-06-15"},
+		{name: "DE hint, ambiguous", str: "05/06/2024", lang: []language.Code{language.DE}, want: "2024-06-05"},
+		// The hint only decides slashes, the separator written in both
+		// orders: dots and dashes are day first for English too
+		{name: "EN hint, ambiguous, dots", str: "05.06.2024", lang: []language.Code{language.EN}, want: "2024-06-05"},
+		{name: "EN hint, ambiguous, dashes", str: "05-06-24", lang: []language.Code{language.EN}, want: "2024-06-05"},
+		// Without a hint the separators decide: slashes are US style and
+		// read month first, dots German style and read day first
+		{name: "no hint, ambiguous", str: "05/06/2024", want: "2024-05-06"},
+		{name: "no hint, ambiguous, dots", str: "05.06.2024", want: "2024-06-05"},
+		// language.Code.Validate accepts these spellings of English,
+		// so they must work as hint too: a padded hint must not be
+		// cut to " e", and a BCP-47 tag selects its language
+		{name: "padded EN hint, ambiguous", str: "05/06/2024", lang: []language.Code{" en"}, want: "2024-05-06"},
+		{name: "BCP-47 EN hint, ambiguous", str: "05/06/2024", lang: []language.Code{"EN-us"}, want: "2024-05-06"},
+		{name: "ordinal day, ambiguous", str: "02 1st 2003", want: "2003-02-01"},
+		// The ordinal suffix is written into the input and marks the day
+		// explicitly, while the language hint is only a guess about the
+		// whole document, so the suffix must win over the hint in both orders.
+		{name: "ordinal day first, ambiguous", str: "1st 02 2003", want: "2003-02-01"},
+		{name: "ordinal day first, ambiguous, EN hint", str: "1st 02 2003", lang: []language.Code{language.EN}, want: "2003-02-01"},
+		{name: "ordinal day second, ambiguous, EN hint", str: "02 1st 2003", lang: []language.Code{language.EN}, want: "2003-02-01"},
+		{name: "ordinal day first, ambiguous, DE hint", str: "1st 02 2003", lang: []language.Code{language.DE}, want: "2003-02-01"},
+		{name: "ordinal day second, ambiguous, DE hint", str: "02 1st 2003", lang: []language.Code{language.DE}, want: "2003-02-01"},
+		// The ordinal suffix marks "1st" and "5th" as the day, so 13 would
+		// have to be the month. Reading the ordinal as the month instead
+		// contradicts the input, so there is no valid date.
+		{name: "ordinal day, other number no month", str: "13 1st 2024", wantErr: true},
+		{name: "ordinal day, other number no month, 5th", str: "13 5th 2020", wantErr: true},
+		{name: "ordinal day first, other number no month", str: "1st 13 2024", wantErr: true},
+		{name: "ordinal day, other number no month, EN hint", str: "13 1st 2024", lang: []language.Code{language.EN}, wantErr: true},
+		{name: "EN hint, no valid ordering", str: "13/13/2024", lang: []language.Code{language.EN}, wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := Normalize(tt.str, tt.lang...)
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+// TestNormalize_AmbiguousOrderFollowsSeparators protects the order of an
+// ambiguous numeric date read without a language hint, which is how
+// JSON, XML, SQL and strfmt read every date: "03/04/2024" with slashes
+// is US style and was stored as 3 April, a silently wrong date. Slashes
+// are read month first and dots day first, the German style. Other
+// separators keep the day first default, because no convention marks
+// them as US style. A language hint only decides dates with slashes,
+// the one separator written in both orders, US and British, so an
+// English hint must not read "03.04.2024" of a German supplier month
+// first. An ordinal suffix decides before the separators and the hint.
+func TestNormalize_AmbiguousOrderFollowsSeparators(t *testing.T) {
+	const (
+		march4 Date = "2024-03-04"
+		april3 Date = "2024-04-03"
+	)
+	tests := []struct {
+		str  string
+		lang language.Code
+		want Date
+	}{
+		// No hint: the separators decide
+		{str: "03/04/2024", want: march4},
+		{str: "03/04/24", want: march4},
+		{str: "3/4/2024", want: march4},
+		{str: "03 / 04 / 2024", want: march4},
+		{str: "03/04/'24", want: march4},
+		{str: "Mon, 03/04/2024", want: march4},
+		{str: "03/04/2024 00:00:00", want: march4},
+		{str: "03.04.2024", want: april3},
+		{str: "03.04.24", want: april3},
+		{str: "3.4.2024", want: april3},
+		{str: "03-04-2024", want: april3},
+		{str: "03-04-24", want: april3},
+		{str: "03 04 2024", want: april3},
+		// Only both separators as slashes are US style
+		{str: "03/04.2024", want: april3},
+		{str: "03.04/2024", want: april3},
+		{str: "03/04-2024", want: april3},
+		// A hint that can't be normalized is no hint
+		{str: "03/04/2024", lang: "xx", want: march4},
+		{str: "03.04.2024", lang: "xx", want: april3},
+		// A hint decides the order of slashes
+		{str: "03/04/2024", lang: language.EN, want: march4},
+		{str: "03/04/24", lang: language.EN, want: march4},
+		{str: "Mon, 03/04/2024", lang: language.EN, want: march4},
+		{str: "03/04/2024", lang: language.DE, want: april3},
+		{str: "03/04/24", lang: language.DE, want: april3},
+		{str: "03/04/2024", lang: language.FR, want: april3},
+		// Other separators stay day first with every hint, also English
+		{str: "03.04.2024", lang: language.EN, want: april3},
+		{str: "03.04.24", lang: language.EN, want: april3},
+		{str: "03-04-2024", lang: language.EN, want: april3},
+		{str: "03 04 2024", lang: language.EN, want: april3},
+		{str: "03/04.2024", lang: language.EN, want: april3},
+		{str: "03.04.2024", lang: "en-US", want: april3},
+		{str: "03.04.2024", lang: language.DE, want: april3},
+		// An ordinal suffix marks the day before slashes decide
+		{str: "3rd/04/2024", want: april3},
+		{str: "03/4th/2024", want: march4},
+		// and before dots or a hint
+		{str: "03.4th.2024", lang: language.DE, want: march4},
+		{str: "3rd/04/2024", lang: language.EN, want: april3},
+		// An unambiguous date has one reading with every separator and hint
+		{str: "13/04/2024", want: "2024-04-13"},
+		{str: "04/13/2024", want: "2024-04-13"},
+		{str: "13.04.2024", want: "2024-04-13"},
+		{str: "04.13.2024", want: "2024-04-13"},
+		{str: "04/13/24", lang: language.DE, want: "2024-04-13"},
+		{str: "13/04/24", lang: language.EN, want: "2024-04-13"},
+	}
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("%s %s", tt.str, tt.lang), func(t *testing.T) {
+			got, err := Normalize(tt.str, tt.lang)
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+
+			// NullableDate and NormalizedLang parse the same way
+			gotNullable, err := NormalizeNullable(tt.str, tt.lang)
+			require.NoError(t, err)
+			assert.Equal(t, tt.want.Nullable(), gotNullable, "NormalizeNullable")
+			gotLang, err := Date(tt.str).NormalizedLang(tt.lang)
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, gotLang, "NormalizedLang")
+		})
+	}
+}
+
+// TestDate_ReadingWithoutHintFollowsSeparators protects the reading paths
+// that can't pass a language hint from the wrong order of a US date: a
+// JSON or XML document, a database row or a strfmt cell with
+// "03/04/2024" was stored as 2024-04-03. Every path must read it like
+// Normalize without a hint, and "03.04.2024" day first.
+func TestDate_ReadingWithoutHintFollowsSeparators(t *testing.T) {
+	for source, want := range map[string]Date{
+		"03/04/2024": "2024-03-04",
+		"03.04.2024": "2024-04-03",
+	} {
+		t.Run(source, func(t *testing.T) {
+			var d Date
+			require.NoError(t, d.Scan(source))
+			assert.Equal(t, want, d, "Scan")
+
+			d = ""
+			require.NoError(t, d.Scan([]byte(source)))
+			assert.Equal(t, want, d, "Scan []byte")
+
+			var doc struct {
+				Date     Date         `json:"date" xml:"date"`
+				Nullable NullableDate `json:"nullable" xml:"nullable,attr"`
+			}
+			jsonDoc := fmt.Sprintf(`{"date":%q,"nullable":%q}`, source, source)
+			require.NoError(t, json.Unmarshal([]byte(jsonDoc), &doc))
+			assert.Equal(t, want, doc.Date, "UnmarshalJSON")
+			assert.Equal(t, want.Nullable(), doc.Nullable, "NullableDate.UnmarshalJSON")
+
+			doc.Date, doc.Nullable = "", ""
+			xmlDoc := fmt.Sprintf(`<doc nullable=%q><date>%s</date></doc>`, source, source)
+			require.NoError(t, xml.Unmarshal([]byte(xmlDoc), &doc))
+			assert.Equal(t, want, doc.Date, "UnmarshalXML")
+			assert.Equal(t, want.Nullable(), doc.Nullable, "NullableDate.UnmarshalXMLAttr")
+
+			for _, validate := range []bool{false, true} {
+				d = ""
+				require.NoError(t, d.ScanString(source, validate))
+				assert.Equal(t, want, d, "ScanString(validate=%t)", validate)
+			}
+
+			var n NullableDate
+			require.NoError(t, n.Scan(source))
+			assert.Equal(t, want.Nullable(), n, "NullableDate.Scan")
+
+			norm, err := Date(source).Normalized()
+			require.NoError(t, err)
+			assert.Equal(t, want, norm, "Normalized")
+
+			// The Finder finds the date, and Normalize with the hint of the
+			// Finder, which is none, reads the found text the same way
+			text := "Invoice of " + source + ", thank you"
+			finder := NewFinder()
+			found := finder.FindAllIndex([]byte(text), -1)
+			require.Len(t, found, 1, "Finder")
+			got, err := Normalize(text[found[0][0]:found[0][1]], finder.LangHint)
+			require.NoError(t, err)
+			assert.Equal(t, want, got, "Normalize of the found text")
+		})
+	}
+}
+
+func TestDate_NonNormalizedValidInput(t *testing.T) {
+	// A valid Date that is not in the normalized YYYY-MM-DD form must
+	// behave like its normalized form in every method. Year, Month, Day
+	// and Compare already normalize, the methods converting to time.Time
+	// must agree with them instead of silently using the zero time.Time.
+	d := Date("25.12.2023") // Monday
+	norm := Date("2023-12-25")
+
+	assert.Equal(t, norm.MidnightUTC(), d.MidnightUTC(), "MidnightUTC")
+	assert.Equal(t, norm.Midnight(), d.Midnight(), "Midnight")
+	assert.Equal(t, norm.MidnightInLocation(time.UTC), d.MidnightInLocation(time.UTC), "MidnightInLocation")
+
+	assert.Equal(t, "25.12.2023", d.Format("02.01.2006"), "Format")
+	assert.Equal(t, "2023-12-25", d.Format(Layout), "Format(Layout)")
+
+	assert.True(t, d.After("2023-12-24"), "After")
+	assert.True(t, Date("2023-12-26").After(d), "After non-normalized other")
+	assert.True(t, d.Before("2023-12-26"), "Before")
+	assert.True(t, d.EqualOrAfter("2023-12-24"), "EqualOrAfter")
+	assert.True(t, d.EqualOrBefore("2023-12-26"), "EqualOrBefore")
+	assert.True(t, d.WithinIncl("2023-12-01", "31.12.2023"), "WithinIncl")
+	assert.True(t, d.BetweenExcl("2023-12-24", "2023-12-26"), "BetweenExcl")
+	assert.True(t, d.AfterTime(time.Date(2023, 12, 24, 12, 0, 0, 0, time.UTC)), "AfterTime")
+	assert.True(t, d.BeforeTime(time.Date(2023, 12, 25, 12, 0, 0, 0, time.UTC)), "BeforeTime")
+
+	assert.Equal(t, Date("2023-12-26"), d.AddDays(1), "AddDays")
+	assert.Equal(t, Date("2024-01-25"), d.AddMonths(1), "AddMonths")
+	assert.Equal(t, Date("2024-12-25"), d.AddYears(1), "AddYears")
+	assert.Equal(t, Date("2024-01-26"), d.AddDate(0, 1, 1), "AddDate")
+	assert.Equal(t, Date("2023-12-26"), d.Add(24*time.Hour), "Add")
+	assert.Equal(t, 24*time.Hour, d.Sub("2023-12-24"), "Sub")
+
+	assert.Equal(t, time.Monday, d.Weekday(), "Weekday")
+	year, week := d.ISOWeek()
+	assert.Equal(t, 2023, year, "ISOWeek year")
+	assert.Equal(t, 52, week, "ISOWeek week")
+	assert.Equal(t, Date("2023-12-25"), d.LastMonday(), "LastMonday")
+	assert.Equal(t, Date("2023-12-31"), d.NextSunday(), "NextSunday")
+	assert.Equal(t, Date("2023-12-24"), d.BeginningOfWeek(time.Sunday), "BeginningOfWeek")
+	assert.Equal(t, Date("2023-12-31"), d.EndOfWeek(time.Monday), "EndOfWeek")
+
+	// A non-normalized zero date still has no time
+	assert.True(t, Date("01.01.0001").MidnightUTC().IsZero(), "zero date MidnightUTC")
+	assert.True(t, Date("01.01.0001").MidnightInLocation(time.Local).IsZero(), "zero date MidnightInLocation")
+}
+
+func TestDate_ZeroDateHasNoTime(t *testing.T) {
+	// A zero Date represents "no date" and must not be converted
+	// into the midnight of year 1 or any other concrete point in time.
+	for _, zero := range []Date{"", "0000-00-00", "0001-01-01"} {
+		t.Run(string(zero), func(t *testing.T) {
+			assert.True(t, zero.Time(12, 0, 0, time.UTC).IsZero(), "Time")
+			assert.True(t, zero.MidnightUTC().IsZero(), "MidnightUTC")
+			assert.True(t, zero.MidnightInLocation(time.UTC).IsZero(), "MidnightInLocation")
+			assert.Equal(t, time.Weekday(0), zero.Weekday(), "Weekday")
+			year, week := zero.ISOWeek()
+			assert.Equal(t, 0, year, "ISOWeek year")
+			assert.Equal(t, 0, week, "ISOWeek week")
+		})
+	}
+}
+
+// TestNormalize_NoSingleDigitYear protects that a single digit is never read
+// as year: with month names like the Italian "set" the text "set 6 4" would
+// else be the date 2004-09-06 for Normalize and Finder.
+func TestNormalize_NoSingleDigitYear(t *testing.T) {
+	for _, str := range []string{"set 6 4", "6 set 4", "4 6 set", "12.12.5"} {
+		_, err := Normalize(str)
+		assert.Error(t, err, "Normalize(%q)", str)
+	}
+	for str, want := range map[string]Date{
+		"set 6 04":   "2004-09-06",
+		"6 set 2004": "2004-09-06",
+		"12.12.05":   "2005-12-12",
+	} {
+		got, err := Normalize(str)
+		require.NoError(t, err, "Normalize(%q)", str)
+		assert.Equal(t, want, got, "Normalize(%q)", str)
+	}
+}
+
+// TestNormalize_DateTimeNeedsTime protects that only a date-time is cut at
+// its "T", so a word like "2023-12-25TOTAL" is no date.
+func TestNormalize_DateTimeNeedsTime(t *testing.T) {
+	_, err := Normalize("2023-12-25TOTAL")
+	assert.Error(t, err)
+	got, err := Normalize("2023-12-25T10:00:00Z")
+	require.NoError(t, err)
+	assert.Equal(t, Date("2023-12-25"), got)
+}
+
+// TestDate_NormalizedLang protects the split of the language hint from
+// Normalized: Normalized implements types.Normalizable and reads an
+// ambiguous numeric date with slashes month first, like JSON and SQL
+// reading do, NormalizedLang still lets language.DE read it day first,
+// and a hint that can't be normalized gives no hint instead of an
+// error, so "xx" reads like "". The hint only decides slashes, so
+// "05.06.2024" stays day first with language.EN.
+func TestDate_NormalizedLang(t *testing.T) {
+	norm, err := Date("05/06/2024").Normalized()
+	require.NoError(t, err)
+	assert.Equal(t, Date("2024-05-06"), norm)
+
+	for lang, want := range map[language.Code]Date{
+		language.EN: "2024-05-06",
+		"EN-us":     "2024-05-06",
+		language.DE: "2024-06-05",
+		"":          "2024-05-06",
+		"xx":        "2024-05-06",
+	} {
+		norm, err = Date("05/06/2024").NormalizedLang(lang)
+		require.NoError(t, err, "NormalizedLang(%q)", lang)
+		assert.Equal(t, want, norm, "NormalizedLang(%q)", lang)
+
+		nullable, err := NullableDate("05/06/2024").NormalizedLang(lang)
+		require.NoError(t, err, "NullableDate.NormalizedLang(%q)", lang)
+		assert.Equal(t, want.Nullable(), nullable, "NullableDate.NormalizedLang(%q)", lang)
+	}
+
+	norm, err = Date("05.06.2024").NormalizedLang(language.EN)
+	require.NoError(t, err)
+	assert.Equal(t, Date("2024-06-05"), norm, "dots with EN hint")
+
+	nullable, err := NullableDate("05/06/2024").Normalized()
+	require.NoError(t, err)
+	assert.Equal(t, NullableDate("2024-05-06"), nullable)
+	nullable, err = NullableDate("05.06.2024").NormalizedLang(language.EN)
+	require.NoError(t, err)
+	assert.Equal(t, NullableDate("2024-06-05"), nullable, "NullableDate dots with EN hint")
+	nullable, err = Null.NormalizedLang(language.EN)
+	require.NoError(t, err)
+	assert.Equal(t, Null, nullable)
+}
+
+// TestNormalize_NoYearZero protects that every date format rejects the
+// year 0 like "0000-05-25" does, because PostgreSQL and Scan reject it:
+// the year-day-month order "0000 25 may" passed time.Parse.
+func TestNormalize_NoYearZero(t *testing.T) {
+	_, err := Normalize("0000 25 may")
+	assert.Error(t, err)
+	got, err := Normalize("2023 25 may")
+	require.NoError(t, err)
+	assert.Equal(t, Date("2023-05-25"), got)
+}
+
+// TestDate_FormatInvalid protects formatted output from a made up date:
+// an invalid date was formatted as the zero time "01.01.0001"
+// with any layout but Layout, so garbage looked like a real date.
+func TestDate_FormatInvalid(t *testing.T) {
+	assert.Equal(t, "garbage", Date("garbage").Format("02.01.2006"))
+	assert.Equal(t, "garbage", NullableDate("garbage").Format("02.01.2006"))
+	assert.Equal(t, "25.12.2023", Date("2023-12-25").Format("02.01.2006"))
+	assert.Equal(t, "", Date("0001-01-01").Format("02.01.2006"), "the zero date is no date")
+	assert.Equal(t, "", NullableDate("0001-01-01").Format("02.01.2006"), "and null as NullableDate")
+}
+
+// TestDate_ValidAndNormalizedYearZero protects that ValidAndNormalized never
+// claims more than Valid: time.Parse accepts "0000-01-01", which Valid
+// rejects, and "0001-01-01", which is the zero date and no valid Date.
+func TestDate_ValidAndNormalizedYearZero(t *testing.T) {
+	assert.False(t, Date("0000-01-01").Valid())
+	assert.False(t, Date("0000-01-01").ValidAndNormalized())
+	assert.False(t, Date("0001-01-01").Valid())
+	assert.False(t, Date("0001-01-01").ValidAndNormalized())
+	assert.True(t, Date("0001-01-02").ValidAndNormalized())
+}
+
+// TestDate_ReadingAndWriting checks the reading and writing contract shared
+// by the normalizing types: every reading path stores a valid date
+// normalized, a zero date as "" and an invalid date unchanged, Value
+// refuses an invalid date, and fmt prints the stored date.
+func TestDate_ReadingAndWriting(t *testing.T) {
+	normtest.Run(t, normtest.Spec[Date]{
+		Canonical: "2023-12-25",
+		Variants:  []Date{"25.12.2023", "December 25, 2023", " 2023-12-25 ", "2023-12-25T10:00:00", "2023-12-25T00:00:00", "2023-12-25 00:00:00"},
+		Invalid:   []Date{"invalid", "2023-02-30"},
+		Blank: []Date{
+			"0001-01-01", "0000-00-00", "01.01.0001", "0001-01-01T00:00:00Z", "0001-01-1 ", "0001-01-1.",
+			// The zero date of MySQL and other implementations in other spellings
+			"0000-00-00 00:00:00", "0000-00-00T00:00:00Z", "00.00.0000",
+		},
+	})
 }

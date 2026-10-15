@@ -18,6 +18,8 @@ type nullSetter interface {
 }
 
 // Scan source into dest using the given ScanConfig.
+// A nil config scans with DefaultScanConfig, like Format formats with
+// the defaults of NewFormatConfig for a nil FormatConfig.
 //
 // A Scanner registered for the destination type in config.TypeScanners is
 // asked before all built-in scanning logic, including the nil source string
@@ -43,6 +45,11 @@ type nullSetter interface {
 // method or the validation left partially assigned is restored to the
 // value it had before, so a caller scanning a row of cells never ends
 // up with a half written field.
+//
+// A nullable.Type[T] destination, or another type whose pointer has the
+// methods of nullable.NullSetable[T] but no scanning method of its own,
+// is set to the T scanned from a non-nil source string, like the
+// money.NullableAmount alias of nullable.Type[money.Amount].
 //
 // A nil pointer destination is allocated, an already allocated one is
 // scanned in place and keeps the fields that the scan doesn't assign.
@@ -79,7 +86,7 @@ func scanValue(dest reflect.Value, source string, config *ScanConfig) error {
 		return fmt.Errorf("can't scan %q into an invalid destination value", source)
 	}
 	if config == nil {
-		return fmt.Errorf("can't scan %q using nil ScanConfig", source)
+		config = DefaultScanConfig
 	}
 	if !dest.CanSet() {
 		// dest.Addr() and the Set methods panic instead of returning an
@@ -233,6 +240,18 @@ func scanSettableValue(dest reflect.Value, source string, config *ScanConfig) er
 		dest.SetFloat(f)
 
 	default:
+		// A nullable.Type[T] has no scanning method of its own, so its T is
+		// scanned with the scanning and validation of T and then set as its
+		// non-null value. A nil source string already set it to null above.
+		if valueType, ok := nullSetableValueType(dest.Type()); ok {
+			value := reflect.New(valueType).Elem()
+			err := scanValue(value, source, config)
+			if err != nil {
+				return err
+			}
+			dest.Addr().MethodByName("Set").Call([]reflect.Value{value})
+			return nil
+		}
 		return fmt.Errorf("can't scan %q as destination type %s", source, dest.Type())
 	}
 

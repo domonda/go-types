@@ -4,9 +4,11 @@ import (
 	"errors"
 	"reflect"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/domonda/go-errs"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/domonda/go-types/country"
@@ -288,18 +290,35 @@ func TestScanInvalidDest(t *testing.T) {
 	assert.Error(t, Scan(unexportedPtrField, "666", config), "unexported struct field of pointer type")
 }
 
-// TestScanNilConfig checks that a nil ScanConfig is reported as an error
-// instead of panicking on the first config field access. Scan reads the
-// config before every branch, including in the recursion for a pointer
-// destination, so a nil one must be rejected up front.
+// TestScanNilConfig checks that a nil ScanConfig scans with DefaultScanConfig
+// instead of panicking on the first config field access, consistent with
+// Format, which formats with the defaults of NewFormatConfig for a nil
+// FormatConfig, so a caller without locale preferences can pass nil to both.
+// Scan reads the config before every branch, including in the recursion for
+// a pointer destination, so the default has to apply to all of them.
+// This test used to expect an error for a nil ScanConfig.
 func TestScanNilConfig(t *testing.T) {
 	var i int
-	assert.Error(t, Scan(reflect.ValueOf(&i).Elem(), "666", nil), "nil ScanConfig")
-	assert.Zero(t, i, "destination is not modified")
+	assert.NoError(t, Scan(reflect.ValueOf(&i).Elem(), "666", nil), "nil ScanConfig")
+	assert.Equal(t, 666, i)
 
 	var ptr *int
-	assert.Error(t, Scan(reflect.ValueOf(&ptr).Elem(), "666", nil), "nil ScanConfig for a pointer destination")
-	assert.Nil(t, ptr, "destination is not allocated")
+	assert.NoError(t, Scan(reflect.ValueOf(&ptr).Elem(), "666", nil), "nil ScanConfig for a pointer destination")
+	if assert.NotNil(t, ptr, "destination is allocated") {
+		assert.Equal(t, 666, *ptr)
+	}
+
+	// The settings of DefaultScanConfig apply, like its nil strings
+	ptr = new(int)
+	assert.NoError(t, Scan(reflect.ValueOf(&ptr).Elem(), "null", nil))
+	assert.Nil(t, ptr, "null is a nil string of DefaultScanConfig")
+
+	var ti time.Time
+	assert.NoError(t, Scan(reflect.ValueOf(&ti).Elem(), "2024-03-05", nil), "registered type scanners of DefaultScanConfig")
+	assert.Equal(t, time.Date(2024, 3, 5, 0, 0, 0, 0, time.UTC), ti)
+
+	assert.Error(t, Scan(reflect.ValueOf(&i).Elem(), "abc", nil), "errors are still reported")
+	assert.Equal(t, 666, i, "destination is not modified by a failed scan")
 }
 
 // TestScanNonSettablePointerDest checks that a pointer which is not
@@ -736,4 +755,200 @@ func TestScanNilStringNotValidated(t *testing.T) {
 
 	// A scanned value is still validated
 	assert.Error(t, Scan(reflect.ValueOf(&i).Elem(), "666", config))
+}
+
+// TestScanBool checks that the configured TrueStrings and FalseStrings are
+// accepted with surrounding whitespace, because spreadsheet exports often
+// pad cells, and that the destination is really assigned in both directions.
+func TestScanBool(t *testing.T) {
+	config := NewScanConfig()
+
+	for _, source := range []string{"true", "Yes", " YES ", "1", "\ttrue"} {
+		b := false
+		assert.NoError(t, Scan(reflect.ValueOf(&b).Elem(), source, config), "Scan(bool, %q)", source)
+		assert.True(t, b, "Scan(bool, %q)", source)
+	}
+	for _, source := range []string{"false", "No", " NO ", "0", "FALSE\n"} {
+		b := true
+		assert.NoError(t, Scan(reflect.ValueOf(&b).Elem(), source, config), "Scan(bool, %q)", source)
+		assert.False(t, b, "Scan(bool, %q)", source)
+	}
+
+	// Only the configured strings are accepted
+	config.TrueStrings = []string{"ja"}
+	config.FalseStrings = []string{"nein"}
+	b := false
+	assert.NoError(t, Scan(reflect.ValueOf(&b).Elem(), "ja", config))
+	assert.True(t, b)
+	assert.Error(t, Scan(reflect.ValueOf(&b).Elem(), "true", config), "not in TrueStrings any more")
+	assert.True(t, b, "destination is not modified by a failed scan")
+}
+
+// TestScanFloat checks that floats are parsed with float.Parse, which
+// detects the decimal and thousands separators, so that numbers from
+// German and English spreadsheets both scan to the same value.
+func TestScanFloat(t *testing.T) {
+	config := NewScanConfig()
+	tests := []struct {
+		source string
+		want   float64
+	}{
+		{source: "0", want: 0},
+		{source: "1.5", want: 1.5},
+		{source: "1,5", want: 1.5},
+		{source: "1,234.56", want: 1234.56},
+		{source: "1.234,56", want: 1234.56},
+		{source: " -158,00 ", want: -158},
+		{source: "1e3", want: 1000},
+	}
+	for _, tt := range tests {
+		var f64 float64
+		assert.NoError(t, Scan(reflect.ValueOf(&f64).Elem(), tt.source, config), "Scan(float64, %q)", tt.source)
+		assert.Equal(t, tt.want, f64, "Scan(float64, %q)", tt.source)
+
+		var f32 float32
+		assert.NoError(t, Scan(reflect.ValueOf(&f32).Elem(), tt.source, config), "Scan(float32, %q)", tt.source)
+		assert.Equal(t, float32(tt.want), f32, "Scan(float32, %q)", tt.source)
+	}
+}
+
+// upperTextUnmarshaler implements only encoding.TextUnmarshaler,
+// not Scannable, to tell which scanning method Scan used.
+type upperTextUnmarshaler string
+
+func (u *upperTextUnmarshaler) UnmarshalText(text []byte) error {
+	if string(text) == "invalid" {
+		return errs.New("invalid text")
+	}
+	*u = upperTextUnmarshaler(strings.ToUpper(string(text)))
+	return nil
+}
+
+// TestScanTextUnmarshaler checks that a type implementing only
+// encoding.TextUnmarshaler is scanned by its UnmarshalText method instead
+// of the conversion of its kind, so the type's own parsing and validation
+// is not bypassed.
+func TestScanTextUnmarshaler(t *testing.T) {
+	config := NewScanConfig()
+
+	var dest upperTextUnmarshaler
+	assert.NoError(t, Scan(reflect.ValueOf(&dest).Elem(), "abc", config))
+	assert.Equal(t, upperTextUnmarshaler("ABC"), dest, "UnmarshalText was used, not the string kind")
+
+	assert.Error(t, Scan(reflect.ValueOf(&dest).Elem(), "invalid", config))
+	assert.Equal(t, upperTextUnmarshaler("ABC"), dest, "destination is not modified by a failed scan")
+}
+
+// TestScanUnsupportedKind checks that a destination type without any
+// scanning method and without a scannable kind is reported as an error
+// instead of being silently left unassigned.
+func TestScanUnsupportedKind(t *testing.T) {
+	config := NewScanConfig()
+
+	type plainStruct struct{ A int }
+	dest := plainStruct{A: 1}
+	err := Scan(reflect.ValueOf(&dest).Elem(), "x", config)
+	assert.Error(t, err)
+	assert.Equal(t, plainStruct{A: 1}, dest, "destination is not modified")
+
+	var c complex128
+	assert.Error(t, Scan(reflect.ValueOf(&c).Elem(), "1+2i", config))
+}
+
+// TestScanNullableTimeUnparsable checks that an unparsable non-nil string
+// is an error for nullable.Time instead of being scanned as null, which
+// would silently drop a malformed date from imported data.
+func TestScanNullableTimeUnparsable(t *testing.T) {
+	config := NewScanConfig()
+
+	want := nullable.TimeFrom(time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC))
+	dest := want
+	assert.Error(t, Scan(reflect.ValueOf(&dest).Elem(), "not a time", config))
+	assert.Equal(t, want, dest, "destination is not modified by a failed scan")
+}
+
+// TestScanNullableType_roundTripsFormatPresets protects that Scan reads back
+// what the FormatConfig presets write for a nullable.Type[T], like the
+// money.NullableAmount, NullableDecimalAmount and NullableCentAmount aliases
+// of it. nullable.Type has no scanning method of its own, so only a nil
+// string could be scanned and a "1.234,50" cell of an exported nullable
+// amount failed to import with "can't scan ... as destination type
+// nullable.Type[...]". A non-nil string is scanned like the T itself, so a
+// money.Amount keeps its locale-aware parsing, and the Nil placeholder of
+// the format config, which every null value including a null
+// date.NullableDate is formatted as, scans back as null.
+func TestScanNullableType_roundTripsFormatPresets(t *testing.T) {
+	decimal := money.NewDecimalAmount(123450, 2)
+	values := []any{
+		money.NullableAmountFrom(1234.5),
+		money.NullableAmountFrom(-0.05),
+		money.NullableDecimalAmountFromPtr(&decimal),
+		money.NullableCentAmountFrom(123450),
+		money.NullableCentAmountFrom(-5),
+		nullable.TypeFrom(1234),
+		nullable.TypeFrom(-1),
+		money.NullableAmount{},
+		money.NullableDecimalAmount{},
+		money.NullableCentAmount{},
+		nullable.Type[int]{},
+		date.NullableDate("2024-03-05"),
+		date.Null,
+	}
+	presets := []struct {
+		name   string
+		config *FormatConfig
+	}{
+		{name: "NewGermanFormatConfig", config: NewGermanFormatConfig()},
+		{name: "NewUSFormatConfig", config: NewUSFormatConfig()},
+	}
+	scanConfig := NewScanConfig()
+	for _, preset := range presets {
+		// The presets write null as "", NULL is another nil string of NewScanConfig
+		for _, nilString := range []string{preset.config.Nil, "NULL"} {
+			preset.config.Nil = nilString
+			for _, value := range values {
+				str := Format(value, preset.config)
+				if nullable.IsNull(value) {
+					assert.Equal(t, nilString, str, "%s: Format(null %T)", preset.name, value)
+				}
+				dest := reflect.New(reflect.TypeOf(value)).Elem()
+				if assert.NoError(t, Scan(dest, str, scanConfig), "%s: Scan(%T, %q)", preset.name, value, str) {
+					assert.Equal(t, value, dest.Interface(), "%s: Scan(%T, %q)", preset.name, value, str)
+				}
+			}
+		}
+	}
+}
+
+// TestScanNullableType checks that a nullable.Type[T] destination is scanned
+// with the scanning of its T: a value is set by what T parses, a nil string
+// sets null also for a destination that held a value, and a string that T
+// can't parse or that fails the validation of T is an error that leaves the
+// destination unchanged instead of setting null and losing the bad cell.
+func TestScanNullableType(t *testing.T) {
+	config := NewScanConfig()
+
+	var amount money.NullableAmount
+	if assert.NoError(t, Scan(reflect.ValueOf(&amount).Elem(), "1,5", config)) {
+		assert.Equal(t, money.NullableAmountFrom(1.5), amount)
+	}
+	assert.NoError(t, Scan(reflect.ValueOf(&amount).Elem(), " ", config))
+	assert.True(t, amount.IsNull(), "a nil string sets null")
+
+	want := money.NullableAmountFrom(1.5)
+	for _, source := range []string{"abc", "1,5,5", "NaN"} {
+		dest := want
+		assert.Error(t, Scan(reflect.ValueOf(&dest).Elem(), source, config), "Scan(money.NullableAmount, %q)", source)
+		assert.Equal(t, want, dest, "a failed Scan(money.NullableAmount, %q) doesn't modify the destination", source)
+	}
+
+	var rate money.NullableRate
+	if assert.NoError(t, Scan(reflect.ValueOf(&rate).Elem(), "19 %", config)) {
+		assert.Equal(t, money.Rate(0.19), rate.Get())
+	}
+
+	var ptr *nullable.Type[int]
+	if assert.NoError(t, Scan(reflect.ValueOf(&ptr).Elem(), "42", config)) {
+		assert.Equal(t, nullable.TypeFrom(42), *ptr)
+	}
 }

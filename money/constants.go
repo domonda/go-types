@@ -1,176 +1,11 @@
 package money
 
+import "strings"
+
 // CurrencyNull represents the SQL NULL for Currency and NullableCurrency.
 // Currency(CurrencyNull).Valid() == false
 // NullableCurrency(CurrencyNull).Valid() == true
 const CurrencyNull = ""
-
-const (
-	AED = "AED" // United Arab Emirates Dirham
-	AFN = "AFN" // Afghanistan Afghani
-	ALL = "ALL" // Albania Lek
-	AMD = "AMD" // Armenia Dram
-	ANG = "ANG" // Netherlands Antilles Guilder
-	AOA = "AOA" // Angola Kwanza
-	ARS = "ARS" // Argentina Peso
-	AUD = "AUD" // Australia Dollar
-	AWG = "AWG" // Aruba Guilder
-	AZN = "AZN" // Azerbaijan New Manat
-	BAM = "BAM" // Bosnia and Herzegovina Convertible Marka
-	BBD = "BBD" // Barbados Dollar
-	BDT = "BDT" // Bangladesh Taka
-	BGN = "BGN" // Bulgaria Lev
-	BHD = "BHD" // Bahrain Dinar
-	BIF = "BIF" // Burundi Franc
-	BMD = "BMD" // Bermuda Dollar
-	BND = "BND" // Brunei Darussalam Dollar
-	BOB = "BOB" // Bolivia Bolíviano
-	BRL = "BRL" // Brazil Real
-	BSD = "BSD" // Bahamas Dollar
-	BTN = "BTN" // Bhutan Ngultrum
-	BWP = "BWP" // Botswana Pula
-	BYN = "BYN" // Belarus Ruble
-	BZD = "BZD" // Belize Dollar
-	CAD = "CAD" // Canada Dollar
-	CDF = "CDF" // Congo/Kinshasa Franc
-	CHF = "CHF" // Switzerland Franc
-	CLP = "CLP" // Chile Peso
-	CNY = "CNY" // China Yuan Renminbi
-	COP = "COP" // Colombia Peso
-	CRC = "CRC" // Costa Rica Colon
-	CUC = "CUC" // Cuba Convertible Peso
-	CUP = "CUP" // Cuba Peso
-	CVE = "CVE" // Cape Verde Escudo
-	CZK = "CZK" // Czech Republic Koruna
-	DJF = "DJF" // Djibouti Franc
-	DKK = "DKK" // Denmark Krone
-	DOP = "DOP" // Dominican Republic Peso
-	DZD = "DZD" // Algeria Dinar
-	EGP = "EGP" // Egypt Pound
-	ERN = "ERN" // Eritrea Nakfa
-	ETB = "ETB" // Ethiopia Birr
-	EUR = "EUR" // Euro Member Countries
-	FJD = "FJD" // Fiji Dollar
-	FKP = "FKP" // Falkland Islands (Malvinas) Pound
-	GBP = "GBP" // United Kingdom Pound
-	GEL = "GEL" // Georgia Lari
-	GGP = "GGP" // Guernsey Pound
-	GHS = "GHS" // Ghana Cedi
-	GIP = "GIP" // Gibraltar Pound
-	GMD = "GMD" // Gambia Dalasi
-	GNF = "GNF" // Guinea Franc
-	GTQ = "GTQ" // Guatemala Quetzal
-	GYD = "GYD" // Guyana Dollar
-	HKD = "HKD" // Hong Kong Dollar
-	HNL = "HNL" // Honduras Lempira
-	HRK = "HRK" // Croatia Kuna
-	HTG = "HTG" // Haiti Gourde
-	HUF = "HUF" // Hungary Forint
-	IDR = "IDR" // Indonesia Rupiah
-	ILS = "ILS" // Israel Shekel
-	IMP = "IMP" // Isle of Man Pound
-	INR = "INR" // India Rupee
-	IQD = "IQD" // Iraq Dinar
-	IRR = "IRR" // Iran Rial
-	ISK = "ISK" // Iceland Krona
-	JEP = "JEP" // Jersey Pound
-	JMD = "JMD" // Jamaica Dollar
-	JOD = "JOD" // Jordan Dinar
-	JPY = "JPY" // Japan Yen
-	KES = "KES" // Kenya Shilling
-	KGS = "KGS" // Kyrgyzstan Som
-	KHR = "KHR" // Cambodia Riel
-	KMF = "KMF" // Comoros Franc
-	KPW = "KPW" // Korea (North) Won
-	KRW = "KRW" // Korea (South) Won
-	KWD = "KWD" // Kuwait Dinar
-	KYD = "KYD" // Cayman Islands Dollar
-	KZT = "KZT" // Kazakhstan Tenge
-	LAK = "LAK" // Laos Kip
-	LBP = "LBP" // Lebanon Pound
-	LKR = "LKR" // Sri Lanka Rupee
-	LRD = "LRD" // Liberia Dollar
-	LSL = "LSL" // Lesotho Loti
-	LYD = "LYD" // Libya Dinar
-	MAD = "MAD" // Morocco Dirham
-	MDL = "MDL" // Moldova Leu
-	MGA = "MGA" // Madagascar Ariary
-	MKD = "MKD" // Macedonia Denar
-	MMK = "MMK" // Myanmar (Burma) Kyat
-	MNT = "MNT" // Mongolia Tughrik
-	MOP = "MOP" // Macau Pataca
-	MRO = "MRO" // Mauritania Ouguiya
-	MUR = "MUR" // Mauritius Rupee
-	MVR = "MVR" // Maldives (Maldive Islands) Rufiyaa
-	MWK = "MWK" // Malawi Kwacha
-	MXN = "MXN" // Mexico Peso
-	MYR = "MYR" // Malaysia Ringgit
-	MZN = "MZN" // Mozambique Metical
-	NAD = "NAD" // Namibia Dollar
-	NGN = "NGN" // Nigeria Naira
-	NIO = "NIO" // Nicaragua Cordoba
-	NOK = "NOK" // Norway Krone
-	NPR = "NPR" // Nepal Rupee
-	NZD = "NZD" // New Zealand Dollar
-	OMR = "OMR" // Oman Rial
-	PAB = "PAB" // Panama Balboa
-	PEN = "PEN" // Peru Sol
-	PGK = "PGK" // Papua New Guinea Kina
-	PHP = "PHP" // Philippines Peso
-	PKR = "PKR" // Pakistan Rupee
-	PLN = "PLN" // Poland Zloty
-	PYG = "PYG" // Paraguay Guarani
-	QAR = "QAR" // Qatar Riyal
-	RON = "RON" // Romania New Leu
-	RSD = "RSD" // Serbia Dinar
-	RUB = "RUB" // Russia Ruble
-	RWF = "RWF" // Rwanda Franc
-	SAR = "SAR" // Saudi Arabia Riyal
-	SBD = "SBD" // Solomon Islands Dollar
-	SCR = "SCR" // Seychelles Rupee
-	SDG = "SDG" // Sudan Pound
-	SEK = "SEK" // Sweden Krona
-	SGD = "SGD" // Singapore Dollar
-	SHP = "SHP" // Saint Helena Pound
-	SLL = "SLL" // Sierra Leone Leone
-	SOS = "SOS" // Somalia Shilling
-	SPL = "SPL" // Seborga Luigino
-	SRD = "SRD" // Suriname Dollar
-	STD = "STD" // São Tomé and Príncipe Dobra
-	SVC = "SVC" // El Salvador Colon
-	SYP = "SYP" // Syria Pound
-	SZL = "SZL" // Swaziland Lilangeni
-	THB = "THB" // Thailand Baht
-	TJS = "TJS" // Tajikistan Somoni
-	TMT = "TMT" // Turkmenistan Manat
-	TND = "TND" // Tunisia Dinar
-	TOP = "TOP" // Tonga Pa'anga
-	TRY = "TRY" // Turkey Lira
-	TTD = "TTD" // Trinidad and Tobago Dollar
-	TVD = "TVD" // Tuvalu Dollar
-	TWD = "TWD" // Taiwan New Dollar
-	TZS = "TZS" // Tanzania Shilling
-	UAH = "UAH" // Ukraine Hryvnia
-	UGX = "UGX" // Uganda Shilling
-	USD = "USD" // United States Dollar
-	UYU = "UYU" // Uruguay Peso
-	UZS = "UZS" // Uzbekistan Som
-	VEF = "VEF" // Venezuela Bolivar
-	VND = "VND" // Viet Nam Dong
-	VUV = "VUV" // Vanuatu Vatu
-	WST = "WST" // Samoa Tala
-	XAF = "XAF" // Communauté Financière Africaine (BEAC) CFA Franc BEAC
-	XCD = "XCD" // East Caribbean Dollar
-	XDR = "XDR" // International Monetary Fund (IMF) Special Drawing Rights
-	XOF = "XOF" // Communauté Financière Africaine (BCEAO) Franc
-	XPF = "XPF" // Comptoirs Français du Pacifique (CFP) Franc
-	YER = "YER" // Yemen Rial
-	ZAR = "ZAR" // South Africa Rand
-	ZMW = "ZMW" // Zambia Kwacha
-	ZWD = "ZWD" // Zimbabwe Dollar
-
-	BTC = "BTC" // Bitcoin
-)
 
 var currencySymbolToCode = map[string]Currency{
 	"€":    EUR,
@@ -188,7 +23,6 @@ var currencySymbolToCode = map[string]Currency{
 	"Ft":   HUF,
 	"kn":   HRK,
 	"¥":    JPY,
-	"₿":    BTC,
 }
 
 var currencyCodeToSymbol = map[Currency]string{
@@ -294,6 +128,7 @@ var currencyCodeToName = map[Currency]string{ //#nosec G101
 	MNT: "Mongolia Tughrik",
 	MOP: "Macau Pataca",
 	MRO: "Mauritania Ouguiya",
+	MRU: "Mauritania New Ouguiya",
 	MUR: "Mauritius Rupee",
 	MVR: "Maldives (Maldive Islands) Rufiyaa",
 	MWK: "Malawi Kwacha",
@@ -326,11 +161,14 @@ var currencyCodeToName = map[Currency]string{ //#nosec G101
 	SEK: "Sweden Krona",
 	SGD: "Singapore Dollar",
 	SHP: "Saint Helena Pound",
+	SLE: "Sierra Leone New Leone",
 	SLL: "Sierra Leone Leone",
 	SOS: "Somalia Shilling",
 	SPL: "Seborga Luigino",
 	SRD: "Suriname Dollar",
+	SSP: "South Sudan Pound",
 	STD: "São Tomé and Príncipe Dobra",
+	STN: "São Tomé and Príncipe New Dobra",
 	SVC: "El Salvador Colon",
 	SYP: "Syria Pound",
 	SZL: "Swaziland Lilangeni",
@@ -349,12 +187,15 @@ var currencyCodeToName = map[Currency]string{ //#nosec G101
 	USD: "United States Dollar",
 	UYU: "Uruguay Peso",
 	UZS: "Uzbekistan Som",
+	VED: "Venezuela Bolívar Digital",
 	VEF: "Venezuela Bolivar",
+	VES: "Venezuela Bolívar Soberano",
 	VND: "Viet Nam Dong",
 	VUV: "Vanuatu Vatu",
 	WST: "Samoa Tala",
 	XAF: "Communauté Financière Africaine (BEAC) CFA Franc BEAC",
 	XCD: "East Caribbean Dollar",
+	XCG: "Caribbean Guilder",
 	XDR: "International Monetary Fund (IMF) Special Drawing Rights",
 	XOF: "Communauté Financière Africaine (BCEAO) Franc",
 	XPF: "Comptoirs Français du Pacifique (CFP) Franc",
@@ -362,4 +203,177 @@ var currencyCodeToName = map[Currency]string{ //#nosec G101
 	ZAR: "South Africa Rand",
 	ZMW: "Zambia Kwacha",
 	ZWD: "Zimbabwe Dollar",
+	ZWG: "Zimbabwe Gold",
+	ZWL: "Zimbabwe Dollar (2009-2024)",
 }
+
+// currencyCodeToMinorUnits holds the ISO 4217 minor units, the number of
+// decimal places of the minor currency unit, of the currencies whose minor
+// unit is not 2 decimal places, see Currency.MinorUnits.
+var currencyCodeToMinorUnits = map[Currency]int{
+	BIF: 0,
+	CLP: 0,
+	DJF: 0,
+	GNF: 0,
+	ISK: 0,
+	JPY: 0,
+	KMF: 0,
+	KRW: 0,
+	PYG: 0,
+	RWF: 0,
+	UGX: 0,
+	VND: 0,
+	VUV: 0,
+	XAF: 0,
+	XOF: 0,
+	XPF: 0,
+
+	BHD: 3,
+	IQD: 3,
+	JOD: 3,
+	KWD: 3,
+	LYD: 3,
+	OMR: 3,
+	TND: 3,
+}
+
+// currencyCodeToISOName holds the English currency names of the ISO 4217
+// list like "Canadian Dollar", which often differ from the names of
+// currencyCodeToName like "Canada Dollar".
+//
+// Only names of two or more words are listed. Single word names like
+// "Rand", "Won" or "Sol" are also common words, so accepting them would
+// detect currencies in any text that StringIsCurrency is used on.
+// A name that ISO 4217 uses for more than one code is listed only
+// for the current code: "Bolívar Soberano" for VES and not for VED.
+// Withdrawn codes kept for old data, like ANG, BGN and CUC, keep their
+// former ISO 4217 name unless a current code took it over, like the
+// "Ouguiya" of MRO that is now the single word name of MRU.
+var currencyCodeToISOName = map[Currency]string{
+	AED: "UAE Dirham",
+	AMD: "Armenian Dram",
+	ANG: "Netherlands Antillean Guilder",
+	ARS: "Argentine Peso",
+	AUD: "Australian Dollar",
+	AWG: "Aruban Florin",
+	AZN: "Azerbaijan Manat",
+	BAM: "Convertible Mark",
+	BBD: "Barbados Dollar",
+	BGN: "Bulgarian Lev",
+	BHD: "Bahraini Dinar",
+	BIF: "Burundi Franc",
+	BMD: "Bermudian Dollar",
+	BND: "Brunei Dollar",
+	BRL: "Brazilian Real",
+	BSD: "Bahamian Dollar",
+	BYN: "Belarusian Ruble",
+	BZD: "Belize Dollar",
+	CAD: "Canadian Dollar",
+	CDF: "Congolese Franc",
+	CHF: "Swiss Franc",
+	CLP: "Chilean Peso",
+	CNY: "Yuan Renminbi",
+	COP: "Colombian Peso",
+	CRC: "Costa Rican Colon",
+	CUC: "Peso Convertible",
+	CUP: "Cuban Peso",
+	CVE: "Cabo Verde Escudo",
+	CZK: "Czech Koruna",
+	DJF: "Djibouti Franc",
+	DKK: "Danish Krone",
+	DOP: "Dominican Peso",
+	DZD: "Algerian Dinar",
+	EGP: "Egyptian Pound",
+	ETB: "Ethiopian Birr",
+	FJD: "Fiji Dollar",
+	FKP: "Falkland Islands Pound",
+	GBP: "Pound Sterling",
+	GHS: "Ghana Cedi",
+	GIP: "Gibraltar Pound",
+	GNF: "Guinean Franc",
+	GYD: "Guyana Dollar",
+	HKD: "Hong Kong Dollar",
+	ILS: "New Israeli Sheqel",
+	INR: "Indian Rupee",
+	IQD: "Iraqi Dinar",
+	IRR: "Iranian Rial",
+	ISK: "Iceland Krona",
+	JMD: "Jamaican Dollar",
+	JOD: "Jordanian Dinar",
+	KES: "Kenyan Shilling",
+	KMF: "Comorian Franc",
+	KPW: "North Korean Won",
+	KWD: "Kuwaiti Dinar",
+	KYD: "Cayman Islands Dollar",
+	LAK: "Lao Kip",
+	LBP: "Lebanese Pound",
+	LKR: "Sri Lanka Rupee",
+	LRD: "Liberian Dollar",
+	LYD: "Libyan Dinar",
+	MAD: "Moroccan Dirham",
+	MDL: "Moldovan Leu",
+	MGA: "Malagasy Ariary",
+	MUR: "Mauritius Rupee",
+	MWK: "Malawi Kwacha",
+	MXN: "Mexican Peso",
+	MYR: "Malaysian Ringgit",
+	MZN: "Mozambique Metical",
+	NAD: "Namibia Dollar",
+	NIO: "Cordoba Oro",
+	NOK: "Norwegian Krone",
+	NPR: "Nepalese Rupee",
+	NZD: "New Zealand Dollar",
+	OMR: "Rial Omani",
+	PHP: "Philippine Peso",
+	PKR: "Pakistan Rupee",
+	QAR: "Qatari Rial",
+	RON: "Romanian Leu",
+	RSD: "Serbian Dinar",
+	RUB: "Russian Ruble",
+	RWF: "Rwanda Franc",
+	SAR: "Saudi Riyal",
+	SBD: "Solomon Islands Dollar",
+	SCR: "Seychelles Rupee",
+	SDG: "Sudanese Pound",
+	SEK: "Swedish Krona",
+	SGD: "Singapore Dollar",
+	SHP: "Saint Helena Pound",
+	SOS: "Somali Shilling",
+	SRD: "Surinam Dollar",
+	SSP: "South Sudanese Pound",
+	SVC: "El Salvador Colon",
+	SYP: "Syrian Pound",
+	TMT: "Turkmenistan New Manat",
+	TND: "Tunisian Dinar",
+	TRY: "Turkish Lira",
+	TTD: "Trinidad and Tobago Dollar",
+	TWD: "New Taiwan Dollar",
+	TZS: "Tanzanian Shilling",
+	UGX: "Uganda Shilling",
+	USD: "US Dollar",
+	UYU: "Peso Uruguayo",
+	UZS: "Uzbekistan Sum",
+	VES: "Bolívar Soberano",
+	XAF: "CFA Franc BEAC",
+	XCD: "East Caribbean Dollar",
+	XCG: "Caribbean Guilder",
+	XDR: "SDR (Special Drawing Right)",
+	XOF: "CFA Franc BCEAO",
+	XPF: "CFP Franc",
+	YER: "Yemeni Rial",
+	ZMW: "Zambian Kwacha",
+	ZWG: "Zimbabwe Gold",
+}
+
+// currencyNameToCode maps the upper case names of currencyCodeToName
+// and currencyCodeToISOName to their currency for Currency.Normalized.
+var currencyNameToCode = func() map[string]Currency {
+	m := make(map[string]Currency, len(currencyCodeToName)+len(currencyCodeToISOName))
+	for code, name := range currencyCodeToName {
+		m[strings.ToUpper(name)] = code
+	}
+	for code, name := range currencyCodeToISOName {
+		m[strings.ToUpper(name)] = code
+	}
+	return m
+}()

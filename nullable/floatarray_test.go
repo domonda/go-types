@@ -4,7 +4,9 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"encoding/json"
+	"math"
 	"sort"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -91,6 +93,48 @@ func Test_FloatArray_Scan(t *testing.T) {
 	assert.Error(t, a.Scan("not an array"))
 	assert.Error(t, a.Scan("{notanumber}"))
 	assert.Error(t, a.Scan(123))
+}
+
+// A Scan error must name the type the caller scans into, not the
+// notnull.FloatArray it shares the array format with, so the message
+// leads to the right Go field. The parse error must stay wrapped.
+func Test_FloatArray_ScanErrorNamesType(t *testing.T) {
+	var a FloatArray
+	for _, src := range []any{123, "not an array", "{1.5,NULL,3}"} {
+		err := a.Scan(src)
+		require.Error(t, err, "Scan(%#v)", src)
+		assert.Contains(t, err.Error(), "nullable.FloatArray", "Scan(%#v)", src)
+		assert.NotContains(t, err.Error(), "notnull", "Scan(%#v)", src)
+	}
+	assert.ErrorIs(t, a.Scan("{1.5,x}"), strconv.ErrSyntax)
+}
+
+// PostgreSQL writes the non-finite float8 values as NaN, Infinity and
+// -Infinity, so Scan must read them, and the values written by Value
+// must scan back to the same floats. JSON has no NaN or infinity,
+// so json.Marshal must fail for them instead of writing invalid JSON.
+func Test_FloatArray_NonFinite(t *testing.T) {
+	var a FloatArray
+	require.NoError(t, a.Scan("{NaN,Infinity,-Infinity}"))
+	require.Len(t, a, 3)
+	assert.True(t, math.IsNaN(a[0]))
+	assert.Equal(t, math.Inf(1), a[1])
+	assert.Equal(t, math.Inf(-1), a[2])
+
+	val, err := FloatArray{math.NaN(), math.Inf(1), math.Inf(-1)}.Value()
+	require.NoError(t, err)
+	var scanned FloatArray
+	require.NoError(t, scanned.Scan(val), "Scan(%q)", val)
+	require.Len(t, scanned, 3)
+	assert.True(t, math.IsNaN(scanned[0]))
+	assert.Equal(t, math.Inf(1), scanned[1])
+	assert.Equal(t, math.Inf(-1), scanned[2])
+
+	for _, f := range []float64{math.NaN(), math.Inf(1), math.Inf(-1)} {
+		_, err := json.Marshal(FloatArray{1, f})
+		var unsupported *json.UnsupportedValueError
+		assert.ErrorAs(t, err, &unsupported, "json.Marshal of %v", f)
+	}
 }
 
 func Test_FloatArray_RoundTrip(t *testing.T) {

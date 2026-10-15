@@ -10,6 +10,8 @@ import (
 // waiting to be unlocked.
 // This is equivalent to declaring a mutex variable for every key,
 // except that the key and the number of mutexes are dynamic.
+// Like a sync.Mutex it is not reentrant, locking a key again
+// from the goroutine holding it deadlocks.
 type KeyMutex[T comparable] struct {
 	global sync.Mutex
 	locks  map[T]*countedLock
@@ -25,9 +27,14 @@ func NewKeyMutex[T comparable]() *KeyMutex[T] {
 	return &KeyMutex[T]{locks: make(map[T]*countedLock)}
 }
 
-// Lock the mutex for a given key
+// Lock the mutex for a given key.
+// The zero value of KeyMutex is usable,
+// it is initialized by the first Lock call.
 func (m *KeyMutex[T]) Lock(key T) {
 	m.global.Lock()
+	if m.locks == nil {
+		m.locks = make(map[T]*countedLock)
+	}
 	lock := m.locks[key]
 	if lock == nil {
 		lock = new(countedLock)
@@ -40,6 +47,7 @@ func (m *KeyMutex[T]) Lock(key T) {
 }
 
 // Unlock the mutex for a given key.
+// It panics if the key is not locked.
 func (m *KeyMutex[T]) Unlock(key T) {
 	m.global.Lock()
 	defer m.global.Unlock()
@@ -55,7 +63,9 @@ func (m *KeyMutex[T]) Unlock(key T) {
 	lock.Unlock()
 }
 
-// IsLocked tells wether a key is locked.
+// IsLocked tells whether a key is locked
+// or a Lock call for it is in progress.
+// The result is a snapshot that can change right after the call.
 func (m *KeyMutex[T]) IsLocked(key T) bool {
 	m.global.Lock()
 	_, locked := m.locks[key]

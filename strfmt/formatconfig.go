@@ -17,7 +17,6 @@ import (
 type FormatConfig struct {
 	Float          float.FormatDef
 	MoneyAmount    MoneyFormat
-	Percent        float.FormatDef
 	Time           string
 	Date           string
 	Nil            string // Also used for nullable.Nullable and Zeroable
@@ -31,36 +30,43 @@ type FormatConfig struct {
 // empty nil string, and "true"/"false" boolean labels.
 // It pre-registers type-specific formatters for date.Date,
 // date.NullableDate, time.Time, nullable.Time, time.Duration,
-// money.Amount, and money.CurrencyAmount.
+// money.Amount, money.CentAmount, money.DecimalAmount,
+// money.CurrencyAmount, and money.CurrencyDecimalAmount.
+// The nullable money types, like any nullable.Type[T],
+// are formatted like T or as config.Nil for null without own formatters.
 func NewFormatConfig() *FormatConfig {
 	return &FormatConfig{
 		Float:       EnglishFloatFormat(-1),
 		MoneyAmount: EnglishMoneyFormat(true),
-		Percent:     EnglishFloatFormat(-1),
 		Time:        time.RFC3339,
 		Date:        date.Layout,
 		Nil:         "",
 		True:        "true",
 		False:       "false",
 		TypeFormatters: map[reflect.Type]Formatter{
-			reflect.TypeFor[date.Date]():            FormatterFunc(formatDateString),
-			reflect.TypeFor[date.NullableDate]():    FormatterFunc(formatNullableDateString),
-			reflect.TypeFor[time.Time]():            FormatterFunc(formatTimeString),
-			reflect.TypeFor[nullable.Time]():        FormatterFunc(formatNullableTimeString),
-			reflect.TypeFor[time.Duration]():        FormatterFunc(formatDurationString),
-			reflect.TypeFor[money.Amount]():         FormatterFunc(formatMoneyAmountString),
-			reflect.TypeFor[money.CurrencyAmount](): FormatterFunc(formatMoneyCurrencyAmountString),
+			reflect.TypeFor[date.Date]():                   FormatterFunc(formatDateString),
+			reflect.TypeFor[date.NullableDate]():           FormatterFunc(formatNullableDateString),
+			reflect.TypeFor[time.Time]():                   FormatterFunc(formatTimeString),
+			reflect.TypeFor[nullable.Time]():               FormatterFunc(formatNullableTimeString),
+			reflect.TypeFor[time.Duration]():               FormatterFunc(formatDurationString),
+			reflect.TypeFor[money.Amount]():                FormatterFunc(formatMoneyAmountString),
+			reflect.TypeFor[money.CentAmount]():            FormatterFunc(formatMoneyCentAmountString),
+			reflect.TypeFor[money.DecimalAmount]():         FormatterFunc(formatMoneyDecimalAmountString),
+			reflect.TypeFor[money.CurrencyAmount]():        FormatterFunc(formatMoneyCurrencyAmountString),
+			reflect.TypeFor[money.CurrencyDecimalAmount](): FormatterFunc(formatMoneyCurrencyDecimalAmountString),
 		},
 	}
 }
 
-// NewEnglishFormatConfig returns a FormatConfig based on NewFormatConfig
-// adjusted for English locale conventions: DD/MM/YYYY date layout,
-// a long-form time layout, and "yes"/"no" boolean labels.
-func NewEnglishFormatConfig() *FormatConfig {
+// NewUSFormatConfig returns a FormatConfig based on NewFormatConfig
+// adjusted for US conventions: MM/DD/YYYY date layout, a long-form time
+// layout, and "yes"/"no" boolean labels. A date with slashes is read
+// month first without a language hint, see date.Normalize, so the dates
+// written by this config read back unchanged.
+func NewUSFormatConfig() *FormatConfig {
 	config := NewFormatConfig()
-	config.Date = "02/01/2006"
-	config.Time = "02/01/2006 15:04:05 MST"
+	config.Date = "01/02/2006"
+	config.Time = "01/02/2006 15:04:05 MST"
 	config.True = "yes"
 	config.False = "no"
 	return config
@@ -68,13 +74,13 @@ func NewEnglishFormatConfig() *FormatConfig {
 
 // NewGermanFormatConfig returns a FormatConfig based on NewFormatConfig
 // adjusted for German locale conventions: comma decimal separator,
-// dot thousands separator, DD.MM.YYYY date layout, a long-form time
-// layout, and "ja"/"nein" boolean labels.
+// dot thousands separator for money amounts only (floats are not grouped),
+// DD.MM.YYYY date layout, a long-form time layout,
+// and "ja"/"nein" boolean labels.
 func NewGermanFormatConfig() *FormatConfig {
 	config := NewFormatConfig()
 	config.Float = GermanFloatFormat(-1)
 	config.MoneyAmount = GermanMoneyFormat(true)
-	config.Percent = GermanFloatFormat(-1)
 	config.Date = "02.01.2006"
 	config.Time = "02.01.2006 15:04:05 MST"
 	config.True = "ja"
@@ -83,11 +89,19 @@ func NewGermanFormatConfig() *FormatConfig {
 }
 
 func formatDateString(val reflect.Value, config *FormatConfig) string {
-	return val.Interface().(date.Date).Format(config.Date)
+	d := val.Interface().(date.Date)
+	if d.IsZero() {
+		return config.Nil
+	}
+	return d.Format(config.Date)
 }
 
 func formatNullableDateString(val reflect.Value, config *FormatConfig) string {
-	return val.Interface().(date.NullableDate).Format(config.Date)
+	d := val.Interface().(date.NullableDate)
+	if d.IsNull() {
+		return config.Nil
+	}
+	return d.Format(config.Date)
 }
 
 func formatTimeString(val reflect.Value, config *FormatConfig) string {
@@ -114,6 +128,18 @@ func formatMoneyAmountString(val reflect.Value, config *FormatConfig) string {
 	return config.MoneyAmount.FormatAmount(val.Interface().(money.Amount))
 }
 
+func formatMoneyCentAmountString(val reflect.Value, config *FormatConfig) string {
+	return config.MoneyAmount.FormatCentAmount(val.Interface().(money.CentAmount))
+}
+
+func formatMoneyDecimalAmountString(val reflect.Value, config *FormatConfig) string {
+	return config.MoneyAmount.FormatDecimalAmount(val.Interface().(money.DecimalAmount))
+}
+
 func formatMoneyCurrencyAmountString(val reflect.Value, config *FormatConfig) string {
 	return config.MoneyAmount.FormatCurrencyAmount(val.Interface().(money.CurrencyAmount))
+}
+
+func formatMoneyCurrencyDecimalAmountString(val reflect.Value, config *FormatConfig) string {
+	return config.MoneyAmount.FormatCurrencyDecimalAmount(val.Interface().(money.CurrencyDecimalAmount))
 }

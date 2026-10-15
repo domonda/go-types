@@ -1,6 +1,7 @@
 package money
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
 	"math/big"
@@ -32,21 +33,32 @@ func NullableAmountFromPtr(ptr *Amount) NullableAmount {
 }
 
 // ParseAmount parses an amount from str accepting only certain decimal digit counts.
-// If no acceptedDecimals are passed, then any decimal digit count is accepted.
-// Infinity and NaN are parsed and returned without error.
-// The Amount.Valid method can be aused to check for infinity and NaN.
+// If no acceptedDecimals are passed, then any decimal digit count is accepted
+// and infinity and NaN are parsed and returned without error.
+// The Amount.Valid method can be used to check for infinity and NaN.
+// If acceptedDecimals are passed, then infinity and NaN are errors
+// because they have no decimals that could be accepted.
 func ParseAmount(str string, acceptedDecimals ...int) (Amount, error) {
 	f, _, _, decimals, err := float.ParseDetails(str)
 	if err != nil {
 		return 0, err
 	}
-	if len(acceptedDecimals) == 0 || math.IsNaN(f) || math.IsInf(f, 0) {
+	if len(acceptedDecimals) == 0 {
 		return Amount(f), nil
+	}
+	if math.IsNaN(f) || math.IsInf(f, 0) {
+		return 0, errNonFiniteNotAccepted(str, acceptedDecimals)
 	}
 	if slices.Contains(acceptedDecimals, decimals) {
 		return Amount(f), nil
 	}
-	return 0, fmt.Errorf("parsing %q returned %d decimals wich is not in accepted list of %v", str, decimals, acceptedDecimals)
+	return 0, fmt.Errorf("parsing %q returned %d decimals which is not in accepted list of %v", str, decimals, acceptedDecimals)
+}
+
+// errNonFiniteNotAccepted returns the error of the parse functions for
+// a NaN or infinite str parsed with acceptedDecimals.
+func errNonFiniteNotAccepted(str string, acceptedDecimals []int) error {
+	return fmt.Errorf("parsing %q returned a non-finite value which has no decimals of the accepted list %v", str, acceptedDecimals)
 }
 
 // AmountFromPtr dereferences ptr or returns defaultVal if it is nil.
@@ -81,11 +93,17 @@ func (a *Amount) ScanString(source string, validate bool) error {
 	return nil
 }
 
-// Cents returns the amount rounded to cents.
+// Cents returns the amount rounded half away from zero to whole cents.
+// Like Amount.CentAmount it rounds the shortest decimal representation
+// of the float64 value, so Amount(0.145) has 15 cents.
 // The result is undefined for infinite and NaN amounts,
 // see Amount.CentAmount for a conversion that handles them.
 func (a Amount) Cents() int64 {
-	return int64(math.Round(float64(a) * 100))
+	if !a.Valid() {
+		// Keep the platform dependent conversion of non-finite values
+		return int64(math.Round(float64(a) * 100))
+	}
+	return int64(a.CentAmount(RoundHalfAwayFromZero))
 }
 
 // CentAmount returns the amount rounded to whole cents
@@ -128,16 +146,22 @@ func (a Amount) CentAmount(rounding RoundingMode) CentAmount {
 
 // DecimalAmount converts the float64 Amount to an exact fixed-point
 // DecimalAmount rounded to the given scale with the given rounding mode.
+// Like Amount.CentAmount it rounds the shortest decimal representation
+// of the float64 value, so Amount(0.145) rounds half away from zero
+// to 0.15 and not to the 0.14 of its binary value.
 // A NaN or infinite Amount maps to the corresponding non-finite DecimalAmount
 // and an out-of-range value maps to ±Inf; it panics only if scale is out of
 // range. See DecimalAmountFrom for a conversion that keeps the full float64
 // precision instead of rounding to a fixed scale.
 func (a Amount) DecimalAmount(scale int, rounding RoundingMode) DecimalAmount {
-	return mustDecimalFromFloat(float64(a), scale, rounding)
+	return decimalFromFloatRounded(float64(a), 64, scale, rounding)
 }
 
-// WithinOneCent returns true if a and b are equal
-// within a one cent tolerance.
+// WithinOneCent returns true if the whole cents of a and b,
+// as returned by Amount.Cents, differ by at most one cent.
+// Because both amounts are rounded to cents first,
+// the difference of the unrounded amounts can be up to
+// just under two cents, like for 9.995 and 10.0149.
 func (a Amount) WithinOneCent(b Amount) bool {
 	diff := a.Cents() - b.Cents()
 	return diff >= -1 && diff <= 1
@@ -148,23 +172,29 @@ func (a Amount) RoundToInt() Amount {
 	return Amount(math.Round(float64(a)))
 }
 
-// RoundToCents returns the amount rounded to cents (2 decimal places)
+// RoundToCents returns the amount rounded half away from zero
+// to cents (2 decimal places), see Amount.RoundToDecimals.
 func (a Amount) RoundToCents() Amount {
-	return Amount(math.Round(float64(a)*100) / 100)
+	return a.RoundToDecimals(2)
 }
 
-// RoundToDecimals returns the amount rounded
+// RoundToDecimals returns the amount rounded half away from zero
 // to the passed number of decimal places.
+// Negative decimals round to tens, hundreds, and so on.
+// Like Amount.CentAmount it rounds the shortest decimal representation
+// of the float64 value, so Amount(0.145).RoundToDecimals(2) is 0.15
+// and not the 0.14 of its binary value.
+// NaN and infinite amounts are returned unchanged.
+// See float.RoundToDecimals.
 func (a Amount) RoundToDecimals(decimals int) Amount {
-	pow := math.Pow10(decimals)
-	return Amount(math.Round(float64(a)*pow) / pow)
+	return float.RoundToDecimals(a, decimals)
 }
 
 // String returns the amount rounded to two decimal places
 // formatted with a dot as decimal separator.
 // String implements the fmt.Stringer interface.
 func (a Amount) String() string {
-	return a.RoundToCents().FormatSep(0, '.', 2)
+	return a.FormatSep(0, '.', 2)
 
 	// neg := a < 0
 	// s := strconv.FormatInt(a.Abs().Cents(), 10)
@@ -257,12 +287,15 @@ func (ptr *Amount) AmountOr(defaultVal Amount) Amount {
 // Valid values for decimalSep are '.' and ','.
 // If thousandsSep is not zero, then the integer part of the number is grouped
 // with thousandsSep between every group of 3 digits.
-// Valid values for thousandsSep are [0, ',', '.']
+// Valid values for thousandsSep are 0 (no grouping), ',', '.', ' '
+// and the apostrophe,
 // and thousandsSep must be different from decimalSep.
-// The precision argument controls the number of digits (excluding the exponent).
-// Note that the last digit is not rounded!
+// The precision argument is the number of decimal places, padded with zeros.
+// The amount is rounded to them half away from zero like Amount.RoundToDecimals
+// does, so Amount(0.125) and Amount(0.145) format as "0.13" and "0.15"
+// with precision 2, see float.Format.
 // The special precision -1 uses the smallest number of digits
-// necessary such that ParseFloat will return f exactly.
+// necessary such that ParseFloat will return the amount exactly.
 func (a Amount) FormatSep(thousandsSep, decimalSep rune, precision int) string {
 	return float.Format(float64(a), thousandsSep, decimalSep, precision, true)
 }
@@ -362,9 +395,16 @@ func (a Amount) Percentage(percent float64) Amount {
 }
 
 // SplitEqually divides the amount equally into count amounts
-// that are rounded to cents and sum up to the initial amount rounded to cents.
-// The last amount may slightly differ from the others amounts to guarantee
-// that the sum of the rounded cents equals the rounded cents of the initial amount.
+// that are rounded to cents and sum up to the initial amount rounded
+// half away from zero to cents.
+// Like CentAmount.SplitEqually the cents that can't be divided evenly
+// are handed to the last amounts, so no two amounts ever differ by more
+// than one cent and none has the opposite sign of the initial amount.
+// A count of one returns the amount unrounded.
+// A NaN or infinite amount, or one beyond the CentAmount range,
+// is divided without rounding. Beyond about ±90 trillion (2^53 cents)
+// float64 can't represent every cent anymore, so the parts
+// may not sum up to the amount exactly.
 func (a Amount) SplitEqually(count int) []Amount {
 	if count < 1 {
 		return nil
@@ -373,20 +413,38 @@ func (a Amount) SplitEqually(count int) []Amount {
 		return []Amount{a} // Don't introduce rounding errors
 	}
 	result := make([]Amount, count)
-	part := (a / Amount(count)).RoundToCents()
-	for i := 0; i < count-1; i++ {
-		result[i] = part
+	cents, ok := a.splitCents()
+	if !ok {
+		for i := range result {
+			result[i] = a / Amount(count)
+		}
+		return result
 	}
-	result[count-1] = (a.RoundToCents() - (part * Amount(count-1))).RoundToCents()
+	for i, part := range cents.SplitEqually(count) {
+		result[i] = part.Amount()
+	}
 	return result
 }
 
-// SplitProportionally splits an amount proportianly
+// SplitProportionally splits an amount proportionally
 // to the passed weights into the same number of amounts
-// that get round to cents and makes sure that the sum
-// is identical to the amount rounded to cents.
-// The passed weights can be positive, negative, or zero,
-// so the result amounts can also be positive, negative, or zero.
+// that are rounded to cents and sum up to the initial amount rounded
+// half away from zero to cents.
+// Only the magnitudes of the weights are used and every result amount
+// gets the sign of the split amount, so the passed weights can be
+// positive, negative, or zero.
+// If all weights are zero then the whole amount ends up
+// in the last result element.
+// A single weight returns the amount unrounded.
+//
+// Like CentAmount.SplitProportionally the cents lost to truncation are
+// handed to the amounts with the largest truncated fraction (the largest
+// remainder method), so every amount is within one cent of its exact share
+// up to the float64 precision of the weight ratios.
+// A NaN or infinite amount or weight, or an amount beyond the CentAmount
+// range, is split without rounding. Beyond about ±90 trillion (2^53 cents)
+// float64 can't represent every cent anymore, so the parts
+// may not sum up to the amount exactly.
 func (a Amount) SplitProportionally(weights []Amount) []Amount {
 	count := len(weights)
 	if count == 0 {
@@ -395,21 +453,56 @@ func (a Amount) SplitProportionally(weights []Amount) []Amount {
 	if count == 1 {
 		return []Amount{a} // Don't introduce rounding errors
 	}
-	compareSum := Amount(0)
-	for _, amount := range weights {
-		compareSum += amount.Copysign(a)
+	cents, ok := a.splitCents()
+	maxWeight := 0.0
+	for _, weight := range weights {
+		ok = ok && weight.Valid()
+		maxWeight = max(maxWeight, weight.AbsFloat())
 	}
-	scaleFactor := a / compareSum
-
-	compareSum = 0
 	result := make([]Amount, count)
-	for i := 0; i < count-1; i++ {
-		result[i] = (weights[i].Copysign(a) * scaleFactor).RoundToCents()
-		compareSum += result[i]
+	if !ok {
+		// Scaled by the largest weight, so that the sum of large
+		// weights can't overflow to infinity and zero every part
+		scale := Amount(1)
+		if maxWeight > 0 && !math.IsInf(maxWeight, 0) {
+			scale = Amount(maxWeight)
+		}
+		totalWeight := Amount(0)
+		for _, weight := range weights {
+			totalWeight += weight.Abs() / scale
+		}
+		if totalWeight == 0 {
+			// Like for the cents below, all zero weights
+			// put the whole amount into the last element
+			result[count-1] = a
+			return result
+		}
+		for i, weight := range weights {
+			result[i] = a * (weight.Abs() / scale / totalWeight)
+		}
+		return result
 	}
-	result[count-1] = (a.RoundToCents() - compareSum).RoundToCents()
-
+	// CentAmount.SplitProportionally apportions the cents exactly for integer
+	// weights. Scaling the weight magnitudes so that the largest one is 2^53
+	// keeps the full float64 precision of their ratios as integers.
+	intWeights := make([]CentAmount, count)
+	if maxWeight > 0 {
+		for i, weight := range weights {
+			intWeights[i] = CentAmount(math.Round(weight.AbsFloat() / maxWeight * (1 << 53)))
+		}
+	}
+	for i, part := range cents.SplitProportionally(intWeights) {
+		result[i] = part.Amount()
+	}
 	return result
+}
+
+// splitCents returns the amount rounded half away from zero to cents
+// and whether the amount is finite and within the CentAmount range,
+// so that its cents can be apportioned exactly by the CentAmount splits.
+func (a Amount) splitCents() (CentAmount, bool) {
+	cents := a.CentAmount(RoundHalfAwayFromZero)
+	return cents, a.Valid() && cents != MinCentAmount && cents != MaxCentAmount
 }
 
 // Valid returns if the amount is neither infinite nor NaN
@@ -440,7 +533,7 @@ func (a Amount) IsNaN() bool {
 	return math.IsNaN(float64(a))
 }
 
-// IsNaN returns if the amount is positive or negative infinity
+// IsInf returns if the amount is positive or negative infinity
 func (a Amount) IsInf() bool {
 	return math.IsInf(float64(a), 0)
 }
@@ -462,9 +555,13 @@ func (a *Amount) UnmarshalJSON(j []byte) error {
 		return nil
 	}
 
-	// Strip quotes
-	if l := len(s); l > 2 && s[0] == '"' && s[l-1] == '"' {
-		s = s[1 : l-1]
+	// Decode a JSON string through the standard library so \uXXXX and other
+	// escape sequences are resolved, not just the surrounding quotes stripped.
+	if len(s) > 0 && s[0] == '"' {
+		err := json.Unmarshal(j, &s)
+		if err != nil {
+			return fmt.Errorf("can't unmarshal JSON(%s) as money.Amount because of: %w", j, err)
+		}
 	}
 
 	amount, err := ParseAmount(s)

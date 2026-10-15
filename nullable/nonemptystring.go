@@ -17,8 +17,9 @@ const NonEmptyStringNull NonEmptyString = ""
 // is interpreted as SQL NULL and JSON null by
 // implementing the sql.Scanner and driver.Valuer interfaces
 // and also json.Marshaler and json.Unmarshaler.
-// Note that this type can't hold an empty string without
-// interpreting it as not null SQL or JSON value.
+// Note that this type can't hold an empty string
+// that is not interpreted as SQL NULL or JSON null.
+// The string is not trimmed, so a string of spaces is not null.
 type NonEmptyString string
 
 // NonEmptyStringf formats a string using fmt.Sprintf

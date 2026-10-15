@@ -1,13 +1,3 @@
-// Package bank provides comprehensive banking data types and utilities for Go applications.
-//
-// The package includes:
-// - IBAN (International Bank Account Number) validation and parsing
-// - BIC (Bank Identifier Code) validation and parsing
-// - Bank account management with validation
-// - CAMT53 bank statement parsing
-// - Database integration (Scanner/Valuer interfaces)
-// - JSON marshalling/unmarshalling
-// - Nullable banking types support
 package bank
 
 import (
@@ -74,7 +64,7 @@ func (a *Account) Normalize() error {
 func (a *Account) String() string {
 	var b strings.Builder
 	b.WriteString("bank.Account{")
-	b.WriteString(a.IBAN.String())
+	b.WriteString(string(a.IBAN))
 	if a.BIC.IsNotNull() {
 		fmt.Fprintf(&b, ", BIC: %s", a.BIC)
 	}

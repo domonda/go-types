@@ -1,12 +1,3 @@
-// Package nullable provides interfaces and utilities for handling nullable values in Go.
-// It defines common interfaces for types that can represent null/zero states and provides
-// reflection-based utilities for null checking.
-//
-// The package includes:
-// - Nullable interface for types that can represent null values
-// - NullSetable interface for types that can be set to null and retrieved
-// - Zeroable interface for types that can represent zero values
-// - Reflection utilities for null/zero checking
 package nullable
 
 import (
@@ -49,10 +40,9 @@ type Zeroable interface {
 	IsZero() bool
 }
 
-// NullableValidator is a generic interface that extends Nullable and Validator for types that can be
-// set to null and have their values retrieved with fallback options.
-// This interface is typically implemented by nullable wrapper types that provide
-// safe handling of optional values with null state management.
+// NullableValidator is an interface that combines Nullable and types.Validator
+// for nullable types whose non-null values can be invalid.
+// Its ValidAndNotNull method returns true if the value is valid and not null.
 type NullableValidator interface {
 	Nullable
 	types.Validator

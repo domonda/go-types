@@ -3,12 +3,14 @@ package uu
 import (
 	"bytes"
 	"database/sql/driver"
+	"encoding/xml"
 	"iter"
 	"maps"
 	"slices"
 	"sort"
 	"strings"
 
+	"github.com/domonda/go-types/internal"
 	"github.com/domonda/go-types/mapset"
 	"github.com/domonda/go-types/strutil"
 )
@@ -156,57 +158,13 @@ func (s IDSet) ForEach(callback func(ID) error) error {
 	return nil
 }
 
-// Sorted returns the IDs of the set as a sorted IDSlice.
+// Sorted returns the IDs of the set as an IDSlice sorted by [ID.Less],
+// or nil if the set is empty.
 // The other set types of this module call this method Sorted too.
 func (s IDSet) Sorted() IDSlice {
 	sl := s.AsSlice()
 	sl.Sort()
 	return sl
-}
-
-// AsSortedSlice returns the IDs of the set as a sorted IDSlice.
-//
-// Deprecated: use [IDSet.Sorted], which is what types.Set,
-// strutil.StringSet and email.AddressSet call it.
-func (s IDSet) AsSortedSlice() IDSlice {
-	return s.Sorted()
-}
-
-// AddSlice adds all IDs from s to the set.
-//
-// Deprecated: use set.InsertAll(slices.Values(s)).
-func (set IDSet) AddSlice(s IDSlice) {
-	for _, id := range s {
-		set[id] = struct{}{}
-	}
-}
-
-// AddSet adds all IDs from other into the set.
-//
-// Deprecated: use [IDSet.UnionWith].
-func (s IDSet) AddSet(other IDSet) {
-	for id := range other {
-		s[id] = struct{}{}
-	}
-}
-
-// AddIDs adds all IDs yielded by ids into the set.
-//
-// Deprecated: use set.InsertAll(slices.Values(ids.AsSlice())),
-// or [IDSet.UnionWith] with ids.AsSet().
-func (s IDSet) AddIDs(ids IDs) {
-	ids.ForEach(func(id ID) error {
-		s[id] = struct{}{}
-		return nil
-	}) //#nosec G104 -- always returns nil
-}
-
-// Add inserts id into the set.
-//
-// Deprecated: use [IDSet.Insert] which additionally reports
-// whether the set was changed.
-func (s IDSet) Add(id ID) {
-	s[id] = struct{}{}
 }
 
 // Insert adds id to the set and reports whether the set was changed.
@@ -274,24 +232,6 @@ func (s IDSet) DeleteFunc(del func(ID) bool) bool {
 // It is valid to call this method on a nil IDSet.
 func (s IDSet) Clear() {
 	clear(s)
-}
-
-// DeleteSlice removes every ID in sl from the set.
-//
-// Deprecated: use set.DeleteAll(slices.Values(sl)).
-func (s IDSet) DeleteSlice(sl IDSlice) {
-	for _, id := range sl {
-		delete(s, id)
-	}
-}
-
-// DeleteSet removes every ID contained in other from the set.
-//
-// Deprecated: use [IDSet.DifferenceWith].
-func (s IDSet) DeleteSet(other IDSet) {
-	for id := range other {
-		delete(s, id)
-	}
 }
 
 // Clone returns a shallow copy of the set, or nil if the set is nil.
@@ -384,6 +324,14 @@ func (s IDSet) MarshalText() (text []byte, err error) {
 	return []byte(s.String()), nil
 }
 
+// MarshalXMLAttr implements encoding/xml.MarshalerAttr by writing the
+// text of MarshalText, and no attribute for a nil pointer, because
+// encoding/xml calls MarshalText through a nil pointer attribute field
+// and panics.
+func (s *IDSet) MarshalXMLAttr(name xml.Name) (xml.Attr, error) {
+	return internal.MarshalXMLAttrText(s, name)
+}
+
 // UnmarshalText implements the encoding.TextUnmarshaler interface
 func (s *IDSet) UnmarshalText(text []byte) error {
 	parsed, err := IDSetFromString(string(text))
@@ -396,8 +344,9 @@ func (s *IDSet) UnmarshalText(text []byte) error {
 
 // Scan implements the database/sql.Scanner interface
 // with the nil map value used as SQL NULL.
-// Id does assign a new IDSet to *set instead of modifying the existing map,
-// so it can be used with uninitialized IDSet variable.
+// It assigns a new IDSet to *s instead of modifying the existing map,
+// so it can be used with an uninitialized IDSet variable.
+// An empty string scans as an empty non-nil set.
 func (s *IDSet) Scan(value any) error {
 	if value == nil {
 		*s = nil

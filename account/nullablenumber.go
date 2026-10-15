@@ -7,12 +7,14 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 
 	"github.com/invopop/jsonschema"
 
 	"github.com/domonda/go-types/nullable"
+	"github.com/domonda/go-types/strutil"
 )
 
 var (
@@ -38,7 +40,7 @@ type NullableNumber string
 // It trims leading and trailing whitespace from the passed string
 // and interprets an empty string as null.
 func NullableNumberFrom(str string) (NullableNumber, error) {
-	str = strings.TrimSpace(str)
+	str = strutil.TrimSpace(str)
 	if err := NullableNumber(str).Validate(); err != nil {
 		return "", err
 	}
@@ -54,15 +56,15 @@ func NullableNumberFromUint(u uint64) NullableNumber {
 	return NullableNumber(strconv.FormatUint(u, 10))
 }
 
-// Valid returns true if the Number is null
-// or matches the regular expression `^[0-9A-Za-z_]+$`
+// Valid returns true if the NullableNumber is null (see IsNull)
+// or matches NumberRegexp (DefaultNumberRegex unless reassigned).
 func (n NullableNumber) Valid() bool {
-	return n == NumberNull || Number(n).Valid()
+	return n.IsNull() || Number(n).Valid()
 }
 
 // Validate returns a wrapped ErrInvalidNumber
-// error if the NullableNumber is not null and
-// does not match the regular expression `^[0-9A-Za-z_]+$`
+// error if the NullableNumber is not null and does not match
+// NumberRegexp (DefaultNumberRegex unless reassigned).
 func (n NullableNumber) Validate() error {
 	if !n.Valid() {
 		return fmt.Errorf("%w: %q", ErrInvalidNumber, n)
@@ -94,15 +96,18 @@ func (n NullableNumber) ValidateNumeric() error {
 	return nil
 }
 
-// IsNull returns true if the string is empty.
+// IsNull returns true if the string is empty or consists only of
+// the runes strutil.TrimSpace removes: whitespace, control and other
+// non-printable runes, and invalid UTF-8,
+// which Value writes as SQL NULL and MarshalJSON as null.
 // IsNull implements the Nullable interface.
 func (n NullableNumber) IsNull() bool {
-	return n == NumberNull
+	return strutil.TrimSpace(n) == NumberNull
 }
 
-// IsNotNull returns true if the string is not empty.
+// IsNotNull returns true if the string is not empty or whitespace only.
 func (n NullableNumber) IsNotNull() bool {
-	return n != NumberNull
+	return !n.IsNull()
 }
 
 // SetNull sets and empty string representing null
@@ -138,7 +143,7 @@ func (n NullableNumber) GetOr(defaultNumber Number) Number {
 // Returns 0 and no error if the NullableNumber is null.
 // Returns an error if the value is not purely numeric.
 func (n NullableNumber) Uint() (uint64, error) {
-	if n == NumberNull {
+	if n.IsNull() {
 		return 0, nil
 	}
 	return Number(n).Uint()
@@ -148,7 +153,7 @@ func (n NullableNumber) Uint() (uint64, error) {
 // Returns nil and no error if the NullableNumber is null.
 // Returns an error if the value is not purely numeric.
 func (n NullableNumber) UintPtr() (*uint64, error) {
-	if n == NumberNull {
+	if n.IsNull() {
 		return nil, nil
 	}
 	u, err := n.Uint()
@@ -162,7 +167,7 @@ func (n NullableNumber) UintPtr() (*uint64, error) {
 // Returns 0 and no error if the NullableNumber is null.
 // Returns an error if the value is not purely numeric.
 func (n NullableNumber) Int() (int64, error) {
-	if n == NumberNull {
+	if n.IsNull() {
 		return 0, nil
 	}
 	return Number(n).Int()
@@ -189,8 +194,11 @@ func (n NullableNumber) TrimLeadingZeros() NullableNumber {
 }
 
 // String returns the string representation of the NullableNumber,
-// returning an empty string if the NullableNumber is null.
+// returning an empty string if the NullableNumber is null (see IsNull).
 func (n NullableNumber) String() string {
+	if n.IsNull() {
+		return ""
+	}
 	return string(n)
 }
 
@@ -208,14 +216,16 @@ func (n *NullableNumber) UnmarshalText(text []byte) error {
 // Value implements the driver database/sql/driver.Valuer interface.
 // Returns nil for SQL NULL if the Number is empty.
 func (n NullableNumber) Value() (driver.Value, error) {
-	str := strings.TrimSpace(string(n))
+	str := strutil.TrimSpace(string(n))
 	if str == "" {
 		return nil, nil
 	}
 	return str, nil
 }
 
-// Scan implements the database/sql.Scanner interface
+// Scan implements the database/sql.Scanner interface.
+// A float64 value must be a non-negative integer,
+// NaN, infinities, and fractions return an error.
 func (n *NullableNumber) Scan(value any) error {
 	switch x := value.(type) {
 	case nil:
@@ -250,7 +260,7 @@ func (n *NullableNumber) Scan(value any) error {
 		return nil
 
 	case float64:
-		if x < 0 {
+		if math.IsNaN(x) || math.IsInf(x, 0) || x < 0 || x != math.Trunc(x) {
 			return fmt.Errorf("%w: %v", ErrInvalidNumber, x)
 		}
 		if x == 0 {
@@ -267,31 +277,44 @@ func (n *NullableNumber) Scan(value any) error {
 
 // MarshalJSON implements encoding/json.Marshaler
 func (n NullableNumber) MarshalJSON() ([]byte, error) {
-	str := strings.TrimSpace(string(n))
+	str := strutil.TrimSpace(string(n))
 	if str == "" {
 		return []byte(`null`), nil
 	}
 	return json.Marshal(str)
 }
 
-// UnmarshalJSON implements encoding/json.Unmarshaler
+// UnmarshalJSON implements encoding/json.Unmarshaler.
+// JSON null, an empty or whitespace only JSON string,
+// and the JSON number 0 give NumberNull like Scan and UnmarshalText.
 func (n *NullableNumber) UnmarshalJSON(j []byte) error {
-	if bytes.Equal(j, []byte(`null`)) {
+	if bytes.Equal(j, []byte(`null`)) || bytes.Equal(bytes.TrimSpace(j), []byte(`0`)) {
 		*n = NumberNull
+		return nil
+	}
+	var str string
+	if json.Unmarshal(j, &str) == nil {
+		// Trimmed like by Scan and UnmarshalText
+		no, err := NullableNumberFrom(str)
+		if err != nil {
+			return fmt.Errorf("%w from JSON: %s", err, j)
+		}
+		*n = no
 		return nil
 	}
 	return (*Number)(n).UnmarshalJSON(j)
 }
 
 // JSONSchema returns a JSON schema for NullableNumber, allowing either
-// a string matching the account number pattern or null.
+// a string matching the account number pattern of NumberRegexp
+// (DefaultNumberRegex unless reassigned) or null.
 func (NullableNumber) JSONSchema() *jsonschema.Schema {
 	return &jsonschema.Schema{
 		Title: "Nullable Account Number",
 		OneOf: []*jsonschema.Schema{
 			{
 				Type:    "string",
-				Pattern: DefaultNumberRegex,
+				Pattern: NumberRegexp.String(),
 			},
 			{Type: "null"},
 		},
@@ -300,9 +323,10 @@ func (NullableNumber) JSONSchema() *jsonschema.Schema {
 }
 
 // MarshalXML implements encoding/xml.Marshaler.
-// Encodes the NullableNumber as an XML element containing its string value.
+// Encodes the NullableNumber as an XML element containing its
+// whitespace trimmed string value, which is empty for null.
 func (n NullableNumber) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
-	return e.EncodeElement(string(n), start)
+	return e.EncodeElement(strutil.TrimSpace(string(n)), start)
 }
 
 // UnmarshalXML implements encoding/xml.Unmarshaler.

@@ -1,6 +1,6 @@
 # email
 
-Email addresses (lenient parsing, normalization, lists and sets), full message structures, and MIME/TNEF parsing.
+Email addresses, address lists and sets, and email messages. The address parser is more lenient than `net/mail`, because mail found in the wild breaks the RFC rules (umlauts in addresses, unquoted commas in names, `addr (Name)` comments). Normalization lowercases the address part, so normalized addresses can be compared as strings. Messages are parsed from MIME (`.eml`), Microsoft TNEF (`winmail.dat`), or the package's own JSON form, and can be encoded back to MIME.
 
 ```
 import "github.com/domonda/go-types/email"
@@ -12,110 +12,412 @@ import "github.com/domonda/go-types/email"
 type Address string // "user@example.com" or "John Doe <user@example.com>"
 ```
 
-Lenient parser that fixes common malformations encountered in real-world mail and lowercases the address part. More permissive than `net/mail.ParseAddress`.
+A non-normalized address with an optional display name. All parsing goes through `ParseAddress`.
 
-| Function / Method                           | Description                                        |
-|---------------------------------------------|----------------------------------------------------|
-| `NormalizedAddress(str)`                    | Parse + normalize.                                 |
-| `AddressFrom(*mail.Address)`                | Convert a stdlib address.                          |
-| `a.Normalized()` / `Validate()` / `Valid()` | Validation variants.                               |
-| `a.Parse()`                                 | To `*mail.Address` via the package's lenient parser. |
-| `ParseAddress(str)`                         | Underlying parser; supports umlauts, RFC 2047 encoded-words (decoded across many charsets beyond Go's stdlib set), quoted names. |
+| Function / Method                                  | Description                                        |
+|----------------------------------------------------|----------------------------------------------------|
+| `ParseAddress(str) (*mail.Address, error)`         | Lenient parser. Lowercases the address part, but never a non-ASCII rune to ASCII, decodes RFC 2047 names in the charsets of `golang.org/x/net/html/charset` (ISO 8859-2, Windows-1250, ...), accepts quoted names with escapes like `net/mail` (`"Say \"Hi\""` is the name `Say "Hi"`), `addr (Name)` comments, and umlauts. A comment can nest: `addr (Name (Dept))` has the name `Name (Dept)`, and `\)` doesn't end it. A comment after the address that isn't closed is an error. A name equal to the address is dropped. Refuses what other parsers read as other recipients, see [Gotchas](#gotchas): an `@` in an unquoted name that is not the address itself (`x@evil.com <a@b.com>`), a quoted `@` or an encoded-word whose text holds `@` or `=?` in a name followed by one of `;:)>[]\,`, an encoded-word in a name whose text is ASCII with one of `"<\`, an `@` or `(` outside a comment that it closes, a comment and one of `;:)>[],`, or an `=?` at the start of a word, also once Python wrote a quoted name again without the backslash of `=\?`, an `=?` at the start of a word that the parser can't decode or that starts a word of the decoded name, an `=?` at the start of the local part or after a space or dot in it, a quoted name without angle brackets after it, a second address in angle brackets that is not the same, and an address within a quoted string or comment, closed or not (`"x@evil.com" "<a@b.com>`, `Doe (Sales <doe@example.com>`). An RFC 2047 encoded-word is read like any other word of an unquoted name. |
+| `NormalizedAddress(str) (Address, error)`          | `Address(str).Normalized()`.                       |
+| `AddressFrom(*mail.Address) Address`               | `""` for nil, the bare address without a name, else `"Name" <addr>` like `mail.Address.String()`, with quotes and backslashes in the name escaped, but with a non-ASCII name as UTF-8 instead of RFC 2047 encoded. A name containing `=?` is quoted with every `=?` written as `=\?`, so it holds no encoded-word until Python's email package writes it again without the backslash: `Validate` refuses it if Python then reads an encoded-word in it that the parser can't decode, like for the name `=? x@evil.com`, or that decodes to an address or another encoded-word. An address without name whose quoted local part has a `<` is written in angle brackets, `<"<a@b.com>"@example.com>`, because the parser reads the text before such a `<` as a name. |
+| `FindAllAddresses(text) []Address`                 | All matches of `AddressRegexp` in text, in order, not normalized. |
+| `UniqueNormalizedAddressSlice([]Address) []Address` | New sorted slice of the unique address parts. Skips invalid entries, returns nil if none is valid, does not modify the input. |
+| `AddressRegexp`                                    | Compiled, unanchored regular expression for an address without name. |
+| `a.Parse() (*mail.Address, error)`                 | `ParseAddress(string(a))`.                         |
+| `a.Normalized() (Address, error)`                  | Parsed and re-formatted with `AddressFrom`. Returns `a` unchanged with the error. |
+| `a.Validate() error` / `a.Valid() bool`            | Whether `Parse` succeeds.                          |
+| `a.ValidAndNormalized() bool`                      | Valid and equal to its normalized form.            |
+| `a.NamePart() (string, error)`                     | Decoded display name, `""` if there is none.       |
+| `a.AddressPart() (Address, error)`                 | Normalized `local@domain` without the display name, a local part that needs quotes quoted like `"a b"@example.com`. |
+| `a.AddressPartString() (string, error)`            | Same as `AddressPart` as string.                   |
+| `a.LocalPart() (string, error)`                    | Normalized part before the `@`, quoted like `"a b"` if it needs quotes. |
+| `a.DomainPart() string`                            | Raw text after the last `@` with trailing `>` and whitespace trimmed, `""` without `@`. Not parsed or lowercased. |
+| `a.AsList() AddressList`                           | List containing only `a`.                          |
+| `a.Nullable() NullableAddress`                     | Type conversion.                                   |
+| `a.ASCII() string`                                 | Normalized, but a non-ASCII name RFC 2047 encoded for message headers, or unchanged if invalid. The address part is not encoded. |
 
-`AddressRegexp` is the compiled regex for the email-only form. It tolerates a wide range of umlaut/diacritic characters since real-world mail commonly violates strict RFC 2821/2822.
+Implements: `sql.Scanner`, `driver.Valuer`, `json.Marshaler`, `json.Unmarshaler`, `encoding.TextMarshaler`, `xml.Unmarshaler`, `xml.UnmarshalerAttr`, `xml.MarshalerAttr`, `strfmt.Scannable`, `types.NormalizableValidator[Address]`, `JSONSchema()` (`string`, format `email`). No `String` method, `fmt` prints the stored address, and no `UnmarshalText`, so `encoding/json` reads the keys of a `map[Address]V` as given.
 
 ## AddressList
 
 ```go
-type AddressList string // comma-separated
+type AddressList string // "a@example.com, John <j@example.com>"
 ```
 
-`NormalizeAddressList(str)` parses, normalizes, and de-duplicates by normalized address part. Methods: `Normalized()`, `Validate()`, plus `ParseAddressList(str)` for the parsed slice.
+A comma separated list. `Validate` and `Valid` accept the empty list. Use `NullableAddressList` for lists that can be empty. `AddressList` is a collection: it is read and written as stored in every format, see [Serialization](#serialization).
 
-`ParseAddressList(str)` and `Split()` (on both `AddressList` and `NullableAddressList`) are lenient: when an entry is malformed the parser skips past the next comma and keeps going, so well-formed entries elsewhere in the list are still returned. The failures are collected into a single `errors.Join` error, so a non-nil error can accompany a non-empty result; treat the error as fatal only when you need a strictly valid list. Empty input and the `undisclosed-recipients` / `withheld-recipients` placeholders parse as an empty list without an error.
+| Function / Method                                  | Description                                        |
+|----------------------------------------------------|----------------------------------------------------|
+| `ParseAddressList(list) ([]*mail.Address, error)`  | Lenient. Skips a malformed entry up to the comma where `SplitAddressList` ends it and keeps parsing, returns the parsed addresses together with an `errors.Join` error. Every address is returned at most once, also when an error follows an unquoted name with commas, like in `Doe, John <john@example.com>; b@example.com`. Of such an entry that can't be parsed only the last part with the angle brackets is parsed once more, so `Doe, John (john@corp) <j@x.com>` gives `j@x.com` with an error. Quotes, angle brackets and comments are read like by `SplitAddressList`, so a list without an error has the entries that `SplitAddressList` returns: a comma in them doesn't separate entries, and one that isn't closed before a comma holds the rest of the list, like in `"Doe <a@example.com>, b@example.com`: it is an error and parsing stops at it. An address within a quoted string or comment, closed or not, is never returned, also not the `a@example.com` of that list. An address with a name that `ParseAddress` refuses, like `x@evil.com <a@b.com>`, is returned with an error. An empty entry is an error, a run of them one error, like the leading comma of `,<a@example.com>`, which is no display name. Every entry is parsed within its end, so the time is linear in the length of the list. Parsing stops after 100 errors, so addresses after them are not returned. `""` and a whole `undisclosed-recipients` / `withheld-recipients` placeholder (also with a space instead of the dash, or as empty group like `undisclosed-recipients:;`) give nil without error. Text after a placeholder is parsed like any list. |
+| `SplitAddressList(list) []Address`                 | Splits at the commas between entries, outside double quotes, angle brackets and comments, and returns the trimmed entries unchanged: not parsed, normalized or validated. Like `ParseAddressList`, entries without `@` are joined with a following `Name <address>` entry, so the unquoted name of `Doe, John <john@example.com>` stays one entry. A comma in an RFC 2047 encoded-word splits like any other, because `net/mail` reads `=?utf-8?q?a@b,?= <c@example.com>` as the two addresses `=?utf-8?q?a@b` and `c@example.com`. The commas are found in the list as `ParseAddressList` reads it, so a list that it parses without an error has the entries that it parses. A blank list and the placeholders give nil, also followed by commas. Never fails. |
+| `NormalizeAddressList(list) ([]string, error)`     | Strict. Normalized addresses, de-duplicated by address part, first spelling wins. Any bad entry returns `nil, err`, an empty list `nil, nil`. |
+| `AddressListJoin(addrs ...Address) AddressList`    | Joins with `", "`, skips empty addresses.          |
+| `AddressListJoinStrings(addrs ...string) AddressList` | Same for strings.                                  |
+| `l.Append(addrs ...Address) AddressList`           | Appends with `", "`, skips empty addresses.        |
+| `l.Parse() ([]*mail.Address, error)`               | `ParseAddressList(string(l))`, lenient.            |
+| `l.SplitNormalized() ([]Address, error)`           | Lenient. Parsed and normalized addresses (via `AddressFrom`), nil for an empty list. |
+| `l.SplitRaw() []Address`                           | The entries as stored, `SplitAddressList(string(l))`. |
+| `l.Normalized() (AddressList, error)`              | Strict. Every address normalized and re-joined with `", "`. Does not de-duplicate. Returns `l` unchanged with the error. |
+| `l.UniqueAddressParts() (AddressSet, error)`       | Strict. Set of the address parts, `nil, nil` for an empty list. |
+| `l.Validate() error` / `l.Valid() bool`            | Strict, any bad entry is an error, also a line break, NUL or bidi override in the list, or a rune in an address part that the parser drops, see [Gotchas](#gotchas). |
+| `l.ValidAndNormalized() bool`                      | Valid and equal to its normalized form.            |
+| `l.Nullable() NullableAddressList`                 | Type conversion.                                   |
+| `l.ASCII() string`                                 | Like `Address.ASCII` for every address, `""` for a list without addresses. |
+| `l.Scan(value) error`, `l.Value()`, `l.MarshalJSON()`, `l.UnmarshalJSON(data)`, `l.MarshalText()` | See [Serialization](#serialization).               |
+
+Implements: `sql.Scanner`, `driver.Valuer`, `json.Marshaler`, `json.Unmarshaler`, `encoding.TextMarshaler`, `xml.MarshalerAttr`, `types.NormalizableValidator[AddressList]`. No `String` method, `fmt` prints the stored list.
 
 ## AddressSet
 
 ```go
 type AddressSet map[Address]struct{}
-
-email.MakeAddressSet(a, b, c)
-email.NormalizedAddressSet(a, b, c) // normalizes each entry
 ```
 
-Set semantics over `Address` values. Sorted iteration and JSON serialization included.
+A set of addresses, stored in SQL as a PostgreSQL text array; write `AddressList()` to store it in a plain string column. Like the lists it is a collection: its addresses are read and written as stored. It implements the abstract set interface of the Go 1.28 collections proposal ([go.dev/issue/80590](https://go.dev/issue/80590)).
 
-Implements the abstract set interface of the Go 1.28 collections proposal
-([go.dev/issue/80590](https://go.dev/issue/80590)): `Insert`, `InsertAll`, `Delete`, `DeleteAll`,
-`DeleteFunc`, `All`, `ContainsAll`, `Equal`, `Union`, `Intersection`, `Difference`,
-`SymmetricDifference`, `Intersects` and the in-place `*With` variants.
+| Function                                           | Description                                        |
+|----------------------------------------------------|----------------------------------------------------|
+| `MakeAddressSet(addrs ...Address) AddressSet`      | Set of the passed addresses as they are.           |
+| `NormalizedAddressSet(addrs ...Address) (AddressSet, error)` | Set of the normalized addresses (display names kept). Strict: the first invalid address returns `nil, err`. |
+| `NormalizedAddressPartSet(addrs ...Address) (AddressSet, error)` | Set of the address parts without names. Strict like `NormalizedAddressSet`. |
 
-`AddressSet` keeps pointer-receiver `Add`, `AddSet`, `AddNormalized` and `AddAddressPart` methods
-alongside the value-receiver interface methods. Those four allocate the underlying map, so they
-work on a nil variable or struct field; the value-receiver `Insert`, `InsertAll`, `UnionWith` and
-`SymmetricDifferenceWith` panic on a nil set like a nil map assignment.
+| Method                                             | Description                                        |
+|----------------------------------------------------|----------------------------------------------------|
+| `Len`, `IsEmpty`, `IsNull`                         | Size, empty or nil, nil only.                      |
+| `Contains`, `ContainsAny(addrs...)`, `ContainsAll(seq)` | Membership. `ContainsAny()` is false, `ContainsAll` of an empty sequence true. |
+| `Equal`, `Intersects`                              | Set comparison.                                    |
+| `All() iter.Seq[Address]`                          | Iterates in undefined order.                       |
+| `Sorted() []Address`, `Strings() []string`         | Sorted elements.                                   |
+| `AddressList() AddressList`                        | Sorted elements as stored joined with `", "`.      |
+| `NormalizedAddressList() (AddressList, error)`     | Normalized, merged and sorted addresses joined with `", "`, or the error of an invalid address. |
+| `GetOne() Address`                                 | Any element, `""` for an empty set.                |
+| `String() string`                                  | Like `AddressList`, but `"<nil>"` for a nil set. Not normalized, because normalizing can merge elements. |
+| `Add`, `AddSet`, `AddNormalized`, `AddAddressPart` | Pointer receivers that allocate the map, safe on a nil set. `AddNormalized` and `AddAddressPart` return the parse error. |
+| `Insert`, `InsertAll`, `UnionWith`, `SymmetricDifferenceWith` | Value receivers, panic on a nil set when they have to add an element. |
+| `Delete`, `DeleteAll`, `DeleteFunc`, `Clear`, `IntersectionWith`, `DifferenceWith` | Remove elements, safe on a nil set. `Delete*` report whether the set changed. |
+| `Clone`, `Union`, `Intersection`, `Difference`, `SymmetricDifference` | New sets. `Clone` of nil is nil. `Difference` is asymmetric. |
+| `Normalized() (AddressSet, error)`                 | New set of the normalized addresses, nil for nil, the receiver with the error if any address is invalid. |
+| `Validate`, `Valid`, `ValidAndNormalized`          | Validation of all elements, `Validate` and `Valid` refuse a line break, NUL or bidi override, or a rune in an address part that the parser drops, like `AddressList`. |
+| `Scan`, `Value`, `MarshalJSON`, `UnmarshalJSON`, `MarshalText`, `UnmarshalText` | See [Serialization](#serialization).               |
 
-## NullableAddress / NullableAddressList
+Implements: `sql.Scanner`, `driver.Valuer`, `json.Marshaler`, `json.Unmarshaler`, `encoding.TextMarshaler`, `encoding.TextUnmarshaler`, `xml.MarshalerAttr`, `fmt.Stringer`, `types.NormalizableValidator[AddressSet]`, the collections proposal set interface.
 
-SQL/JSON-friendly cousins where empty string is the null sentinel.
+## NullableAddress
+
+```go
+type NullableAddress string
+const AddressNull NullableAddress = ""
+```
+
+An `Address` where `""` is SQL NULL and JSON null. A value of only the runes that `strutil.TrimSpace` removes (whitespace, control and other non-printable runes, invalid UTF-8) is null too, like for `country.NullableCode`. Null counts as valid.
+
+| Function / Method                                  | Description                                        |
+|----------------------------------------------------|----------------------------------------------------|
+| `NullableAddressFrom(*mail.Address) NullableAddress` | Like `AddressFrom`, nil gives `AddressNull`.       |
+| `NormalizedNullableAddress(str) (NullableAddress, error)` | `""` and values that are empty after `strutil.TrimSpace` give `AddressNull`, otherwise like `NormalizedAddress`. |
+| `n.Parse() (*mail.Address, error)`                 | `nil, nil` for null.                               |
+| `n.Normalized()`, `n.Valid()`, `n.Validate()`, `n.ValidAndNormalized()` | Like `Address`, null is valid and normalizes to null. |
+| `n.NamePart()`, `n.AddressPart()`, `n.LocalPart()`, `n.DomainPart()` | Like `Address`, `""` for null.                     |
+| `n.IsNull()`, `n.IsNotNull()`                      | Null is `""` or only runes that `strutil.TrimSpace` removes. |
+| `n.Get() Address`                                  | Panics if null.                                    |
+| `n.GetOr(def Address) Address`                     | Value or the default.                              |
+| `n.ASCII()`                                        | Like `Address`, `""` for null.                     |
+| `n.StringOr(nullString) string`                    | As stored, or the default if null.                 |
+| `n.Set(Address)`, `n.SetNull()`                    | `Set("")` sets null.                               |
+| `n.AsList() NullableAddressList`                   | List containing only `n`, the null list if `n` is null. |
+
+Implements: `sql.Scanner`, `driver.Valuer`, `json.Marshaler`, `json.Unmarshaler`, `encoding.TextMarshaler`, `xml.Unmarshaler`, `xml.UnmarshalerAttr`, `xml.MarshalerAttr`, `strfmt.Scannable`, `JSONSchema()` (email string or null), `nullable.NullSetable[Address]`, `types.NormalizableValidator[NullableAddress]`. No `String` method, `fmt` prints the stored address, and no `UnmarshalText`, so `encoding/json` reads the keys of a `map[NullableAddress]V` as given.
+
+## NullableAddressList
+
+```go
+type NullableAddressList string
+```
+
+An `AddressList` where `""` and whitespace only are the empty list, SQL NULL, and JSON null. Null counts as valid.
+
+| Function / Method                                  | Description                                      |
+|----------------------------------------------------|--------------------------------------------------|
+| `NullableAddressListJoin(addrs ...Address)`, `NullableAddressListJoinStrings(addrs ...string)` | Like the `AddressList` joins.                    |
+| `n.Append(addrs ...Address)`                       | Like `AddressList.Append`.                       |
+| `n.Parse()`, `n.SplitNormalized()`                 | Lenient like `AddressList`, `nil, nil` for null. |
+| `n.SplitRaw()`                                     | Like `AddressList.SplitRaw`, nil for null.       |
+| `n.Normalized()`, `n.Validate()`, `n.ValidAndNormalized()` | Strict like `AddressList`, null is valid.        |
+| `n.IsNull()`, `n.IsNotNull()`                      | Null is `""` or only runes that `strutil.TrimSpace` removes. |
+| `n.Get() AddressList`                              | Panics if null.                                  |
+| `n.GetOr(def AddressList)`                         | Value or the default.                            |
+| `n.ASCII()`                                        | Like `AddressList`, `""` for null and for a list without addresses. |
+| `n.StringOr(nullString)`                           | As stored, or the default if null.               |
+| `n.Set(AddressList)`, `n.SetNull()`                | `Set("")` sets null.                             |
+
+Implements: `sql.Scanner`, `driver.Valuer`, `json.Marshaler`, `json.Unmarshaler`, `encoding.TextMarshaler`, `encoding.TextUnmarshaler`, `xml.MarshalerAttr`, `nullable.NullSetable[AddressList]`. No `String` method, no `Valid()` and no `JSONSchema`.
 
 ## Message
 
-```go
-type Header = textproto.MIMEHeader
+`Message` holds the parsed headers, bodies, and attachments of one email. It has no custom JSON methods, the JSON keys come from the struct tags and empty fields are omitted.
 
-type Message struct {
-    ProviderID          nullable.TrimmedString
-    InReplyToProviderID nullable.TrimmedString
-    ProviderLabels      []string
-    // ... headers, body, attachments
+| Field                 | Type                     | JSON key              | Source                                             |
+|-----------------------|--------------------------|-----------------------|----------------------------------------------------|
+| `ProviderID`          | `nullable.TrimmedString` | `providerID`          | ID at the mail provider (e.g. Gmail), not parsed from MIME |
+| `InReplyToProviderID` | `nullable.TrimmedString` | `inReplyToProviderID` | `ProviderID` of the parent message                 |
+| `ProviderLabels`      | `[]string`               | `providerLabels`      | Provider labels, not parsed from MIME              |
+| `MessageID`           | `nullable.TrimmedString` | `messageID`           | `Message-Id` header                                |
+| `InReplyTo`           | `nullable.TrimmedString` | `inReplyTo`           | `In-Reply-To` header                               |
+| `References`          | `nullable.TrimmedString` | `references`          | `References` header                                |
+| `Date`                | `*time.Time`             | `date`                | `Date` header, nil if missing or unparsable        |
+| `From`                | `Address`                | `from`                | `From` header, normalized                          |
+| `ReplyTo`             | `NullableAddress`        | `replyTo`             | `Reply-To` header, normalized                      |
+| `To`                  | `AddressList`            | `to`                  | `To` headers, normalized, unparsable entries dropped |
+| `DeliveredTo`         | `NullableAddressList`    | `deliveredTo`         | `Delivered-To` headers, like `To`                  |
+| `Cc`                  | `NullableAddressList`    | `cc`                  | `Cc` headers, like `To`                            |
+| `Bcc`                 | `NullableAddressList`    | `bcc`                 | `Bcc` headers, like `To`                           |
+| `ExtraHeader`         | `Header`                 | `extraHeader`         | All other headers, RFC 2047 decoded                |
+| `Subject`             | `string`                 | `subject`             | `Subject` header, trimmed                          |
+| `Body`                | `string`                 | `body`                | Plain text body                                    |
+| `BodyHTML`            | `nullable.TrimmedString` | `bodyHTML`            | HTML body                                          |
+| `Attachments`         | `[]*Attachment`          | `attachments`         | Attachments, inline parts, other parts             |
+
+| Function / Method                                  | Description                                        |
+|----------------------------------------------------|----------------------------------------------------|
+| `type Header = textproto.MIMEHeader`               | Header map type of `ExtraHeader`.                  |
+| `IsParsedHeader(key) bool`                         | True for the 11 headers with own fields (`Message-Id`, `In-Reply-To`, `References`, `Date`, `From`, `Reply-To`, `To`, `Delivered-To`, `Cc`, `Bcc`, `Subject`), case-insensitive. |
+| `IsExtraHeader(key) bool`                          | `!IsParsedHeader(key)`.                            |
+| `NewMessage(from, to, subject, body, bodyHTML) *Message` | New message with an allocated `ExtraHeader`.       |
+| `msg.AddAttachment(partID, filename, content)`     | Appends `NewAttachment(partID, filename, content)`. |
+| `msg.Recipients() []string`                        | Address parts of `To`, `Cc`, and `Bcc` in that order, de-duplicated. Unparsable entries are dropped without error. |
+| `msg.ReplyToAddress() Address`                     | `ReplyTo` if set, else `From`.                     |
+| `msg.ReferencesMessageIDs() []string`              | `References` split at whitespace and commas, empty entries skipped. |
+| `msg.IsAutoSubmitted() bool`                       | `Auto-Submitted` header set and not `no` (RFC 3834). |
+| `msg.AutoResponseSuppress() bool`                  | An `X-Auto-Response-Suppress` value is `DR`, `AutoReply`, or `All`. |
+| `msg.ListID() string`, `msg.FeedbackID() string`   | `List-Id` and `Feedback-Id` from `ExtraHeader`.    |
+| `msg.NewReplyMessage(from, replyText, replyHTML, keepAttachments, textTempl, htmlTempl)` | Builds a reply, see below.                         |
+| `msg.BuildRawMessage() ([]byte, error)`            | Encodes the message as RFC 5322 MIME, see below.   |
+| `msg.String() string`                              | Short debug description.                           |
+| `ExtractBodyURLs(msg) strutil.StringSet`           | URLs starting with `http` found in `Body` and `BodyHTML`. |
+| `HTMLToPlaintext(html []byte, delimiter string) (string, error)` | Trimmed, non-empty text nodes joined with `delimiter`. On a parse error it returns the text so far with the error. |
+
+`NewReplyMessage` returns a message with `InReplyTo` set to the parent's `MessageID`, `InReplyToProviderID` to its `ProviderID`, `References` to the parent's References followed by its Message-ID (space separated), where a parent without References but with a single In-Reply-To ID contributes that ID, and `To` to the parent's `ReplyToAddress()`. The subject gets a `"Re: "` prefix unless it already starts with `Re:` in any case. `Body` is rendered from `textTempl` with `text/template`, `BodyHTML` from `htmlTempl` with `html/template`, the latter only if the parent has an HTML body or `replyHTML` is not empty. Both templates get a `ReplyTemplateData`:
+
+```go
+type ReplyTemplateData struct {
+    Message                 // the parent message
+    Date      string        // parent Date as RFC 1123Z, the current time if nil
+    BodyLines []string      // parent Body split at "\n"
+    BodyHTML  template.HTML // parent BodyHTML, or Body with "\n" replaced by "<br>"
+    ReplyText string
+    ReplyHTML template.HTML // replyHTML, or replyText with "\n" replaced by "<br>"
 }
 ```
 
-Parsed message headers tracked separately (`Message-Id`, `In-Reply-To`, `References`, `Date`, `From`, `Reply-To`, `To`, `Delivered-To`, `Cc`, `Bcc`, `Subject`). Anything else is exposed via `Header`. Helpers: `IsParsedHeader(key)`, `IsExtraHeader(key)`.
+`BuildRawMessage` writes `text/plain` and `text/html` bodies (as `multipart/alternative` if both exist), attachments with `Inline` set as inline parts with their Content-ID inside `multipart/related`, and all other attachments with an attachment disposition inside `multipart/mixed`. The addresses are written normalized, with a non-ASCII display name RFC 2047 encoded without the address like `mail.Address.String()` does. If an address part is not ASCII, the names are written as UTF-8 and the MIME encoder encodes the whole header value, the address included. `To`, `Cc`, and `Bcc` are each written once with all addresses comma separated, `Delivered-To` once per address, then all `ExtraHeader` values.
 
-## Parsing wire-format mail
+## Parsing messages
 
-```go
-import "os"
+| Function                                           | Description                                        |
+|----------------------------------------------------|----------------------------------------------------|
+| `ParseMessage(data []byte) (*Message, error)`      | Detects the format: JSON if the data without surrounding whitespace starts with `{` and ends with `}`, TNEF if `ParseTNEFMessageBytes` succeeds, MIME otherwise. Empty data is an error. |
+| `ParseMIMEMessage(r io.Reader) (*Message, error)`  | Parses MIME with [`jhillyerd/enmime`](https://github.com/jhillyerd/enmime). Returns a message with all usable data and the joined header errors, nil only if the envelope can't be read. |
+| `ParseMIMEMessageBytes(data []byte) (*Message, error)` | `ParseMIMEMessage` of a byte slice.                |
+| `ParseTNEFMessageBytes(data []byte) (*Message, error)` | Parses Microsoft TNEF (`winmail.dat`). Data shorter than 4 bytes is an error. |
 
-f, _ := os.Open("mail.eml")
-msg, err := email.ParseMIMEMessage(f)
-```
+How `ParseMIMEMessage` treats the headers:
 
-Backed by [`jhillyerd/enmime`](https://github.com/jhillyerd/enmime). RFC 2047 encoded-words in address headers (`From`, `To`, `Cc`, …) and extra (non-parsed) headers are decoded across many charsets beyond Go's stdlib defaults (us-ascii, utf-8, iso-8859-1) — e.g. ISO 8859-2 or Windows-1250 — so a `From` display name in such a charset no longer drops the whole message. More broadly, as long as the envelope is readable `ParseMIMEMessage` returns a `*Message` with all usable data even when individual headers (`Date`, `From`, `To`) can't be parsed; those failures are collected into a single `errors.Join` error returned alongside the message, so a non-nil error can accompany a usable result. For Microsoft TNEF (`winmail.dat`) attachments, see `parsetnef.go`.
+- The address headers (`From`, `Reply-To`, `To`, `Cc`, `Bcc`, `Delivered-To`) are parsed raw, so only display names are RFC 2047 decoded and an encoded comma or `@` in a name can't add a recipient. An encoded-word in a name is read like any other word of an unquoted name, like by `net/mail`: a comma, quote, parenthesis or angle bracket written unencoded in it is read like outside of it, so `To: =?utf-8?q?a@b,?= <c@example.com>` has the entry `=?utf-8?q?a@b` before the comma, an error, and the addresses that can be parsed are kept, and an unencoded `@` in it is an `@` in an unquoted name, an error too. So is an encoded-word whose text is ASCII with one of `"<\`, an encoded `@` or `(` outside a comment that it closes, a comment and one of `;:)>[],`, or an `=?` at the start of a word, like in `From: =?utf-8?q?x=40evil.com?= <ceo@corp.com>`, which Python's email package writes unencoded, see [Gotchas](#gotchas), and one that can't be decoded, so such a `From` is empty with an error; `=?utf-8?q?J=C3=BCrgen_=28j=40x.de=29?=` is valid, and so are the two words `=?utf-8?b?SsO8cmdlbiBNw7xsbGVyLCBCdWNoaGFsdHVuZyB1bmQgRmluYW56ZW4gKEFi?= =?utf-8?b?dGVpbHVuZyBOb3JkKQ==?=` of the name `Jürgen Müller, Buchhaltung und Finanzen (Abteilung Nord)`, whose ASCII text `teilung Nord)` only ends the name for Python, and the words that `net/mail` writes for `Ärztekammer für Wien – Abteilung Rechnungswesen und Buchhaltung (Zentrale)`, whose ASCII text `swesen und Buchhaltung (Zentrale)` closes its comment. A value that is only encoded-words, which MIME encoders write for a non-ASCII address part, is decoded as a whole. The address of an entry of `To`, `Cc`, `Bcc` or `Delivered-To` with a name that can't be decoded is kept without the name, for `To` with an error. A second address is only taken from angle brackets: `attacker@evil.com ceo@corp.com` is an error, not `ceo@corp.com`, and so is `attacker@evil.com <ceo@corp.com>`, which leaves `From` empty with an error and keeps `ceo@corp.com` in `To` with an error.
+- `From` is normalized. If it is missing or unparsable, `From` is `""` and an error is collected.
+- `To` entries are parsed leniently. The parsable addresses are kept and an error is collected for the others.
+- `Reply-To`, `Delivered-To`, `Cc`, and `Bcc` errors are ignored. The parsable addresses are kept, an unparsable `Reply-To` is dropped.
+- `Date` is matched against a fixed list of layouts. On failure `Date` is nil and an error is collected.
+- Every header without an own field goes to `ExtraHeader`, RFC 2047 decoded like display names. A value that fails to decode is kept as is.
+- Attachments come first, then inline parts (`Inline` set), then other parts (`OtherPart` set). `ContentType` and `ContentID` are taken from the MIME part.
+
+`ParseTNEFMessageBytes` sets `Body`, `BodyHTML`, and one attachment per TNEF attachment with `PartID` `TNEF0`, `TNEF1`, ... and `Filename` from the attachment title. `ContentType` and `ContentID` stay empty. If the plain body has at most one byte and the HTML body is longer, `Body` is set to the text converted from the HTML.
+
+`ParseMIMEMessage` does not unpack a `winmail.dat` attachment. Pass its `Content` to `ParseTNEFMessageBytes` yourself.
 
 ## Attachment
 
 ```go
 type Attachment struct {
-    PartID, ContentID, ContentType string
-    Inline, OtherPart              bool
-    Filename                       string
-    Content                        []byte
+    PartID      string `json:",omitempty"` // MIME part ID
+    ContentID   string `json:",omitempty"` // Content-ID, referenced from HTML bodies
+    ContentType string `json:",omitempty"` // MIME media type
+    Inline      bool   `json:",omitempty"` // inline part referenced from the body
+    OtherPart   bool   `json:",omitempty"` // neither attachment nor inline part
+    Filename    string
+    Content     []byte
 }
-
-email.NewAttachment(partID, filename, content)
 ```
 
-`Attachment` implements `fs.FileReader`. `ContentType` is auto-detected via `http.DetectContentType` when constructed.
+| Function / Method                                  | Description                                        |
+|----------------------------------------------------|----------------------------------------------------|
+| `NewAttachment(partID, filename, content) *Attachment` | Sets `ContentID` to a random UUID v4 in hex and `ContentType` with `http.DetectContentType(content)`. |
+| `a.String() string`                                | Short debug description with part ID, filename, and size. |
 
 ## Rule
 
-```go
-type Rule interface {
-    AppliesToMessage(*Message) bool
-}
-```
+`Rule` is a predicate over messages, for example to filter inbound mail.
 
-Compose rules for filtering: `RuleFunc(func(*Message) bool)`, `BoolRule(true|false)`, `AllRule{r1, r2}` (AND), `AnyRule{r1, r2}` (OR).
+| Type       | Description                                        |
+|------------|----------------------------------------------------|
+| `Rule`     | Interface with `AppliesToMessage(msg *Message) bool`. |
+| `RuleFunc` | `func(*Message) bool` as `Rule`.                   |
+| `BoolRule` | Constant result.                                   |
+| `AllRule`  | `[]Rule` that applies if all rules apply. An empty `AllRule` applies. |
+| `AnyRule`  | `[]Rule` that applies if any rule applies. An empty `AnyRule` does not apply. |
 
 ## Config
 
-`ProviderDomains()` returns a set of well-known consumer mail-provider domains (gmail, yahoo, gmx, web.de, …). Useful for distinguishing personal from business addresses.
+`ProviderDomains() map[string]struct{}` returns a new map of well-known consumer mail provider domains (`gmail.com`, `gmx.at`, `web.de`, ...) on every call, so callers can modify it. Use it with `DomainPart` of a normalized address to tell personal from business addresses.
+
+## Serialization
+
+`Address` and `NullableAddress` follow the rules of [Reading and writing values](../README.md#reading-and-writing-values): reading normalizes, `Value` refuses an invalid address, and `fmt` prints the stored address. The collections `AddressList`, `NullableAddressList` and `AddressSet` keep their addresses as stored in every format, because normalizing rewrites every entry and could merge two elements of a set. Their `Value` still refuses an invalid list or address.
+
+| Type                  | `Value()` writes                                   | `Scan` accepts                                     | JSON                                               | Text and XML                                       |
+|-----------------------|----------------------------------------------------|----------------------------------------------------|----------------------------------------------------|----------------------------------------------------|
+| `Address`             | Normalized, blank as NULL, an invalid address is an error | `string` and `[]byte` normalized if valid, blank as `""`, else unchanged without error. NULL as `""` | `MarshalJSON` normalized, an invalid address unchanged, blank as `""`. `UnmarshalJSON` like `Scan`, `null` leaves the value unchanged | `MarshalText` like `MarshalJSON`. XML elements and attributes read like `Scan`. `ScanString` for `strfmt` reads like `Scan`, with `validate` an invalid or blank address is an error |
+| `NullableAddress`     | Null (see `IsNull`) as NULL, else like `Address`   | Like `Address`, NULL and blank as null             | Null marshals as `null`, else like `Address`. `null` and blank unmarshal to null | `MarshalText` `""` for null, else like `Address`. XML like `Scan`. `ScanString` like `Address`, but `NULL`, `null`, `nil` and blank as null |
+| `AddressList`         | The list as stored, trimmed. Blank as NULL, a list that `Validate` refuses is an error, also one with a line break, a NUL or a bidi override, or a rune in an address part that the parser drops | A plain list as stored, trimmed. A PostgreSQL array or JSON array: the elements joined with `", "`. A JSON object: the keys sorted and joined. A JSON string: its content. NULL, `""` and whitespace only as `""` | `MarshalJSON` the list as stored as JSON string. `UnmarshalJSON`: a string as stored, an array or object joined like `Scan`, `null` leaves the value unchanged. Round-trips every list | `MarshalText` as stored. XML reads the plain string as given |
+| `NullableAddressList` | Null (see `IsNull`) as NULL, else like `AddressList` | Like `AddressList`, NULL and blank as null         | Null marshals as `null`, else like `AddressList`. `null` unmarshals to null | `MarshalText` `""` for null, else as stored. `UnmarshalText` assigns the text as is |
+| `AddressSet`          | nil: NULL. Empty: `{}`. Else the sorted PostgreSQL array `{"a@example.com","b@example.com"}` of the addresses as stored, valid ones trimmed. An address that `Validate` refuses is an error, also one with a line break, a NUL or a bidi override, or a rune in an address part that the parser drops | NULL, `""` and whitespace only: nil set. A PostgreSQL array: elements trimmed, empty ones skipped, a `NULL` element or a nested array is an error. A JSON array: elements exactly. A JSON object: the keys. A plain string or a JSON string: split with `SplitAddressList`. `[]byte` like `string` | `MarshalJSON` a sorted array of the addresses as stored, also invalid ones, nil is `null`, empty `[]`. `UnmarshalJSON` an array exactly, an object's keys, a string split with `SplitAddressList`, `null` and `""` as nil. Round-trips every set | `MarshalText` the sorted addresses as stored joined with `", "`, valid ones trimmed, an error for an address that `Validate` refuses or that would not read back as one entry. `UnmarshalText` splits with `SplitAddressList`, also for XML |
+
+The arrays written by `AddressSet` and read by the `Scan` methods of `AddressSet`, `AddressList`, and `NullableAddressList` need PostgreSQL or an array-compatible database like CockroachDB or YugabyteDB. `AddressList.Value` and `NullableAddressList.Value` write a plain string that works with any database, so write `set.AddressList()` to store a set in a plain string column. `AddressSet.Scan` reads it back.
+
+## Gotchas
+
+- **Lenient vs strict.** `ParseAddressList`, `AddressList.SplitNormalized`, and `NullableAddressList.SplitNormalized`/`Parse` return the valid entries plus an error. `Validate`, `Normalized`, `UniqueAddressParts`, `NormalizeAddressList`, `NormalizedAddressSet`, and `NormalizedAddressPartSet` fail on the first bad entry. `Message.Recipients` drops bad entries silently. `"a@example.com, not an address"` gives `[a@example.com]` and an error from `SplitNormalized`, and only an error from `Normalized`. `SplitRaw` and `SplitAddressList` don't parse at all and return `[a@example.com not an address]`.
+- **Normalization is lossy.** The local part is lowercased (`John.Doe@Example.com` becomes `john.doe@example.com`), but no rune that is not ASCII becomes ASCII: the Kelvin sign U+212A of `"<U+212A>ate"@corp.com` stays, it would become the `k` of the other mailbox `kate@corp.com`. A quoted local part keeps its content and quotes: `"Doe, John"@Example.com` becomes `"doe, john"@example.com`, so it stays the same mailbox. A local part is written without quotes only if `net/mail` and this parser both read it unquoted, so `doe..john@x.com` becomes `"doe..john"@x.com` and `"'abc"@x.com` stays quoted. Display names lose runes that are not graphic, like bidi overrides. A quoted name keeps its escaped quotes and backslashes, like for `net/mail`: `"Say \"Hi\"" <a@b.com>` stays as it is, and `"\"Example\" <x@evil.com>" <a@b.com>` is the address `a@b.com` with the name `"Example" <x@evil.com>`. Outside quotes, quotes and backslashes are dropped: `Jo"hn <j@x.com>` becomes `"John" <j@x.com>`, and `mike@doe.com (Mike \(Sales\))` becomes `"Mike (Sales)" <mike@doe.com>`. A display name equal to the address is dropped, `<a@b.com>` becomes `a@b.com`, and `mike@doe.com (Mike Doe)` becomes `"Mike Doe" <mike@doe.com>`.
+- **Display names are quoted UTF-8.** `John Doe <j@example.com>` normalizes to `"John Doe" <j@example.com>`, so `ValidAndNormalized` is false for the unquoted form. A non-ASCII name stays UTF-8 (RFC 6532), also when the input was RFC 2047 encoded: `Jürgen Müller <J@X.de>` and `=?utf-8?q?J=C3=BCrgen_M=C3=BCller?= <j@x.de>` both normalize to `"Jürgen Müller" <j@x.de>`. Only `BuildRawMessage` and the `ASCII` methods RFC 2047 encode non-ASCII names, because MIME headers must be ASCII, `ASCII` in words of at most 75 characters, or in one longer word where a word would hold only ASCII text, which Python's email package writes unencoded, so that the `;` of `(Vorstand; Finanzen)` would end the name. A name containing `=?` is written quoted with every `=?` escaped as `=\?`, like `"=\?utf-8?q?x?=" <a@b.com>` for the name `=?utf-8?q?x?=`, because the parser and Python's email package decode encoded-words in names, also within quotes, but not one with an escaped `=?`. Python writes the name again without the backslash, so a name whose `=?` then starts an encoded-word that holds an address or another encoded-word, or none that can be decoded, is refused, see the next item; `"Really=?" <a@b.com>`, whose `=?` is within a word, is valid and normalizes to `"Really=\?" <a@b.com>`.
+- **A top level domain of two or more ASCII letters is required, and no label may be empty.** `user@example..com` is invalid, like for `net/mail`. `user@example` and IP literals like `user@[192.0.2.1]` are invalid.
+- **`AddressRegexp` is not anchored.** `AddressRegexp.MatchString("xx a@b.com yy")` is true. Use `Address.Validate` to validate.
+- **`DomainPart` does not parse.** `Address("John <J@Example.COM>").DomainPart()` is `Example.COM`. Call it on a normalized address before looking it up in `ProviderDomains()`.
+- **Empty strings in SQL.** `AddressList.Scan` reads `""` and whitespace only as `""`, `AddressSet.Scan` as nil set, and the nullable types as null. `Value` writes them as SQL NULL, which a `NOT NULL` column rejects.
+- **The collections refuse runes that inject headers, break storage or hide another mailbox.** The parser reads an address with line breaks and other whitespace turned into spaces, and without control and format characters and invalid UTF-8, but the collections write their text as stored. So `Validate` and `Valid` of `AddressList`, `NullableAddressList` and `AddressSet` return an error for a control character other than the tab (like CR, LF and NUL), a bidi embedding, override or isolate (U+202A to U+202E, U+2066 to U+2069) or invalid UTF-8 within the text, and so do their `Value` methods and `AddressSet.MarshalText` with the same error: `"x\r\nBcc: evil@example.com" <a@example.com>` is refused. All other runes are valid and written as stored in display names and comments, like the no-break space, the ideographic space (U+3000) between Japanese family and given names, the zero width non-joiner of Persian names, the zero width joiner of emoji sequences, the soft hyphen, the left-to-right and right-to-left marks and the tab. In an address part, the local part or the domain, inside or without angle brackets, and in the spaces around it, the collections refuse every rune that the parser drops or reads as another rune, because `net/mail` and mail servers read it as part of another mailbox: a rune that is not graphic like the soft hyphen in `ad<U+00AD>min@corp.com`, a space other than U+0020 like the no-break space in `x <<U+00A0>a@b.com>` or a tab in a quoted local part, and an apostrophe right before or after the address part, which the parser drops, like in `'ceo@corp.com`. So do they in an unquoted name that is the address, like the no-break space of `<U+00A0>a@b.com <a@b.com>`, in the same address repeated in angle brackets after it, and after a comment after an address up to the next comma, where Python's `email.utils` appends the rune to the domain, like for `a@b.com (x)<U+00A0>, c@d.com`. A tab outside quotes, like after a comma, is a space for both. `Address.Validate` accepts all of them, because `Address.Value` writes the normalized address without them, so store `Normalized()` of a refused list. Build message headers from the parsed addresses, like `BuildRawMessage` does, not from the stored text.
+- **Names that hold another recipient are invalid.** Other parsers, like Python's `email.utils.getaddresses` that `smtplib.send_message` uses, read other recipients in some names than this parser read. So `Validate` and `Normalized` of every address type refuse an `@` in an unquoted name like in `x@evil.com <ceo@corp.com>`, unless the name is the address itself as written, with the domain in any case, like in `a@example.com <a@example.com>`: quote the name, `"x@evil.com" <ceo@corp.com>` is valid. They also refuse a second address in angle brackets that is not the same address, like in `<x@evil.com> <ceo@corp.com>`, a quoted name without angle brackets, like in `"x@evil.com" ceo@corp.com`, a name with a quoted `@`, or an RFC 2047 encoded-word whose text holds an `@` or `=?`, followed by one of `;:)>[]\,` outside its quoted strings and comments, where Python's parsers end the name and read its first word, decoded, as the address, like in `"x@evil.com"; <ceo@corp.com>`, `Team:"x@evil.com":<ceo@corp.com>` and `=?utf-8?q?=C3=A4_x=40evil.com?=; <ceo@corp.com>`, which `smtplib.send_message` sends to `x@evil.com`, and an address within a quoted string or comment, closed or not, like in `"x@evil.com" "<ceo@corp.com>` and `Doe (Sales <doe@example.com>`. One of `;:)>[],` before such an address only ends the name, so `Doe; =?utf-8?q?J=C3=BCrgen?= <ceo@corp.com>` is valid, but a backslash is refused before it too. An encoded-word in a name whose text is ASCII with one of `"<\`, an `@` or `(` outside a comment that it closes, a comment and one of `;:)>[],`, where Python drops the address, or an `=?` at the start of a word is refused too, because Python's email package writes such text unencoded and unquoted when it writes the header, where it is an address, opens a quoted string, a comment or an address that reaches into the next entry, escapes a quote, or is an encoded-word that it decodes when it reads the message: a message to `=?utf-8?q?x=40evil.com?= <ceo@corp.com>` holds `To: x@evil.com <ceo@corp.com>` and is sent to `x@evil.com` once it is read again. Other ASCII text, like the `teilung Nord)` of a name split into two encoded-words, only ends the name, a closed comment like `(Zentrale)` or `(ivan@example.org)` stays a comment, and text with other runes is encoded again, so `=?utf-8?q?J=C3=BCrgen_=28j=40x.de=29?= <j@x.de>` is valid. Such an encoded-word is refused in a quoted name too, because Python writes it unquoted there if the name has other runes, like in `"ä =?utf-8?q?x=40evil.com?=" <ceo@corp.com>`, also with the `=?` escaped as `=\?`, which Python writes again without the backslash. So is refused an `=?` at the start of a word of a name that starts no encoded-word that the parser decodes, like one in an unknown charset, with an invalid encoding or with a quote in it, which Python still decodes, also up to a `?=` after the name, or that starts a word of the decoded name, like the decoded `=?` of `=?utf-8?b?PT8=?=utf-8?q?x <y?=@corp.com>`, which Python reads as encoded-word up to the `?=` of the address once it wrote the header, but not one within a word, like in `"Really=?" <a@b.com>`, and an `=?` at the start of the local part or after a space or dot in it, where Python decodes an encoded-word, like in `=?utf-8?q?admin?=@corp.com`, which Python sends to `admin@corp.com`. Lenient parsing still returns an address of such an entry with an error, but never one within a quoted string or comment. An incoming `From: x@evil.com <ceo@corp.com>` is parsed as no `From` with an error.
+- **Unquoted names are stored as written, and some mail stacks read their words as recipients.** `AddressList`, `NullableAddressList` and `AddressSet` keep an unquoted display name as written, also one with a comma or one of `;:)>[]`, which other parsers read as the end of the name: Python's `EmailMessage` with `smtplib.send_message` sends `admin, John <ceo@corp.com>` to `admin`, which a mail server completes with its own domain, and to `ceo@corp.com`, `evil.com!attacker; <ceo@corp.com>` only to `evil.com!attacker`, and `John Doe [External] <ceo@corp.com>` only to `John Doe`. Such names are refused only where an `@`, an `=?` or an encoded-word refused above takes part, see above; `=?utf-8?q?Doe=2C_John?= <j@x.com>` is valid too. Store `Normalized()`, which quotes every name, or quote the name, like `"Doe, John" <j@x.com>` and `"John Doe [External]" <ceo@corp.com>`, when the text goes into a header of another system.
+- **The collections are not normalized.** `AddressList`, `NullableAddressList` and `AddressSet` keep `John@Example.com` and `john@example.com` as written, a set as two elements. Normalize with `Normalized` or `NormalizedAddressList` where you compare or deduplicate addresses.
+- **Not for mailing lists with millions of addresses.** The address types and `ParseAddressList` are made for the recipients of a message, a form field or a database column. Every `Validate`, `Normalized` and `Value` call parses the whole list, which takes about a second for 10 MB. Store a huge list one address per row or as `[]string` and parse the addresses one at a time.
+- **`AddressSet` iterates in random order.** `All` and `range` iterate in random order. Use `Sorted`, `Strings`, or `AddressList` for a stable order; `MarshalJSON`, `MarshalText` and `Value` sort.
+- **A nil `AddressSet` panics on `Insert`, `InsertAll`, `UnionWith`, and `SymmetricDifferenceWith`**, like a nil map assignment. Use `Add` and `AddSet` on fields that may be nil.
+- **Errors carry the raw message.** `ParseMessage`, `ParseMIMEMessage`, `ParseMIMEMessageBytes`, `ParseTNEFMessageBytes`, `NewReplyMessage`, and `BuildRawMessage` wrap errors with `errs.WrapWithFuncParams` from [go-errs](https://github.com/domonda/go-errs). `err.Error()` contains the call stack with the passed arguments, for the parse functions the raw message bytes, cut at `errs.FormatParamMaxLen` (5000 bytes by default) per argument and repeated for every wrapping function. This also applies to the joined header errors returned together with a usable message. `ParseAddressList` errors contain at most 100 bytes of the list from each failing entry on, for at most 100 errors. Don't log these errors where message content must not appear.
+- **Named time zones in `Date`.** Zone abbreviations are parsed with `time.Parse`, which only knows `UTC` and the abbreviations of the local time zone. Others get offset zero: `Mon, 2 Jan 2006 15:04:05 EST` parses as `15:04:05 +0000 EST`.
+- **`ParseMessage` falls back to MIME.** Data that is not detected as JSON or TNEF is parsed as MIME. A truncated JSON document like `{"subject":"x"` returns a mostly empty, non-nil message with a `From` error instead of a JSON syntax error.
+- **`BuildRawMessage` writes `Bcc`.** Remove `Bcc` before encoding a message for the visible recipients. A missing `Date` is written as the current time, and an unparsable `From` or `ReplyTo`, an unparsable entry in `To`, `Cc`, `Bcc`, or `DeliveredTo`, or a nil attachment fails the whole build.
+- **Reply templates are not escaped.** `ReplyTemplateData.BodyHTML` and `ReplyHTML` are `template.HTML`, so `html/template` inserts them as is, including a plain text body converted with `<br>`.
+- **`NewReplyMessage` with `keepAttachments` shares** the parent's `Attachments` slice and its `*Attachment` values.
+- **TNEF attachments have no `ContentType` or `ContentID`.** Only `NewAttachment` detects the content type and creates a Content-ID.
+
+## Examples
+
+Normalize an address and compare lenient with strict list parsing:
+
+```go
+package main
+
+import (
+	"fmt"
+
+	"github.com/domonda/go-types/email"
+)
+
+func main() {
+	addr, err := email.NormalizedAddress("John Doe <John.Doe@Example.com>")
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(addr)
+	part, _ := addr.AddressPart()
+	fmt.Println(part)
+
+	list := email.AddressList("a@example.com, not an address, B@Example.com")
+	// Lenient: the valid entries are returned together with the error
+	addrs, err := list.SplitNormalized()
+	fmt.Println(addrs, err != nil)
+	// Strict: any invalid entry is an error
+	_, err = list.Normalized()
+	fmt.Println(err != nil)
+
+	// Output:
+	// "John Doe" <john.doe@example.com>
+	// john.doe@example.com
+	// [a@example.com b@example.com] true
+	// true
+}
+```
+
+Collect recipients in a possibly nil `AddressSet` and write it as PostgreSQL array:
+
+```go
+package main
+
+import (
+	"fmt"
+
+	"github.com/domonda/go-types/email"
+)
+
+func main() {
+	var set email.AddressSet // nil, Add allocates the map
+	set.Add("b@example.com")
+	err := set.AddAddressPart(`"Alice" <Alice@Example.com>`)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(set.Sorted())
+
+	value, err := set.Value()
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(value)
+
+	// Output:
+	// [alice@example.com b@example.com]
+	// {"alice@example.com","b@example.com"}
+}
+```
+
+Use the partial result of a message with a broken `To` header:
+
+```go
+package main
+
+import (
+	"fmt"
+
+	"github.com/domonda/go-types/email"
+)
+
+func main() {
+	raw := "From: John Doe <John@Example.com>\r\n" +
+		"To: jane@example.com, broken@\r\n" +
+		"Subject: Invoice\r\n" +
+		"\r\n" +
+		"Please find the invoice attached.\r\n"
+
+	msg, err := email.ParseMessage([]byte(raw))
+	if msg == nil {
+		panic(err)
+	}
+	fmt.Println(msg.From)
+	fmt.Println(msg.To)
+	fmt.Println(msg.Subject)
+	fmt.Println("has error:", err != nil)
+
+	// Output:
+	// "John Doe" <john@example.com>
+	// jane@example.com
+	// Invoice
+	// has error: true
+}
+```
 
 ## Related
 
-- `nullable.TrimmedString` — used heavily for optional header fields.
-- `notnull` — `Message.ProviderLabels` and similar list fields.
-- `uu` — `Attachment.ContentID` defaults to a v4 UUID hex.
+- [`nullable`](../nullable/README.md): `nullable.TrimmedString` for the optional `Message` fields.
+- [`strutil`](../strutil/README.md): `strutil.StringSet` returned by `ExtractBodyURLs`.
+- [`charset`](../charset/README.md): encodings for message bodies outside UTF-8.
+- [Null conventions](../docs/explanation-null-conventions.md): why `""` is the null value of `NullableAddress`.
+- [Validation and normalization](../docs/explanation-validation-and-normalization.md): the `Valid`/`Validate`/`Normalized` pattern.
+- [Lenient parsing](../docs/explanation-lenient-parsing.md): partial results with joined errors.
+- [Store optional values](../docs/howto-store-optional-values.md): `NullableAddress` and `NullableAddressList` columns.
+- [Extract identifiers from text](../docs/howto-extract-identifiers-from-text.md): `FindAllAddresses`.

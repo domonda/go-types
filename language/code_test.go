@@ -1,8 +1,14 @@
 package language
 
 import (
+	"database/sql/driver"
+	"encoding/json"
+	"maps"
+	"regexp"
+	"slices"
 	"testing"
 
+	"github.com/domonda/go-types/internal/normtest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -82,14 +88,17 @@ func TestCodeNormalizedErrors(t *testing.T) {
 	}
 }
 
+// Valid accepts every spelling that Normalized accepts, like Validate and
+// the Valid of every other normalizing type, so Valid and Validate never
+// disagree. ValidAndNormalized is the check for the canonical code.
 func TestCodeValid(t *testing.T) {
-	// Valid() should still reflect strict ISO 639-1 membership, not the
-	// liberal acceptance of Normalized().
 	assert.True(t, EN.Valid())
 	assert.True(t, Code("en").Valid())
-	assert.False(t, Code("EN").Valid(), "Valid() is case-sensitive on the underlying map")
-	assert.False(t, Code("eng").Valid(), "Valid() does not accept 639-3 directly")
-	assert.False(t, Code("en-US").Valid(), "Valid() does not accept BCP-47 directly")
+	assert.True(t, Code("EN").Valid(), "Valid() accepts other cases")
+	assert.True(t, Code("eng").Valid(), "Valid() accepts 639-3")
+	assert.True(t, Code("en-US").Valid(), "Valid() accepts BCP-47 tags")
+	assert.False(t, Code("xx").Valid())
+	assert.False(t, Null.Valid())
 }
 
 func TestCodeValidAndNormalized(t *testing.T) {
@@ -103,6 +112,16 @@ func TestCodeLanguageName(t *testing.T) {
 	assert.Equal(t, "English", EN.LanguageName())
 	assert.Equal(t, "German", DE.LanguageName())
 	assert.Equal(t, "", Code("xx").LanguageName())
+	assert.Equal(t, "", Null.LanguageName())
+
+	// Like country.Code.EnglishName, the name is
+	// looked up for the normalized code, so every input that Normalized
+	// accepts has a name (e.g. language codes read from user input or HTTP headers).
+	assert.Equal(t, "English", Code("EN").LanguageName())
+	assert.Equal(t, "English", Code(" en ").LanguageName())
+	assert.Equal(t, "English", Code("eng").LanguageName())
+	assert.Equal(t, "English", Code("en-US").LanguageName())
+	assert.Equal(t, "German", Code("ger").LanguageName())
 }
 
 func TestParseCode(t *testing.T) {
@@ -159,4 +178,210 @@ func TestParseCodeErrors(t *testing.T) {
 			assert.Equal(t, Code(tt.in), got, "error path should return input unchanged")
 		})
 	}
+}
+
+// TestCode_EnumsMatchCodeNames ties the two lists of language codes together:
+// Enums() is generated from the constants in code.go, but Valid() looks up
+// codeNames in constants.go. A code added to only one of them would make
+// Enums() list a code that Valid() rejects, or miss one that it accepts.
+func TestCode_EnumsMatchCodeNames(t *testing.T) {
+	assert.ElementsMatch(t, slices.Collect(maps.Keys(codeNames)), Code("").Enums())
+}
+
+// TestCode_ValidateStringAndNullSentinel covers the three parts of Code's
+// public surface that the //#enum migration created or had to protect.
+//
+// Valid and Validate carry a #custom marker because they normalize first,
+// like country.Code and money.Currency, so input that types.Validate and
+// DeepValidate receive from users ("EN", "eng", "en-US") is not rejected,
+// and the error of Validate names the offending input. That is safe
+// because reading stores and Value writes the normalized code. The strict
+// exact-match methods that go-enum would generate instead reject all of
+// them. String is the one go-enum generates: it returns the code as stored,
+// so fmt shows what a Code holds. Null is marked //#exclude so that go-enum
+// keeps it out of the enum value lists while it stays a typed Code constant
+// with working methods.
+//
+// Value: protects=language.Code's #custom Valid and Validate accept what
+// Normalized accepts and Validate names the input, String returns the
+// stored code, and Null stays a typed sentinel outside Enums and
+// EnumStrings;
+// fails_when=go-enum regenerates Valid or Validate as the strict lookup,
+// String normalizes again, or Null loses its //#exclude marker;
+// why_new=Validate and String have no test at all and
+// TestCode_EnumsMatchCodeNames never looks at EnumStrings or Null;
+// seam=none
+func TestCode_ValidateStringAndNullSentinel(t *testing.T) {
+	t.Run("Validate accepts every enumerated code", func(t *testing.T) {
+		for _, c := range Code("").Enums() {
+			require.NoError(t, c.Validate(), "Code(%q).Validate()", string(c))
+		}
+	})
+
+	t.Run("Validate accepts what Normalized accepts", func(t *testing.T) {
+		// Value and MarshalJSON write them normalized,
+		// so validation can pass them.
+		for _, in := range []Code{"EN", " de ", "eng", "ger", "en-US", "zh_Hant"} {
+			require.True(t, in.Valid(), "Code(%q).Valid()", string(in))
+			require.NoError(t, in.Validate(), "Code(%q).Validate()", string(in))
+		}
+	})
+
+	t.Run("Validate rejects what Normalized rejects", func(t *testing.T) {
+		for _, in := range []Code{"", "xx", "zzz", "English"} {
+			err := in.Validate()
+			require.Error(t, err, "Code(%q).Validate() should error", string(in))
+			// The error has to name the offending value to be diagnosable.
+			assert.ErrorContains(t, err, string(in))
+		}
+	})
+
+	t.Run("String returns the stored code", func(t *testing.T) {
+		// fmt must show what a Code holds, so a non-canonical
+		// value can't pass for the canonical one in a log
+		for _, c := range []Code{"en", "EN", "eng", "en-US", "xx"} {
+			assert.Equal(t, string(c), c.String())
+		}
+	})
+
+	t.Run("Null sentinel", func(t *testing.T) {
+		// Compile-time: Null stays a typed Code constant, not an untyped
+		// string, so it keeps its methods and can be compared to a Code.
+		var _ Code = Null
+
+		assert.False(t, Null.Valid(), "language.Null.Valid() must be false")
+		assert.Error(t, Null.Validate())
+		assert.NotContains(t, Code("").Enums(), Null, "Null is not a valid language code")
+		assert.NotContains(t, Code("").EnumStrings(), string(Null))
+	})
+
+	t.Run("EnumStrings matches Enums", func(t *testing.T) {
+		// Both lists are generated independently from the same constants, so
+		// nothing but this assertion keeps them from drifting apart.
+		enums := Code("").Enums()
+		want := make([]string, len(enums))
+		for i, c := range enums {
+			want[i] = string(c)
+		}
+		assert.Equal(t, want, Code("").EnumStrings())
+	})
+}
+
+// TestCode_ScanValue protects the SQL NULL mapping documented on Code:
+// the empty Code (Null) is written as SQL NULL, and SQL NULL is scanned
+// back as Null, so a nullable language column round-trips without turning
+// NULL into an empty string or vice versa.
+func TestCode_ScanValue(t *testing.T) {
+	t.Run("Scan", func(t *testing.T) {
+		tests := []struct {
+			name  string
+			value any
+			want  Code
+		}{
+			{name: "string", value: "de", want: DE},
+			{name: "bytes", value: []byte("fr"), want: FR},
+			{name: "NULL", value: nil, want: Null},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				c := EN // non-zero start value to detect that Scan overwrites it
+				require.NoError(t, c.Scan(tt.value))
+				assert.Equal(t, tt.want, c)
+			})
+		}
+	})
+
+	t.Run("Scan unsupported type", func(t *testing.T) {
+		c := EN
+		err := c.Scan(42)
+		require.Error(t, err)
+		assert.Equal(t, EN, c, "failed Scan must not modify the Code")
+	})
+
+	t.Run("Value", func(t *testing.T) {
+		v, err := Null.Value()
+		require.NoError(t, err)
+		assert.Nil(t, v, "Null must be written as SQL NULL, not as empty string")
+
+		v, err = DE.Value()
+		require.NoError(t, err)
+		assert.Equal(t, driver.Value("de"), v)
+	})
+
+	t.Run("round-trip", func(t *testing.T) {
+		for _, c := range []Code{Null, EN, DE, ZH} {
+			v, err := c.Value()
+			require.NoError(t, err)
+			var scanned Code
+			require.NoError(t, scanned.Scan(v))
+			assert.Equal(t, c, scanned)
+		}
+	})
+}
+
+// Value and MarshalJSON write a Code normalized, because Validate accepts
+// every spelling that Normalized accepts: without normalization "EN" and
+// "en-US" would reach SQL and JSON as given and fail the JSON schema
+// pattern ^[a-z]{2}$. Value refuses a code that can't be normalized,
+// because the database is where an invalid value would stay; JSON writes
+// it unchanged, so a response that holds one still renders.
+func TestCode_ValueAndMarshalJSONNormalize(t *testing.T) {
+	tests := []struct {
+		c    Code
+		want string
+	}{
+		{c: DE, want: "de"},
+		{c: "EN", want: "en"},
+		{c: " eng ", want: "en"},
+		{c: "en-US", want: "en"},
+		{c: "ger", want: "de"},
+	}
+	for _, tt := range tests {
+		v, err := tt.c.Value()
+		require.NoError(t, err)
+		assert.Equal(t, driver.Value(tt.want), v, "Code(%q).Value()", string(tt.c))
+
+		j, err := json.Marshal(tt.c)
+		require.NoError(t, err)
+		assert.Equal(t, `"`+tt.want+`"`, string(j), "json.Marshal(Code(%q))", string(tt.c))
+	}
+
+	_, err := Code("xx").Value()
+	assert.Error(t, err, "Value() of an invalid code")
+	j, err := json.Marshal(Code("xx"))
+	require.NoError(t, err)
+	assert.Equal(t, `"xx"`, string(j), "json.Marshal of an invalid code")
+
+	j, err = json.Marshal(Null)
+	require.NoError(t, err)
+	assert.Equal(t, `""`, string(j), "Null is no JSON null")
+}
+
+// TestCode_JSONSchema protects that the published JSON schema accepts every
+// valid language code and rejects non-normalized forms, so schema based
+// validation agrees with Code.ValidAndNormalized.
+func TestCode_JSONSchema(t *testing.T) {
+	schema := Code("").JSONSchema()
+	require.NotNil(t, schema)
+	assert.Equal(t, "string", schema.Type)
+	pattern := regexp.MustCompile(schema.Pattern)
+	for _, c := range Code("").Enums() {
+		assert.True(t, pattern.MatchString(string(c)), "schema pattern must accept %q", c)
+	}
+	for _, s := range []string{"", "EN", "eng", "en-US", "e"} {
+		assert.False(t, pattern.MatchString(s), "schema pattern must reject %q", s)
+	}
+}
+
+// TestCode_ReadingAndWriting checks the reading and writing contract shared
+// by the normalizing types: every reading path stores a valid code
+// normalized and an invalid one unchanged, Value refuses an invalid code,
+// and fmt prints the stored code.
+func TestCode_ReadingAndWriting(t *testing.T) {
+	normtest.Run(t, normtest.Spec[Code]{
+		Canonical:    EN,
+		Variants:     []Code{"EN", " en ", "eng", "en-US", "en_GB"},
+		Invalid:      []Code{"xx", "English"},
+		StoredString: true,
+	})
 }

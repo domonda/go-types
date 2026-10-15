@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func Test_BOMOfBytes(t *testing.T) {
@@ -122,4 +123,183 @@ func Test_DecodeWithBOM(t *testing.T) {
 	str, err := DecodeStringWithBOM([]byte{0xFF, 0xFE, 0x00, 0x00, 'h', 0, 0, 0, 'i', 0, 0, 0})
 	assert.NoError(t, err)
 	assert.Equal(t, "hi", str)
+}
+
+// allBOMs are the byte order marks that have an Encoding
+var allBOMs = []BOM{BOMUTF8, BOMUTF16LE, BOMUTF16BE, BOMUTF32LE, BOMUTF32BE}
+
+func Test_BOM_Encoding(t *testing.T) {
+	for _, bom := range allBOMs {
+		t.Run(bom.String(), func(t *testing.T) {
+			enc, err := bom.Encoding()
+			require.NoError(t, err)
+			// The Encoding must be the one the BOM names and report the
+			// same BOM back, so that encoding text and writing enc.BOM()
+			// in front of it produces data that is detected again.
+			assert.Equal(t, bom.String(), enc.Name())
+			assert.Equal(t, bom, enc.BOM())
+		})
+	}
+
+	// Data without BOM is assumed to be UTF-8
+	enc, err := NoBOM.Encoding()
+	require.NoError(t, err)
+	assert.Equal(t, "UTF-8", enc.Name())
+
+	_, err = BOM("xy").Encoding()
+	assert.EqualError(t, err, "unsupported BOM: [120 121]")
+}
+
+// Test_BOM_RoundTrip checks that text encoded with the Encoding of a BOM
+// and prefixed with that BOM decodes back to the original text through
+// every BOM aware decoding function.
+func Test_BOM_RoundTrip(t *testing.T) {
+	// Must not start with U+0000 because of the documented
+	// UTF-16LE/UTF-32LE ambiguity, see Test_BOMOfBytes
+	const text = "Grüße 100 € 世界 😀"
+	for _, bom := range allBOMs {
+		t.Run(bom.String(), func(t *testing.T) {
+			enc, err := bom.Encoding()
+			require.NoError(t, err)
+			encoded, err := enc.Encode([]byte(text))
+			require.NoError(t, err)
+			withBOM := append([]byte(bom), encoded...)
+
+			assert.Equal(t, bom, BOMOfBytes(withBOM))
+			assert.Equal(t, bom, BOMOfString(string(withBOM)))
+
+			decoded, err := DecodeWithBOM(withBOM)
+			require.NoError(t, err)
+			assert.Equal(t, text, string(decoded), "DecodeWithBOM")
+
+			str, err := DecodeStringWithBOM(withBOM)
+			require.NoError(t, err)
+			assert.Equal(t, text, str, "DecodeStringWithBOM")
+
+			// With a known BOM, the BOM in the data is optional
+			for _, data := range [][]byte{withBOM, encoded} {
+				decoded, err = bom.Decode(data)
+				require.NoError(t, err)
+				assert.Equal(t, text, string(decoded), "BOM.Decode")
+
+				str, err = bom.DecodeString(data)
+				require.NoError(t, err)
+				assert.Equal(t, text, str, "BOM.DecodeString")
+			}
+		})
+	}
+}
+
+func Test_BOM_Decode_WrongBOM(t *testing.T) {
+	// Data that announces a different encoding than the caller expects
+	// must be rejected instead of being decoded into garbage
+	data := []byte{0xFE, 0xFF, 0x00, 'h'} // UTF-16BE
+	for _, bom := range []BOM{BOMUTF8, BOMUTF16LE, BOMUTF32LE, BOMUTF32BE} {
+		_, err := bom.Decode(data)
+		assert.Error(t, err, "%s.Decode", bom)
+		_, err = bom.DecodeString(data)
+		assert.Error(t, err, "%s.DecodeString", bom)
+	}
+}
+
+// Test_BOM_Decode_UTF32TextStartingWithUTF16BOM checks that the BOM aware
+// functions decode valid UTF-32LE text like DecodeUTF32 does, even if its
+// first bytes FF FE look like the UTF-16LE BOM.
+func Test_BOM_Decode_UTF32TextStartingWithUTF16BOM(t *testing.T) {
+	const text = "\U000FFEFFabc"
+	encoded, err := EncodeUTF32([]byte(text), binary.LittleEndian)
+	require.NoError(t, err)
+	require.Equal(t, BOMUTF16LE, BOMOfBytes(encoded))
+
+	decoded, err := BOMUTF32LE.Decode(encoded)
+	require.NoError(t, err)
+	assert.Equal(t, text, string(decoded), "BOM.Decode")
+	str, err := BOMUTF32LE.DecodeString(encoded)
+	require.NoError(t, err)
+	assert.Equal(t, text, str, "BOM.DecodeString")
+	decoded, err = DecodeWithBOM(append([]byte(BOMUTF32LE), encoded...))
+	require.NoError(t, err)
+	assert.Equal(t, text, string(decoded), "DecodeWithBOM")
+}
+
+func Test_BOM_Decode_NoBOM(t *testing.T) {
+	// NoBOM means UTF-8 without BOM, the bytes are passed through
+	decoded, err := NoBOM.Decode([]byte("Grüße"))
+	require.NoError(t, err)
+	assert.Equal(t, "Grüße", string(decoded))
+
+	str, err := NoBOM.DecodeString([]byte("Grüße"))
+	require.NoError(t, err)
+	assert.Equal(t, "Grüße", str)
+
+	// but data that starts with a BOM can't be BOM-less
+	_, err = NoBOM.Decode(append([]byte(BOMUTF8), 'a'))
+	assert.Error(t, err)
+}
+
+func Test_BOM_Decode_Unsupported(t *testing.T) {
+	invalid := BOM("xy")
+	_, err := invalid.Decode([]byte("xyz"))
+	assert.EqualError(t, err, "unsupported BOM: [120 121]")
+	_, err = invalid.DecodeString([]byte("z"))
+	assert.EqualError(t, err, "unsupported BOM: [120 121]")
+}
+
+func Test_DecodeWithBOM_Errors(t *testing.T) {
+	// Decoding errors after the BOM are returned, not swallowed
+	_, err := DecodeWithBOM([]byte{0xFE, 0xFF, 0x00, 'h', 'i'}) // odd UTF-16 length
+	assert.Error(t, err)
+	_, err = DecodeStringWithBOM([]byte{0xFE, 0xFF, 0x00, 'h', 'i'})
+	assert.Error(t, err)
+
+	// Empty input has no BOM and decodes to nothing
+	decoded, err := DecodeWithBOM(nil)
+	assert.NoError(t, err)
+	assert.Empty(t, decoded)
+}
+
+func Test_BOM_String_UTF32AndInvalid(t *testing.T) {
+	assert.Equal(t, "UTF-32BE", BOMUTF32BE.String())
+	assert.Equal(t, "UTF-32LE", BOMUTF32LE.String())
+	// Invalid values show their bytes for debugging
+	assert.Equal(t, "Invalid BOM: [120 121]", BOM("xy").String())
+}
+
+// TestBOM_DecodeKeepsTextBOM protects that only the one leading BOM is
+// removed: a U+FEFF after it is a character of the text, like a zero
+// width no-break space, and must be decoded instead of stripped again.
+func TestBOM_DecodeKeepsTextBOM(t *testing.T) {
+	tests := []struct {
+		bom  BOM
+		data []byte
+	}{
+		{bom: BOMUTF32LE, data: []byte{0xFF, 0xFE, 0, 0, 0xFF, 0xFE, 0, 0, 'a', 0, 0, 0}},
+		{bom: BOMUTF32BE, data: []byte{0, 0, 0xFE, 0xFF, 0, 0, 0xFE, 0xFF, 0, 0, 0, 'a'}},
+		{bom: BOMUTF16LE, data: []byte{0xFF, 0xFE, 0xFF, 0xFE, 'a', 0}},
+		{bom: BOMUTF16BE, data: []byte{0xFE, 0xFF, 0xFE, 0xFF, 0, 'a'}},
+	}
+	for _, tt := range tests {
+		decoded, err := tt.bom.Decode(tt.data)
+		require.NoError(t, err, tt.bom.String())
+		assert.Equal(t, "\ufeffa", string(decoded), tt.bom.String())
+		str, err := tt.bom.DecodeString(tt.data)
+		require.NoError(t, err, tt.bom.String())
+		assert.Equal(t, "\ufeffa", str, tt.bom.String())
+	}
+}
+
+// TestDecodeWithBOM_KeepsTextBOM protects that the BOM detecting functions
+// strip one BOM like BOM.Decode: they split the BOM off and then let
+// BOM.Decode strip a second one, a U+FEFF of the text.
+func TestDecodeWithBOM_KeepsTextBOM(t *testing.T) {
+	data := []byte{0xFF, 0xFE, 0xFF, 0xFE, 'A', 0}
+	decoded, err := DecodeWithBOM(data)
+	require.NoError(t, err)
+	assert.Equal(t, "\ufeffA", string(decoded))
+	str, err := DecodeStringWithBOM(data)
+	require.NoError(t, err)
+	assert.Equal(t, "\ufeffA", str)
+	text, encName, err := AutoDecode(data, nil, nil)
+	require.NoError(t, err)
+	assert.Equal(t, "\ufeffA", string(text), encName)
 }

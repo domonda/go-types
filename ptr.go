@@ -1,11 +1,5 @@
 package types
 
-// Ptr returns a new pointer to a copy of the passed value.
-// This is useful for creating pointers to values that need to be passed by reference.
-func Ptr[T any](value T) *T {
-	return &value
-}
-
 // FromPtr returns the dereferenced value of the pointer if it is not nil,
 // otherwise it returns the zero value of the type T.
 // This safely dereferences a pointer without panicking on nil.

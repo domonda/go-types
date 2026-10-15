@@ -2,6 +2,7 @@ package vat
 
 import (
 	"database/sql/driver"
+	"encoding/xml"
 	"fmt"
 	"strings"
 	"unicode"
@@ -11,6 +12,7 @@ import (
 	"github.com/domonda/go-errs"
 	"github.com/domonda/go-types"
 	"github.com/domonda/go-types/country"
+	"github.com/domonda/go-types/internal"
 	"github.com/domonda/go-types/strutil"
 )
 
@@ -33,9 +35,16 @@ const NorthernIrelandVATCountryCode = "XI"
 const ErrInvalidID errs.Sentinel = "invalid VAT ID"
 
 // ID is a european VAT ID.
-// ID implements the database/sql.Scanner and database/sql/driver.Valuer interfaces,
-// returning errors when the ID is not valid and can't be normalized.
-// Use NullableID to read and write SQL NULL values.
+// See NullableID for a nullable version of this type.
+//
+// Scan, UnmarshalJSON, UnmarshalXML and ScanString store a valid ID
+// normalized, a blank one as "" and an invalid one unchanged.
+// Value writes the normalized ID, SQL NULL for a blank one, and returns
+// an error wrapping ErrInvalidID for an invalid one. MarshalJSON and
+// MarshalText write the normalized ID or an invalid one unchanged,
+// and fmt prints the ID as stored. ID has no UnmarshalText, so
+// encoding/json reads and writes the keys of a map[ID]V as given.
+// See "Reading and writing values" in the README of the module.
 type ID string
 
 // NormalizeVATID returns str as normalized VAT ID or an error.
@@ -196,72 +205,83 @@ func (id ID) Number() string {
 	return string(norm[2:])
 }
 
-// String returns the normalized ID if possible,
-// else it will be returned unchanged as string.
-// String implements the fmt.Stringer interface.
-func (id ID) String() string {
-	norm, err := id.Normalized()
-	if err != nil {
-		return string(id)
-	}
-	return string(norm)
-}
-
-// ScanString tries to parse and assign the passed
-// source string as value of the implementing type.
-//
-// If validate is true, the source string is checked
-// for validity before it is assigned to the type.
-//
-// If validate is false and the source string
-// can still be assigned in some non-normalized way
-// it will be assigned without returning an error.
+// ScanString implements the strfmt.Scannable interface.
+// Without validate it stores source like Scan, with validate it stores
+// the normalized ID or returns the error of Normalized,
+// also for a blank source.
 func (id *ID) ScanString(source string, validate bool) error {
-	newID, err := ID(source).Normalized()
-	if err != nil {
-		if validate {
-			return err
-		}
-		newID = ID(source)
-	}
-	*id = newID
-	return nil
+	return internal.ScanStringNormalized(id, source, validate, false, ID.Normalized, nil)
 }
 
 // Scan implements the database/sql.Scanner interface.
+// A valid ID is stored normalized, SQL NULL and a blank string as "",
+// and an ID that can't be normalized unchanged without an error,
+// so that one invalid value doesn't fail a whole query; Validate reports it.
 func (id *ID) Scan(value any) error {
-	switch x := value.(type) {
-	case string:
-		*id = ID(x)
-	case []byte:
-		*id = ID(x)
-	case nil:
-		return fmt.Errorf("%w: can't scan SQL NULL as vat.ID", ErrInvalidID)
-	default:
-		return fmt.Errorf("%w: can't scan SQL value of type %T as vat.ID", ErrInvalidID, value)
-	}
-	return nil
+	return internal.ScanNormalized(id, value, ID.Normalized, nil)
 }
 
 // Value implements the driver database/sql/driver.Valuer interface.
+// It returns the normalized ID, SQL NULL for a blank ID,
+// or the error of Normalized wrapping ErrInvalidID
+// for an ID that can't be normalized.
 func (id ID) Value() (driver.Value, error) {
-	normalized, err := id.Normalized()
-	if err != nil {
-		return string(id), nil
-	}
-	return string(normalized), nil
+	return internal.ValueNormalized(id, ID.Normalized, nil)
+}
+
+// MarshalJSON implements encoding/json.Marshaler by writing the
+// normalized ID, "" for a blank ID, or the ID unchanged
+// if it can't be normalized.
+func (id ID) MarshalJSON() ([]byte, error) {
+	return internal.MarshalJSONNormalized(id, false, ID.Normalized, nil)
+}
+
+// UnmarshalJSON implements encoding/json.Unmarshaler.
+// A JSON string is stored like Scan stores it, JSON null leaves the ID
+// unchanged like encoding/json does for a string type, and any other
+// JSON value is an error.
+func (id *ID) UnmarshalJSON(data []byte) error {
+	return internal.UnmarshalJSONNormalized(id, data, false, ID.Normalized, nil)
+}
+
+// MarshalText implements encoding.TextMarshaler like MarshalJSON,
+// so that encoding/xml and strfmt write the normalized ID.
+// encoding/json writes map keys of string types as they are
+// and doesn't call MarshalText for them.
+func (id ID) MarshalText() ([]byte, error) {
+	return internal.MarshalTextNormalized(id, ID.Normalized, nil)
+}
+
+// MarshalXMLAttr implements encoding/xml.MarshalerAttr by writing the
+// text of MarshalText, and no attribute for a nil pointer, because
+// encoding/xml calls MarshalText through a nil pointer attribute field
+// and panics.
+func (id *ID) MarshalXMLAttr(name xml.Name) (xml.Attr, error) {
+	return internal.MarshalXMLAttrText(id, name)
+}
+
+// UnmarshalXML implements encoding/xml.Unmarshaler
+// by storing the text of the element like Scan stores it.
+func (id *ID) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	return internal.UnmarshalXMLNormalized(id, d, start, ID.Normalized, nil)
+}
+
+// UnmarshalXMLAttr implements encoding/xml.UnmarshalerAttr
+// by storing the attribute value like Scan stores it.
+func (id *ID) UnmarshalXMLAttr(attr xml.Attr) error {
+	return internal.UnmarshalXMLAttrNormalized(id, attr, ID.Normalized, nil)
 }
 
 // JSONSchema returns the JSON schema for ID, describing it as a string with
-// the title "Value Added Tax ID" and the package-defined minimum and maximum
-// length constraints.
+// the title "Value Added Tax ID" and the package-defined minimum length.
+// It has no maximum length, see IDMaxLength.
 func (ID) JSONSchema() *jsonschema.Schema {
+	// No MaxLength, because IDMaxLength limits the normalized ID while
+	// JSON input can be formatted with whitespace and punctuation
 	minLength := uint64(IDMinLength)
-	maxLength := uint64(IDMaxLength)
 	return &jsonschema.Schema{
 		Title:     "Value Added Tax ID",
 		Type:      "string",
 		MinLength: &minLength,
-		MaxLength: &maxLength,
 	}
 }

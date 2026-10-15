@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/domonda/go-pretty"
+	"github.com/domonda/go-types/internal/xmlattrtest"
 )
 
 // And returns result of binary AND of two UUIDs.
@@ -393,10 +394,6 @@ func TestUnmarshalText(t *testing.T) {
 		input []byte
 	}{
 		{
-			name:  "binary format (16 bytes)",
-			input: []byte{0x6b, 0xa7, 0xb8, 0x10, 0x9d, 0xad, 0x11, 0xd1, 0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4, 0x30, 0xc8},
-		},
-		{
 			name:  "standard dashed format (36 bytes)",
 			input: []byte("6ba7b810-9dad-11d1-80b4-00c04fd430c8"),
 		},
@@ -445,6 +442,32 @@ func TestUnmarshalText(t *testing.T) {
 		err := id.UnmarshalText([]byte(""))
 		require.Error(t, err, "should return error for empty string")
 	})
+}
+
+// TestUnmarshalText_RejectsRawBinary checks that text and JSON are only
+// parsed in the textual UUID formats. The raw 16 byte binary format that
+// IDFromBytes also accepts is not text: accepting it would turn every
+// 16 character string, like the JSON value "abcdefghijklmnop", into an ID
+// without an error. Raw binary stays valid where binary data is expected,
+// in UnmarshalBinary and in Scan of a 16 byte []byte, which is how SQL
+// drivers return binary UUID columns.
+func TestUnmarshalText_RejectsRawBinary(t *testing.T) {
+	const text16 = "abcdefghijklmnop"
+	ref := IDMust("6ba7b810-9dad-11d1-80b4-00c04fd430c8")
+
+	id := ref
+	require.Error(t, id.UnmarshalText([]byte(text16)), "UnmarshalText of 16 characters")
+	require.Error(t, id.UnmarshalText(ref.Bytes()), "UnmarshalText of raw binary")
+	require.Error(t, json.Unmarshal([]byte(`"`+text16+`"`), &id), "json.Unmarshal of 16 characters")
+	require.Error(t, id.Scan(text16), "Scan of a 16 character string")
+	require.Equal(t, ref, id, "ID must be unchanged after errors")
+
+	var binID ID
+	require.NoError(t, binID.UnmarshalBinary(ref.Bytes()))
+	require.Equal(t, ref, binID)
+	var scanned ID
+	require.NoError(t, scanned.Scan(ref.Bytes()), "Scan of raw binary []byte")
+	require.Equal(t, ref, scanned)
 }
 
 func TestValue(t *testing.T) {
@@ -879,6 +902,29 @@ func TestID_Less(t *testing.T) {
 			rhs:  ID{0x6b, 0xa7, 0xb8, 0x10, 0x9d, 0xad, 0x11, 0xd1, 0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4, 0x30, 0xc8},
 			want: false,
 		},
+		// The cases above also pass with a byte order where the
+		// last byte is the most significant, because the
+		// most significant and least significant byte change together
+		// or alone. The following cases differ in two bytes
+		// where only the first one must decide the order.
+		{
+			name: "first byte outweighs last byte",
+			id:   ID{0x00, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff},
+			rhs:  ID{0x01, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x00},
+			want: true,
+		},
+		{
+			name: "first byte outweighs second byte",
+			id:   ID{0x01, 0x00, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+			rhs:  ID{0x00, 0x01, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+			want: false,
+		},
+		{
+			name: "byte 7 outweighs byte 8",
+			id:   ID{0, 0, 0, 0, 0, 0, 0, 0x00, 0xff, 0, 0, 0, 0, 0, 0, 0},
+			rhs:  ID{0, 0, 0, 0, 0, 0, 0, 0x01, 0x00, 0, 0, 0, 0, 0, 0, 0},
+			want: true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -886,6 +932,26 @@ func TestID_Less(t *testing.T) {
 				t.Errorf("ID.Less() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+// TestID_Less_CanonicalOrder checks that ID.Less sorts like the
+// canonical byte representation and the canonical string format,
+// so sorted IDs come out in the same order as from a database index
+// or from sorting their strings. IDSlice.Sort and IDSet.String use Less,
+// while IDSet.Strings and NullableIDCompare use the string and byte order.
+func TestID_Less_CanonicalOrder(t *testing.T) {
+	ids := IDSlice{IDNil, {0xff}, {15: 0xff}, {7: 0xff}, {8: 0xff}}
+	for range 100 {
+		ids = append(ids, IDv4(), IDv7())
+	}
+	for _, a := range ids {
+		for _, b := range ids {
+			wantLess := bytes.Compare(a[:], b[:]) < 0
+			require.Equal(t, wantLess, a.Less(b), "%s.Less(%s)", a, b)
+			require.Equal(t, wantLess, a.String() < b.String(), "string order of %s and %s", a, b)
+			require.Equal(t, wantLess, NullableIDCompare(a.Nullable(), b.Nullable()) < 0, "NullableIDCompare(%s, %s)", a, b)
+		}
 	}
 }
 
@@ -930,6 +996,10 @@ func TestID_V7Time(t *testing.T) {
 		{name: "version 4 UUID", id: IDv4(), want: time.Time{}, wantOK: false},
 		{name: "version 7 UUID fixed timestamp", id: IDv7WithTime(timestamp), want: timestamp, wantOK: true},
 		{name: "version 7 UUID current timestamp", id: IDv7WithTime(now), want: now, wantOK: true},
+		// RFC 9562 stores unsigned 48 bit milliseconds since 1970,
+		// so the first and the last representable time round trip
+		{name: "version 7 UUID Unix epoch", id: IDv7WithTime(time.UnixMilli(0)), want: time.UnixMilli(0), wantOK: true},
+		{name: "version 7 UUID last 48 bit time", id: IDv7WithTime(time.UnixMilli(1<<48 - 1)), want: time.UnixMilli(1<<48 - 1), wantOK: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -940,6 +1010,89 @@ func TestID_V7Time(t *testing.T) {
 			require.Equal(t, tt.wantOK, ok)
 			require.Equal(t, tt.want, got)
 		})
+	}
+}
+
+// A time outside of what RFC 9562 can store, before 1970 or after the
+// year 10889, keeps only its lower 48 bits and so doesn't round trip.
+// The README documents it, this pins that it is a documented limit
+// of the format, not a time that silently comes back correct.
+func TestIDv7WithTime_OutOfRange(t *testing.T) {
+	before1970 := time.Date(1960, 1, 1, 0, 0, 0, 0, time.UTC)
+	got, ok := IDv7WithTime(before1970).V7Time()
+	require.True(t, ok)
+	require.False(t, got.Equal(before1970), "%s must not round trip", before1970)
+	require.Equal(t, before1970.UnixMilli()&(1<<48-1), got.UnixMilli(), "keeps only the lower 48 bits, as documented")
+}
+
+// TestIDv7_RFC9562Layout checks the byte layout of the 48 bit
+// v7 timestamp. RFC 9562 stores it big-endian in the first 6 bytes,
+// which is what makes v7 IDs sortable by creation time and
+// interoperable with v7 IDs generated by other implementations.
+func TestIDv7_RFC9562Layout(t *testing.T) {
+	// Test vector of RFC 9562 Appendix A.6:
+	// unix_ts_ms 0x017F22E279B0 = 2022-02-22T19:22:22Z
+	rfcVector := IDMust("017F22E2-79B0-7CC3-98C4-DC0C0C07398F")
+	rfcTime := time.Date(2022, 2, 22, 19, 22, 22, 0, time.UTC)
+
+	got, ok := rfcVector.V7Time()
+	require.True(t, ok)
+	require.True(t, rfcTime.Equal(got), "V7Time decodes the RFC test vector: got %s, want %s", got, rfcTime)
+
+	// A v7 ID generated by another implementation
+	got, ok = IDMust("019222e8-1ec3-7e4f-97e2-919670df6d6b").V7Time()
+	require.True(t, ok)
+	require.Equal(t, int64(0x019222e81ec3), got.UnixMilli(), "V7Time of foreign v7 ID")
+
+	id := IDv7WithTime(rfcTime)
+	require.Equal(t, rfcVector[:6], id[:6], "IDv7WithTime writes the timestamp big-endian")
+	require.Equal(t, "017f22e2-79b0-7", id.String()[:15])
+
+	id = IDv7Deterministic(rfcTime.UnixMilli())
+	require.Equal(t, "017f22e2-79b0-7000-8000-000000000000", id.String(), "IDv7Deterministic writes the timestamp big-endian")
+}
+
+// TestIDv7_TimeSortable checks the main reason to use v7 IDs:
+// IDs created later sort after IDs created earlier,
+// in byte order (database indexes), string order and with ID.Less.
+// The time steps cross the byte boundaries of the timestamp,
+// where a wrong byte order breaks the sort order.
+func TestIDv7_TimeSortable(t *testing.T) {
+	start := time.Date(2024, 9, 24, 7, 21, 30, 0, time.UTC)
+	var ids IDSlice
+	for _, offset := range []int64{0, 1, 2, 255, 256, 257, 1 << 16, 1<<16 + 1, 1 << 24, 1 << 32, 1 << 40} {
+		ts := start.Add(time.Duration(offset) * time.Millisecond)
+		ids = append(ids, IDv7WithTime(ts))
+		ids = append(ids, IDv7Deterministic(ts.UnixMilli()))
+	}
+	for i := 2; i < len(ids); i++ {
+		prev, id := ids[i-2], ids[i]
+		require.Negative(t, bytes.Compare(prev[:], id[:]), "byte order: %s before %s", prev, id)
+		require.Less(t, prev.String(), id.String(), "string order")
+		require.True(t, prev.Less(id), "ID.Less order: %s before %s", prev, id)
+	}
+}
+
+// TestIDv7_V7TimeRoundTrip checks that V7Time returns the time
+// passed to IDv7WithTime and IDv7Deterministic with millisecond precision
+// for times that use all 6 bytes of the timestamp.
+func TestIDv7_V7TimeRoundTrip(t *testing.T) {
+	for _, ts := range []time.Time{
+		time.UnixMilli(0),
+		time.UnixMilli(1),
+		time.UnixMilli(1<<48 - 1), // largest 48 bit timestamp
+		time.Date(2022, 2, 22, 19, 22, 22, 123_456_789, time.UTC),
+		time.Now(),
+	} {
+		want := time.UnixMilli(ts.UnixMilli())
+
+		got, ok := IDv7WithTime(ts).V7Time()
+		require.True(t, ok)
+		require.True(t, want.Equal(got), "IDv7WithTime(%s).V7Time() = %s", want, got)
+
+		got, ok = IDv7Deterministic(ts.UnixMilli()).V7Time()
+		require.True(t, ok)
+		require.True(t, want.Equal(got), "IDv7Deterministic(%d).V7Time() = %s", ts.UnixMilli(), got)
 	}
 }
 
@@ -956,4 +1109,203 @@ func ExampleID_JSONSchema() {
 	//   "format": "uuid",
 	//   "title": "UUID"
 	// }
+}
+
+func TestIDv7DeterministicFunc_Series(t *testing.T) {
+	// The returned function is meant to replace random IDs in tests
+	// (e.g. via ContextWithIDFunc), so it must produce the same
+	// strictly increasing series of valid v7 IDs on every run.
+	next := IDv7DeterministicFunc(1000)
+	other := IDv7DeterministicFunc(1000)
+
+	prev := IDNil
+	for i := range int64(5) {
+		id := next()
+		require.NoError(t, id.Validate())
+		require.Equal(t, IDv7Deterministic(1000+i), id, "deterministic series")
+		require.Equal(t, id, other(), "independent series with same start are equal")
+		ts, ok := id.V7Time()
+		require.True(t, ok)
+		require.Equal(t, 1000+i, ts.UnixMilli(), "timestamp counts up per call")
+		require.True(t, prev.Less(id) || prev.IsNil(), "series is sortable")
+		prev = id
+	}
+}
+
+func TestIDv7DeterministicFunc_Concurrent(t *testing.T) {
+	// Documented as safe for concurrent use: no ID may be
+	// handed out twice and none may be skipped.
+	const goroutines, perGoroutine = 8, 100
+	next := IDv7DeterministicFunc(0)
+
+	results := make(chan ID, goroutines*perGoroutine)
+	done := make(chan struct{})
+	for range goroutines {
+		go func() {
+			for range perGoroutine {
+				results <- next()
+			}
+			done <- struct{}{}
+		}()
+	}
+	for range goroutines {
+		<-done
+	}
+	close(results)
+
+	seen := make(IDSet)
+	for id := range results {
+		require.True(t, seen.Insert(id), "duplicate ID %s", id)
+	}
+	require.Len(t, seen, goroutines*perGoroutine)
+	for i := range int64(goroutines * perGoroutine) {
+		require.True(t, seen.Contains(IDv7Deterministic(i)), "missing ID number %d", i)
+	}
+}
+
+func TestIDFromPtr(t *testing.T) {
+	id := IDMust("6ba7b810-9dad-11d1-80b4-00c04fd430c8")
+	def := IDMust("de8482f2-164a-40f9-b4e0-c349b78c22f6")
+
+	require.Equal(t, id, IDFromPtr(&id, def))
+	require.Equal(t, def, IDFromPtr(nil, def), "nil pointer returns default")
+	require.Equal(t, IDNil, IDFromPtr(nil, IDNil))
+}
+
+func TestIDFromAny(t *testing.T) {
+	refStr := "6ba7b810-9dad-11d1-80b4-00c04fd430c8"
+	ref := IDMust(refStr)
+	invalidVersion := ref
+	invalidVersion.SetVersion(0)
+
+	tests := []struct {
+		name    string
+		val     any
+		want    ID
+		wantErr error
+	}{
+		{name: "string", val: refStr, want: ref},
+		{name: "hex string", val: ref.Hex(), want: ref},
+		{name: "[]byte text", val: []byte(refStr), want: ref},
+		{name: "[]byte binary", val: ref.Bytes(), want: ref},
+		{name: "ID", val: ref, want: ref},
+		{name: "NullableID", val: ref.Nullable(), want: ref},
+		{name: "[16]byte", val: [16]byte(ref), want: ref},
+		// Unlike NullableIDFromAny, a missing value is an error for a required ID
+		{name: "nil", val: nil, want: IDNil, wantErr: ErrNilID},
+		{name: "Nil ID", val: IDNil, want: IDNil, wantErr: ErrNilID},
+		{name: "NULL NullableID", val: IDNull, want: IDNil, wantErr: ErrNilID},
+		{name: "invalid version", val: invalidVersion, want: invalidVersion, wantErr: ErrInvalidVersion(0)},
+		// Parsed strings and bytes must be validated like the typed IDs,
+		// a well formed but invalid UUID is still not a usable ID
+		{name: "Nil UUID string", val: IDNil.String(), want: IDNil, wantErr: ErrNilID},
+		{name: "Nil UUID []byte text", val: []byte(IDNil.String()), want: IDNil, wantErr: ErrNilID},
+		{name: "Nil UUID []byte binary", val: IDNil.Bytes(), want: IDNil, wantErr: ErrNilID},
+		{name: "invalid version string", val: invalidVersion.String(), want: invalidVersion, wantErr: ErrInvalidVersion(0)},
+		{name: "invalid version []byte text", val: []byte(invalidVersion.String()), want: invalidVersion, wantErr: ErrInvalidVersion(0)},
+		{name: "invalid version []byte binary", val: invalidVersion.Bytes(), want: invalidVersion, wantErr: ErrInvalidVersion(0)},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := IDFromAny(tt.val)
+			if tt.wantErr != nil {
+				require.ErrorIs(t, err, tt.wantErr)
+			} else {
+				require.NoError(t, err)
+			}
+			require.Equal(t, tt.want, got)
+		})
+	}
+
+	t.Run("errors", func(t *testing.T) {
+		for _, val := range []any{"", "not-a-uuid", []byte("short"), 42, &ref} {
+			_, err := IDFromAny(val)
+			require.Error(t, err, "%#v", val)
+		}
+	})
+}
+
+func TestIDFrom_IDTypes(t *testing.T) {
+	// IDFrom does not validate, so typed IDs must pass through unchanged
+	ref := IDMust("6ba7b810-9dad-11d1-80b4-00c04fd430c8")
+	require.Equal(t, ref, IDFrom(ref))
+	require.Equal(t, ref, IDFrom(ref.Nullable()))
+	require.Equal(t, IDNil, IDFrom(IDNil))
+	require.Equal(t, IDNil, IDFrom(IDNull))
+	require.Equal(t, IDNil, IDFrom("not-a-uuid"), "unparseable string returns IDNil")
+	require.Equal(t, IDNil, IDFrom([]byte("short")), "unparseable bytes return IDNil")
+}
+
+func TestIDMust_Panics(t *testing.T) {
+	// IDMust is for IDs that must be valid, so every invalid
+	// input including the Nil UUID must panic instead of
+	// silently producing an unusable ID.
+	invalidVersion := IDMust("6ba7b810-9dad-11d1-80b4-00c04fd430c8")
+	invalidVersion.SetVersion(0)
+
+	require.Panics(t, func() { IDMust("not-a-uuid") })
+	require.Panics(t, func() { IDMust([]byte("short")) })
+	require.Panics(t, func() { IDMust(IDNil) })
+	require.Panics(t, func() { IDMust([16]byte{}) })
+	require.Panics(t, func() { IDMust(invalidVersion) })
+	require.Panics(t, func() { IDMust(invalidVersion.Nullable()) })
+	require.Panics(t, func() { IDMustFromString("not-a-uuid") })
+
+	// Parsed strings and bytes are no exception
+	require.Panics(t, func() { IDMust("00000000-0000-0000-0000-000000000000") })
+	require.Panics(t, func() { IDMust([]byte("00000000-0000-0000-0000-000000000000")) })
+	require.Panics(t, func() { IDMust(make([]byte, 16)) })
+	require.Panics(t, func() { IDMust(invalidVersion.String()) })
+	require.Panics(t, func() { IDMust([]byte(invalidVersion.String())) })
+	require.Panics(t, func() { IDMust(invalidVersion.Bytes()) })
+}
+
+func TestID_IsZeroIsNotNil(t *testing.T) {
+	id := IDMust("6ba7b810-9dad-11d1-80b4-00c04fd430c8")
+	require.True(t, IDNil.IsZero())
+	require.False(t, IDNil.IsNotNil())
+	require.False(t, id.IsZero())
+	require.True(t, id.IsNotNil())
+}
+
+func TestID_StringUpperAndHex(t *testing.T) {
+	id := IDMust("6ba7b810-9dad-11d1-80b4-00c04fd430c8")
+	require.Equal(t, "6BA7B810-9DAD-11D1-80B4-00C04FD430C8", id.StringUpper())
+	require.Equal(t, "6ba7b8109dad11d180b400c04fd430c8", id.Hex())
+
+	// Both representations must be parseable back to the same ID
+	for _, s := range []string{id.StringUpper(), id.Hex()} {
+		parsed, err := IDFromString(s)
+		require.NoError(t, err)
+		require.Equal(t, id, parsed)
+	}
+
+	require.Equal(t, "00000000000000000000000000000000", IDNil.Hex(), "Hex is always 32 characters")
+}
+
+func TestIDFromString_InvalidEncodings(t *testing.T) {
+	// The content must be validated for every supported encoding,
+	// not only the overall length and dash positions.
+	for _, s := range []string{
+		"6ba7b8109dad11d180b400c04fd430cx", // hex without dashes
+		"a3fW6RxSR_amqRvJxqIi2!",           // base64 URL
+		"a3fW6RxSR+amqRvJxqIi2g",           // standard base64 is not URL encoding
+		"xba7b810-9dad-11d1-80b4-00c04fd430c8",
+		"6ba7b810-xdad-11d1-80b4-00c04fd430c8",
+		"6ba7b810-9dad-x1d1-80b4-00c04fd430c8",
+		"6ba7b810-9dad-11d1-x0b4-00c04fd430c8",
+		"6ba7b810-9dad-11d1-80b4-x0c04fd430c8",
+		"urn:uuid:6ba7b810-9dad-11d1-80b4-00c04fd430cx",
+		"urn:uuid:6ba7b810-9dad-11d1-80b4-00c04fd430c",
+	} {
+		_, err := IDFromString(s)
+		require.Error(t, err, s)
+	}
+}
+
+// TestID_MarshalXMLAttr protects against a panic: encoding/xml calls the value
+// receiver MarshalText through a nil *ID attribute field. MarshalXMLAttr
+// leaves the attribute out instead and writes a non-nil one like MarshalText.
+func TestID_MarshalXMLAttr(t *testing.T) {
+	xmlattrtest.NilPointer(t, IDNil, IDMustFromString("6ba7b810-9dad-11d1-80b4-00c04fd430c8"))
 }

@@ -2,6 +2,7 @@ package bank
 
 import (
 	"database/sql/driver"
+	"encoding/xml"
 	"errors"
 	"fmt"
 	"regexp"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/domonda/go-types"
 	"github.com/domonda/go-types/country"
+	"github.com/domonda/go-types/internal"
 	"github.com/domonda/go-types/strutil"
 )
 
@@ -42,29 +44,24 @@ func StringIsIBAN(str string) bool {
 }
 
 // IBAN is a International Bank Account Number.
-// IBAN implements the database/sql.Scanner and database/sql/driver.Valuer interfaces,
-// and will treat an empty IBAN string as SQL NULL value.
+// See NullableIBAN for a nullable version of this type.
+//
+// Scan, UnmarshalJSON, UnmarshalXML and ScanString store a valid IBAN
+// normalized, a blank one as "" and an invalid one unchanged.
+// Value writes the normalized IBAN, SQL NULL for a blank one, and returns
+// an error for an invalid one. MarshalJSON and MarshalText write the
+// normalized IBAN or an invalid one unchanged, and fmt prints the IBAN
+// as stored. IBAN has no UnmarshalText, so encoding/json reads and writes
+// the keys of a map[IBAN]V as given. See "Reading and writing values"
+// in the README of the module.
 type IBAN string
 
-// ScanString tries to parse and assign the passed
-// source string as value of the implementing type.
-//
-// If validate is true, the source string is checked
-// for validity before it is assigned to the type.
-//
-// If validate is false and the source string
-// can still be assigned in some non-normalized way
-// it will be assigned without returning an error.
+// ScanString implements the strfmt.Scannable interface.
+// Without validate it stores source like Scan, with validate it stores
+// the normalized IBAN or returns the error of Normalized,
+// also for a blank source.
 func (iban *IBAN) ScanString(source string, validate bool) error {
-	newIBAN, err := IBAN(source).Normalized()
-	if err != nil {
-		if validate {
-			return err
-		}
-		newIBAN = IBAN(source)
-	}
-	*iban = newIBAN
-	return nil
+	return internal.ScanStringNormalized(iban, source, validate, false, IBAN.Normalized, nil)
 }
 
 // Valid returns if this is a valid International Bank Account Number
@@ -96,21 +93,22 @@ func (iban IBAN) CountryCode() country.Code {
 
 // Normalized returns the iban in normalized form,
 // or an error if the format can't be detected.
+// All whitespace, including leading whitespace, is removed
+// before the IBAN is checked.
 // Returns the IBAN unchanged in case of an error.
 func (iban IBAN) Normalized() (IBAN, error) {
+	normalized := IBAN(strutil.RemoveRunesString(string(iban), strutil.IsSpace))
 	switch {
-	case iban.Nullable().IsNull():
+	case normalized == "":
 		return iban, errors.New("empty IBAN")
-	case len(iban) < IBANMinLength:
+	case len(normalized) < IBANMinLength:
 		return iban, errors.New("IBAN too short")
 	}
-	countryLength, found := countryIBANLength[country.Code(iban[:2])]
+	countryLength, found := countryIBANLength[country.Code(normalized[:2])]
 	if !found {
 		return iban, errors.New("invalid IBAN country code")
 	}
-	normalized := IBAN(strutil.RemoveRunesString(string(iban), strutil.IsSpace))
 	if len(normalized) != countryLength {
-		// fmt.Println(normalized, len(normalized), countryLength)
 		return iban, errors.New("wrong IBAN length")
 	}
 	if !ibanRegexp.MatchString(string(normalized)) {
@@ -152,17 +150,6 @@ func (iban IBAN) NormalizedWithSpaces() (IBAN, error) {
 	return IBAN(b.String()), nil
 }
 
-// String returns the normalized IBAN string if possible,
-// else it will be returned unchanged as string.
-// String implements the fmt.Stringer interface.
-func (iban IBAN) String() string {
-	norm, err := iban.Normalized()
-	if err != nil {
-		return string(iban)
-	}
-	return string(norm)
-}
-
 // Nullable returns the IBAN as NullableIBAN
 func (iban IBAN) Nullable() NullableIBAN {
 	return NullableIBAN(iban)
@@ -200,23 +187,61 @@ func (iban IBAN) isCheckSumValid() bool {
 }
 
 // Scan implements the database/sql.Scanner interface.
+// A valid IBAN is stored normalized, SQL NULL and a blank string as "",
+// and a IBAN that can't be normalized unchanged without an error,
+// so that one invalid value doesn't fail a whole query; Validate reports it.
 func (iban *IBAN) Scan(value any) error {
-	switch x := value.(type) {
-	case string:
-		*iban = IBAN(x)
-	case []byte:
-		*iban = IBAN(x)
-	case nil:
-		*iban = IBAN(IBANNull)
-	default:
-		return fmt.Errorf("can't scan SQL value of type %T as IBAN", value)
-	}
-	return nil
+	return internal.ScanNormalized(iban, value, IBAN.Normalized, nil)
+}
+
+// MarshalJSON implements encoding/json.Marshaler by writing the
+// normalized IBAN, "" for a blank IBAN, or the IBAN unchanged
+// if it can't be normalized.
+func (iban IBAN) MarshalJSON() ([]byte, error) {
+	return internal.MarshalJSONNormalized(iban, false, IBAN.Normalized, nil)
+}
+
+// UnmarshalJSON implements encoding/json.Unmarshaler.
+// A JSON string is stored like Scan stores it, JSON null leaves the IBAN
+// unchanged like encoding/json does for a string type, and any other
+// JSON value is an error.
+func (iban *IBAN) UnmarshalJSON(data []byte) error {
+	return internal.UnmarshalJSONNormalized(iban, data, false, IBAN.Normalized, nil)
+}
+
+// MarshalText implements encoding.TextMarshaler like MarshalJSON,
+// so that encoding/xml and strfmt write the normalized IBAN.
+// encoding/json writes map keys of string types as they are
+// and doesn't call MarshalText for them.
+func (iban IBAN) MarshalText() ([]byte, error) {
+	return internal.MarshalTextNormalized(iban, IBAN.Normalized, nil)
+}
+
+// MarshalXMLAttr implements encoding/xml.MarshalerAttr by writing the
+// text of MarshalText, and no attribute for a nil pointer, because
+// encoding/xml calls MarshalText through a nil pointer attribute field
+// and panics.
+func (iban *IBAN) MarshalXMLAttr(name xml.Name) (xml.Attr, error) {
+	return internal.MarshalXMLAttrText(iban, name)
+}
+
+// UnmarshalXML implements encoding/xml.Unmarshaler
+// by storing the text of the element like Scan stores it.
+func (iban *IBAN) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	return internal.UnmarshalXMLNormalized(iban, d, start, IBAN.Normalized, nil)
+}
+
+// UnmarshalXMLAttr implements encoding/xml.UnmarshalerAttr
+// by storing the attribute value like Scan stores it.
+func (iban *IBAN) UnmarshalXMLAttr(attr xml.Attr) error {
+	return internal.UnmarshalXMLAttrNormalized(iban, attr, IBAN.Normalized, nil)
 }
 
 // Value implements the driver database/sql/driver.Valuer interface.
+// It returns the normalized IBAN, SQL NULL for a blank IBAN,
+// or the error of Normalized for a IBAN that can't be normalized.
 func (iban IBAN) Value() (driver.Value, error) {
-	return string(iban), nil
+	return internal.ValueNormalized(iban, IBAN.Normalized, nil)
 }
 
 // JSONSchema returns the JSON schema definition for the IBAN type.
@@ -228,19 +253,19 @@ func (IBAN) JSONSchema() *jsonschema.Schema {
 	}
 }
 
-// BankAndAccountNumbers extracts the bank number and account number from the IBAN
-// for supported countries (AT, CH, DE). Returns an error if the IBAN is invalid
-// or the country is not supported.
+// BankAndAccountNumbers extracts the bank number and account number from the
+// normalized IBAN (whitespace removed) for supported countries (AT, CH, DE).
+// Returns an error if the IBAN is invalid or the country is not supported.
 func (iban *IBAN) BankAndAccountNumbers() (bankNo, accountNo string, err error) {
-	country := iban.CountryCode()
-	if country == "" {
+	norm, err := iban.Normalized()
+	if err != nil {
 		return "", "", fmt.Errorf("invalid IBAN: %q", string(*iban))
 	}
-	getNumbers, found := getBankAndAccountNumbers[country]
+	getNumbers, found := getBankAndAccountNumbers[country.Code(norm[:2])]
 	if !found {
 		return "", "", fmt.Errorf("can't extract bank and account numbers from IBAN: %q", string(*iban))
 	}
-	return getNumbers(string(*iban))
+	return getNumbers(string(norm))
 }
 
 var getBankAndAccountNumbers = map[country.Code]func(string) (string, string, error){

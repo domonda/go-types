@@ -11,26 +11,29 @@ import (
 
 // JSON is a []byte slice containing JSON text or nil
 // as the representation of the JSON "null" value.
-// that implements the interfaces:
-// json.Marshaler, json.Unmarshaler, driver.Value, sql.Scanner.
+// It implements the interfaces
+// json.Marshaler, json.Unmarshaler, driver.Valuer and sql.Scanner.
 // The nil value of the type JSON is marshalled as
 // the JSON "null" and SQL NULL values.
 // The JSON "null" and SQL NULL values are unmarshalled
-// as nil value ot the type JSON.
+// as nil value of the type JSON.
 type JSON []byte
 
 // MarshalJSON marshals source as JSON and returns it as a nullable JSON value.
-// The result is nil (null) if source marshals to the JSON "null" value.
+// If source marshals to the JSON "null" value, the result is JSON("null")
+// and not nil; use the method JSON.MarshalFrom to get nil in that case.
 func MarshalJSON(source any) (JSON, error) {
 	return json.Marshal(source)
 }
 
-// IsNull returns true if j is nil.
+// IsNull returns true if j is nil or empty.
+// An empty JSON is marshalled as null and written as SQL NULL like nil.
 // IsNull implements the Nullable interface.
-func (j JSON) IsNull() bool { return j == nil }
+func (j JSON) IsNull() bool { return len(j) == 0 }
 
-// MarshalFrom marshalles source as JSON and sets it
+// MarshalFrom marshals source as JSON and sets it
 // at j when there was no error.
+// If source marshals to the JSON "null" value, j is set to nil.
 func (j *JSON) MarshalFrom(source any) error {
 	jsonBytes, err := json.Marshal(source)
 	if err == nil {
@@ -43,25 +46,27 @@ func (j *JSON) MarshalFrom(source any) error {
 	return err
 }
 
-// UnmarshalTo unmashalles the JSON of j to dest
+// UnmarshalTo unmarshals the JSON of j to dest.
+// A nil j returns an error because it holds no JSON text.
 func (j JSON) UnmarshalTo(dest any) error {
 	return json.Unmarshal(j, dest)
 }
 
 // MarshalJSON returns j as the JSON encoding of j.
+// A nil or empty j holds no JSON text and returns null.
 // MarshalJSON implements encoding/json.Marshaler
 // See the package function MarshalJSON to marshal
 // a struct into JSON
 func (j JSON) MarshalJSON() ([]byte, error) {
-	if j.IsNull() {
+	if len(j) == 0 {
 		return []byte("null"), nil
 	}
 	return j, nil
 }
 
 // UnmarshalJSON sets *j to a copy of sourceJSON.
-// UnarshalJSON implements encoding/json.Unmarshaler
-// See method Unmarshal for unmarshalling into a struct.
+// UnmarshalJSON implements encoding/json.Unmarshaler
+// See method UnmarshalTo for unmarshalling into a struct.
 func (j *JSON) UnmarshalJSON(sourceJSON []byte) error {
 	if j == nil {
 		return errors.New("UnmarshalJSON on nil pointer")
@@ -101,13 +106,15 @@ func (j JSON) IsEmpty() bool {
 }
 
 // Scan stores the src in *j. No validation is done.
+// SQL NULL, the text null, and an empty string or []byte,
+// which hold no JSON text, store nil.
 func (j *JSON) Scan(src any) error {
 	switch x := src.(type) {
 	case nil:
 		*j = nil
 
 	case string:
-		if x == "null" {
+		if x == "" || x == "null" {
 			*j = nil
 		} else {
 			// Converting from string does a copy
@@ -115,7 +122,7 @@ func (j *JSON) Scan(src any) error {
 		}
 
 	case []byte:
-		if bytes.Equal(x, []byte("null")) {
+		if len(x) == 0 || bytes.Equal(x, []byte("null")) {
 			*j = nil
 		} else {
 			// Need to copy because, src will be gone after call.

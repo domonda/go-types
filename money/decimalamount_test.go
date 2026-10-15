@@ -8,8 +8,10 @@ import (
 	"math"
 	"math/big"
 	"math/rand"
+	"strconv"
 	"testing"
 
+	"github.com/domonda/go-types/internal/xmlattrtest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -93,6 +95,40 @@ func TestParseDecimalAmount_exactBeatsFloat(t *testing.T) {
 	assert.NotEqual(t, s, f.String())
 }
 
+// TestParseDecimalAmount_loneSeparator pins the documented asymmetry of a
+// single separator: a lone '.' or ',' is the decimal separator, while the
+// Swiss apostrophe and the French space only ever group thousands, so a
+// Swiss "1'000" is a thousand and not one, and an apostrophe that can't
+// group thousands is rejected instead of being read as a decimal separator.
+func TestParseDecimalAmount_loneSeparator(t *testing.T) {
+	cases := []struct {
+		str   string
+		coeff int64
+		scale int
+	}{
+		{"1,000", 1000, 3},
+		{"1.000", 1000, 3},
+		{"1'000", 1000, 0},
+		{"1 000", 1000, 0},
+		{"-12'345", -12345, 0},
+	}
+	for _, c := range cases {
+		a, err := ParseDecimalAmount(c.str)
+		require.NoError(t, err, "ParseDecimalAmount(%q)", c.str)
+		assert.Equal(t, c.coeff, a.Coefficient(), "coefficient of %q", c.str)
+		assert.Equal(t, c.scale, a.Scale(), "scale of %q", c.str)
+	}
+	for _, s := range []string{"1'5", "1 5", "1'50", "1'0000"} {
+		_, err := ParseDecimalAmount(s)
+		assert.Error(t, err, "ParseDecimalAmount(%q)", s)
+		_, err = ParseAmount(s)
+		assert.Error(t, err, "ParseAmount(%q)", s)
+	}
+	amount, err := ParseAmount("1'000")
+	require.NoError(t, err)
+	assert.Equal(t, Amount(1000), amount, "ParseAmount agrees with ParseDecimalAmount")
+}
+
 func TestParseDecimalAmount_acceptedDecimals(t *testing.T) {
 	_, err := ParseDecimalAmount("1.234", 0, 2)
 	assert.Error(t, err, "3 decimals not in {0,2}")
@@ -115,6 +151,45 @@ func TestParseDecimalAmount_errors(t *testing.T) {
 	} {
 		_, err := ParseDecimalAmount(s)
 		assert.Error(t, err, "expected error parsing %q", s)
+	}
+}
+
+// TestParseDecimalAmount_acceptedDecimalsRejectNonFinite protects that
+// passing acceptedDecimals rejects NaN and ±Inf, as documented: the decimals
+// of the result must be in the list, and a non-finite value has none. The
+// allowlist is the guard of the caller for real money input, where a "NaN" or
+// "Infinity" is never a valid amount. Without acceptedDecimals they are
+// still parsed, because PostgreSQL numeric columns can hold them.
+func TestParseDecimalAmount_acceptedDecimalsRejectNonFinite(t *testing.T) {
+	for _, s := range []string{"NaN", "Inf", "+Inf", "-Inf", "Infinity", "+Infinity", "-Infinity", " Inf "} {
+		a, err := ParseDecimalAmount(s, 2)
+		assert.Error(t, err, "ParseDecimalAmount(%q, 2) = %v", s, a)
+
+		a, err = ParseDecimalAmount(s)
+		if assert.NoError(t, err, "ParseDecimalAmount(%q)", s) {
+			assert.False(t, a.IsFinite(), "ParseDecimalAmount(%q)", s)
+		}
+	}
+	a, err := ParseDecimalAmount("1,50", 0, 2)
+	if assert.NoError(t, err) {
+		assert.Equal(t, "1.50", a.String())
+	}
+}
+
+// TestParseDecimalAmount_oneSign protects that an exact amount with a sign
+// at both ends is an error instead of one of the signs winning: reading
+// "+1.5-" as -1.5 or "-1+" as -1 books a misread value with a silently
+// chosen sign. One leading or trailing sign stays valid.
+func TestParseDecimalAmount_oneSign(t *testing.T) {
+	for _, s := range []string{"+1.5-", "-1.5+", "-1+", "- 1.234,56 +", "+1+", "-1.5-"} {
+		a, err := ParseDecimalAmount(s)
+		assert.Error(t, err, "ParseDecimalAmount(%q) = %v", s, a)
+	}
+	for s, want := range map[string]string{"-1.5": "-1.5", "1.5-": "-1.5", "+1.5": "1.5", "1.5+": "1.5"} {
+		a, err := ParseDecimalAmount(s)
+		if assert.NoError(t, err, "ParseDecimalAmount(%q)", s) {
+			assert.Equal(t, want, a.String(), "ParseDecimalAmount(%q)", s)
+		}
 	}
 }
 
@@ -216,6 +291,34 @@ func TestDecimalAmount_Format(t *testing.T) {
 	// Formatting must not panic even for the largest value at high precision.
 	big := NewDecimalAmount(maxDecimalAmountCoefficient, 0)
 	assert.NotPanics(t, func() { _ = fmt.Sprintf("%.18f", big) })
+}
+
+// TestDecimalAmount_FormatPlusV protects that the '+' flag of the %v verb
+// means "add field names" like everywhere in fmt, and not a plus sign.
+// fmt passes the flag on to every field of a struct printed with %+v, so a
+// struct with a DecimalAmount field printed as {T:+1234.50} in logs and test
+// failures, unlike the int, float64, Amount, CentAmount and Rate fields next
+// to it. The '+' flag of the other verbs still writes the sign.
+func TestDecimalAmount_FormatPlusV(t *testing.T) {
+	a := NewDecimalAmount(123450, 2)
+	assert.Equal(t, "{T:1234.50}", fmt.Sprintf("%+v", struct{ T DecimalAmount }{a}))
+	assert.Equal(t, "{T:1234.50 A:1234.50 C:1234.50 R:0.19 I:5}", fmt.Sprintf("%+v", struct {
+		T DecimalAmount
+		A Amount
+		C CentAmount
+		R Rate
+		I int
+	}{a, 1234.5, 123450, 0.19, 5}))
+	assert.Equal(t, "1234.50", fmt.Sprintf("%+v", a))
+	assert.Equal(t, "  1234.50", fmt.Sprintf("%+9v", a))
+	assert.Equal(t, "Inf", fmt.Sprintf("%+v", DecimalAmountInf(1)))
+	assert.Equal(t, fmt.Sprintf("% v", 5)[:1]+"1234.50", fmt.Sprintf("% v", a), "the space flag writes a space like for an int")
+
+	assert.Equal(t, "+1234.50", fmt.Sprintf("%+s", a))
+	assert.Equal(t, "+1234.50", fmt.Sprintf("%+f", a))
+	assert.Equal(t, "+1235", fmt.Sprintf("%+d", a))
+	assert.Equal(t, `"+1234.50"`, fmt.Sprintf("%+q", a))
+	assert.Equal(t, "+Inf", fmt.Sprintf("%+f", DecimalAmountInf(1)))
 }
 
 func TestDecimalAmount_CmpEqual(t *testing.T) {
@@ -758,7 +861,15 @@ func TestDecimalAmount_nonFiniteNoPanic(t *testing.T) {
 }
 
 // floatToDecimalOracle is an independent big.Rat reference for
-// decimalFromFloatRounded, used to validate the int128 implementation.
+// decimalFromFloatRounded, used to validate its digit string implementation.
+//
+// It rounds the shortest decimal representation of f, not the exact binary
+// value that big.Rat.SetFloat64 would give. The shortest decimal is the
+// literal a human typed or a JSON number carried, and the one that parses
+// back to f, so it is the value the amount was meant to have: 0.145 has to
+// round to 0.15 even though its float64 is 0.14499999999999999001. Rounding
+// the binary value made Amount.DecimalAmount disagree with Amount.CentAmount,
+// Cents, RoundToCents and the formatting methods on such ties.
 func floatToDecimalOracle(f float64, scale int, mode RoundingMode) DecimalAmount {
 	switch {
 	case math.IsNaN(f):
@@ -766,7 +877,10 @@ func floatToDecimalOracle(f float64, scale int, mode RoundingMode) DecimalAmount
 	case math.IsInf(f, 0):
 		return decimalInf(math.Signbit(f))
 	}
-	r := new(big.Rat).SetFloat64(f)
+	r, ok := new(big.Rat).SetString(strconv.FormatFloat(f, 'g', -1, 64))
+	if !ok {
+		panic("big.Rat can't parse the shortest decimal of " + strconv.FormatFloat(f, 'g', -1, 64))
+	}
 	pow := new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(scale)), nil)
 	r.Mul(r, new(big.Rat).SetInt(pow))
 	num, den := r.Num(), r.Denom()
@@ -797,6 +911,8 @@ func TestDecimalAmount_FromFloatOracle(t *testing.T) {
 	values := []float64{
 		0, math.Copysign(0, -1), 1, -1, 0.5, -0.5, 0.25, 0.125, 0.0625,
 		1.5, 2.5, 12.5, 0.375, 2.675, 1.005, 100.0 / 3, 1.0 / 3, 2.0 / 3,
+		// Ties of the shortest decimal whose binary value is below the tie
+		0.145, -0.145, 0.285, 1.115, 8.345, 1.0005, 1.45, -2.675,
 		1234.56, -99.99, 0.1, 0.2, 0.3, 9.99999999, 123456789.123456,
 		1e-9, 1e-15, 1e-18, 1e-19, 1e-20, 5e-10,
 		1e6, 1e12, 1e15, 1e17, 2.8e17, 1e18, 1e19, 1e30,
@@ -816,8 +932,7 @@ func TestDecimalAmount_FromFloatOracle(t *testing.T) {
 		for scale := 0; scale <= MaxDecimalAmountScale; scale++ {
 			for _, mode := range modes {
 				want := floatToDecimalOracle(f, scale, mode)
-				got, err := decimalFromFloatRounded(f, scale, mode)
-				require.NoError(t, err)
+				got := decimalFromFloatRounded(f, 64, scale, mode)
 				if want != got {
 					t.Fatalf("fromFloat(%v, %d, %s) = %s (packed %d), want %s (packed %d)",
 						f, scale, mode, got, got, want, want)
@@ -987,8 +1102,10 @@ func TestDecimalAmount_AmountInterop(t *testing.T) {
 	got := DecimalAmountFrom(Amount(1234.567)).RoundToDecimals(2, RoundHalfAwayFromZero)
 	assert.Equal(t, "1234.57", got.String())
 
-	// Amount.DecimalAmount rounds the exact binary float64 value directly.
+	// Amount.DecimalAmount rounds the same shortest decimal in one step,
+	// so both agree also on ties whose binary value is below the tie.
 	assert.Equal(t, "1234.57", Amount(1234.567).DecimalAmount(2, RoundHalfAwayFromZero).String())
+	assert.Equal(t, "0.15", Amount(0.145).DecimalAmount(2, RoundHalfAwayFromZero).String())
 	// A non-finite Amount maps to the matching sentinel instead of panicking.
 	assert.True(t, Amount(math.Inf(1)).DecimalAmount(2, RoundHalfAwayFromZero).IsInf(1))
 	assert.True(t, Amount(math.NaN()).DecimalAmount(2, RoundHalfAwayFromZero).IsNaN())
@@ -1001,24 +1118,161 @@ func TestDecimalAmount_AmountInterop(t *testing.T) {
 func TestDecimalAmount_RateInterop(t *testing.T) {
 	price := NewDecimalAmount(10000, 2) // 100.00
 
-	// The result is the shortest decimal that round-trips the float64
-	// product exactly; round to the final precision explicitly at the end.
+	// The result is the exact product with the shortest decimal of the rate,
+	// without trailing zeros; round to the final precision explicitly at the end.
 	product := price.MultipliedByRate(Rate(1.19))
+	assert.Equal(t, "119", product.String())
 	assert.Equal(t, "119.00", product.RoundToCents(RoundHalfAwayFromZero).String())
-	// A float64 product carrying binary noise keeps that noise until rounded:
-	// 0.10 * 3 in float64 is 0.30000000000000004.
-	noisy := NewDecimalAmount(10, 2).MultipliedByRate(Rate(3))
-	assert.Equal(t, "0.30000000000000004", noisy.String())
-	assert.Equal(t, "0.30", noisy.RoundToCents(RoundHalfAwayFromZero).String())
+	// No float64 binary noise: 0.10 * 3 in float64 is 0.30000000000000004,
+	// the exact product is 0.3.
+	exact := NewDecimalAmount(10, 2).MultipliedByRate(Rate(3))
+	assert.Equal(t, "0.3", exact.String())
+	assert.Equal(t, "0.30", exact.RoundToCents(RoundHalfAwayFromZero).String())
 	// Reverse: 119.00 / 1.19 -> 100.00 after rounding to cents.
 	assert.Equal(t, "100.00", NewDecimalAmount(11900, 2).DividedByRate(Rate(1.19)).RoundToCents(RoundHalfAwayFromZero).String())
-	// 19% of 100.00 -> 19.00 (exact in float64, shortest representation "19").
+	// 19% of 100.00 -> 19.00 (shortest representation "19").
 	assert.Equal(t, "19.00", price.Percentage(19).RoundToCents(RoundHalfAwayFromZero).String())
-	// An exact float64 product converts without any rounding needed.
+	// An exact product has no trailing zeros.
 	assert.Equal(t, "250", price.MultipliedByRate(Rate(2.5)).String())
 
 	// Dividing by a zero rate yields +Inf instead of panicking.
 	assert.True(t, price.DividedByRate(Rate(0)).IsInf(1))
+
+	// Documented: a rate whose shortest decimal has more than 18 decimals
+	// can't be an exact DecimalAmount, so the result is the float64
+	// product or quotient, rounded to the 18 decimals a DecimalAmount
+	// holds, instead of an error or an overflowed scale.
+	tiny := 1.2345678901234567e-5 // shortest decimal has 21 decimals
+	one := NewDecimalAmount(1, 0)
+	for name, got := range map[string]DecimalAmount{
+		"MultipliedByRate": one.MultipliedByRate(Rate(tiny)),
+		"Percentage":       one.Percentage(tiny * 100),
+	} {
+		assert.InDelta(t, tiny, got.Float(), 1e-18, name)
+		assert.LessOrEqual(t, got.Scale(), MaxDecimalAmountScale, name)
+	}
+	assert.InDelta(t, 1/tiny, one.DividedByRate(Rate(tiny)).Float(), 1e-9)
+}
+
+// TestDecimalAmount_rateMethodsRoundShortestDecimal protects the rounding
+// convention of the module, that a float is rounded by its shortest decimal
+// representation half away from zero, for the float rate methods of the
+// exact DecimalAmount. They computed a float64 product, so 3.00 * 0.145 was
+// 0.43499999999999994 and rounded to 0.43 cents instead of the 0.44 of the
+// exact 0.435, unlike CentAmount(300).MultipliedByRate(0.145). The rate is
+// taken as its shortest decimal and the result is computed exactly.
+func TestDecimalAmount_rateMethodsRoundShortestDecimal(t *testing.T) {
+	tests := []struct {
+		name      string
+		got       DecimalAmount
+		want      string
+		wantCents string
+	}{
+		{name: "3.00 * 0.145", got: NewDecimalAmount(300, 2).MultipliedByRate(0.145), want: "0.435", wantCents: "0.44"},
+		{name: "-3.00 * 0.145", got: NewDecimalAmount(-300, 2).MultipliedByRate(0.145), want: "-0.435", wantCents: "-0.44"},
+		{name: "100 * 0.00145", got: NewDecimalAmount(100, 0).MultipliedByRate(0.00145), want: "0.145", wantCents: "0.15"},
+		{name: "0.10 * 3", got: NewDecimalAmount(10, 2).MultipliedByRate(3), want: "0.3", wantCents: "0.30"},
+		{name: "100.00 * 2.5", got: NewDecimalAmount(10000, 2).MultipliedByRate(2.5), want: "250", wantCents: "250.00"},
+		{name: "0.17 / 0.272", got: NewDecimalAmount(17, 2).DividedByRate(0.272), want: "0.625", wantCents: "0.63"},
+		{name: "1 / 3 at the largest scale that fits", got: NewDecimalAmount(1, 0).DividedByRate(3), want: "0.33333333333333333", wantCents: "0.33"},
+		{name: "25.00 * 1.14%", got: NewDecimalAmount(2500, 2).Percentage(1.14), want: "0.285", wantCents: "0.29"},
+		{name: "1.00 * 14.5%", got: NewDecimalAmount(100, 2).Percentage(14.5), want: "0.145", wantCents: "0.15"},
+	}
+	for _, tt := range tests {
+		assert.Equal(t, tt.want, tt.got.String(), tt.name)
+		assert.Equal(t, tt.wantCents, tt.got.RoundToCents(RoundHalfAwayFromZero).String(), tt.name+" rounded to cents")
+	}
+
+	// A rate without an exact DecimalAmount still yields the float64 product
+	assert.True(t, NewDecimalAmount(1, 0).MultipliedByRate(1e-20).IsZero(), "a rate beyond the scale")
+	assert.True(t, NewDecimalAmount(1, 18).MultipliedByRate(1e18).Equal(NewDecimalAmount(1, 0)), "a rate beyond the coefficient range")
+
+	// Rounded to cents the DecimalAmount and the CentAmount methods agree
+	for _, cents := range []int64{100, 300, -300, 17, 2500, 1250} {
+		d := NewDecimalAmount(cents, 2)
+		for _, rate := range []Rate{0.145, 0.272, 0.0114, 1.19} {
+			want := CentAmount(cents).MultipliedByRate(rate)
+			got, err := d.MultipliedByRate(rate).CentAmount(RoundHalfAwayFromZero)
+			if assert.NoError(t, err) {
+				assert.Equal(t, want, got, "%v.MultipliedByRate(%v)", d, rate)
+			}
+			want = CentAmount(cents).DividedByRate(rate)
+			got, err = d.DividedByRate(rate).CentAmount(RoundHalfAwayFromZero)
+			if assert.NoError(t, err) {
+				assert.Equal(t, want, got, "%v.DividedByRate(%v)", d, rate)
+			}
+		}
+		for _, percent := range []float64{14.5, 27.2, 1.14, 119} {
+			want := CentAmount(cents).Percentage(percent)
+			got, err := d.Percentage(percent).CentAmount(RoundHalfAwayFromZero)
+			if assert.NoError(t, err) {
+				assert.Equal(t, want, got, "%v.Percentage(%v)", d, percent)
+			}
+		}
+	}
+}
+
+// TestExactDecimalFromFloat_fastPathMatchesFormatted protects that the
+// float64 fast path, which converts the rates of MultipliedByRate,
+// DividedByRate and Percentage to their shortest decimal, never changes a
+// rate. It is only allowed to skip formatting and parsing the shortest digits
+// where it provably finds the identical coefficient and scale, so every
+// float64 must convert exactly like its formatted digits parse, most of all
+// the short decimals that rates are written with and their float64 neighbors,
+// whose shortest decimals have 16 or 17 digits that need not be unique.
+func TestExactDecimalFromFloat_fastPathMatchesFormatted(t *testing.T) {
+	check := func(f float64) {
+		t.Helper()
+		got, gotOK := exactDecimalFromFloat(f)
+		want, wantOK := exactDecimalFromFloatFormatted(f)
+		if got != want || gotOK != wantOK {
+			t.Fatalf("exactDecimalFromFloat(%v) = %v, %t, formatted digits parse to %v, %t", f, got, gotOK, want, wantOK)
+		}
+	}
+	// checkNeighbors checks f with both signs and its float64 neighbors
+	checkNeighbors := func(f float64) {
+		t.Helper()
+		for _, g := range []float64{f, math.Nextafter(f, math.Inf(1)), math.Nextafter(f, math.Inf(-1))} {
+			check(g)
+			check(-g)
+		}
+	}
+	for _, f := range []float64{
+		0, 0.1, 0.3, 0.1 + 0.2, 0.145, 1.005, 1.0845, 0.92137, 1.19, 19, 1e-18,
+		1.2345678901234567e-5, 5e-324, 2.2250738585072014e-308, 1e-300, 1e300,
+		math.MaxFloat64, math.Inf(1), math.NaN(), 0x1p52 - 0.5, 0x1p52, 0x1p53,
+	} {
+		checkNeighbors(f)
+	}
+	for exp := -25; exp <= 25; exp++ {
+		checkNeighbors(math.Pow10(exp))
+		checkNeighbors(math.Ldexp(1, 3*exp))
+	}
+
+	rng := rand.New(rand.NewSource(4711))
+	for range 20_000 {
+		// A decimal of up to 17 significant digits at up to 21 decimal places
+		digits, scale := 1+rng.Intn(17), rng.Intn(22)
+		f, err := strconv.ParseFloat(fmt.Sprintf("%de-%d", rng.Int63n(int64(math.Pow10(digits))), scale), 64)
+		require.NoError(t, err)
+		checkNeighbors(f)
+		// A decimal of up to 15 digits scales to below 2^50, so the fast path
+		// must take every rate written with them, which are all real rates.
+		if _, _, ok := shortestDecimalFast(f); !ok && digits <= 15 && scale <= MaxDecimalAmountScale {
+			t.Fatalf("shortestDecimalFast(%v) took the exact path", f)
+		}
+	}
+	for range 2 * rateSweepSize() {
+		switch rng.Intn(3) {
+		case 0:
+			check(math.Float64frombits(rng.Uint64()))
+		case 1:
+			check(math.Ldexp(1+rng.Float64(), rng.Intn(141)-70))
+		default:
+			// The product of a short decimal and a random factor
+			check(float64(rng.Int63n(1e9)) / math.Pow10(rng.Intn(10)) * rng.Float64())
+		}
+	}
 }
 
 func TestDecimalAmount_CentAmount(t *testing.T) {
@@ -1604,4 +1858,45 @@ func TestParseDecimalAmount_zeroKeepsMantissaScale(t *testing.T) {
 	assert.NoError(t, err)
 	_, err = ParseDecimalAmount("0e-30", 0)
 	assert.NoError(t, err)
+}
+
+// TestDecimalAmount_DividedByNegativeZeroRate protects the IEEE 754 sign of
+// a division by a negative zero rate, like float64 division, because the
+// decimal zero of the exact path has no sign.
+func TestDecimalAmount_DividedByNegativeZeroRate(t *testing.T) {
+	q := NewDecimalAmount(100, 0).DividedByRate(Rate(math.Copysign(0, -1)))
+	assert.True(t, q.IsInf(-1), "1 / -0 = %s, want -Inf", q)
+	q = NewDecimalAmount(100, 0).DividedByRate(0)
+	assert.True(t, q.IsInf(1), "1 / 0 = %s, want +Inf", q)
+}
+
+func BenchmarkDecimalAmount_MultipliedByRate(b *testing.B) {
+	i := 0
+	for b.Loop() {
+		benchCents[i%len(benchCents)].DecimalAmount().MultipliedByRate(benchRates[i%len(benchRates)])
+		i++
+	}
+}
+
+func BenchmarkDecimalAmount_DividedByRate(b *testing.B) {
+	i := 0
+	for b.Loop() {
+		benchCents[i%len(benchCents)].DecimalAmount().DividedByRate(benchRates[i%len(benchRates)])
+		i++
+	}
+}
+
+func BenchmarkDecimalAmount_Percentage(b *testing.B) {
+	i := 0
+	for b.Loop() {
+		benchCents[i%len(benchCents)].DecimalAmount().Percentage(benchPercents[i%len(benchPercents)])
+		i++
+	}
+}
+
+// TestDecimalAmount_MarshalXMLAttr protects against a panic: encoding/xml calls the value
+// receiver MarshalText through a nil *DecimalAmount attribute field. MarshalXMLAttr
+// leaves the attribute out instead and writes a non-nil one like MarshalText.
+func TestDecimalAmount_MarshalXMLAttr(t *testing.T) {
+	xmlattrtest.NilPointer(t, DecimalAmount{}, NewDecimalAmount(-123456, 2))
 }

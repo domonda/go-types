@@ -1,0 +1,391 @@
+package account
+
+import (
+	"encoding/json"
+	"encoding/xml"
+	"math"
+	"regexp"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func TestNullableNumberFrom(t *testing.T) {
+	// Unlike NumberFrom, an empty or whitespace only string is NULL, not an error
+	tests := []struct {
+		name    string
+		str     string
+		want    NullableNumber
+		wantErr bool
+	}{
+		{name: "empty is NULL", str: "", want: NumberNull},
+		{name: "whitespace is NULL", str: " \t\n", want: NumberNull},
+		{name: "trimmed", str: " 123/4 ", want: "123/4"},
+		{name: "invalid", str: "#1", wantErr: true},
+		{name: "must start alphanumeric", str: "_1", wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := NullableNumberFrom(tt.str)
+			if tt.wantErr {
+				require.ErrorIs(t, err, ErrInvalidNumber)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestNullableNumberFromUint(t *testing.T) {
+	// 0 is interpreted as NULL for the nullable type
+	assert.Equal(t, NumberNull, NullableNumberFromUint(0))
+	assert.Equal(t, NullableNumber("42"), NullableNumberFromUint(42))
+}
+
+func TestNullableNumber_Valid(t *testing.T) {
+	assert.True(t, NumberNull.Valid(), "NULL is a valid NullableNumber")
+	assert.NoError(t, NumberNull.Validate())
+	assert.True(t, NullableNumber("AT-1").Valid())
+	assert.NoError(t, NullableNumber("AT-1").Validate())
+	assert.True(t, NullableNumber(" ").Valid(), "a whitespace-only value is NULL, see IsNull")
+	assert.ErrorIs(t, NullableNumber("-1").Validate(), ErrInvalidNumber)
+}
+
+func TestNullableNumber_NullMethods(t *testing.T) {
+	var n NullableNumber
+	assert.True(t, n.IsNull(), "zero value must be NULL")
+	assert.False(t, n.IsNotNull())
+	assert.Equal(t, Number("default"), n.GetOr("default"))
+	assert.Panics(t, func() { n.Get() }, "Get on NULL must panic instead of returning an invalid Number")
+
+	n.Set("123")
+	assert.True(t, n.IsNotNull())
+	assert.False(t, n.IsNull())
+	assert.Equal(t, Number("123"), n.Get())
+	assert.Equal(t, Number("123"), n.GetOr("default"))
+	assert.Equal(t, "123", n.String())
+
+	n.SetNull()
+	assert.True(t, n.IsNull())
+	assert.Equal(t, "", n.String())
+}
+
+func TestNullableNumber_StringHelpers(t *testing.T) {
+	n := NullableNumber("00AT-123/4")
+	assert.True(t, n.HasPrefix("00AT"))
+	assert.False(t, n.HasPrefix("DE"))
+	assert.True(t, n.HasSuffix("/4"))
+	assert.False(t, n.HasSuffix("/5"))
+	assert.Equal(t, NullableNumber("AT-123/4"), n.TrimLeadingZeros())
+	assert.Equal(t, NumberNull, NullableNumber("000").TrimLeadingZeros(), "all zeros trims to NULL")
+	assert.Equal(t, NumberNull, NumberNull.TrimLeadingZeros())
+
+	before, after, found := n.Cut("/")
+	assert.True(t, found)
+	assert.Equal(t, NullableNumber("00AT-123"), before)
+	assert.Equal(t, NullableNumber("4"), after)
+	_, _, found = n.Cut("#")
+	assert.False(t, found)
+}
+
+func TestNullableNumber_Numeric(t *testing.T) {
+	assert.True(t, NullableNumber("123").IsNumeric())
+	assert.NoError(t, NullableNumber("123").ValidateNumeric())
+	assert.False(t, NullableNumber("12a").IsNumeric())
+	assert.ErrorIs(t, NullableNumber("12a").ValidateNumeric(), ErrAlphanumericNumber)
+	assert.False(t, NumberNull.IsNumeric(), "NULL is not numeric")
+	assert.ErrorIs(t, NumberNull.ValidateNumeric(), ErrAlphanumericNumber)
+}
+
+func TestNullableNumber_UintInt(t *testing.T) {
+	// NULL converts to the zero value without an error
+	u, err := NumberNull.Uint()
+	require.NoError(t, err)
+	assert.Equal(t, uint64(0), u)
+	p, err := NumberNull.UintPtr()
+	require.NoError(t, err)
+	assert.Nil(t, p, "NULL must convert to a nil pointer, not a pointer to 0")
+	i, err := NumberNull.Int()
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), i)
+
+	u, err = NullableNumber("42").Uint()
+	require.NoError(t, err)
+	assert.Equal(t, uint64(42), u)
+	p, err = NullableNumber("42").UintPtr()
+	require.NoError(t, err)
+	require.NotNil(t, p)
+	assert.Equal(t, uint64(42), *p)
+	i, err = NullableNumber("42").Int()
+	require.NoError(t, err)
+	assert.Equal(t, int64(42), i)
+
+	// Non NULL alphanumeric values are still an error
+	_, err = NullableNumber("0x10").Uint()
+	assert.ErrorIs(t, err, ErrAlphanumericNumber)
+	p, err = NullableNumber("0x10").UintPtr()
+	assert.ErrorIs(t, err, ErrAlphanumericNumber)
+	assert.Nil(t, p)
+	_, err = NullableNumber("0x10").Int()
+	assert.ErrorIs(t, err, ErrAlphanumericNumber)
+}
+
+func TestNullableNumber_UnmarshalText(t *testing.T) {
+	n := NullableNumber("123")
+	require.NoError(t, n.UnmarshalText([]byte("  ")))
+	assert.True(t, n.IsNull(), "empty text must set NULL")
+
+	require.NoError(t, n.UnmarshalText([]byte(" 1/2 ")))
+	assert.Equal(t, NullableNumber("1/2"), n)
+
+	err := n.UnmarshalText([]byte("#1"))
+	require.ErrorIs(t, err, ErrInvalidNumber)
+	assert.Equal(t, NullableNumber("1/2"), n, "failed unmarshalling must not modify the value")
+}
+
+func TestNullableNumber_Value(t *testing.T) {
+	// NULL must be written to SQL as nil, not as an empty string
+	v, err := NumberNull.Value()
+	require.NoError(t, err)
+	assert.Nil(t, v)
+
+	v, err = NullableNumber("  ").Value()
+	require.NoError(t, err)
+	assert.Nil(t, v, "whitespace only must also be written as NULL")
+
+	v, err = NullableNumber(" 123 ").Value()
+	require.NoError(t, err)
+	assert.Equal(t, "123", v)
+}
+
+func TestNullableNumber_Scan(t *testing.T) {
+	tests := []struct {
+		name    string
+		value   any
+		want    NullableNumber
+		wantErr bool
+	}{
+		{name: "SQL NULL", value: nil, want: NumberNull},
+		{name: "empty string is NULL", value: "", want: NumberNull},
+		{name: "string", value: " 123-4 ", want: "123-4"},
+		{name: "empty bytes is NULL", value: []byte{}, want: NumberNull},
+		{name: "bytes", value: []byte("AB/12"), want: "AB/12"},
+		// 0 is NULL, consistent with NullableNumberFromUint
+		{name: "int64 zero is NULL", value: int64(0), want: NumberNull},
+		{name: "int64", value: int64(1234567), want: "1234567"},
+		{name: "float64 zero is NULL", value: float64(0), want: NumberNull},
+		// -0 equals 0, so it must also be NULL and not become "-0".
+		// Note that the Go constant -0.0 is +0, so Copysign is needed.
+		{name: "float64 negative zero is NULL", value: math.Copysign(0, -1), want: NumberNull},
+		{name: "float64", value: float64(1234567), want: "1234567"},
+		{name: "invalid string", value: "#1", wantErr: true},
+		{name: "invalid bytes", value: []byte("-1"), wantErr: true},
+		{name: "negative int64", value: int64(-1), wantErr: true},
+		{name: "negative float64", value: float64(-0.5), wantErr: true},
+		// Same as for Number: only non-negative integer floats are
+		// account numbers, "NaN" would pass the alphanumeric pattern.
+		{name: "NaN", value: math.NaN(), wantErr: true},
+		{name: "+Inf", value: math.Inf(1), wantErr: true},
+		{name: "non-integer float64", value: float64(1.5), wantErr: true},
+		{name: "unsupported type", value: true, wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			n := NullableNumber("unchanged")
+			err := n.Scan(tt.value)
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.Equal(t, NullableNumber("unchanged"), n, "failed scan must not modify the value")
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, n)
+		})
+	}
+}
+
+func TestNullableNumber_JSON(t *testing.T) {
+	type obj struct {
+		N NullableNumber `json:"n"`
+	}
+
+	t.Run("NULL round trip", func(t *testing.T) {
+		j, err := json.Marshal(obj{N: NumberNull})
+		require.NoError(t, err)
+		assert.Equal(t, `{"n":null}`, string(j), "NULL must be marshalled as JSON null, not as empty string")
+
+		got := obj{N: "previous"}
+		require.NoError(t, json.Unmarshal(j, &got))
+		assert.True(t, got.N.IsNull(), "JSON null must overwrite a previous value with NULL")
+	})
+
+	t.Run("empty string unmarshals as null", func(t *testing.T) {
+		// Scan("") and UnmarshalText("") give NumberNull, and MarshalJSON
+		// writes empty and whitespace only values as null, so a JSON ""
+		// (e.g. from a cleared form field) must also be read as NULL
+		// instead of failing as an invalid account number.
+		for _, j := range []string{`""`, `"  "`} {
+			n := NullableNumber("previous")
+			require.NoError(t, json.Unmarshal([]byte(j), &n), "json.Unmarshal(%s)", j)
+			assert.Equal(t, NumberNull, n, "json.Unmarshal(%s)", j)
+		}
+	})
+
+	t.Run("whitespace marshals as null", func(t *testing.T) {
+		j, err := json.Marshal(NullableNumber("  "))
+		require.NoError(t, err)
+		assert.Equal(t, `null`, string(j))
+	})
+
+	t.Run("value round trip", func(t *testing.T) {
+		j, err := json.Marshal(obj{N: "AT-12/34"})
+		require.NoError(t, err)
+		assert.Equal(t, `{"n":"AT-12/34"}`, string(j))
+		var got obj
+		require.NoError(t, json.Unmarshal(j, &got))
+		assert.Equal(t, NullableNumber("AT-12/34"), got.N)
+	})
+
+	t.Run("JSON number", func(t *testing.T) {
+		var n NullableNumber
+		require.NoError(t, json.Unmarshal([]byte(`1234567`), &n))
+		assert.Equal(t, NullableNumber("1234567"), n)
+	})
+
+	t.Run("invalid", func(t *testing.T) {
+		var n NullableNumber
+		assert.ErrorIs(t, json.Unmarshal([]byte(`"#1"`), &n), ErrInvalidNumber)
+		assert.ErrorIs(t, json.Unmarshal([]byte(`-1`), &n), ErrInvalidNumber)
+	})
+}
+
+func TestNullableNumber_JSONSchema(t *testing.T) {
+	// The schema must accept JSON null because NULL is marshalled as null
+	s := NumberNull.JSONSchema()
+	require.Len(t, s.OneOf, 2)
+	assert.Equal(t, "string", s.OneOf[0].Type)
+	assert.Equal(t, DefaultNumberRegex, s.OneOf[0].Pattern)
+	assert.Equal(t, "null", s.OneOf[1].Type)
+
+	// The schema must publish the pattern that Validate actually uses,
+	// also when NumberRegexp was reassigned for an application specific format
+	orig := NumberRegexp
+	t.Cleanup(func() { NumberRegexp = orig })
+	NumberRegexp = regexp.MustCompile(`^[0-9]{6}$`)
+	assert.Equal(t, `^[0-9]{6}$`, NumberNull.JSONSchema().OneOf[0].Pattern)
+}
+
+func TestNullableNumber_XML(t *testing.T) {
+	type doc struct {
+		Number NullableNumber `xml:"number"`
+	}
+
+	x, err := xml.Marshal(doc{Number: "AT-12/34"})
+	require.NoError(t, err)
+	assert.Equal(t, `<doc><number>AT-12/34</number></doc>`, string(x))
+	var d doc
+	require.NoError(t, xml.Unmarshal(x, &d))
+	assert.Equal(t, NullableNumber("AT-12/34"), d.Number)
+
+	// NULL round trips through an empty element
+	x, err = xml.Marshal(doc{Number: NumberNull})
+	require.NoError(t, err)
+	assert.Equal(t, `<doc><number></number></doc>`, string(x))
+	d.Number = "previous"
+	require.NoError(t, xml.Unmarshal(x, &d))
+	assert.True(t, d.Number.IsNull())
+
+	// Marshalling trims like Value and MarshalJSON, so every output format
+	// writes the same account number and whitespace only is written as NULL
+	x, err = xml.Marshal(doc{Number: " 123 "})
+	require.NoError(t, err)
+	assert.Equal(t, `<doc><number>123</number></doc>`, string(x))
+	x, err = xml.Marshal(doc{Number: "  "})
+	require.NoError(t, err)
+	assert.Equal(t, `<doc><number></number></doc>`, string(x))
+
+	err = xml.Unmarshal([]byte(`<doc><number>-1</number></doc>`), &d)
+	assert.ErrorIs(t, err, ErrInvalidNumber)
+
+	err = xml.Unmarshal([]byte(`<doc><number>1</doc>`), &d)
+	assert.Error(t, err, "XML syntax errors must be propagated")
+}
+
+// Value and MarshalJSON write a whitespace-only NullableNumber as NULL and
+// null, so IsNull must agree, or Get would return a number that is
+// stored as NULL.
+//
+// Every method must treat such a null like NumberNull: a null is valid
+// and converts to 0 or nil, it must not be reported as invalid. The
+// trimmed runes are those of strutil.TrimSpace like for the other nullable
+// types, which includes zero-width characters.
+func TestNullableNumber_WhitespaceIsNull(t *testing.T) {
+	for _, n := range []NullableNumber{"  ", "\t\n", "\u200b", " \u00a0 "} {
+		t.Run(string(n), func(t *testing.T) {
+			assert.True(t, n.IsNull())
+			assert.False(t, n.IsNotNull())
+			v, err := n.Value()
+			require.NoError(t, err)
+			assert.Nil(t, v)
+			j, err := json.Marshal(n)
+			require.NoError(t, err)
+			assert.Equal(t, `null`, string(j))
+
+			assert.True(t, n.Valid(), "Valid")
+			assert.NoError(t, n.Validate(), "Validate")
+			u, err := n.Uint()
+			assert.NoError(t, err, "Uint")
+			assert.Zero(t, u, "Uint")
+			up, err := n.UintPtr()
+			assert.NoError(t, err, "UintPtr")
+			assert.Nil(t, up, "UintPtr")
+			i, err := n.Int()
+			assert.NoError(t, err, "Int")
+			assert.Zero(t, i, "Int")
+
+			from, err := NullableNumberFrom(string(n))
+			require.NoError(t, err, "NullableNumberFrom")
+			assert.Equal(t, NumberNull, from, "NullableNumberFrom")
+		})
+	}
+}
+
+// Scan(int64(0)) and NullableNumberFromUint(0) give NumberNull, so the JSON
+// number 0 must decode to NumberNull too: the same column value must not
+// depend on whether it arrived through SQL or JSON.
+func TestNullableNumber_UnmarshalJSONZeroIsNull(t *testing.T) {
+	n := NullableNumber("123")
+	require.NoError(t, json.Unmarshal([]byte(`0`), &n))
+	assert.Equal(t, NumberNull, n)
+
+	require.NoError(t, json.Unmarshal([]byte(`42`), &n))
+	assert.Equal(t, NullableNumber("42"), n)
+}
+
+// TestNullableNumber_UnmarshalJSONTrimsLikeScan protects that JSON reads a
+// value padded with a zero-width space like Scan and UnmarshalText do,
+// so the same column value doesn't fail only when it arrives as JSON.
+func TestNullableNumber_UnmarshalJSONTrimsLikeScan(t *testing.T) {
+	var scanned NullableNumber
+	require.NoError(t, scanned.Scan("\u200b123"))
+
+	var fromJSON NullableNumber
+	require.NoError(t, json.Unmarshal([]byte(`"\u200b123"`), &fromJSON))
+	assert.Equal(t, scanned, fromJSON)
+	assert.Equal(t, NullableNumber("123"), fromJSON)
+
+	require.Error(t, json.Unmarshal([]byte(`"not a number!"`), &fromJSON))
+}
+
+// TestNullableNumber_StringOfNull protects that String writes "" for every
+// null value, like the other nullable types, and not the whitespace or
+// control characters that IsNull counts as null.
+func TestNullableNumber_StringOfNull(t *testing.T) {
+	for _, n := range []NullableNumber{"", " ", "\x00", "\u200b"} {
+		assert.True(t, n.IsNull(), "%q", n)
+		assert.Equal(t, "", n.String(), "%q", n)
+	}
+	assert.Equal(t, "123", NullableNumber("123").String())
+}

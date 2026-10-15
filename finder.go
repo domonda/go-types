@@ -5,7 +5,8 @@ package types
 // returning the start and end indices of each match.
 type Finder interface {
 	// FindAllIndex finds all occurrences of the pattern in str and returns
-	// a slice of index pairs [start, end] for each match.
+	// a slice of byte index pairs [start, end) for each match,
+	// so str[start:end] is the matched text.
 	// The parameter n limits the number of matches returned:
 	//   - n < 0: return all matches
 	//   - n == 0: return no matches

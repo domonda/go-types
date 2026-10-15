@@ -3,19 +3,21 @@ package uu
 import (
 	"bytes"
 	"database/sql/driver"
+	"encoding/xml"
 	"fmt"
 	"slices"
 	"sort"
 	"strings"
 	"unsafe"
 
+	"github.com/domonda/go-types/internal"
 	"github.com/domonda/go-types/strutil"
 )
 
 // IDSlice is a slice of uu.IDs.
 // It is a []ID underneath.
-// Implements the database/sql.Scanner and database/sql/driver.Valuer interfaces.
-// Implements the encoding/json.Marshaler and Unmarshaler interfaces.
+// Implements the database/sql.Scanner and database/sql/driver.Valuer interfaces
+// and the encoding/json.Marshaler and Unmarshaler interfaces
 // with the nil slice value used as SQL NULL and JSON null.
 //
 // Value and Scan use the PostgreSQL array text format ({"id1","id2"}),
@@ -252,6 +254,14 @@ func (s IDSlice) MarshalText() (text []byte, err error) {
 	return []byte(s.String()), nil
 }
 
+// MarshalXMLAttr implements encoding/xml.MarshalerAttr by writing the
+// text of MarshalText, and no attribute for a nil pointer, because
+// encoding/xml calls MarshalText through a nil pointer attribute field
+// and panics.
+func (s *IDSlice) MarshalXMLAttr(name xml.Name) (xml.Attr, error) {
+	return internal.MarshalXMLAttrText(s, name)
+}
+
 // UnmarshalText implements the encoding.TextUnmarshaler interface
 // by calling IDSliceFromString.
 func (s *IDSlice) UnmarshalText(text []byte) error {
@@ -264,9 +274,11 @@ func (s *IDSlice) UnmarshalText(text []byte) error {
 }
 
 // Scan implements the database/sql.Scanner interface
-// with the nil map value used as SQL NULL.
-// Does *s = make(Slice) if *s == nil
-// so it can be used with an not initialized Slice variable
+// with the nil slice value used as SQL NULL.
+// SQL NULL and an empty source value set *s = nil,
+// the empty array "{}" sets an empty non-nil slice.
+// A new slice is assigned to *s, so it can be used
+// with an uninitialized IDSlice variable.
 func (s *IDSlice) Scan(value any) (err error) {
 	switch x := value.(type) {
 	case string:
@@ -298,7 +310,8 @@ func (s *IDSlice) scanBytes(src []byte) (err error) {
 	if len(src) > 2 {
 		elements := bytes.SplitSeq(src[1:len(src)-1], []byte{','})
 		for elem := range elements {
-			id, err := IDFromBytes(bytes.Trim(elem, `'"`))
+			var id ID
+			err := id.UnmarshalText(bytes.Trim(elem, `'"`))
 			if err != nil {
 				return err
 			}
@@ -311,7 +324,8 @@ func (s *IDSlice) scanBytes(src []byte) (err error) {
 }
 
 // Value implements the driver database/sql/driver.Valuer interface
-// with the nil map value used as SQL NULL
+// with the nil slice value used as SQL NULL
+// and an empty non-nil slice as the empty array "{}".
 func (s IDSlice) Value() (driver.Value, error) {
 	if s == nil {
 		return nil, nil
@@ -370,14 +384,16 @@ func (s *IDSlice) UnmarshalJSON(data []byte) error {
 
 	ids := make(IDSlice, 0)
 
-	if len(data) > 2 {
+	// An array of only whitespace like "[ ]" is empty
+	if len(strutil.TrimSpaceBytes(data[1:len(data)-1])) > 0 {
 		for i, next := 1, 1; i < len(data); i++ {
 			if data[i] == ',' || i == len(data)-1 {
 				str := strutil.TrimSpaceBytes(data[next:i])
 				if len(str) < 2 || str[0] != '"' || str[len(str)-1] != '"' {
 					return fmt.Errorf("can't parse as uu.IDSlice because not a JSON string array: %s", data)
 				}
-				id, err := IDFromBytes(str[1 : len(str)-1])
+				var id ID
+				err := id.UnmarshalText(str[1 : len(str)-1])
 				if err != nil {
 					return fmt.Errorf("error parsing uu.IDSlice from JSON: %w", err)
 				}

@@ -2,12 +2,17 @@ package email
 
 import (
 	"database/sql/driver"
+	"encoding/json"
+	"encoding/xml"
 	"reflect"
 	"slices"
 	"testing"
 
 	"github.com/domonda/go-types/internal/collections"
 	"github.com/domonda/go-types/internal/collections/settest"
+	"github.com/domonda/go-types/internal/xmlattrtest"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestAddressSet_Scan(t *testing.T) {
@@ -27,6 +32,14 @@ func TestAddressSet_Scan(t *testing.T) {
 			name:  "{single_quote'@example.com}",
 			value: "{single_quote'@example.com}",
 			want:  MakeAddressSet("single_quote'@example.com"),
+		},
+		// Padding around the whole literal is trimmed like around a plain
+		// string, so the array must still be decoded instead of becoming
+		// a single bogus element with braces and quotes
+		{
+			name:  "padded array literal",
+			value: " {\"a@example.com\",b@example.com} ",
+			want:  MakeAddressSet("a@example.com", "b@example.com"),
 		},
 	}
 	for _, tt := range tests {
@@ -327,9 +340,30 @@ func TestAddressSet_ScanNonArray(t *testing.T) {
 		want    AddressSet
 		wantErr bool
 	}{
-		// A plain string is a single address, not an array literal,
+		// A plain string is an address list, not an array literal,
 		// so that a non-array SQL column can be scanned too.
 		{name: "plain string", value: "a@example.com", want: MakeAddressSet("a@example.com")},
+		{name: "plain address list", value: `"Doe, John" <john@example.com>, b@example.com`, want: MakeAddressSet(`"Doe, John" <john@example.com>`, "b@example.com")},
+		// One address with an unquoted comma in its display name, which
+		// ParseAddress accepts, must stay one valid element that Value can
+		// write, not become the invalid element "Doe" and another one.
+		{name: "unquoted comma in display name", value: `Doe, John <john@example.com>`, want: MakeAddressSet(`Doe, John <john@example.com>`)},
+		// The addresses are not normalized, so that two spellings of the
+		// same address stay two elements like they were written
+		{name: "plain list not normalized", value: "A@Example.com, a@example.com", want: MakeAddressSet("A@Example.com", "a@example.com")},
+		// json and jsonb columns
+		{name: "JSON array", value: `["a@example.com", "A@Example.com"]`, want: MakeAddressSet("a@example.com", "A@Example.com")},
+		{name: "JSON object", value: `{"a@example.com": {}, "b@example.com": {}}`, want: MakeAddressSet("a@example.com", "b@example.com")},
+		{name: "JSON string", value: `"a@example.com, b@example.com"`, want: MakeAddressSet("a@example.com", "b@example.com")},
+		{name: "empty JSON array", value: `[]`, want: AddressSet{}},
+		{name: "JSON array of numbers", value: `[1, 2]`, wantErr: true},
+		// Like the padded array elements below, the padding of a plain
+		// string is not part of the address, else " a@example.com " and
+		// "a@example.com" would be different members of the set.
+		{name: "padded plain string", value: " a@example.com\t", want: MakeAddressSet("a@example.com")},
+		{name: "padded plain bytes", value: []byte(" a@example.com "), want: MakeAddressSet("a@example.com")},
+		// Whitespace only and the empty string are no addresses
+		{name: "whitespace only plain string", value: "  ", want: nil},
 		{name: "bytes", value: []byte(`{a@example.com,b@example.com}`), want: MakeAddressSet("a@example.com", "b@example.com")},
 		{name: "empty array", value: "{}", want: AddressSet{}},
 		// A hand written literal, unlike PostgreSQL output, may pad its
@@ -350,7 +384,7 @@ func TestAddressSet_ScanNonArray(t *testing.T) {
 		// A nested literal used to yield the inner braces as a single address.
 		{name: "nested array", value: "{{a@example.com}}", wantErr: true},
 		{name: "null", value: nil, want: nil},
-		{name: "empty string", value: "", wantErr: true},
+		{name: "empty string", value: "", want: nil},
 		{name: "invalid array", value: "{,}", wantErr: true},
 		{name: "unsupported type", value: 123, wantErr: true},
 	}
@@ -369,6 +403,12 @@ func TestAddressSet_ScanNonArray(t *testing.T) {
 			}
 		})
 	}
+
+	// The scanned address with an unquoted comma in its name writes back
+	var set AddressSet
+	require.NoError(t, set.Scan(`Doe, John <john@example.com>`))
+	_, err := set.Value()
+	assert.NoError(t, err)
 }
 
 func TestAddressSet_Value(t *testing.T) {
@@ -387,6 +427,53 @@ func TestAddressSet_Value(t *testing.T) {
 	}
 	if want := `{"a@example.com","b@example.com"}`; got != want {
 		t.Errorf("Value() = %v, want %s", got, want)
+	}
+}
+
+// AddressSet is a collection: Value and MarshalJSON write the addresses as
+// stored, so that two spellings of the same address stay two elements and
+// the set reads back with all its elements. MarshalJSON writes a sorted
+// JSON array that round-trips every set, also with invalid addresses.
+// Value trims the surrounding whitespace of valid addresses and refuses an
+// invalid address, because the database is where it would stay.
+func TestAddressSet_ValueAndMarshalJSONAsStored(t *testing.T) {
+	tests := []struct {
+		set      AddressSet
+		wantSQL  driver.Value
+		wantJSON string
+	}{
+		{set: nil, wantSQL: nil, wantJSON: `null`},
+		{set: MakeAddressSet(), wantSQL: "{}", wantJSON: `[]`},
+		{set: MakeAddressSet("B@Example.com", "b@example.com", "a@example.com"), wantSQL: `{"B@Example.com","a@example.com","b@example.com"}`, wantJSON: `["B@Example.com","a@example.com","b@example.com"]`},
+		{set: MakeAddressSet(" a@example.com", "a@example.com"), wantSQL: `{"a@example.com"}`, wantJSON: `[" a@example.com","a@example.com"]`},
+	}
+	for _, tt := range tests {
+		v, err := tt.set.Value()
+		if err != nil || v != tt.wantSQL {
+			t.Errorf("Value() of %v = %v, %v, want %v, nil", tt.set, v, err, tt.wantSQL)
+		}
+
+		j, err := json.Marshal(tt.set)
+		if err != nil || string(j) != tt.wantJSON {
+			t.Errorf("json.Marshal of %v = %s, %v, want %s, nil", tt.set, j, err, tt.wantJSON)
+		}
+		var decoded AddressSet
+		if err := json.Unmarshal(j, &decoded); err != nil || !reflect.DeepEqual(decoded, tt.set) {
+			t.Errorf("json.Unmarshal(%s) = %v, %v; want %v", j, decoded, err, tt.set)
+		}
+	}
+
+	invalid := MakeAddressSet("B@Example.com", "invalid", "")
+	if _, err := invalid.Value(); err == nil {
+		t.Errorf("Value() of %v returned no error for the invalid address", invalid)
+	}
+	j, err := json.Marshal(invalid)
+	if err != nil || string(j) != `["","B@Example.com","invalid"]` {
+		t.Errorf("json.Marshal of %v = %s, %v", invalid, j, err)
+	}
+	var decoded AddressSet
+	if err := json.Unmarshal(j, &decoded); err != nil || !reflect.DeepEqual(decoded, invalid) {
+		t.Errorf("JSON round trip of %v = %v, %v", invalid, decoded, err)
 	}
 }
 
@@ -452,6 +539,13 @@ func TestAddressSet_AddressListAndString(t *testing.T) {
 	if got, want := set.String(), "a@example.com, b@example.com"; got != want {
 		t.Errorf("String() = %s, want %s", got, want)
 	}
+
+	// Unlike the address types, String doesn't normalize: normalizing would
+	// merge the two spellings, and String has to list every element.
+	set = MakeAddressSet("B@Example.com", "b@example.com")
+	if got, want := set.String(), "B@Example.com, b@example.com"; got != want {
+		t.Errorf("String() = %s, want %s", got, want)
+	}
 }
 
 // TestAddressSet_StringNilVsEmpty pins the three renderings apart. A nil and an
@@ -475,31 +569,10 @@ func TestAddressSet_StringNilVsEmpty(t *testing.T) {
 	}
 }
 
-// TestAddressSet_DeprecatedMutators covers the pre-DeleteAll API that is kept
-// for compatibility. It must stay behaviour compatible with the new methods,
-// because callers mix both while migrating.
-func TestAddressSet_DeprecatedMutators(t *testing.T) {
-	t.Run("DeleteSlice", func(t *testing.T) {
-		set := MakeAddressSet("a@example.com", "b@example.com")
-		set.DeleteSlice([]Address{"b@example.com", "x@example.com"})
-		if want := MakeAddressSet("a@example.com"); !set.Equal(want) {
-			t.Errorf("after DeleteSlice set = %s, want %s", set, want)
-		}
-	})
-
-	t.Run("DeleteSet", func(t *testing.T) {
-		set := MakeAddressSet("a@example.com", "b@example.com")
-		set.DeleteSet(MakeAddressSet("b@example.com", "x@example.com"))
-		if want := MakeAddressSet("a@example.com"); !set.Equal(want) {
-			t.Errorf("after DeleteSet set = %s, want %s", set, want)
-		}
-	})
-}
-
 // TestAddressSet_NullVsEmpty pins null and empty apart for the SQL round trip,
 // the same contract uu.IDSet has. AddressSet.Value already got this right; the
 // test exists so a future refactor through Sorted() (which is nil for an empty
-// set, like uu.IDSet.AsSortedSlice was) cannot silently collapse an empty set
+// set, like uu.IDSet.Sorted is) cannot silently collapse an empty set
 // into NULL again.
 func TestAddressSet_NullVsEmpty(t *testing.T) {
 	cases := []struct {
@@ -571,5 +644,134 @@ func TestAddressSet_Normalized_DoesNotAliasReceiver(t *testing.T) {
 	// A nil set stays nil, so it keeps meaning SQL NULL.
 	if got, err := AddressSet(nil).Normalized(); err != nil || got != nil {
 		t.Errorf("Normalized() of a nil set = %v, %v, want nil, nil", got, err)
+	}
+}
+
+// A set keeps its addresses as given in every format, so that two
+// spellings of the same address stay two elements: normalizing could
+// merge them, and the set would read back with fewer elements than it
+// was written with. Normalizing is explicit with Normalized and
+// NormalizedAddressList.
+func TestAddressSet_RoundTripsKeepSpellings(t *testing.T) {
+	set := MakeAddressSet("John@Example.com", "john@example.com", `"Doe, John" <doe@example.com>`)
+
+	t.Run("SQL", func(t *testing.T) {
+		v, err := set.Value()
+		require.NoError(t, err)
+		var got AddressSet
+		require.NoError(t, got.Scan(v))
+		assert.Equal(t, set, got)
+	})
+	t.Run("JSON", func(t *testing.T) {
+		data, err := json.Marshal(set)
+		require.NoError(t, err)
+		var got AddressSet
+		require.NoError(t, json.Unmarshal(data, &got))
+		assert.Equal(t, set, got)
+	})
+	t.Run("text", func(t *testing.T) {
+		text, err := set.MarshalText()
+		require.NoError(t, err)
+		assert.Equal(t, `"Doe, John" <doe@example.com>, John@Example.com, john@example.com`, string(text))
+		var got AddressSet
+		require.NoError(t, got.UnmarshalText(text))
+		assert.Equal(t, set, got)
+	})
+	t.Run("XML", func(t *testing.T) {
+		type doc struct {
+			XMLName xml.Name   `xml:"doc"`
+			To      AddressSet `xml:"to"`
+			Cc      AddressSet `xml:"cc,attr"`
+		}
+		data, err := xml.Marshal(doc{To: set, Cc: set})
+		require.NoError(t, err)
+		var got doc
+		require.NoError(t, xml.Unmarshal(data, &got))
+		assert.Equal(t, set, got.To)
+		assert.Equal(t, set, got.Cc)
+	})
+
+	norm, err := set.NormalizedAddressList()
+	require.NoError(t, err)
+	assert.Equal(t, AddressList(`"Doe, John" <doe@example.com>, john@example.com`), norm, "normalizing merges the two spellings")
+}
+
+// MarshalText writes an address list, which can't hold every string as
+// one entry. An invalid address, or one that would read back as other
+// entries, is an error instead of a text that reads back as another set.
+// The surrounding whitespace of a valid address is trimmed, because it
+// is no part of the address.
+func TestAddressSet_MarshalText(t *testing.T) {
+	text, err := MakeAddressSet(" a@example.com", "b@example.com\t").MarshalText()
+	require.NoError(t, err)
+	assert.Equal(t, "a@example.com, b@example.com", string(text))
+
+	for _, addr := range []Address{"not an address", ""} {
+		_, err := MakeAddressSet("a@example.com", addr).MarshalText()
+		assert.Error(t, err, "MarshalText of a set with %q", addr)
+	}
+
+	// The commas of an unquoted display name read back as one entry
+	text, err = MakeAddressSet("a@example.com", "Doe, John <john@example.com>").MarshalText()
+	require.NoError(t, err)
+	var back AddressSet
+	require.NoError(t, back.UnmarshalText(text))
+	assert.Equal(t, MakeAddressSet("a@example.com", "Doe, John <john@example.com>"), back)
+
+	// A valid address with an angle bracket that isn't closed reads back
+	// alone, but in the joined list the bracket swallows the entries after
+	// it, so the set is refused instead of reading back with one entry
+	require.NoError(t, Address("Doe <doe@example.com").Validate())
+	_, err = MakeAddressSet("Doe <doe@example.com", "b@example.com").MarshalText()
+	assert.ErrorContains(t, err, "would not read back")
+
+	text, err = AddressSet(nil).MarshalText()
+	require.NoError(t, err)
+	assert.Equal(t, "", string(text))
+	text, err = MakeAddressSet().MarshalText()
+	require.NoError(t, err)
+	assert.Equal(t, "", string(text))
+
+	var set AddressSet
+	require.NoError(t, set.UnmarshalText([]byte(`"Doe, John" <john@example.com>, a@example.com`)))
+	assert.Equal(t, MakeAddressSet(`"Doe, John" <john@example.com>`, "a@example.com"), set)
+	require.NoError(t, set.UnmarshalText(nil))
+	assert.Nil(t, set, "empty text is the nil set")
+	// A list of only separators has no entries, so it is the nil set too,
+	// which Value writes as NULL instead of the empty array
+	require.NoError(t, set.UnmarshalText([]byte(" , ,")))
+	assert.Nil(t, set, "text of only separators is the nil set")
+	require.NoError(t, set.Scan(","))
+	assert.Nil(t, set, "Scan of only separators is the nil set")
+}
+
+func TestAddressSet_MarshalXMLAttr(t *testing.T) {
+	xmlattrtest.NilPointer(t, AddressSet(nil), MakeAddressSet(), MakeAddressSet("b@example.com", `"Doe, John" <john@example.com>`))
+}
+
+// UnmarshalJSON reads the JSON array that MarshalJSON writes, the object
+// with the addresses as keys that MarshalJSON wrote before, and a string
+// with an address list, so that stored JSON of every version can be read.
+func TestAddressSet_UnmarshalJSONShapes(t *testing.T) {
+	want := MakeAddressSet("a@example.com", "B@Example.com")
+	for _, data := range []string{
+		`["a@example.com", "B@Example.com"]`,
+		`{"a@example.com": {}, "B@Example.com": {}}`,
+		`"a@example.com, B@Example.com"`,
+	} {
+		var set AddressSet
+		require.NoError(t, json.Unmarshal([]byte(data), &set), data)
+		assert.Equal(t, want, set, data)
+	}
+
+	for data, want := range map[string]AddressSet{`null`: nil, `""`: nil, `[]`: {}, `{}`: {}} {
+		set := MakeAddressSet("previous@example.com")
+		require.NoError(t, json.Unmarshal([]byte(data), &set), data)
+		assert.Equal(t, want, set, data)
+	}
+
+	for _, data := range []string{`123`, `true`, `[1]`} {
+		var set AddressSet
+		assert.Error(t, json.Unmarshal([]byte(data), &set), data)
 	}
 }

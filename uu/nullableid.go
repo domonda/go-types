@@ -5,15 +5,17 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"strings"
 
 	"github.com/invopop/jsonschema"
 
+	"github.com/domonda/go-types/internal"
 	"github.com/domonda/go-types/nullable"
 )
 
-// IDNull is a zero UUID and will be treatet as SQL NULL.
+// IDNull is a zero UUID and will be treated as SQL NULL and JSON null.
 var IDNull NullableID
 
 // NullableID is a UUID where the Nil UUID "00000000-0000-0000-0000-000000000000"
@@ -97,8 +99,8 @@ func NullableIDFromPtr(ptr *ID) NullableID {
 // if the conversion is not possible or the ID is not valid.
 //
 // Supported types:
-//   - string: parsed using NullableIDFromString (supports all format variations)
-//   - []byte: parsed using NullableIDFromBytes (supports all format variations)
+//   - string: parsed using NullableIDFromString (supports all format variations) and validated
+//   - []byte: parsed using NullableIDFromBytes (supports all format variations) and validated
 //   - ID, NullableID, [16]byte: validated and converted
 //   - nil: returns IDNull with no error
 //
@@ -114,9 +116,17 @@ func NullableIDFromPtr(ptr *ID) NullableID {
 func NullableIDFromAny(val any) (NullableID, error) {
 	switch x := val.(type) {
 	case string:
-		return NullableIDFromString(x)
+		id, err := NullableIDFromString(x)
+		if err != nil {
+			return IDNull, err
+		}
+		return id, id.Validate()
 	case []byte:
-		return NullableIDFromBytes(x)
+		id, err := NullableIDFromBytes(x)
+		if err != nil {
+			return IDNull, err
+		}
+		return id, id.Validate()
 	case ID:
 		return NullableID(x), NullableID(x).Validate()
 	case NullableID:
@@ -134,8 +144,8 @@ func NullableIDFromAny(val any) (NullableID, error) {
 // if the conversion is not possible or the ID is not valid.
 //
 // Supported types (via IDSource constraint):
-//   - string: parsed using NullableIDFromString (supports all format variations)
-//   - []byte: parsed using NullableIDFromBytes (supports all format variations)
+//   - string: parsed using NullableIDFromString (supports all format variations) and validated
+//   - []byte: parsed using NullableIDFromBytes (supports all format variations) and validated
 //   - ID, NullableID, [16]byte: validated and converted
 //
 // For string and []byte inputs, supports:
@@ -154,18 +164,26 @@ func NullableIDMust[T IDSource](val T) NullableID {
 		if err != nil {
 			panic(err)
 		}
+		if err := id.Validate(); err != nil {
+			panic(err)
+		}
 		return id
 	case []byte:
 		id, err := NullableIDFromBytes(x)
 		if err != nil {
 			panic(err)
 		}
-		return id
-	case ID:
-		if err := x.Validate(); err != nil {
+		if err := id.Validate(); err != nil {
 			panic(err)
 		}
-		return x.Nullable()
+		return id
+	case ID:
+		// Validated as NullableID like by NullableIDFromAny,
+		// so that the Nil UUID gives IDNull
+		if err := NullableID(x).Validate(); err != nil {
+			panic(err)
+		}
+		return NullableID(x)
 	case NullableID:
 		if err := x.Validate(); err != nil {
 			panic(err)
@@ -423,6 +441,14 @@ func (n NullableID) MarshalText() ([]byte, error) {
 		return []byte{}, nil
 	}
 	return ID(n).MarshalText()
+}
+
+// MarshalXMLAttr implements encoding/xml.MarshalerAttr by writing the
+// text of MarshalText, and no attribute for a nil pointer, because
+// encoding/xml calls MarshalText through a nil pointer attribute field
+// and panics.
+func (n *NullableID) MarshalXMLAttr(name xml.Name) (xml.Attr, error) {
+	return internal.MarshalXMLAttrText(n, name)
 }
 
 // UnmarshalText implements encoding.TextUnmarshaler.

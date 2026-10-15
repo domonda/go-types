@@ -1,22 +1,15 @@
-// Package country provides comprehensive country code handling and validation
-// based on ISO 3166-1 alpha-2 standards for Go applications.
-//
-// The package includes:
-// - ISO 3166-1 alpha-2 country code validation and normalization
-// - Alternative country code mappings (ITU codes, German names, etc.)
-// - European Union membership checking
-// - Database integration (Scanner/Valuer interfaces)
-// - JSON marshalling/unmarshalling
-// - Nullable country code support
 package country
 
 import (
 	"database/sql/driver"
+	"encoding/xml"
 	"fmt"
 	"strings"
 
 	"github.com/invopop/jsonschema"
 
+	types "github.com/domonda/go-types"
+	"github.com/domonda/go-types/internal"
 	"github.com/domonda/go-types/nullable"
 	"github.com/domonda/go-types/strutil"
 )
@@ -27,11 +20,16 @@ const Null NullableCode = ""
 // Compile-time check that NullableCode implements nullable.NullSetable[Code]
 var _ nullable.NullSetable[Code] = (*NullableCode)(nil)
 
+// Compile-time check that NullableCode implements types.NormalizableValidator[NullableCode]
+var _ types.NormalizableValidator[NullableCode] = NullableCode("")
+
 // NullableCode represents a country code according to ISO 3166-1 alpha-2 standard
-// where an empty string represents NULL.
-// NullableCode implements the database/sql.Scanner and database/sql/driver.Valuer interfaces,
-// and treats an empty NullableCode string as SQL NULL.
+// where an empty or whitespace only string represents NULL.
 // Null.Valid() or NullableCode("").Valid() will return true.
+//
+// NullableCode reads and writes like Code, except that null is
+// SQL NULL and JSON null. See "Reading and writing values"
+// in the README of the module.
 type NullableCode string
 
 // Valid returns true if the NullableCode is valid (including null values).
@@ -77,12 +75,10 @@ func (n NullableCode) Normalized() (NullableCode, error) {
 	return n, fmt.Errorf("invalid country.NullableCode: '%s'", string(n))
 }
 
-// NormalizedWithAltCodes uses AltCodes to map to ISO 3166-1 alpha-2 codes
-// or returns the result of Normalized() if no mapping exists.
+// NormalizedWithAltCodes returns the same result as Normalized,
+// which already maps the AltCodes to ISO 3166-1 alpha-2 codes.
+// It is kept for compatibility.
 func (n NullableCode) NormalizedWithAltCodes() (NullableCode, error) {
-	if norm, ok := AltCodes[strings.ToUpper(strutil.TrimSpace(string(n)))]; ok {
-		return norm.Nullable(), nil
-	}
 	return n.Normalized()
 }
 
@@ -105,15 +101,19 @@ func (n NullableCode) EnglishName() string {
 	return Code(n).EnglishName()
 }
 
-// IsNull returns true if the NullableCode is null.
+// IsNull returns true if the NullableCode is null,
+// which includes a string of only the runes strutil.TrimSpace removes:
+// whitespace, control and other non-printable runes, and invalid UTF-8,
+// like for Normalized.
 // IsNull implements the nullable.Nullable interface.
 func (n NullableCode) IsNull() bool {
-	return n == Null
+	return strutil.TrimSpace(n) == Null
 }
 
-// IsNotNull returns true if the NullableCode is not null.
+// IsNotNull returns true if the NullableCode is not null,
+// see IsNull.
 func (n NullableCode) IsNotNull() bool {
-	return n != Null
+	return !n.IsNull()
 }
 
 // Set sets a Code for this NullableCode.
@@ -143,7 +143,8 @@ func (n NullableCode) GetOr(defaultCode Code) Code {
 	return Code(n)
 }
 
-// StringOr returns the NullableCode as string or the passed defaultString if the NullableCode is null.
+// StringOr returns the NullableCode as stored,
+// or the passed defaultString if the NullableCode is null.
 func (n NullableCode) StringOr(defaultString string) string {
 	if n.IsNull() {
 		return defaultString
@@ -151,50 +152,62 @@ func (n NullableCode) StringOr(defaultString string) string {
 	return string(n)
 }
 
-// String returns the normalized code if possible, else it will be returned unchanged as string.
-// String implements the fmt.Stringer interface.
-func (n NullableCode) String() string {
-	if n.IsNull() {
-		return ""
-	}
-	norm, err := n.Normalized()
-	if err != nil {
-		return string(n)
-	}
-	return string(norm)
-}
-
 // Scan implements the database/sql.Scanner interface.
+// A valid code is stored normalized, SQL NULL and a blank string as Null,
+// and a code that can't be normalized unchanged without an error,
+// so that one invalid value doesn't fail a whole query; Validate reports it.
 func (n *NullableCode) Scan(value any) error {
-	switch x := value.(type) {
-	case string:
-		*n = NullableCode(x)
-	case []byte:
-		*n = NullableCode(x)
-	case nil:
-		*n = Null
-	default:
-		return fmt.Errorf("can't scan SQL value of type %T as country.NullableCode", value)
-	}
-	return nil
+	return internal.ScanNormalized(n, value, NullableCode.Normalized, nil)
 }
 
 // Value implements the driver database/sql/driver.Valuer interface.
-// Returns nil for SQL NULL if the NullableCode is Null.
+// It returns the normalized code, SQL NULL if the NullableCode is null,
+// or the error of Normalized for a code that can't be normalized.
 func (n NullableCode) Value() (driver.Value, error) {
-	if n == Null {
-		return nil, nil
-	}
-	return Code(n).Value()
+	return internal.ValueNormalized(n, NullableCode.Normalized, nil)
 }
 
-// MarshalJSON implements encoding/json.Marshaler by returning the JSON null value
-// for an empty (null) string.
+// MarshalJSON implements encoding/json.Marshaler by writing the JSON null
+// value if the NullableCode is null, else the normalized code,
+// or the code unchanged if it can't be normalized.
 func (n NullableCode) MarshalJSON() ([]byte, error) {
-	if n.IsNull() {
-		return []byte(`null`), nil
-	}
-	return Code(n).MarshalJSON()
+	return internal.MarshalJSONNormalized(n, true, NullableCode.Normalized, nil)
+}
+
+// UnmarshalJSON implements encoding/json.Unmarshaler.
+// A JSON string is stored like Scan stores it, JSON null sets the
+// NullableCode to null, so that decoding null into a field that holds
+// a value resets it, and any other JSON value is an error.
+func (n *NullableCode) UnmarshalJSON(data []byte) error {
+	return internal.UnmarshalJSONNormalized(n, data, true, NullableCode.Normalized, nil)
+}
+
+// MarshalText implements encoding.TextMarshaler like MarshalJSON,
+// but with "" for null, so that encoding/xml and strfmt write the
+// normalized code. encoding/json writes map keys of string types
+// as they are and doesn't call MarshalText for them.
+func (n NullableCode) MarshalText() ([]byte, error) {
+	return internal.MarshalTextNormalized(n, NullableCode.Normalized, nil)
+}
+
+// MarshalXMLAttr implements encoding/xml.MarshalerAttr by writing the
+// text of MarshalText, and no attribute for a nil pointer, because
+// encoding/xml calls MarshalText through a nil pointer attribute field
+// and panics.
+func (n *NullableCode) MarshalXMLAttr(name xml.Name) (xml.Attr, error) {
+	return internal.MarshalXMLAttrText(n, name)
+}
+
+// UnmarshalXML implements encoding/xml.Unmarshaler
+// by storing the text of the element like Scan stores it.
+func (n *NullableCode) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	return internal.UnmarshalXMLNormalized(n, d, start, NullableCode.Normalized, nil)
+}
+
+// UnmarshalXMLAttr implements encoding/xml.UnmarshalerAttr
+// by storing the attribute value like Scan stores it.
+func (n *NullableCode) UnmarshalXMLAttr(attr xml.Attr) error {
+	return internal.UnmarshalXMLAttrNormalized(n, attr, NullableCode.Normalized, nil)
 }
 
 // JSONSchema returns the JSON schema definition for the NullableCode type.
@@ -212,23 +225,10 @@ func (NullableCode) JSONSchema() *jsonschema.Schema {
 	}
 }
 
-// ScanString tries to parse and assign the passed source string as value of the implementing type.
-// If validate is true, the source string is checked for validity before assignment.
-// If validate is false and the source string can still be assigned in some non-normalized way,
-// it will be assigned without returning an error.
+// ScanString implements the strfmt.Scannable interface.
+// The strings "NULL", "null" and "nil" set the NullableCode to null.
+// Without validate it stores source like Scan, with validate it stores
+// the normalized code or returns the error of Normalized.
 func (n *NullableCode) ScanString(source string, validate bool) error {
-	switch source {
-	case "", "NULL", "null", "nil":
-		n.SetNull()
-		return nil
-	}
-	code, err := NullableCode(source).Normalized()
-	if err != nil {
-		if validate {
-			return err
-		}
-		code = NullableCode(source)
-	}
-	*n = code
-	return nil
+	return internal.ScanStringNormalized(n, source, validate, true, NullableCode.Normalized, nil)
 }

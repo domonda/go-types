@@ -1,6 +1,14 @@
 package email
 
-import "testing"
+import (
+	"database/sql/driver"
+	"encoding/json"
+	"testing"
+
+	"github.com/domonda/go-types/internal/xmlattrtest"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
 
 func TestNullableAddressList_Scan(t *testing.T) {
 	tests := []struct {
@@ -32,6 +40,10 @@ func TestNullableAddressList_Scan(t *testing.T) {
 		// elements. The padding is not part of the address.
 		{name: "padded elements", value: `{ a@example.com , b@example.com }`, want: "a@example.com, b@example.com"},
 		{name: "whitespace only array", value: `{ }`, want: ""},
+		// Padding around the whole literal is trimmed like around a plain
+		// string, so the array must still be decoded instead of being
+		// stored as the literal text with braces and quotes
+		{name: "padded array literal", value: " {\"a@example.com\",b@example.com} ", want: "a@example.com, b@example.com"},
 		// Regression cases for the array codec swap (nullable.SplitArray ->
 		// notnull.StringArray). Each behaves differently than before, so each
 		// is pinned rather than left to be discovered in production.
@@ -47,17 +59,27 @@ func TestNullableAddressList_Scan(t *testing.T) {
 		{name: "nested array", value: `{{a@example.com}}`, wantErr: true},
 		// A non-array string is an already joined list, so it is taken as is.
 		{name: "plain string", value: "a@example.com, b@example.com", want: "a@example.com, b@example.com"},
+		// Like the padded array elements above and like AddressSet.Scan,
+		// the padding of a plain string is not part of the list, else
+		// " a@example.com " and "a@example.com" would be different lists
+		// and the padding would end up in the first and last address.
+		{name: "padded plain string", value: " a@example.com, b@example.com\t\n", want: "a@example.com, b@example.com"},
+		{name: "padded plain bytes", value: []byte(" a@example.com "), want: "a@example.com"},
+		// An empty or whitespace only string holds no address,
+		// so it is the null list like the empty array {}
+		{name: "whitespace only plain string", value: " \t ", want: ""},
+		{name: "whitespace only plain bytes", value: []byte(" \t "), want: ""},
 		{name: "bytes", value: []byte(`{"a@example.com"}`), want: "a@example.com"},
-		// SQL NULL is the empty list, unlike the empty string which is
-		// rejected because it can only come from a non-NULL column.
 		{name: "null", value: nil, want: ""},
-		{name: "empty string", value: "", wantErr: true},
+		{name: "empty string", value: "", want: ""},
+		{name: "empty bytes", value: []byte{}, want: ""},
 		{name: "invalid array", value: `{,}`, wantErr: true},
 		{name: "unsupported type", value: 123, wantErr: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var n NullableAddressList
+			// Not null, so that Scan has to set a null result
+			n := NullableAddressList("previous@example.com")
 			err := n.Scan(tt.value)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("Scan() error = %v, wantErr %t", err, tt.wantErr)
@@ -96,4 +118,217 @@ func TestNullableAddressList_ScanValueRoundTrip(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestNullableAddressList_Null protects that the NULL list (empty string)
+// is a valid, already normalized empty list for which parsing yields no
+// addresses and no error, so optional headers like Cc can be handled
+// without special casing.
+func TestNullableAddressList_Null(t *testing.T) {
+	var n NullableAddressList
+
+	assert.True(t, n.IsNull())
+	assert.False(t, n.IsNotNull())
+	assert.NoError(t, n.Validate())
+	assert.True(t, n.ValidAndNormalized())
+
+	parsed, err := n.Parse()
+	assert.NoError(t, err)
+	assert.Nil(t, parsed)
+
+	split, err := n.SplitNormalized()
+	assert.NoError(t, err)
+	assert.Nil(t, split)
+
+	normalized, err := n.Normalized()
+	assert.NoError(t, err)
+	assert.True(t, normalized.IsNull())
+
+	assert.Equal(t, "<none>", n.StringOr("<none>"))
+	assert.Equal(t, AddressList("default@example.com"), n.GetOr("default@example.com"))
+	assert.Panics(t, func() { n.Get() }, "Get on NULL must panic instead of returning an invalid AddressList")
+}
+
+func TestNullableAddressList_NotNull(t *testing.T) {
+	const n NullableAddressList = `"Doe, John" <John@Example.com>, B@example.com`
+
+	assert.True(t, n.IsNotNull())
+	assert.NoError(t, n.Validate())
+	assert.False(t, n.ValidAndNormalized(), "upper case address parts are not normalized")
+
+	parsed, err := n.Parse()
+	require.NoError(t, err)
+	require.Len(t, parsed, 2, "the quoted comma must not split the first address")
+	assert.Equal(t, "Doe, John", parsed[0].Name)
+	assert.Equal(t, "john@example.com", parsed[0].Address)
+	assert.Equal(t, "b@example.com", parsed[1].Address)
+
+	normalized, err := n.Normalized()
+	require.NoError(t, err)
+	assert.Equal(t, NullableAddressList(`"Doe, John" <john@example.com>, b@example.com`), normalized)
+	assert.True(t, normalized.ValidAndNormalized())
+
+	assert.Equal(t, string(n), n.StringOr("<none>"), "StringOr returns the list as stored")
+	assert.Equal(t, AddressList(n), n.Get())
+	assert.Equal(t, AddressList(n), n.GetOr("default@example.com"))
+}
+
+func TestNullableAddressList_Invalid(t *testing.T) {
+	// A non-NULL invalid list must not be mistaken for NULL.
+	const n NullableAddressList = "a@example.com, not an address"
+
+	assert.Error(t, n.Validate())
+	assert.False(t, n.ValidAndNormalized())
+
+	normalized, err := n.Normalized()
+	assert.Error(t, err)
+	assert.Equal(t, n, normalized, "Normalized must return the input unchanged on error")
+}
+
+// TestNullableAddressListJoin protects that joining no usable addresses
+// results in the NULL list instead of an invalid list of empty entries.
+func TestNullableAddressListJoin(t *testing.T) {
+	assert.True(t, NullableAddressListJoin().IsNull())
+	assert.True(t, NullableAddressListJoin("", "").IsNull())
+	assert.Equal(t,
+		NullableAddressList(`a@example.com, "Doe, John" <john@example.com>`),
+		NullableAddressListJoin("", "a@example.com", "", `"Doe, John" <john@example.com>`),
+	)
+}
+
+func TestNullableAddressList_Append(t *testing.T) {
+	var n NullableAddressList
+	n = n.Append("")
+	assert.True(t, n.IsNull(), "appending only empty addresses keeps the list NULL")
+
+	n = n.Append("a@example.com")
+	assert.Equal(t, NullableAddressList("a@example.com"), n, "appending to NULL must not start with a separator")
+
+	n = n.Append("", "b@example.com")
+	assert.Equal(t, NullableAddressList("a@example.com, b@example.com"), n)
+}
+
+func TestNullableAddressList_SetAndSetNull(t *testing.T) {
+	var n NullableAddressList
+	n.Set("a@example.com, b@example.com")
+	assert.Equal(t, NullableAddressList("a@example.com, b@example.com"), n)
+
+	n.SetNull()
+	assert.True(t, n.IsNull())
+
+	n.Set("a@example.com")
+	n.Set("") // documented: setting the empty AddressList means NULL
+	assert.True(t, n.IsNull())
+}
+
+// TestNullableAddressList_JSON protects the JSON NULL mapping: the NULL list
+// is written as JSON null and both null and "" are read as NULL.
+func TestNullableAddressList_JSON(t *testing.T) {
+	data, err := json.Marshal(NullableAddressList(""))
+	require.NoError(t, err)
+	assert.Equal(t, `null`, string(data))
+
+	tests := []struct {
+		json    string
+		want    NullableAddressList
+		wantErr bool
+	}{
+		{json: `null`, want: ""},
+		{json: `""`, want: ""},
+		{json: `"a@example.com, b@example.com"`, want: "a@example.com, b@example.com"},
+		// Arrays and objects with the addresses as keys are joined
+		{json: `["a@example.com", "B@Example.com"]`, want: "a@example.com, B@Example.com"},
+		{json: `{"b@example.com": {}, "a@example.com": {}}`, want: "a@example.com, b@example.com"},
+		{json: `[]`, want: ""},
+		{json: `123`, wantErr: true},
+		{json: `true`, wantErr: true},
+		{json: `[1]`, wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.json, func(t *testing.T) {
+			n := NullableAddressList("previous@example.com")
+			err := json.Unmarshal([]byte(tt.json), &n)
+			if tt.wantErr {
+				assert.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, n)
+		})
+	}
+
+	t.Run("round-trip", func(t *testing.T) {
+		for _, want := range []NullableAddressList{"", `"Doe, John" <john@example.com>, b@example.com`} {
+			data, err := json.Marshal(want)
+			require.NoError(t, err)
+			var got NullableAddressList
+			require.NoError(t, json.Unmarshal(data, &got))
+			assert.Equal(t, want, got)
+		}
+	})
+}
+
+// A non-null NullableAddressList is written as stored like AddressList,
+// see TestAddressList_ValueAndMarshalJSONAsStored, and null, including
+// the whitespace only null, is written as SQL NULL and JSON null.
+func TestNullableAddressList_ValueAndMarshalJSONAsStored(t *testing.T) {
+	tests := []struct {
+		n        NullableAddressList
+		wantSQL  driver.Value
+		wantJSON string
+	}{
+		{n: "", wantSQL: nil, wantJSON: `null`},
+		{n: "  ", wantSQL: nil, wantJSON: `null`},
+		{n: "undisclosed-recipients:;", wantSQL: "undisclosed-recipients:;", wantJSON: `"undisclosed-recipients:;"`},
+		{n: "A@Example.com,  B@Example.com", wantSQL: "A@Example.com,  B@Example.com", wantJSON: `"A@Example.com,  B@Example.com"`},
+	}
+	for _, tt := range tests {
+		v, err := tt.n.Value()
+		require.NoError(t, err)
+		assert.Equal(t, tt.wantSQL, v, "NullableAddressList(%q).Value()", string(tt.n))
+
+		j, err := json.Marshal(tt.n)
+		require.NoError(t, err)
+		assert.Equal(t, tt.wantJSON, string(j), "json.Marshal(NullableAddressList(%q))", string(tt.n))
+	}
+
+	_, err := NullableAddressList("not an address").Value()
+	assert.Error(t, err, "Value() of an invalid list")
+	j, err := json.Marshal(NullableAddressList("not an address"))
+	require.NoError(t, err)
+	assert.Equal(t, `"not an address"`, string(j))
+}
+
+// ASCII works like that of AddressList, see TestAddressList_ASCII,
+// and returns "" for null and for a list without addresses. StringOr
+// returns the alternative only for null and any other list as stored.
+func TestNullableAddressList_ASCIIStringOr(t *testing.T) {
+	tests := []struct {
+		n            NullableAddressList
+		wantASCII    string
+		wantStringOr string
+	}{
+		{n: ``, wantASCII: ``, wantStringOr: `none`},
+		{n: `  `, wantASCII: ``, wantStringOr: `none`},
+		{n: `undisclosed-recipients:;`, wantASCII: ``, wantStringOr: `undisclosed-recipients:;`},
+		{n: `A@Example.com, Zoë <Zoe@Example.com>`, wantASCII: `a@example.com, =?utf-8?q?Zo=C3=AB?= <zoe@example.com>`, wantStringOr: `A@Example.com, Zoë <Zoe@Example.com>`},
+		{n: `not an address`, wantASCII: `not an address`, wantStringOr: `not an address`},
+	}
+	for _, tt := range tests {
+		assert.Equal(t, tt.wantASCII, tt.n.ASCII(), "NullableAddressList(%q).ASCII()", string(tt.n))
+		assert.Equal(t, tt.wantStringOr, tt.n.StringOr("none"), "NullableAddressList(%q).StringOr()", string(tt.n))
+	}
+}
+
+func TestNullableAddressList_UnmarshalText(t *testing.T) {
+	n := NullableAddressList("previous@example.com")
+	require.NoError(t, n.UnmarshalText(nil))
+	assert.True(t, n.IsNull(), "empty text must be NULL")
+
+	require.NoError(t, n.UnmarshalText([]byte("a@example.com, b@example.com")))
+	assert.Equal(t, NullableAddressList("a@example.com, b@example.com"), n)
+}
+
+func TestNullableAddressList_MarshalXMLAttr(t *testing.T) {
+	xmlattrtest.NilPointer(t, NullableAddressList(""), NullableAddressList(`A@Example.com, "Doe, John" <john@example.com>`))
 }

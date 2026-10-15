@@ -90,19 +90,19 @@ func ExtractBodyURLs(msg *Message) strutil.StringSet {
 	urls := make(strutil.StringSet)
 	for _, url := range extractBodyURLsRegexp.FindAllString(msg.Body, -1) {
 		if strings.HasPrefix(url, "http") {
-			urls.Add(url)
+			urls.Insert(url)
 		}
 	}
 	for _, url := range extractBodyURLsRegexp.FindAllString(string(msg.BodyHTML), -1) {
 		if strings.HasPrefix(url, "http") {
-			urls.Add(url)
+			urls.Insert(url)
 		}
 	}
 	return urls
 }
 
 // HTMLToPlaintext converts HTML to plaintext
-// by concaternating the content of text nodes
+// by concatenating the content of text nodes
 // with the passed delimiter between them.
 // Whitespace is trimmed from the text nodes and
 // nodes consisting only of whitespace are ignored.

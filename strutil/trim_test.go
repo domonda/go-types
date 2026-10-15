@@ -173,3 +173,64 @@ func TestTruncateWithEllipsis(t *testing.T) {
 		})
 	}
 }
+
+func TestCutTrimSpace(t *testing.T) {
+	tests := []struct {
+		name       string
+		s, sep     string
+		wantBefore string
+		wantAfter  string
+		wantFound  bool
+	}{
+		{name: "key value", s: " key = value ", sep: "=", wantBefore: "key", wantAfter: "value", wantFound: true},
+		{name: "only first separator", s: "a: b: c", sep: ":", wantBefore: "a", wantAfter: "b: c", wantFound: true},
+		{name: "multi-byte separator", s: "Wien → Graz", sep: "→", wantBefore: "Wien", wantAfter: "Graz", wantFound: true},
+		// Both halves get the full TrimSpace treatment, not only ASCII spaces
+		{name: "zero width and BOM", s: "\ufeffa\u200b|\u00a0b\u2060", sep: "|", wantBefore: "a", wantAfter: "b", wantFound: true},
+		{name: "separator at start", s: "=value", sep: "=", wantBefore: "", wantAfter: "value", wantFound: true},
+		{name: "separator at end", s: "key=", sep: "=", wantBefore: "key", wantAfter: "", wantFound: true},
+		{name: "only separator", s: "=", sep: "=", wantBefore: "", wantAfter: "", wantFound: true},
+		// Like strings.Cut, s is returned unchanged if sep is not found,
+		// it is not trimmed in that case
+		{name: "not found", s: " no separator ", sep: "=", wantBefore: " no separator ", wantAfter: "", wantFound: false},
+		{name: "empty", s: "", sep: "=", wantBefore: "", wantAfter: "", wantFound: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			before, after, found := CutTrimSpace(tt.s, tt.sep)
+			require.Equal(t, tt.wantFound, found, "found")
+			require.Equal(t, tt.wantBefore, before, "before")
+			require.Equal(t, tt.wantAfter, after, "after")
+		})
+	}
+
+	// Works with any string type
+	type Line string
+	before, after, found := CutTrimSpace(Line("a , b"), Line(","))
+	require.True(t, found)
+	require.Equal(t, Line("a"), before)
+	require.Equal(t, Line("b"), after)
+}
+
+func TestTruncateTrimSpace(t *testing.T) {
+	tests := []struct {
+		s      string
+		maxLen int
+		want   string
+	}{
+		{s: "", maxLen: 10, want: ""},
+		{s: "  abc  ", maxLen: 100, want: "abc"},
+		// Truncation happens before trimming, so leading whitespace
+		// counts towards maxLen
+		{s: "  abc", maxLen: 3, want: "a"},
+		// Trailing whitespace uncovered by the truncation is trimmed
+		{s: "ab cd", maxLen: 3, want: "ab"},
+		{s: "もしもし World", maxLen: 5, want: "もしもし"},
+		{s: "abc", maxLen: 0, want: ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.s, func(t *testing.T) {
+			require.Equal(t, tt.want, TruncateTrimSpace(tt.s, tt.maxLen))
+		})
+	}
+}

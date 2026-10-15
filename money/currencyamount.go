@@ -3,8 +3,10 @@ package money
 import (
 	"database/sql/driver"
 	"fmt"
+	"slices"
 	"strings"
 
+	"github.com/domonda/go-types/internal"
 	"github.com/domonda/go-types/strutil"
 )
 
@@ -77,23 +79,40 @@ func ParseCurrencyAmount(str string, acceptedDecimals ...int) (result CurrencyAm
 	return result, nil
 }
 
+// String returns the currency code as stored followed by the amount
+// rounded to two decimal places, or to the three of the minor unit of
+// currencies like KWD, see Currency.MinorUnits, like "EUR 1234.50",
+// "JPY 1234.50" or "KWD 1.234", with a point as decimal separator and
+// without thousands grouping. Never fewer than two decimal places,
+// because the amount of a currency without a minor unit, like JPY,
+// can still have a fraction. Value writes the same format with the
+// normalized currency. An amount without currency is formatted with
+// two decimal places.
 // String implements the fmt.Stringer interface.
 func (ca CurrencyAmount) String() string {
-	return ca.FormatSep(true, 0, '.', 2)
+	return ca.format(string(ca.Currency), true, 0, '.', defaultPrecision(ca.Currency.MinorUnits()))
 }
 
 // FormatSep formats the CurrencyAmount using the given separators and decimal precision.
 // If currencyFirst is true the currency code is placed before the amount,
-// otherwise it is placed after. See Amount.FormatSep for details about the separator and precision arguments.
+// otherwise it is placed after. The currency is normalized if valid,
+// else written unchanged. See Amount.FormatSep for details about the
+// separator and precision arguments.
 func (ca CurrencyAmount) FormatSep(currencyFirst bool, thousandsSep, decimalSep rune, precision int) string {
-	amountStr := ca.Amount.FormatSep(thousandsSep, decimalSep, precision)
-	if ca.Currency == "" {
-		return amountStr
-	}
-	if currencyFirst {
-		return string(ca.Currency) + " " + amountStr
-	}
-	return amountStr + " " + string(ca.Currency)
+	currency := internal.NormalizedOrRaw(ca.Currency, Currency.Normalized, nil)
+	return ca.format(string(currency), currencyFirst, thousandsSep, decimalSep, precision)
+}
+
+func (ca CurrencyAmount) format(currency string, currencyFirst bool, thousandsSep, decimalSep rune, precision int) string {
+	return internal.JoinCurrencyAmount(currency, ca.Amount.FormatSep(thousandsSep, decimalSep, precision), currencyFirst)
+}
+
+// defaultPrecision returns the decimal places that String and Value write
+// for a currency with the passed minor units, see Currency.MinorUnits:
+// those of the minor unit, but never fewer than two, because the amount
+// of a currency without a minor unit, like JPY, can still have a fraction.
+func defaultPrecision(minorUnits int) int {
+	return max(2, minorUnits)
 }
 
 // GoString returns a Go syntax representation of the CurrencyAmount for debugging.
@@ -105,12 +124,32 @@ func (ca CurrencyAmount) GoString() string {
 // ScanString tries to parse and assign the passed
 // source string as value of the implementing type.
 //
+// Only amounts with zero or two decimal places or with the decimal places
+// of the minor unit of the currency, see Currency.MinorUnits, are accepted,
+// so that an ambiguous thousands grouping like "EUR 1.234" is rejected
+// while "KWD 1.234" written by String and "KWD 1,234" written by the
+// German strfmt money format are scanned. Like ParseAmount reads a single
+// separator, both are 1.234 and not 1234 with thousands grouping, which
+// String writes as "KWD 1234.000" and the strfmt money formats with
+// decimals too, like "KWD 1,234.000".
+//
 // If validate is true, then the Amount.Valid method is checked
 // to return an error if the floating point value is infinite or NaN.
 func (ca *CurrencyAmount) ScanString(source string, validate bool) error {
-	parsed, err := ParseCurrencyAmount(source, 0, 2)
+	parsed, err := ParseCurrencyAmount(source)
 	if err != nil {
 		return err
+	}
+	// NaN and ±Inf have no decimals to check, validate decides about them
+	if parsed.Amount.Valid() {
+		acceptedDecimals := []int{0, 2}
+		if minorUnits := parsed.Currency.MinorUnits(); !slices.Contains(acceptedDecimals, minorUnits) {
+			acceptedDecimals = append(acceptedDecimals, minorUnits)
+		}
+		parsed, err = ParseCurrencyAmount(source, acceptedDecimals...)
+		if err != nil {
+			return err
+		}
 	}
 	if validate && !parsed.Amount.Valid() {
 		return fmt.Errorf("invalid amount: %q", source)
@@ -141,7 +180,14 @@ func (ca *CurrencyAmount) Scan(value any) (err error) {
 }
 
 // Value implements the database/sql/driver.Valuer interface
-// by returning the result of the String method.
+// by writing the format of String with the normalized currency,
+// or returning the error of Currency.Normalized for a currency
+// that can't be normalized.
 func (ca CurrencyAmount) Value() (driver.Value, error) {
-	return ca.String(), nil
+	currency, err := ca.Currency.normalizedForValue()
+	if err != nil {
+		return nil, err
+	}
+	// MinorUnits would normalize the normalized currency again
+	return ca.format(string(currency), true, 0, '.', defaultPrecision(currency.minorUnitsOfNormalized())), nil
 }

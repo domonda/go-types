@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"iter"
 	"maps"
+	"reflect"
 	"slices"
 	"strings"
 
@@ -29,6 +30,7 @@ func NewSet[T cmp.Ordered](vals ...T) Set[T] {
 }
 
 // Sorted returns a slice containing all values in the set, sorted in ascending order.
+// Returns nil for an empty or nil set.
 func (set Set[T]) Sorted() []T {
 	return SetToSortedSlice(set)
 }
@@ -40,32 +42,6 @@ func (set Set[T]) GetOne() T {
 		return val
 	}
 	return *new(T)
-}
-
-// Add adds a value to the set.
-//
-// Deprecated: use [Set.Insert] which additionally reports
-// whether the set was changed.
-func (set Set[T]) Add(val T) {
-	set[val] = struct{}{}
-}
-
-// AddSlice adds all values from the slice to the set.
-//
-// Deprecated: use set.InsertAll(slices.Values(vals)).
-func (set Set[T]) AddSlice(vals []T) {
-	for _, val := range vals {
-		set[val] = struct{}{}
-	}
-}
-
-// AddSet adds all values from another set to this set.
-//
-// Deprecated: use [Set.UnionWith].
-func (set Set[T]) AddSet(other Set[T]) {
-	for val := range other {
-		set[val] = struct{}{}
-	}
 }
 
 // Insert adds val to the set and reports whether the set was changed.
@@ -130,31 +106,13 @@ func (set Set[T]) DeleteFunc(del func(T) bool) bool {
 	return mapset.DeleteFunc(set, del)
 }
 
-// DeleteSlice removes all values from the slice from the set.
-//
-// Deprecated: use set.DeleteAll(slices.Values(vals)).
-func (set Set[T]) DeleteSlice(vals []T) {
-	for _, val := range vals {
-		delete(set, val)
-	}
-}
-
-// DeleteSet removes all values from the other set from this set.
-//
-// Deprecated: use [Set.DifferenceWith].
-func (set Set[T]) DeleteSet(other Set[T]) {
-	for str := range other {
-		delete(set, str)
-	}
-}
-
 // Clear removes all values from the set.
 // It is valid to call this method on a nil set.
 func (set Set[T]) Clear() {
 	clear(set)
 }
 
-// Clone creates a deep copy of the set.
+// Clone returns a new set with the same values, or nil if the set is nil.
 func (set Set[T]) Clone() Set[T] {
 	if set == nil {
 		return nil
@@ -226,6 +184,7 @@ func (set Set[T]) SymmetricDifferenceWith(other Set[T]) {
 // Map applies a transformation function to each value in the set and returns a new set
 // containing the results. The mapFunc should return the transformed value and a boolean
 // indicating whether to include the result in the new set.
+// The returned set is never nil, also not for a nil set.
 func (set Set[T]) Map(mapFunc func(T) (T, bool)) Set[T] {
 	result := make(Set[T], len(set))
 	for val := range set {
@@ -258,7 +217,8 @@ func (set Set[T]) IsNull() bool {
 }
 
 // String implements the fmt.Stringer interface.
-// Returns a string representation of the set with values in sorted order.
+// Returns a string representation of the set with values in sorted order,
+// formatted with %#v, like [1, 2, 3] or ["a", "b"], and <nil> for a nil set.
 func (set Set[T]) String() string { //#nosec
 	if set == nil {
 		return "<nil>"
@@ -275,7 +235,15 @@ func (set Set[T]) String() string { //#nosec
 	return b.String()
 }
 
-// MarshalJSON implements encoding/json.Marshaler by returning the JSON null value for an empty (null) string.
+// MarshalJSON implements encoding/json.Marshaler.
+// A nil set is encoded as null, an empty set as [],
+// and any other set as an array of its values in ascending order.
+// Values of a normalizing string type, which implements [Normalizable],
+// like money.Currency, are written as stored, without the MarshalJSON
+// method of T that normalizes, because two values like "eur" and "EUR"
+// would be written as the same value and the set would read back with
+// fewer values than it was written with. Other values are written with
+// their own MarshalJSON method.
 func (set Set[T]) MarshalJSON() ([]byte, error) {
 	if set.IsNull() {
 		return []byte(`null`), nil
@@ -286,11 +254,23 @@ func (set Set[T]) MarshalJSON() ([]byte, error) {
 	if len(set) == 0 {
 		return []byte(`[]`), nil
 	}
-	return json.Marshal(set.Sorted())
+	sorted := set.Sorted()
+	if isNormalizingString[T]() {
+		strs := make([]string, len(sorted))
+		for i, val := range sorted {
+			strs[i] = reflect.ValueOf(val).String()
+		}
+		return json.Marshal(strs)
+	}
+	return json.Marshal(sorted)
 }
 
 // UnmarshalJSON implements encoding/json.Unmarshaler.
 // It unmarshals a JSON array into the set, removing any duplicates.
+// Values of a normalizing string type, which implements [Normalizable],
+// are stored as given, without the UnmarshalJSON method of T that
+// normalizes, so that MarshalJSON and UnmarshalJSON round-trip every set.
+// Other values are read with their own UnmarshalJSON method.
 // It assigns a new set rather than modifying the existing map, so a map
 // shared with another variable is never rewritten.
 // JSON null assigns a nil set and the empty array an allocated empty
@@ -306,9 +286,21 @@ func (set *Set[T]) UnmarshalJSON(j []byte) error {
 		return nil
 	}
 	var slice []T
-	err := json.Unmarshal(j, &slice)
-	if err != nil {
-		return fmt.Errorf("can't unmarshall %T from JSON: %w", *set, err)
+	if isNormalizingString[T]() {
+		var strs []string
+		err := json.Unmarshal(j, &strs)
+		if err != nil {
+			return fmt.Errorf("can't unmarshall %T from JSON: %w", *set, err)
+		}
+		slice = make([]T, len(strs))
+		for i, str := range strs {
+			reflect.ValueOf(&slice[i]).Elem().SetString(str)
+		}
+	} else {
+		err := json.Unmarshal(j, &slice)
+		if err != nil {
+			return fmt.Errorf("can't unmarshall %T from JSON: %w", *set, err)
+		}
 	}
 	// Always a new set, never the caller's existing map. Clearing and
 	// refilling in place rewrote any other variable sharing that map:
@@ -319,8 +311,20 @@ func (set *Set[T]) UnmarshalJSON(j []byte) error {
 	return nil
 }
 
+// isNormalizingString reports if T is a string kind that implements
+// Normalizable[T], whose JSON methods normalize, like money.Currency.
+// Set writes and reads such values as stored. The JSON methods of other
+// types are used, because they can validate or define their encoding.
+func isNormalizingString[T any]() bool {
+	_, normalizing := any(*new(T)).(Normalizable[T])
+	return normalizing && reflect.TypeFor[T]().Kind() == reflect.String
+}
+
 // ReduceSet applies a reduction function to all values in the set and returns the result.
 // The reduceFunc is called for each value in the set, with the accumulated result and the current value.
+// The first call gets the zero value of R as accumulated result.
+// The values are passed in undefined map iteration order,
+// so only an order independent reduceFunc gives a deterministic result.
 func ReduceSet[S ~map[T]struct{}, T cmp.Ordered, R any](set S, reduceFunc func(last R, val T) R) (result R) {
 	for val := range set {
 		result = reduceFunc(result, val)
@@ -330,6 +334,7 @@ func ReduceSet[S ~map[T]struct{}, T cmp.Ordered, R any](set S, reduceFunc func(l
 
 // ReduceSlice applies a reduction function to all values in the slice and returns the result.
 // The reduceFunc is called for each value in the slice, with the accumulated result and the current value.
+// The first call gets the zero value of R as accumulated result.
 func ReduceSlice[S ~[]T, T cmp.Ordered, R any](slice S, reduceFunc func(last R, val T) R) (result R) {
 	for _, val := range slice {
 		result = reduceFunc(result, val)
@@ -337,7 +342,9 @@ func ReduceSlice[S ~[]T, T cmp.Ordered, R any](slice S, reduceFunc func(last R, 
 	return result
 }
 
-// SetToRandomizedSlice converts a set to a slice with values in random order.
+// SetToRandomizedSlice converts a set to a slice with values in map iteration
+// order, which is unspecified but not a random shuffle.
+// Returns nil for an empty or nil set.
 func SetToRandomizedSlice[S ~map[T]struct{}, T cmp.Ordered](set S) []T {
 	l := len(set)
 	if l == 0 {
@@ -353,6 +360,7 @@ func SetToRandomizedSlice[S ~map[T]struct{}, T cmp.Ordered](set S) []T {
 }
 
 // SetToSortedSlice converts a set to a slice with values in sorted order.
+// Returns nil for an empty or nil set.
 func SetToSortedSlice[S ~map[T]struct{}, T cmp.Ordered](set S) []T {
 	l := len(set)
 	switch l {

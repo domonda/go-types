@@ -76,8 +76,10 @@ func (a NullBoolArray) Value() (driver.Value, error) {
 // Scan implements the sql.Scanner interface.
 // A nil source scans to a nil slice (SQL NULL), the empty array {}
 // to a non-nil empty slice. Otherwise it parses a PostgreSQL
-// boolean array literal like {t,NULL,f} from a string or []byte;
-// elements other than t and f scan as a null Type[bool].
+// boolean array literal like {t,NULL,f} from a string or []byte.
+// The elements t, f, true and false scan as values and NULL as
+// a null Type[bool], all case-insensitive. Any other element
+// returns an error and leaves a unchanged.
 func (a *NullBoolArray) Scan(src any) error {
 	switch src := src.(type) {
 	case []byte:
@@ -102,7 +104,7 @@ func (a *NullBoolArray) scanBytes(src []byte) error {
 		return nil
 	}
 	if src[0] != '{' || src[len(src)-1] != '}' {
-		return fmt.Errorf("can't parse %q as NullBoolArray", string(src))
+		return fmt.Errorf("can't parse %q as nullable.NullBoolArray", string(src))
 	}
 	if len(src) == 2 { // src == "{}"
 		*a = NullBoolArray{}
@@ -112,12 +114,15 @@ func (a *NullBoolArray) scanBytes(src []byte) error {
 	elements := strings.Split(string(src[1:len(src)-1]), ",")
 	newArray := make(NullBoolArray, len(elements))
 	for i, elem := range elements {
-		switch elem {
-		case "t":
+		switch strings.ToLower(elem) {
+		case "t", "true":
 			newArray[i] = TypeFrom(true)
-		case "f":
+		case "f", "false":
 			newArray[i] = TypeFrom(false)
-			// Any other element (NULL, etc.) stays a null Type[bool].
+		case "null":
+			// Stays a null Type[bool]
+		default:
+			return fmt.Errorf("can't parse %q as nullable.NullBoolArray: invalid element %q at index %d", string(src), elem, i)
 		}
 	}
 	*a = newArray

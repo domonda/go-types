@@ -1,8 +1,14 @@
 package email
 
 import (
+	"html/template"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/domonda/go-types/strutil"
 )
 
 func TestHTMLToPlaintext(t *testing.T) {
@@ -180,6 +186,104 @@ func Test_parseDate(t *testing.T) {
 			if err == nil && !got.Equal(tt.want) {
 				t.Errorf("parseDate() = %v, want %v", got, tt.want)
 			}
+		})
+	}
+}
+
+// TestExtractBodyURLs covers the only function in utils.go that this branch
+// changed (strutil.StringSet.Add was removed in favour of Insert). The set
+// semantics it relies on are what make the swap safe, so they are asserted
+// here rather than assumed: both bodies feed one set, a URL repeated within
+// or across them appears once, and everything the regexp finds that is not
+// an http(s) URL is dropped.
+//
+// Value: protects=ExtractBodyURLs unions the http(s) URLs of Body and
+// BodyHTML into one deduplicated StringSet and drops non-http schemes;
+// fails_when=the Insert replacing the removed Add stops deduplicating, one of
+// the two bodies stops being scanned, or the "http" prefix filter is dropped;
+// why_new=ExtractBodyURLs has no test at all, so the Add -> Insert swap is
+// unprotected;
+// seam=none
+func TestExtractBodyURLs(t *testing.T) {
+	tests := []struct {
+		name     string
+		body     string
+		bodyHTML string
+		want     strutil.StringSet
+	}{
+		{
+			name: "empty message",
+			want: strutil.NewStringSet(),
+		},
+		{
+			name: "plaintext body only",
+			body: "see http://a.example.com and https://b.example.com/x?y=1",
+			want: strutil.NewStringSet("http://a.example.com", "https://b.example.com/x?y=1"),
+		},
+		{
+			name:     "HTML body only",
+			bodyHTML: `<a href="https://c.example.com/path">c</a>`,
+			want:     strutil.NewStringSet("https://c.example.com/path"),
+		},
+		{
+			name:     "both bodies are unioned",
+			body:     "http://a.example.com",
+			bodyHTML: `<a href="https://c.example.com">c</a>`,
+			want:     strutil.NewStringSet("http://a.example.com", "https://c.example.com"),
+		},
+		{
+			name:     "duplicates collapse within and across the bodies",
+			body:     "http://a.example.com twice http://a.example.com",
+			bodyHTML: `<a href="http://a.example.com">again</a>`,
+			want:     strutil.NewStringSet("http://a.example.com"),
+		},
+		{
+			name:     "non-http schemes are dropped",
+			body:     "write to mailto:a@example.com or fetch ftp://files.example.com/f",
+			bodyHTML: `<a href="mailto:b@example.com">b</a> <a href="https://d.example.com">d</a>`,
+			want:     strutil.NewStringSet("https://d.example.com"),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			msg := &Message{Body: tt.body}
+			msg.BodyHTML.Set(tt.bodyHTML)
+			if got := ExtractBodyURLs(msg); !got.Equal(tt.want) {
+				t.Errorf("ExtractBodyURLs() = %v, want %v", got.Sorted(), tt.want.Sorted())
+			}
+		})
+	}
+}
+
+func Test_plaintextToHTML(t *testing.T) {
+	// Line breaks of a quoted plaintext body must survive in the HTML reply.
+	assert.Equal(t, template.HTML("Hello<br>World<br>"), plaintextToHTML("Hello\nWorld\n"))
+	assert.Equal(t, template.HTML(""), plaintextToHTML(""))
+}
+
+// Test_formatDate protects that every built message gets a Date header
+// (RFC 5322 requires it) that parseDate can read back, because
+// BuildRawMessage writes it with formatDate and ParseMIMEMessage
+// reads it with parseDate.
+func Test_formatDate(t *testing.T) {
+	t.Run("round-trip", func(t *testing.T) {
+		date := time.Date(2026, 2, 19, 6, 12, 35, 0, time.FixedZone("CET", 3600))
+		formatted := formatDate(&date)
+		assert.Equal(t, "Thu, 19 Feb 2026 06:12:35 +0100", formatted)
+
+		parsed, err := parseDate(formatted)
+		require.NoError(t, err)
+		assert.True(t, parsed.Equal(date), "parseDate(formatDate(%s)) = %s", date, parsed)
+	})
+
+	for name, date := range map[string]*time.Time{"nil": nil, "zero": {}} {
+		t.Run(name+" uses current time", func(t *testing.T) {
+			before := time.Now().Truncate(time.Second)
+			parsed, err := parseDate(formatDate(date))
+			require.NoError(t, err)
+			after := time.Now()
+			assert.False(t, parsed.Before(before), "%s is before %s", parsed, before)
+			assert.False(t, parsed.After(after), "%s is after %s", parsed, after)
 		})
 	}
 }

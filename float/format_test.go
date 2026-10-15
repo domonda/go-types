@@ -2,6 +2,7 @@ package float
 
 import (
 	"math"
+	"math/rand/v2"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -130,8 +131,16 @@ func Test_FormatFloat(t *testing.T) {
 }
 
 // Test_FormatFloat_precisionRounding checks that a non-negative precision
-// rounds the value. strconv uses round-half-to-even; every input below is an
-// exact float64 value so the expected output is deterministic.
+// rounds the value half away from zero like RoundToDecimals and all money
+// formatting do, and not to even like strconv does.
+//
+// The value that is rounded is the shortest decimal representation of the
+// float, the decimal a human typed or a JSON number carried, not its binary
+// approximation: 1.005 is stored as 1.00499999999999989342 and must still
+// format as "1.01", because the same number rounded to "1.01" by one
+// function and to "1.00" by another makes a report disagree with itself.
+// This test used to pin strconv's ties to even ("2" for 2.5 and "0.12" for
+// 0.125), which contradicted RoundToDecimals and the money formatting.
 func Test_FormatFloat_precisionRounding(t *testing.T) {
 	tests := []struct {
 		f            float64
@@ -139,22 +148,54 @@ func Test_FormatFloat_precisionRounding(t *testing.T) {
 		precision    int
 		want         string
 	}{
-		{0.5, 0, 0, "0"},
+		{0.5, 0, 0, "1"},
 		{1.5, 0, 0, "2"},
-		{2.5, 0, 0, "2"},
+		{2.5, 0, 0, "3"},
 		{3.5, 0, 0, "4"},
-		{0.125, 0, 2, "0.12"},
+		{0.125, 0, 2, "0.13"},
 		{0.375, 0, 2, "0.38"},
-		{0.625, 0, 2, "0.62"},
+		{0.625, 0, 2, "0.63"},
 		{0.875, 0, 2, "0.88"},
-		{1.0625, 0, 3, "1.062"},
-		{1234.5, ',', 0, "1,234"},
+		{1.0625, 0, 3, "1.063"},
+		{1234.5, ',', 0, "1,235"},
 		{1234567.875, ',', 2, "1,234,567.88"},
+		// Ties of the decimal that are below the tie in binary
+		{1.005, 0, 2, "1.01"},
+		{0.145, 0, 2, "0.15"},
+		{2.675, 0, 2, "2.68"},
+		{1234.565, '\'', 2, "1'234.57"},
+		// Not a tie
+		{0.144999, 0, 2, "0.14"},
+		// A carry adds an integer digit that has to be grouped
+		{999.995, ',', 2, "1,000"},
+		{999999.5, '\'', 0, "1'000'000"},
+		// The shortest decimal of 1e23 is 1e23,
+		// its binary value 99999999999999991611392
+		{1e23, 0, 0, "100000000000000000000000"},
+		{1e23, ',', 2, "100,000,000,000,000,000,000,000"},
 	}
 	for _, tt := range tests {
 		got := Format(tt.f, tt.thousandsSep, '.', tt.precision, false)
 		assert.Equal(t, tt.want, got, "Format(%v, '%s', '.', %d, false)", tt.f, string(tt.thousandsSep), tt.precision)
+		// Half away from zero is symmetric around zero
+		got = Format(-tt.f, tt.thousandsSep, '.', tt.precision, false)
+		assert.Equal(t, "-"+tt.want, got, "Format(%v, '%s', '.', %d, false)", -tt.f, string(tt.thousandsSep), tt.precision)
 	}
+
+	// padPrecision pads the rounded digits
+	assert.Equal(t, "1.01", Format(1.005, 0, '.', 2, true))
+	assert.Equal(t, "1.0050", Format(1.005, 0, '.', 4, true), "fewer decimals than precision are padded, not rounded")
+	assert.Equal(t, "1,000.00", Format(999.995, ',', '.', 2, true))
+	// float32 values round their shortest float32 decimal
+	assert.Equal(t, "1.01", Format(float32(1.005), 0, '.', 2, false))
+	// A value that is zero after rounding is formatted without a sign,
+	// unlike by strconv, because "-0.00" is no amount: money.Amount(-0.004)
+	// must format like the money.DecimalAmount -0.004, which is "0.00"
+	assert.Equal(t, "0.00", Format(-0.001, 0, '.', 2, true))
+	assert.Equal(t, "0", Format(-0.4, 0, '.', 0, false))
+	assert.Equal(t, "0", Format(math.Copysign(0, -1), 0, '.', -1, false))
+	assert.Equal(t, "0,00", Format(math.Copysign(0, -1), '.', ',', 2, true))
+	assert.Equal(t, "-0.01", Format(-0.005, 0, '.', 2, true), "rounded away from zero keeps the sign")
 }
 
 // Test_FormatFloat_zero checks formatting of zero across separator and
@@ -185,13 +226,47 @@ func Test_FormatFloat_padPrecision(t *testing.T) {
 	assert.Equal(t, "1,234.5", Format(1234.5, ',', '.', 4, false))
 	assert.Equal(t, "1.234.567", Format(1234567.0, '.', ',', 3, false))
 
-	// precision rounds the value before any trimming or padding.
-	assert.Equal(t, "1.2", Format(1.25, 0, '.', 1, false))
-	assert.Equal(t, "1.2", Format(1.25, 0, '.', 1, true))
+	// precision rounds the value half away from zero
+	// before any trimming or padding.
+	assert.Equal(t, "1.3", Format(1.25, 0, '.', 1, false))
+	assert.Equal(t, "1.3", Format(1.25, 0, '.', 1, true))
+	assert.Equal(t, "1", Format(1.04, 0, '.', 1, false))
+	assert.Equal(t, "1.0", Format(1.04, 0, '.', 1, true))
 
 	// precision -1 always yields the shortest form, padPrecision is moot.
 	assert.Equal(t, "1.5", Format(1.5, 0, '.', -1, false))
 	assert.Equal(t, "1.5", Format(1.5, 0, '.', -1, true))
+}
+
+// TestFormat_fastPathMatchesExact protects that the float64 fast path of
+// Format never changes a formatted string. It is only allowed to skip
+// formatting and rounding the shortest decimal digits where it provably
+// writes the identical digits, sign and point, so every input must format
+// exactly like rounding the digits does, most of all the decimal ties and
+// their float64 neighbors where float64 arithmetic alone gets it wrong.
+func TestFormat_fastPathMatchesExact(t *testing.T) {
+	check := func(f float64, precision int) {
+		t.Helper()
+		got := formatRounded(f, 64, precision)
+		want := formatRoundedExact(f, 64, precision)
+		if got != want {
+			t.Fatalf("formatRounded(%v, 64, %d) = %q, exact digit rounding = %q", f, precision, got, want)
+		}
+	}
+	for _, f := range fastPathTargetedFloats() {
+		for precision := -1; precision <= 24; precision++ {
+			check(f, precision)
+		}
+	}
+	for _, tie := range fastPathTies() {
+		for precision := max(tie.decimals-1, 0); precision <= tie.decimals+1; precision++ {
+			check(tie.f, precision)
+		}
+	}
+	rng := rand.New(rand.NewPCG(7, 8))
+	for range fastPathSweepSize() {
+		check(randomFastPathFloat(rng), rng.IntN(13))
+	}
 }
 
 func Benchmark_FormatFloat_commaDecimalSep(b *testing.B) {
@@ -245,4 +320,13 @@ func Test_FormatFloat_float32AndSpecials(t *testing.T) {
 	assert.Equal(t, "+Inf", Format(math.Inf(1), ',', '.', -1, false))
 	assert.Equal(t, "-Inf", Format(math.Inf(-1), ',', '.', -1, false))
 	assert.Equal(t, "+Inf", Format(math.Inf(1), ',', '.', 2, true))
+}
+
+func BenchmarkFormat(b *testing.B) {
+	b.ReportAllocs()
+	i := 0
+	for b.Loop() {
+		_ = Format(benchFloats[i%len(benchFloats)], 0, '.', 2, true)
+		i++
+	}
 }

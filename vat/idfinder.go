@@ -10,22 +10,25 @@ var IDFinder idFinder
 
 type idFinder struct{}
 
+// FindAllIndex returns the byte-index pairs [start, end) of the VAT IDs in str.
+// At most n results are returned; pass n < 0 to return all matches.
 func (idFinder) FindAllIndex(str []byte, n int) (indices [][]int) {
 	l := len(str)
-	if l < IDMinLength {
+	if n == 0 || l < IDMinLength {
 		return nil
 	}
 
 	wordIndices := strutil.SplitAndTrimIndex(str, isVATIDSplitRune, isVATIDTrimRune)
-	// fmt.Println("STRING", string(str), wordIndices)
 
 	for begSpace := range wordIndices {
 		for endSpace := begSpace; endSpace < begSpace+3 && endSpace < len(wordIndices); endSpace++ {
 			beg := wordIndices[begSpace][0]
 			end := wordIndices[endSpace][1]
-			// fmt.Println("TEST", str[beg:end])
 			if BytesAreVATID(str[beg:end]) {
 				indices = append(indices, []int{beg, end})
+				if n > 0 && len(indices) == n {
+					return indices
+				}
 				break
 			}
 		}

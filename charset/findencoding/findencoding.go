@@ -1,18 +1,14 @@
-// Package findencoding provides utilities for detecting and testing character encodings
-// in text files, particularly useful for debugging encoding issues and finding the correct
-// encoding for unknown text data.
+// Package findencoding is a debugging aid for finding the character
+// encoding of a text file by eye.
 //
-// The package includes:
-// - File encoding detection and testing
-// - Byte Order Mark (BOM) detection and handling
-// - Multiple encoding format support (UTF-8, Windows-1252, ISO-8859-1, etc.)
-// - Debugging utilities for encoding analysis
-// - Safe file reading with size limits
+// PrintFileWithAllEncodings prints the content of a file decoded with the
+// single byte encodings of golang.org/x/text/encoding/charmap and as UTF-8,
+// so a human can compare the outputs and pick the encoding that looks right.
+// The only automatic detection is a Byte Order Mark (BOM): if the file starts
+// with one, the content is only printed in the encoding of the BOM.
 //
-// This package is particularly useful for:
-// - Debugging encoding issues in text files
-// - Finding the correct encoding for legacy files
-// - Testing how text appears in different character encodings
+// The whole file is read into memory, the maxBytes argument only limits
+// how many bytes of it are decoded and printed.
 package findencoding
 
 import (
@@ -27,8 +23,9 @@ import (
 
 // PrintFileWithAllEncodings reads a file and prints its content using all available
 // character encodings, making it easy to identify the correct encoding for unknown text.
-// The function handles BOM detection and provides formatted output for each encoding.
-// maxBytes limits the number of bytes to read (0 defaults to 1MB).
+// If the file starts with a BOM, the content is only printed in the encoding of the BOM.
+// The whole file is read, maxBytes limits the number of bytes (including a BOM)
+// that are decoded and printed: 0 defaults to 1MB, a negative value means no limit.
 func PrintFileWithAllEncodings(filename string, maxBytes int) error { //#nosec G304 -- file inclusion OK
 	sourceData, err := os.ReadFile(filename)
 	if err != nil {
@@ -37,7 +34,7 @@ func PrintFileWithAllEncodings(filename string, maxBytes int) error { //#nosec G
 	if maxBytes == 0 {
 		maxBytes = 1024 * 1024
 	}
-	if len(sourceData) > maxBytes {
+	if maxBytes > 0 && len(sourceData) > maxBytes {
 		sourceData = sourceData[:maxBytes]
 	}
 

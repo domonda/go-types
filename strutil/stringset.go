@@ -11,6 +11,8 @@ import (
 )
 
 // StringSet is a set of unique strings implemented as a map.
+// It has no JSON or SQL methods, so encoding/json encodes it
+// like any map as an object, for example {"a":{}}.
 type StringSet map[string]struct{}
 
 // NewStringSet creates and returns a new StringSet containing the provided strings.
@@ -39,6 +41,7 @@ func NewStringSetMergeSlices(slices ...[]string) StringSet {
 }
 
 // Sorted returns all strings in the set as a sorted slice.
+// It returns nil for an empty or nil set.
 func (set StringSet) Sorted() (s []string) {
 	if count := len(set); count > 0 {
 		s = make([]string, 0, count)
@@ -67,32 +70,6 @@ func (set StringSet) Len() int {
 // IsEmpty returns true if the set is empty or nil.
 func (set StringSet) IsEmpty() bool {
 	return len(set) == 0
-}
-
-// AddSlice adds all strings from the slice s to the set.
-//
-// Deprecated: use set.InsertAll(slices.Values(s)).
-func (set StringSet) AddSlice(s []string) {
-	for _, str := range s {
-		set[str] = struct{}{}
-	}
-}
-
-// AddSet adds all strings from the other set to this set.
-//
-// Deprecated: use [StringSet.UnionWith].
-func (set StringSet) AddSet(other StringSet) {
-	for str := range other {
-		set[str] = struct{}{}
-	}
-}
-
-// Add adds str to the set.
-//
-// Deprecated: use [StringSet.Insert] which additionally reports
-// whether the set was changed.
-func (set StringSet) Add(str string) {
-	set[str] = struct{}{}
 }
 
 // Insert adds str to the set and reports whether the set was changed.
@@ -169,25 +146,7 @@ func (set StringSet) Clear() {
 	clear(set)
 }
 
-// DeleteSlice removes all strings in the slice s from the set.
-//
-// Deprecated: use set.DeleteAll(slices.Values(s)).
-func (set StringSet) DeleteSlice(s []string) {
-	for _, str := range s {
-		delete(set, str)
-	}
-}
-
-// DeleteSet removes all strings in the other set from this set.
-//
-// Deprecated: use [StringSet.DifferenceWith].
-func (set StringSet) DeleteSet(other StringSet) {
-	for str := range other {
-		delete(set, str)
-	}
-}
-
-// Clone returns a deep copy of the set. Returns nil if the set is nil.
+// Clone returns a copy of the set. Returns nil if the set is nil.
 func (set StringSet) Clone() StringSet {
 	if set == nil {
 		return nil

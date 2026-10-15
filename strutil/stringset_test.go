@@ -124,60 +124,6 @@ func TestStringSet_StringContainsAnyOfSet(t *testing.T) {
 	}
 }
 
-// TestStringSet_DeprecatedMutators covers the pre-Insert API that is kept
-// for compatibility. It must stay behaviour compatible with the new methods,
-// because callers mix both while migrating.
-func TestStringSet_DeprecatedMutators(t *testing.T) {
-	t.Run("Add", func(t *testing.T) {
-		set := NewStringSet()
-		set.Add("a")
-		set.Add("a")
-		if want := NewStringSet("a"); !set.Equal(want) {
-			t.Errorf("after Add set = %s, want %s", set, want)
-		}
-	})
-
-	t.Run("AddSlice", func(t *testing.T) {
-		set := NewStringSet("a")
-		set.AddSlice([]string{"b", "c", "b"})
-		if want := NewStringSet("a", "b", "c"); !set.Equal(want) {
-			t.Errorf("after AddSlice set = %s, want %s", set, want)
-		}
-		set.AddSlice(nil)
-		if want := NewStringSet("a", "b", "c"); !set.Equal(want) {
-			t.Errorf("AddSlice(nil) changed the set to %s", set)
-		}
-	})
-
-	t.Run("AddSet", func(t *testing.T) {
-		set := NewStringSet("a")
-		set.AddSet(NewStringSet("a", "b"))
-		if want := NewStringSet("a", "b"); !set.Equal(want) {
-			t.Errorf("after AddSet set = %s, want %s", set, want)
-		}
-		set.AddSet(nil)
-		if want := NewStringSet("a", "b"); !set.Equal(want) {
-			t.Errorf("AddSet(nil) changed the set to %s", set)
-		}
-	})
-
-	t.Run("DeleteSlice", func(t *testing.T) {
-		set := NewStringSet("a", "b", "c")
-		set.DeleteSlice([]string{"b", "x"})
-		if want := NewStringSet("a", "c"); !set.Equal(want) {
-			t.Errorf("after DeleteSlice set = %s, want %s", set, want)
-		}
-	})
-
-	t.Run("DeleteSet", func(t *testing.T) {
-		set := NewStringSet("a", "b", "c")
-		set.DeleteSet(NewStringSet("b", "x"))
-		if want := NewStringSet("a", "c"); !set.Equal(want) {
-			t.Errorf("after DeleteSet set = %s, want %s", set, want)
-		}
-	})
-}
-
 func TestStringSet_IsEmpty(t *testing.T) {
 	// StringSet has no IsNull, so unlike the other three set types it cannot
 	// distinguish a nil from an allocated empty set. IsEmpty is true for both.

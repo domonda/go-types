@@ -4,9 +4,13 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
+	"math"
+	"reflect"
 	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/domonda/go-types/internal"
 )
 
 // FloatArray implements the sql.Scanner and driver.Valuer interfaces
@@ -78,38 +82,30 @@ func (a *FloatArray) Scan(src any) error {
 	return fmt.Errorf("can't convert %T to notnull.FloatArray", src)
 }
 
-func (a *FloatArray) scanBytes(src []byte) (err error) {
-	if len(src) == 0 {
-		*a = FloatArray{}
-		return nil
+func (a *FloatArray) scanBytes(src []byte) error {
+	array, err := internal.ParseFloatArray(src, "notnull.FloatArray")
+	if err != nil {
+		return err
 	}
-	if src[0] != '{' || src[len(src)-1] != '}' {
-		return fmt.Errorf("can't parse %q as notnull.FloatArray", string(src))
-	}
-	if len(src) == 2 { // src == "{}"
-		*a = FloatArray{}
-		return nil
-	}
-
-	elements := strings.Split(string(src[1:len(src)-1]), ",")
-	newArray := make(FloatArray, len(elements))
-	for i, elem := range elements {
-		newArray[i], err = strconv.ParseFloat(elem, 64)
-		if err != nil {
-			return fmt.Errorf("can't parse %q as notnull.FloatArray because of: %w", string(src), err)
-		}
-	}
-	*a = newArray
+	*a = array
 	return nil
 }
 
 // MarshalJSON implements encoding/json.Marshaler.
 // A nil or empty array is encoded as the empty JSON array []
 // instead of null; a notnull array is never null.
+// JSON has no NaN or infinity, so like encoding/json
+// it returns a *json.UnsupportedValueError for them.
 func (a FloatArray) MarshalJSON() ([]byte, error) {
 	b := make([]byte, 1, 32)
 	b[0] = '['
 	for i := range a {
+		if math.IsNaN(a[i]) || math.IsInf(a[i], 0) {
+			return nil, &json.UnsupportedValueError{
+				Value: reflect.ValueOf(a[i]),
+				Str:   strconv.FormatFloat(a[i], 'g', -1, 64),
+			}
+		}
 		if i > 0 {
 			b = append(b, ',')
 		}

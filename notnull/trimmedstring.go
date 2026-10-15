@@ -10,6 +10,7 @@ import (
 	"strings"
 	"unsafe"
 
+	"github.com/domonda/go-types/internal"
 	"github.com/domonda/go-types/strutil"
 )
 
@@ -42,7 +43,8 @@ func TrimmedStringFrom(str string) TrimmedString {
 	return TrimmedString(strutil.TrimSpace(str))
 }
 
-// JoinTrimmedStrings joins trimmed strings with the passed separator between them
+// TrimmedStringJoin joins trimmed strings with the passed separator between them.
+// Unlike nullable.TrimmedStringJoin it keeps strings that are empty after trimming.
 func TrimmedStringJoin[S ~string](separator string, strs ...S) TrimmedString {
 	var b strings.Builder
 	for i, s := range strs {
@@ -55,20 +57,15 @@ func TrimmedStringJoin[S ~string](separator string, strs ...S) TrimmedString {
 }
 
 // IsEmpty indicates if the trimmed string is empty
-// which is also the case when the underlying
-// string consists only of whitespace.
+// which is also the case when the underlying string
+// consists only of runes removed by strutil.TrimSpace.
 func (s TrimmedString) IsEmpty() bool {
-	for _, r := range s {
-		if !strutil.IsSpace(r) {
-			return false
-		}
-	}
-	return true
+	return s.String() == ""
 }
 
 // String implements the fmt.Stringer interface
 // by returning a trimmed string that might be empty
-// if the underlying string consisting only of whitespace.
+// if the underlying string consists only of whitespace.
 func (s TrimmedString) String() string {
 	return strutil.TrimSpace(string(s))
 }
@@ -165,7 +162,9 @@ func (s TrimmedString) Value() (driver.Value, error) {
 	return s.String(), nil
 }
 
-// Scan implements the database/sql.Scanner interface
+// Scan implements the database/sql.Scanner interface.
+// SQL NULL returns an error because TrimmedString has no null state,
+// use nullable.TrimmedString for nullable columns.
 func (s *TrimmedString) Scan(value any) error {
 	switch x := value.(type) {
 	case string:
@@ -181,9 +180,17 @@ func (s *TrimmedString) Scan(value any) error {
 	}
 }
 
-// UnmarshalText implements the encoding.TextMarshaler interface
+// MarshalText implements the encoding.TextMarshaler interface
 func (s TrimmedString) MarshalText() ([]byte, error) {
 	return []byte(s.String()), nil
+}
+
+// MarshalXMLAttr implements encoding/xml.MarshalerAttr by writing the
+// text of MarshalText, and no attribute for a nil pointer, because
+// encoding/xml calls MarshalText through a nil pointer attribute field
+// and panics.
+func (s *TrimmedString) MarshalXMLAttr(name xml.Name) (xml.Attr, error) {
+	return internal.MarshalXMLAttrText(s, name)
 }
 
 // UnmarshalText implements the encoding.TextUnmarshaler interface

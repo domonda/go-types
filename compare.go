@@ -6,11 +6,17 @@ import (
 	"reflect"
 )
 
-// CompareReflectValue compares two reflect.Values.
+// CompareReflectValue compares two reflect.Values and returns
+// -1, 0, or +1 like [cmp.Compare], so it can be used as the
+// comparison function for [slices.SortFunc].
 // Returns 0 if the values are not of the same type or not of an orderable kind,
-// so the function is safe to use as the less function for [slices.SortFunc]
-// on slices of mixed or non-orderable [reflect.Value]s (the order of such
-// elements is left unchanged).
+// so sorting mixed or non-orderable values does not panic.
+// The resulting order of such values is unspecified, because treating them
+// as equal to each other but not to the values between them breaks the
+// strict weak ordering that [slices.SortFunc] requires.
+//
+// The invalid zero reflect.Value, which has no type,
+// is ordered before all valid values.
 //
 // Orderable kinds are:
 //   - all integer, unsigned integer, and float kinds (compared by value)
@@ -21,10 +27,23 @@ import (
 //   - array and slice (compared lexicographically by element, shorter first on tie;
 //     []byte uses [bytes.Compare])
 //   - struct (compared lexicographically by field)
-//   - interface (compared by dynamic type name, then by underlying value)
+//   - interface (nil first, then compared by dynamic type name,
+//     then by underlying value)
 //
 // This is used for sorting map keys in DeepValidate.
 func CompareReflectValue(a, b reflect.Value) int {
+	aValid, bValid := a.IsValid(), b.IsValid()
+	if !aValid || !bValid {
+		// Order invalid first like nil interface values
+		switch {
+		case !aValid && !bValid:
+			return 0
+		case !aValid:
+			return -1
+		default:
+			return 1
+		}
+	}
 	if a.Type() != b.Type() {
 		return 0
 	}
@@ -60,7 +79,7 @@ func CompareReflectValue(a, b reflect.Value) int {
 		}
 		return cmp.Compare(imag(ac), imag(bc))
 
-	case reflect.Pointer, reflect.UnsafePointer:
+	case reflect.Pointer, reflect.UnsafePointer, reflect.Chan:
 		return cmp.Compare(a.Pointer(), b.Pointer())
 
 	case reflect.Array:
@@ -103,7 +122,17 @@ func CompareReflectValue(a, b reflect.Value) int {
 				return 1
 			}
 		}
-		return CompareReflectValue(a.Elem(), b.Elem())
+		ae, be := a.Elem(), b.Elem()
+		if at, bt := ae.Type(), be.Type(); at != bt {
+			if c := cmp.Compare(at.String(), bt.String()); c != 0 {
+				return c
+			}
+			// Different types with the same name, like *template.Template
+			// of text/template and html/template, are ordered by the address
+			// of their type descriptors, which is fixed for a binary
+			return cmp.Compare(reflect.ValueOf(at).Pointer(), reflect.ValueOf(bt).Pointer())
+		}
+		return CompareReflectValue(ae, be)
 
 	default:
 		return 0

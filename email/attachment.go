@@ -8,7 +8,6 @@ import (
 )
 
 // Attachment of an Email.
-// Attachment implements fs.FileReader
 type Attachment struct {
 	// PartID is the MIME part identifier of the attachment.
 	PartID string `json:",omitempty"`

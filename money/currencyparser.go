@@ -2,7 +2,7 @@ package money
 
 import "github.com/domonda/go-types/language"
 
-// CurrencyParser implements the strfmt.Parser interface for dates.
+// CurrencyParser implements the strfmt.Parser interface for currencies.
 type CurrencyParser struct{}
 
 // Parse normalizes str as a currency code and returns it as a string.

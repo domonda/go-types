@@ -16,14 +16,17 @@ func NewCurrencyAmountParser(acceptedDecimals ...int) *CurrencyAmountParser {
 
 // Parse parses str as a CurrencyAmount and returns it formatted with the currency
 // code first, a dot as decimal separator, and the maximum number of accepted
-// decimal digits. langHints are accepted but not used for parsing.
+// decimal digits, or without accepted decimals like CurrencyAmount.String
+// with two decimal digits, or three for currencies like KWD, so that no
+// decimal of the currency is lost. langHints are accepted but not used
+// for parsing.
 // Parse implements the strfmt.Parser interface.
 func (p *CurrencyAmountParser) Parse(str string, langHints ...language.Code) (normalized string, err error) {
 	amount, err := ParseCurrencyAmount(str, p.acceptedDecimals...)
 	if err != nil {
 		return "", err
 	}
-	decimals := 2
+	decimals := defaultPrecision(amount.Currency.MinorUnits())
 	if len(p.acceptedDecimals) > 0 {
 		decimals = -1
 		for _, accepted := range p.acceptedDecimals {

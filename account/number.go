@@ -1,13 +1,3 @@
-// Package account provides account number handling with validation,
-// parsing, and database integration for Go applications.
-//
-// The package includes:
-// - Account number validation with regex patterns
-// - Support for alphanumeric account numbers
-// - Numeric conversion utilities
-// - Database integration (Scanner/Valuer interfaces)
-// - JSON and XML marshalling/unmarshalling
-// - Nullable account number support
 package account
 
 import (
@@ -16,6 +6,7 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
+	"math"
 	"regexp"
 	"strconv"
 	"strings"
@@ -126,8 +117,8 @@ func (n Number) ValidateNumeric() error {
 }
 
 // Uint converts the Number to a uint64.
-// Returns an error if the Number is not purely numeric.
-// Prevents parsing of non-digit strings like hex numbers.
+// Returns a wrapped ErrAlphanumericNumber if the Number is not purely numeric
+// and the strconv.ParseUint error if the value overflows a uint64.
 func (n Number) Uint() (uint64, error) {
 	// Check upfront to prevent non digit strings like hex numbers
 	// to be parsed by strconv.ParseUint
@@ -148,8 +139,9 @@ func (n Number) UintPtr() (*uint64, error) {
 }
 
 // Int converts the Number to an int64.
-// Returns an error if the Number is not purely numeric.
-// Prevents parsing of non-digit strings like hex numbers.
+// Returns a wrapped ErrAlphanumericNumber if the Number is not purely numeric,
+// so a sign like "-1" or "+1" is an error and the result is never negative,
+// and the strconv.ParseInt error if the value overflows an int64.
 func (n Number) Int() (int64, error) {
 	// Check upfront to prevent non digit strings like hex numbers
 	// to be parsed by strconv.ParseInt
@@ -205,7 +197,10 @@ func (n Number) Value() (driver.Value, error) {
 	return NullableNumber(n).Value()
 }
 
-// Scan implements the database/sql.Scanner interface
+// Scan implements the database/sql.Scanner interface.
+// A float64 value must be a non-negative integer,
+// NaN, infinities, and fractions return an error,
+// -0 is scanned as "0".
 func (n *Number) Scan(value any) error {
 	switch x := value.(type) {
 	case string:
@@ -232,8 +227,11 @@ func (n *Number) Scan(value any) error {
 		return nil
 
 	case float64:
-		if x < 0 {
+		if math.IsNaN(x) || math.IsInf(x, 0) || x < 0 || x != math.Trunc(x) {
 			return fmt.Errorf("%w: %v", ErrInvalidNumber, x)
+		}
+		if x == 0 {
+			x = 0 // -0 would be formatted as "-0"
 		}
 		*n = Number(strconv.FormatFloat(x, 'f', -1, 64))
 		return nil
@@ -273,19 +271,21 @@ func (n *Number) UnmarshalJSON(j []byte) error {
 }
 
 // JSONSchema returns a JSON schema for Number as a string constrained
-// to the account number pattern.
+// to the account number pattern of NumberRegexp
+// (DefaultNumberRegex unless reassigned).
 func (Number) JSONSchema() *jsonschema.Schema {
 	return &jsonschema.Schema{
 		Title:   "Account Number",
 		Type:    "string",
-		Pattern: DefaultNumberRegex,
+		Pattern: NumberRegexp.String(),
 	}
 }
 
 // MarshalXML implements encoding/xml.Marshaler.
-// Encodes the Number as an XML element containing its string value.
+// Encodes the Number as an XML element containing its
+// whitespace trimmed string value.
 func (n Number) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
-	return e.EncodeElement(string(n), start)
+	return NullableNumber(n).MarshalXML(e, start)
 }
 
 // UnmarshalXML implements encoding/xml.Unmarshaler.

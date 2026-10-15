@@ -11,6 +11,7 @@ import (
 
 	"github.com/domonda/go-types/internal/collections"
 	"github.com/domonda/go-types/internal/collections/settest"
+	"github.com/domonda/go-types/internal/xmlattrtest"
 )
 
 // IDSet must implement the abstract set interface of the Go 1.28
@@ -63,9 +64,9 @@ func TestIDSet_AllMatchesAsSlice(t *testing.T) {
 	set := MakeIDSet(testIDA, testIDB, testIDC)
 	fromAll := IDSlice(slices.Collect(set.All()))
 	fromAll.Sort()
-	fromSlice := set.AsSortedSlice()
+	fromSlice := set.Sorted()
 	if !slices.Equal(fromAll, fromSlice) {
-		t.Errorf("All() = %v, AsSortedSlice() = %v", fromAll, fromSlice)
+		t.Errorf("All() = %v, Sorted() = %v", fromAll, fromSlice)
 	}
 }
 
@@ -181,9 +182,9 @@ func TestIDSet_Strings(t *testing.T) {
 }
 
 func TestIDSet_StringAndPrettyString(t *testing.T) {
-	// Built from the sorted ID strings rather than from AsSortedSlice(), so
+	// Built from the sorted ID strings rather than from Sorted(), so
 	// the assertion does not restate the implementation: String is literally
-	// "set" + AsSortedSlice().String(), and comparing against that would pass
+	// "set" + Sorted().String(), and comparing against that would pass
 	// even if both regressed together.
 	ids := []string{testIDA.String(), testIDB.String()}
 	slices.Sort(ids)
@@ -194,7 +195,7 @@ func TestIDSet_StringAndPrettyString(t *testing.T) {
 		t.Errorf("String() = %s, want %s", got, want)
 	}
 	// PrettyString deliberately drops the "set" prefix that String carries:
-	// it is s.AsSortedSlice().PrettyString(), so an IDSet and an IDSlice with
+	// it is s.Sorted().PrettyString(), so an IDSet and an IDSlice with
 	// the same IDs pretty-print identically. Only String round-trips through
 	// IDSetFromString, which strips that prefix.
 	if got, want := set.PrettyString(), "["+strings.Join(ids, ",")+"]"; got != want {
@@ -202,6 +203,25 @@ func TestIDSet_StringAndPrettyString(t *testing.T) {
 	}
 	if got, want := IDSet(nil).String(), "set[]"; got != want {
 		t.Errorf("String() of a nil set = %s, want %s", got, want)
+	}
+}
+
+// TestIDSet_StringMatchesStringsOrder checks that String, which sorts
+// with ID.Less, lists the IDs in the same order as Strings, which sorts
+// the ID strings, so the two representations of a set never disagree.
+// The IDs differ in their first and last bytes so that only the
+// canonical byte order puts them in string order.
+func TestIDSet_StringMatchesStringsOrder(t *testing.T) {
+	set := MakeIDSet(
+		IDMustFromString("00000000-0000-4000-8000-0000000000ff"),
+		IDMustFromString("ff000000-0000-4000-8000-000000000000"),
+		IDMustFromString("0000ff00-0000-4000-8000-000000000001"),
+		testIDA,
+		testIDB,
+		testIDC,
+	)
+	if got, want := set.String(), "set["+strings.Join(set.Strings(), ",")+"]"; got != want {
+		t.Errorf("String() = %s, want order of Strings() %s", got, want)
 	}
 }
 
@@ -219,8 +239,8 @@ func TestIDSet_GetOne(t *testing.T) {
 func TestIDSet_AsSet(t *testing.T) {
 	// AsSet exists only to implement the IDs interface, so it must return the
 	// receiver itself rather than a copy. Assert aliasing, not equality:
-	// maps.Equal would also hold for maps.Clone(s), and callers like AddIDs
-	// store through the returned map.
+	// maps.Equal would also hold for maps.Clone(s), and callers of the IDs
+	// interface may store through the returned map.
 	set := MakeIDSet(testIDA)
 	got := set.AsSet()
 	if !maps.Equal(got, set) {
@@ -243,7 +263,7 @@ func TestIDSet_ForEach(t *testing.T) {
 		t.Fatalf("ForEach returned %v", err)
 	}
 	visited.Sort()
-	if want := set.AsSortedSlice(); !visited.Equal(want) {
+	if want := set.Sorted(); !visited.Equal(want) {
 		t.Errorf("ForEach visited %s, want %s", visited, want)
 	}
 
@@ -314,6 +334,10 @@ func TestIDSet_MarshalAndUnmarshalText(t *testing.T) {
 	if err := parsed.UnmarshalText([]byte("[not-an-uuid]")); err == nil {
 		t.Error("UnmarshalText of an invalid ID returned no error")
 	}
+	// A 16 character element must not be taken as raw binary UUID bytes
+	if err := parsed.UnmarshalText([]byte("[abcdefghijklmnop]")); err == nil {
+		t.Error("UnmarshalText of a 16 character element returned no error")
+	}
 }
 
 func TestIDSet_ScanAndValue(t *testing.T) {
@@ -325,7 +349,7 @@ func TestIDSet_ScanAndValue(t *testing.T) {
 	}
 	// Value writes the sorted slice, so that the SQL literal of a set
 	// is deterministic.
-	wantValue, err := set.AsSortedSlice().Value()
+	wantValue, err := set.Sorted().Value()
 	if err != nil {
 		t.Fatalf("IDSlice.Value returned %v", err)
 	}
@@ -366,7 +390,7 @@ func TestIDSet_MarshalAndUnmarshalJSON(t *testing.T) {
 		t.Fatalf("Marshal returned %v", err)
 	}
 	// Sorted, so that the JSON of a set is deterministic and comparable.
-	wantData, err := set.AsSortedSlice().MarshalJSON()
+	wantData, err := set.Sorted().MarshalJSON()
 	if err != nil {
 		t.Fatalf("IDSlice.MarshalJSON returned %v", err)
 	}
@@ -423,75 +447,15 @@ func TestIDSet_MarshalAndUnmarshalJSON(t *testing.T) {
 	if err := parsed.UnmarshalJSON([]byte(`["not-an-uuid"]`)); err == nil {
 		t.Error("Unmarshal of an invalid ID returned no error")
 	}
-}
-
-// TestIDSet_DeprecatedMutators covers the pre-Insert API that is kept for
-// compatibility. It must stay behaviour compatible with the new methods,
-// because callers mix both while migrating.
-func TestIDSet_DeprecatedMutators(t *testing.T) {
-	t.Run("Add", func(t *testing.T) {
-		set := make(IDSet)
-		set.Add(testIDA)
-		set.Add(testIDA)
-		if want := MakeIDSet(testIDA); !set.Equal(want) {
-			t.Errorf("after Add set = %s, want %s", set, want)
-		}
-	})
-
-	t.Run("AddSlice", func(t *testing.T) {
-		set := MakeIDSet(testIDA)
-		set.AddSlice(IDSlice{testIDB, testIDB})
-		if want := MakeIDSet(testIDA, testIDB); !set.Equal(want) {
-			t.Errorf("after AddSlice set = %s, want %s", set, want)
-		}
-		set.AddSlice(nil)
-		if want := MakeIDSet(testIDA, testIDB); !set.Equal(want) {
-			t.Errorf("AddSlice(nil) changed the set to %s", set)
-		}
-	})
-
-	t.Run("AddSet", func(t *testing.T) {
-		set := MakeIDSet(testIDA)
-		set.AddSet(MakeIDSet(testIDA, testIDB))
-		if want := MakeIDSet(testIDA, testIDB); !set.Equal(want) {
-			t.Errorf("after AddSet set = %s, want %s", set, want)
-		}
-		set.AddSet(nil)
-		if want := MakeIDSet(testIDA, testIDB); !set.Equal(want) {
-			t.Errorf("AddSet(nil) changed the set to %s", set)
-		}
-	})
-
-	t.Run("DeleteSlice", func(t *testing.T) {
-		set := MakeIDSet(testIDA, testIDB)
-		set.DeleteSlice(IDSlice{testIDB, testIDC})
-		if want := MakeIDSet(testIDA); !set.Equal(want) {
-			t.Errorf("after DeleteSlice set = %s, want %s", set, want)
-		}
-	})
-
-	t.Run("DeleteSet", func(t *testing.T) {
-		set := MakeIDSet(testIDA, testIDB)
-		set.DeleteSet(MakeIDSet(testIDB, testIDC))
-		if want := MakeIDSet(testIDA); !set.Equal(want) {
-			t.Errorf("after DeleteSet set = %s, want %s", set, want)
-		}
-	})
-}
-
-func TestIDSet_AddIDs(t *testing.T) {
-	// AddIDs takes the IDs interface, so both an IDSlice and an IDSet
-	// have to work as the source.
-	set := MakeIDSet(testIDA)
-	set.AddIDs(IDSlice{testIDB, testIDB})
-	set.AddIDs(MakeIDSet(testIDC))
-	if want := MakeIDSet(testIDA, testIDB, testIDC); !set.Equal(want) {
-		t.Errorf("after AddIDs set = %s, want %s", set, want)
+	// A JSON string is text, a 16 character string
+	// must not be taken as raw binary UUID bytes
+	if err := parsed.UnmarshalJSON([]byte(`["abcdefghijklmnop"]`)); err == nil {
+		t.Error("Unmarshal of a 16 character string returned no error")
 	}
 }
 
 // TestIDSet_NullVsEmpty pins null and empty apart in both directions. Before,
-// Value and MarshalJSON went through AsSortedSlice, which is a nil IDSlice for
+// Value and MarshalJSON went through Sorted, which is a nil IDSlice for
 // an empty set and therefore wrote SQL NULL / JSON null: an allocated empty set
 // was indistinguishable from a nil one, so storing an empty set wrote NULL to
 // the column.
@@ -587,8 +551,6 @@ func TestIDSet_ContainsAny(t *testing.T) {
 }
 
 func TestIDSet_Sorted(t *testing.T) {
-	// Sorted is the name the other three set types use; AsSortedSlice is
-	// the deprecated alias and must stay behaviour identical until removed.
 	set := MakeIDSet(testIDB, testIDA, testIDC)
 	got := set.Sorted()
 	want := IDSlice{testIDA, testIDB, testIDC}
@@ -596,10 +558,14 @@ func TestIDSet_Sorted(t *testing.T) {
 	if !got.Equal(want) {
 		t.Errorf("Sorted() = %s, want %s", got, want)
 	}
-	if deprecated := set.AsSortedSlice(); !deprecated.Equal(got) {
-		t.Errorf("AsSortedSlice() = %s, want %s from Sorted()", deprecated, got)
-	}
 	if got := IDSet(nil).Sorted(); got != nil {
 		t.Errorf("Sorted() of a nil set = %s, want nil", got)
 	}
+}
+
+// TestIDSet_MarshalXMLAttr protects against a panic: encoding/xml calls the value
+// receiver MarshalText through a nil *IDSet attribute field. MarshalXMLAttr
+// leaves the attribute out instead and writes a non-nil one like MarshalText.
+func TestIDSet_MarshalXMLAttr(t *testing.T) {
+	xmlattrtest.NilPointer(t, IDSet(nil), MakeIDSet(IDMustFromString("6ba7b810-9dad-11d1-80b4-00c04fd430c8")))
 }

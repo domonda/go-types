@@ -1,42 +1,50 @@
 package email
 
 import (
-	"bytes"
 	"database/sql/driver"
-	"encoding/json"
-	"errors"
+	"encoding/xml"
 	"fmt"
 	"net/mail"
 
 	"github.com/invopop/jsonschema"
 
+	"github.com/domonda/go-types"
+	"github.com/domonda/go-types/internal"
 	"github.com/domonda/go-types/nullable"
+	"github.com/domonda/go-types/strutil"
 )
 
 // NullableAddress is a string containing a non-normalized email-address
 // with an optional name part before the mandatory address part.
-// An empty string represents the SQL/JSON null value.
+// An empty or whitespace only string represents the SQL/JSON null value,
+// like for country.NullableCode.
+//
+// NullableAddress reads and writes like Address, except that null is
+// SQL NULL and JSON null. See "Reading and writing values" in the README
+// of the module.
 type NullableAddress string
 
 // Compile-time check that NullableAddress implements nullable.NullSetable[Address]
 var _ nullable.NullSetable[Address] = (*NullableAddress)(nil)
+
+// Compile-time check that NullableAddress implements types.NormalizableValidator[NullableAddress]
+var _ types.NormalizableValidator[NullableAddress] = NullableAddress("")
 
 // AddressNull is the NULL value for NullableAddress.
 const AddressNull NullableAddress = ""
 
 // NullableAddressFrom creates a NullableAddress from a parsed mail.Address.
 // A nil address results in the NULL value.
+// Like AddressFrom, an address without a name part is returned
+// as just the address part without angle brackets.
 func NullableAddressFrom(a *mail.Address) NullableAddress {
-	if a == nil {
-		return ""
-	}
-	return NullableAddress(a.String())
+	return AddressFrom(a).Nullable()
 }
 
 // NormalizedNullableAddress parses an email address less strict
 // than the standard net/mail.ParseAddress function
 // fixing malformed addresses and lower cases the address part.
-// An empty string is interpreted as valid NULL address.
+// An empty or whitespace only string is interpreted as valid NULL address.
 func NormalizedNullableAddress(addr string) (normalized NullableAddress, err error) {
 	return NullableAddress(addr).Normalized()
 }
@@ -59,6 +67,11 @@ func (n NullableAddress) Validate() error {
 	return Address(n).Validate()
 }
 
+// Valid returns true if the NullableAddress is null or a valid address.
+func (n NullableAddress) Valid() bool {
+	return n.Validate() == nil
+}
+
 // ValidAndNormalized returns true if the NullableAddress is valid and already normalized.
 func (n NullableAddress) ValidAndNormalized() bool {
 	norm, err := n.Normalized()
@@ -68,10 +81,11 @@ func (n NullableAddress) ValidAndNormalized() bool {
 // Normalized parses an email address less strict
 // than the standard net/mail.ParseAddress function
 // fixing malformed addresses and lower cases the address part.
-// An empty string is interpreted as valid NULL address.
+// An empty or whitespace only string is interpreted as valid NULL address
+// and returned as AddressNull, see IsNull.
 func (n NullableAddress) Normalized() (NullableAddress, error) {
 	if n.IsNull() {
-		return n, nil
+		return AddressNull, nil
 	}
 	norm, err := Address(n).Normalized()
 	return NullableAddress(norm), err
@@ -114,17 +128,30 @@ func (n NullableAddress) DomainPart() string {
 	return Address(n).DomainPart()
 }
 
-// IsNull returns true if the string n is empty.
+// IsNull returns true if the string n is empty or consists only of
+// the runes strutil.TrimSpace removes: whitespace, control and other
+// non-printable runes, and invalid UTF-8, like for Normalized.
+// IsNull implements the nullable.Nullable interface.
 func (n NullableAddress) IsNull() bool {
-	return n == ""
+	return strutil.TrimSpace(n) == AddressNull
 }
 
-// IsNotNull returns true if the string n is not empty.
+// IsNotNull returns true if the NullableAddress is not null,
+// see IsNull.
 func (n NullableAddress) IsNotNull() bool {
-	return n != ""
+	return !n.IsNull()
 }
 
-// StringOr returns the string value of n or the passed nullString if n.IsNull()
+// ASCII returns the address like Address.ASCII, or "" for null.
+func (n NullableAddress) ASCII() string {
+	if n.IsNull() {
+		return ""
+	}
+	return Address(n).ASCII()
+}
+
+// StringOr returns the NullableAddress as stored,
+// or the passed nullString if the NullableAddress is null.
 func (n NullableAddress) StringOr(nullString string) string {
 	if n.IsNull() {
 		return nullString
@@ -163,54 +190,74 @@ func (n *NullableAddress) SetNull() {
 }
 
 // Scan implements the database/sql.Scanner interface.
+// A valid address is stored normalized, SQL NULL and a blank string as
+// AddressNull, and an address that can't be normalized unchanged without
+// an error, so that one invalid value doesn't fail a whole query;
+// Validate reports it.
 func (n *NullableAddress) Scan(value any) error {
-	switch s := value.(type) {
-	case nil:
-		n.SetNull()
-		return nil
-
-	case string:
-		if s == "" {
-			return errors.New("can't scan empty string as email.NullableAddress")
-		}
-		*n = NullableAddress(s)
-		return nil
-
-	default:
-		return fmt.Errorf("can't scan %T as email.NullableAddress", value)
-	}
+	return internal.ScanNormalized(n, value, normalizeAddressForRead, nil)
 }
 
 // Value implements the driver database/sql/driver.Valuer interface.
+// It returns the normalized address, SQL NULL if the NullableAddress is
+// null, or the error of Normalized for an address that can't be normalized.
 func (n NullableAddress) Value() (driver.Value, error) {
-	if n.IsNull() {
-		return nil, nil
-	}
-	return string(n), nil
+	return internal.ValueNormalized(n, NullableAddress.Normalized, nil)
 }
 
-// UnmarshalText implements encoding.TextUnmarshaler
-func (n *NullableAddress) UnmarshalText(text []byte) error {
-	*n = NullableAddress(text)
-	return nil
-}
-
-// UnmarshalJSON implements the json.Unmarshaler interface
-// returning the JSON null value for and empty/NULL address.
+// UnmarshalJSON implements encoding/json.Unmarshaler.
+// A JSON string is stored like Scan stores it, JSON null sets the
+// NullableAddress to null, so that decoding null into a field that holds
+// a value resets it, and any other JSON value is an error.
 func (n *NullableAddress) UnmarshalJSON(data []byte) error {
-	if bytes.Equal(data, []byte(`null`)) {
-		n.SetNull()
-		return nil
-	}
-	return json.Unmarshal(data, (*string)(n))
+	return internal.UnmarshalJSONNormalized(n, data, true, normalizeAddressForRead, nil)
 }
 
-// MarshalJSON implements the json.Marshaler interface.
-func (n NullableAddress) MarshalJSON() ([]byte, error) {
-	if n.IsNull() {
-		return []byte(`null`), nil
+// UnmarshalXML implements encoding/xml.Unmarshaler
+// by storing the text of the element like Scan stores it.
+func (n *NullableAddress) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	return internal.UnmarshalXMLNormalized(n, d, start, normalizeAddressForRead, nil)
+}
+
+// UnmarshalXMLAttr implements encoding/xml.UnmarshalerAttr
+// by storing the attribute value like Scan stores it.
+func (n *NullableAddress) UnmarshalXMLAttr(attr xml.Attr) error {
+	return internal.UnmarshalXMLAttrNormalized(n, attr, normalizeAddressForRead, nil)
+}
+
+// ScanString implements the strfmt.Scannable interface.
+// The strings "NULL", "null" and "nil" set the NullableAddress to null.
+// Without validate it stores source like Scan, with validate it stores
+// the normalized address or returns the error of Normalized.
+func (n *NullableAddress) ScanString(source string, validate bool) error {
+	if !validate {
+		// Like Scan, without building the error that it drops
+		return internal.ScanStringNormalized(n, source, false, true, normalizeAddressForRead[NullableAddress], nil)
 	}
-	return json.Marshal(string(n))
+	return internal.ScanStringNormalized(n, source, true, true, NullableAddress.Normalized, nil)
+}
+
+// MarshalJSON implements encoding/json.Marshaler by writing the JSON null
+// value if the NullableAddress is null, else the normalized address,
+// or the address unchanged if it can't be normalized.
+func (n NullableAddress) MarshalJSON() ([]byte, error) {
+	return internal.MarshalJSONNormalized(n, true, normalizeAddressForRead, nil)
+}
+
+// MarshalText implements encoding.TextMarshaler like MarshalJSON,
+// but with "" for null, so that encoding/xml and strfmt write the
+// normalized address. encoding/json writes map keys of string types
+// as they are and doesn't call MarshalText for them.
+func (n NullableAddress) MarshalText() ([]byte, error) {
+	return internal.MarshalTextNormalized(n, normalizeAddressForRead, nil)
+}
+
+// MarshalXMLAttr implements encoding/xml.MarshalerAttr by writing the
+// text of MarshalText, and no attribute for a nil pointer, because
+// encoding/xml calls MarshalText through a nil pointer attribute field
+// and panics.
+func (n *NullableAddress) MarshalXMLAttr(name xml.Name) (xml.Attr, error) {
+	return internal.MarshalXMLAttrText(n, name)
 }
 
 // JSONSchema returns the JSON schema definition for the NullableAddress type.
@@ -229,7 +276,11 @@ func (NullableAddress) JSONSchema() *jsonschema.Schema {
 }
 
 // AsList converts the NullableAddress to a NullableAddressList
-// containing this single address.
+// containing this single address,
+// or the null NullableAddressList if n is null, see IsNull.
 func (n NullableAddress) AsList() NullableAddressList {
+	if n.IsNull() {
+		return ""
+	}
 	return NullableAddressList(n)
 }

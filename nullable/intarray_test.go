@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"sort"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -71,6 +72,20 @@ func Test_IntArray_Scan(t *testing.T) {
 	assert.Error(t, a.Scan("not an array"))
 	assert.Error(t, a.Scan("{notanumber}"))
 	assert.Error(t, a.Scan(123))
+}
+
+// A Scan error must name the type the caller scans into, not the
+// notnull.IntArray it shares the array format with, so the message
+// leads to the right Go field. The parse error must stay wrapped.
+func Test_IntArray_ScanErrorNamesType(t *testing.T) {
+	var a IntArray
+	for _, src := range []any{123, "not an array", "{1,NULL,3}"} {
+		err := a.Scan(src)
+		require.Error(t, err, "Scan(%#v)", src)
+		assert.Contains(t, err.Error(), "nullable.IntArray", "Scan(%#v)", src)
+		assert.NotContains(t, err.Error(), "notnull", "Scan(%#v)", src)
+	}
+	assert.ErrorIs(t, a.Scan("{1,x}"), strconv.ErrSyntax)
 }
 
 func Test_IntArray_RoundTrip(t *testing.T) {

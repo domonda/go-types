@@ -41,10 +41,15 @@ func NewIDMutexWithCallbacks(onLock, onUnlock func(ID)) *IDMutex {
 }
 
 // Lock the mutex for a given ID.
+// The zero value of IDMutex is usable,
+// it is initialized by the first Lock call.
 func (m *IDMutex) Lock(id ID) {
 	m.onLockCallback(id)
 
 	m.global.Lock()
+	if m.locks == nil {
+		m.locks = make(map[ID]*countedLock)
+	}
 	lock := m.locks[id]
 	if lock == nil {
 		lock = new(countedLock)
@@ -74,23 +79,32 @@ func (m *IDMutex) Unlock(id ID) {
 	lock.Unlock()
 }
 
+// onLockCallback calls m.onLock and ignores any panic from it,
+// so a broken callback can't prevent the locking.
 func (m *IDMutex) onLockCallback(id ID) {
 	if m.onLock == nil {
 		return
 	}
-	defer recover()
+	// recover only stops a panic when called directly by a deferred function
+	defer func() { recover() }()
 	m.onLock(id)
 }
 
+// onUnlockCallback calls m.onUnlock and ignores any panic from it,
+// so a broken callback can't prevent the unlocking.
 func (m *IDMutex) onUnlockCallback(id ID) {
 	if m.onUnlock == nil {
 		return
 	}
-	defer recover()
+	// recover only stops a panic when called directly by a deferred function
+	defer func() { recover() }()
 	m.onUnlock(id)
 }
 
-// IsLocked tells wether an ID is locked.
+// IsLocked tells whether an ID is locked
+// or a Lock call for it is waiting.
+// The result is only a snapshot that can change
+// as soon as IsLocked returns.
 func (m *IDMutex) IsLocked(id ID) bool {
 	m.global.Lock()
 	_, locked := m.locks[id]

@@ -97,6 +97,9 @@ func TestCurrencyDecimalAmount_SQL(t *testing.T) {
 	assert.Equal(t, "12.5", scanned.Amount.String())
 
 	assert.Error(t, scanned.Scan(true))
+	assert.Error(t, scanned.Scan("EUR abc"))
+	assert.Equal(t, Currency(""), scanned.Currency, "a failed scan must not modify the value")
+	assert.Equal(t, "12.5", scanned.Amount.String(), "a failed scan must not modify the value")
 }
 
 func TestCurrencyDecimalAmount_JSON(t *testing.T) {
@@ -108,6 +111,25 @@ func TestCurrencyDecimalAmount_JSON(t *testing.T) {
 	var got CurrencyDecimalAmount
 	require.NoError(t, json.Unmarshal(data, &got))
 	assert.Equal(t, ca, got)
+}
+
+// Value and JSON write the currency normalized and String as stored, like
+// TestCurrencyAmount_NormalizedCurrencyOutput.
+func TestCurrencyDecimalAmount_NormalizedCurrencyOutput(t *testing.T) {
+	ca := CurrencyDecimalAmount{Currency: "eur", Amount: NewDecimalAmount(150, 2)}
+	v, err := ca.Value()
+	require.NoError(t, err)
+	assert.Equal(t, "EUR 1.50", v)
+	assert.Equal(t, "eur 1.50", ca.String())
+
+	data, err := json.Marshal(ca)
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"Currency":"EUR","Amount":1.50}`, string(data))
+
+	// Value refuses a currency that can't be normalized, so an invalid
+	// currency never reaches the database, like for CurrencyAmount.
+	_, err = CurrencyDecimalAmount{Currency: "XYZ", Amount: NewDecimalAmount(150, 2)}.Value()
+	assert.Error(t, err)
 }
 
 func TestCurrencyDecimalAmount_CurrencyAmount(t *testing.T) {
@@ -122,6 +144,14 @@ func TestCurrencyDecimalAmount_ScanString(t *testing.T) {
 	require.NoError(t, ca.ScanString("EUR 1.234,56", true))
 	assert.Equal(t, Currency("EUR"), ca.Currency)
 	assert.Equal(t, "1234.56", ca.Amount.String())
+
+	// A failed scan must leave the previously scanned value untouched,
+	// and validate must reject the non-finite amounts the parser accepts.
+	before := ca
+	assert.Error(t, ca.ScanString("XYZ 12.34", false))
+	assert.Equal(t, before, ca)
+	assert.Error(t, ca.ScanString("EUR NaN", true))
+	assert.Equal(t, before, ca)
 }
 
 // TestParseCurrencyDecimalAmount_scientificNotation guards the currency split

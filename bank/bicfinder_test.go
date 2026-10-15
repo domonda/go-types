@@ -14,6 +14,7 @@ var bicFinderData = map[string][][]int{
 	"GIBAATWWX01 ":              nil,      // a trailing separator does not rescue an invalid code
 	"GIBAATWW X01":              {{0, 8}}, // only the standalone 8-char BIC is matched
 	" XBKAUATWW ":               nil,      // BKAUATWW is not separator-bounded on the left
+	"REF1BKAUATWW":              nil,      // a BIC glued to a preceding digit is part of another token
 	"AMTSGERICHT":               nil,      // syntactically a BIC but listed in falseBICs
 	"BKAUATWW":                  {{0, 8}},
 	" BKAUATWW ":                {{1, 9}},

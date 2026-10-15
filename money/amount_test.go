@@ -1,6 +1,7 @@
 package money
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
 	"math/big"
@@ -81,6 +82,12 @@ var nonStandardFormatted = map[string]Amount{
 func Test_ParseAmount(t *testing.T) {
 	for str, refAmount := range amountTable2Decimals {
 		amount, err := ParseAmount(str, 2)
+		if !refAmount.Valid() {
+			// Accepted decimals reject non-finite values,
+			// see TestParseAmount_acceptedDecimalsRejectNonFinite
+			assert.Error(t, err, "ParseAmount(%q, 2) = %v", str, amount)
+			continue
+		}
 		if err != nil {
 			t.Errorf("Could not parse amount %s because of error: '%s'", str, err)
 		}
@@ -101,6 +108,44 @@ func Test_ParseAmount(t *testing.T) {
 		}
 		if !equalInclNaN(float64(amount), float64(refAmount)) {
 			t.Errorf("Parsed '%s' amount %f != %f", str, amount, refAmount)
+		}
+	}
+}
+
+// TestParseAmount_acceptedDecimalsRejectNonFinite protects that passing
+// acceptedDecimals rejects NaN and ±Inf. The allowlist is the guard of the
+// caller for real money input, like the cells of an imported bank statement,
+// where a "NaN" or "Inf" is never a valid amount and has no decimals that
+// could be in the list. Without acceptedDecimals they are still parsed.
+func TestParseAmount_acceptedDecimalsRejectNonFinite(t *testing.T) {
+	for _, str := range []string{"NaN", "Inf", "+Inf", "-Inf", " Inf "} {
+		amount, err := ParseAmount(str, 0, 2)
+		assert.Error(t, err, "ParseAmount(%q, 0, 2) = %v", str, amount)
+
+		amount, err = ParseAmount(str)
+		if assert.NoError(t, err, "ParseAmount(%q)", str) {
+			assert.False(t, amount.Valid(), "ParseAmount(%q)", str)
+		}
+	}
+	amount, err := ParseAmount("1,50", 0, 2)
+	if assert.NoError(t, err) {
+		assert.Equal(t, Amount(1.5), amount)
+	}
+}
+
+// TestParseAmount_oneSign protects that an amount with a sign at both ends
+// is an error instead of one of the signs winning: reading "+1.5-" as -1.5
+// or "-1+" as -1 books a misread value with a silently chosen sign.
+// One leading or trailing sign stays valid.
+func TestParseAmount_oneSign(t *testing.T) {
+	for _, str := range []string{"+1.5-", "-1.5+", "-1+", "- 1.234,56 +", "+1+", "-1.5-"} {
+		amount, err := ParseAmount(str)
+		assert.Error(t, err, "ParseAmount(%q) = %v", str, amount)
+	}
+	for str, want := range map[string]Amount{"-1.5": -1.5, "1.5-": -1.5, "+1.5": 1.5, "1.5+": 1.5} {
+		amount, err := ParseAmount(str)
+		if assert.NoError(t, err, "ParseAmount(%q)", str) {
+			assert.Equal(t, want, amount, "ParseAmount(%q)", str)
 		}
 	}
 }
@@ -199,7 +244,11 @@ func Test_Amount_SplitEqually(t *testing.T) {
 		{amount: 100, numAmounts: 3}:     {33.33, 33.33, 33.34},
 		{amount: 0.01, numAmounts: 5}:    {0, 0, 0, 0, 0.01},
 		{amount: 0.05, numAmounts: 5}:    {0.01, 0.01, 0.01, 0.01, 0.01},
-		{amount: 1, numAmounts: 17}:      {0.06, 0.06, 0.06, 0.06, 0.06, 0.06, 0.06, 0.06, 0.06, 0.06, 0.06, 0.06, 0.06, 0.06, 0.06, 0.06, 0.04},
+		// The last amount used to get the whole rounding difference:
+		// 16 times 0.06 and 0.04, which is 1.88 cents off its fair share
+		// of 5.88 cents. The 15 cents that can't be divided evenly
+		// now go to the last 15 amounts like CentAmount.SplitEqually does.
+		{amount: 1, numAmounts: 17}: {0.05, 0.05, 0.06, 0.06, 0.06, 0.06, 0.06, 0.06, 0.06, 0.06, 0.06, 0.06, 0.06, 0.06, 0.06, 0.06, 0.06},
 
 		{amount: -100, numAmounts: 0}:     nil,
 		{amount: -100.005, numAmounts: 1}: {-100.005}, // Single amount won't be rounded to cents
@@ -207,7 +256,7 @@ func Test_Amount_SplitEqually(t *testing.T) {
 		{amount: -100, numAmounts: 3}:     {-33.33, -33.33, -33.34},
 		{amount: -0.01, numAmounts: 5}:    {-0, -0, -0, -0, -0.01},
 		{amount: -0.05, numAmounts: 5}:    {-0.01, -0.01, -0.01, -0.01, -0.01},
-		{amount: -1, numAmounts: 17}:      {-0.06, -0.06, -0.06, -0.06, -0.06, -0.06, -0.06, -0.06, -0.06, -0.06, -0.06, -0.06, -0.06, -0.06, -0.06, -0.06, -0.04},
+		{amount: -1, numAmounts: 17}:      {-0.05, -0.05, -0.06, -0.06, -0.06, -0.06, -0.06, -0.06, -0.06, -0.06, -0.06, -0.06, -0.06, -0.06, -0.06, -0.06, -0.06},
 	}
 	for input, expected := range data {
 		result := input.amount.SplitEqually(input.numAmounts)
@@ -231,7 +280,11 @@ func Test_Amount_SplitProportionally(t *testing.T) {
 		{100, []Amount{1, 2, 3}, []Amount{16.67, 33.33, 50}},
 		{100, []Amount{1, 2, 3, 4}, []Amount{10, 20, 30, 40}},
 		{100, []Amount{-1, +2, -3, +4}, []Amount{10, 20, 30, 40}},
-		{100, []Amount{11, 17, 37}, []Amount{16.92, 26.15, 56.93}},
+		// The exact shares are 16.923, 26.154 and 56.923. The last amount used
+		// to get the whole rounding difference (26.15 and 56.93), now the cent
+		// lost to truncation goes to the largest truncated fraction of 26.154
+		// like CentAmount.SplitProportionally does.
+		{100, []Amount{11, 17, 37}, []Amount{16.92, 26.16, 56.92}},
 		{1, []Amount{11, 17, 37}, []Amount{0.17, 0.26, 0.57}},
 		{100, []Amount{1, 0, 1}, []Amount{50, 0, 50}},
 		{250.00, []Amount{333.33, 83.33, 0.01}, []Amount{200, 50, 0}}, // Note that the 1 cent amount got rounded to 0
@@ -246,7 +299,7 @@ func Test_Amount_SplitProportionally(t *testing.T) {
 		{-100, []Amount{-1, 2, 3}, []Amount{-16.67, -33.33, -50}},
 		{-100, []Amount{-1, 2, 3, 4}, []Amount{-10, -20, -30, -40}},
 		{-100, []Amount{-1, +2, -3, +4}, []Amount{-10, -20, -30, -40}},
-		{-100, []Amount{-11, 17, 37}, []Amount{-16.92, -26.15, -56.93}},
+		{-100, []Amount{-11, 17, 37}, []Amount{-16.92, -26.16, -56.92}},
 		{-1, []Amount{-11, 17, 37}, []Amount{-0.17, -0.26, -0.57}},
 		{-100, []Amount{1, 0, 1}, []Amount{-50, 0, -50}},
 	}
@@ -254,6 +307,131 @@ func Test_Amount_SplitProportionally(t *testing.T) {
 		result := test.amount.SplitProportionally(test.weights)
 		assert.Equal(t, test.expected, result)
 	}
+}
+
+// checkAmountSplit asserts the apportionment contract shared by the Amount
+// and the CentAmount splits for the cents of the split amount and the
+// exact shares of them: the parts sum to the cents of the split amount, no
+// part is a cent or more away from its exact share, and no part has the
+// opposite sign of the split amount.
+func checkAmountSplit(t *testing.T, amount Amount, shares []float64, parts []Amount, msg string) {
+	t.Helper()
+
+	if !assert.Len(t, parts, len(shares), msg) {
+		return
+	}
+	var sum int64
+	for i, part := range parts {
+		cents := part.Cents()
+		sum += cents
+		assert.Equal(t, part, part.RoundToCents(), "%s: part %d is rounded to cents", msg, i)
+		assert.Less(t, math.Abs(float64(cents)-shares[i]), 1.0, "%s: part %d = %v is less than one cent from its share of %v cents", msg, i, part, shares[i])
+		assert.False(t, (amount > 0 && cents < 0) || (amount < 0 && cents > 0), "%s: part %d = %v has the sign of %v", msg, i, part, amount)
+	}
+	assert.Equal(t, amount.Cents(), sum, "%s: parts sum to the cents of the amount", msg)
+}
+
+// TestAmount_SplitEqually_apportionment protects that the parts of an equal
+// split sum to the cents of the amount, are less than one cent from their
+// fair share and never flip the sign. Handing the whole rounding difference
+// to the last part broke the last two: Amount(1).SplitEqually(200) rounded
+// each half cent share up to 0.01, so the last part was 1 - 1.99 = -0.99
+// for an amount that only has positive shares.
+func TestAmount_SplitEqually_apportionment(t *testing.T) {
+	for _, amount := range []Amount{1, -1, 0.01, 100, 100.005, -100.005, 1234.56, 0.07, 99999.99} {
+		for _, count := range []int{2, 3, 7, 17, 200, 1000} {
+			parts := amount.SplitEqually(count)
+			share := float64(amount.Cents()) / float64(count)
+			shares := make([]float64, count)
+			for i := range shares {
+				shares[i] = share
+			}
+			msg := fmt.Sprintf("Amount(%v).SplitEqually(%d)", amount, count)
+			checkAmountSplit(t, amount, shares, parts, msg)
+
+			// Exactly the cents of CentAmount.SplitEqually
+			for i, cents := range amount.CentAmount(RoundHalfAwayFromZero).SplitEqually(count) {
+				assert.Equal(t, cents.Amount(), parts[i], "%s: part %d like CentAmount", msg, i)
+			}
+		}
+	}
+
+	parts := Amount(1).SplitEqually(200)
+	assert.Equal(t, Amount(0), parts[0], "a half cent share rounds down for the first parts")
+	assert.Equal(t, Amount(0.01), parts[199], "and up for the last ones")
+
+	// Without cents to apportion the amount is divided without rounding
+	for _, part := range Amount(math.NaN()).SplitEqually(3) {
+		assert.True(t, part.IsNaN())
+	}
+	assert.Equal(t, []Amount{Amount(math.Inf(-1)), Amount(math.Inf(-1))}, Amount(math.Inf(-1)).SplitEqually(2))
+	assert.Equal(t, []Amount{1e20 / 4, 1e20 / 4, 1e20 / 4, 1e20 / 4}, Amount(1e20).SplitEqually(4), "beyond the CentAmount range")
+}
+
+// TestAmount_SplitProportionally_apportionment protects that the parts of a
+// proportional split sum to the cents of the amount, are less than one cent
+// from their exact share and never flip the sign, because the cents lost to
+// rounding go to the largest truncated fractions. Handing the whole rounding
+// difference to the last part flipped its sign for many small shares that
+// all rounded up, like 200 equal weights of one euro.
+func TestAmount_SplitProportionally_apportionment(t *testing.T) {
+	equalWeights := make([]Amount, 200)
+	for i := range equalWeights {
+		equalWeights[i] = 1
+	}
+	weightSets := [][]Amount{
+		equalWeights,
+		{1, 2},
+		{11, 17, 37},
+		{-11, 17, -37},
+		{333.33, 83.33, 0.01},
+		{0.001, 0.002, 0.003},
+		{1e-300, 1, 1e300},
+		{0, 0, 5},
+		{7, 0, 0, 3},
+		{0.3, 0.3, 0.3, 0.1},
+	}
+	for _, amount := range []Amount{1, -1, 0.01, 100, -100, 1234.56, 0.07, 99999.99, 250} {
+		for _, weights := range weightSets {
+			parts := amount.SplitProportionally(weights)
+			var totalWeight float64
+			for _, weight := range weights {
+				totalWeight += weight.AbsFloat()
+			}
+			shares := make([]float64, len(weights))
+			for i, weight := range weights {
+				shares[i] = float64(amount.Cents()) * weight.AbsFloat() / totalWeight
+			}
+			checkAmountSplit(t, amount, shares, parts, fmt.Sprintf("Amount(%v).SplitProportionally(%v)", amount, weights))
+		}
+	}
+
+	// A half cent share rounds up for one half of the parts
+	// and down for the other half
+	parts := Amount(1).SplitProportionally(equalWeights)
+	numCents := 0
+	for _, part := range parts {
+		if part == 0.01 {
+			numCents++
+		}
+	}
+	assert.Equal(t, 100, numCents, "parts of 0.01 in %v", parts)
+
+	// Weights below a cent of the amount are still proportional
+	assert.Equal(t, []Amount{16.67, 33.33, 50}, Amount(100).SplitProportionally([]Amount{0.001, 0.002, 0.003}))
+
+	// If all weights are zero the whole amount ends up in the last part
+	// like for CentAmount.SplitProportionally instead of NaN parts
+	assert.Equal(t, []Amount{0, 0, 100.01}, Amount(100.005).SplitProportionally([]Amount{0, 0, 0}))
+
+	// Without cents to apportion the amount is split without rounding
+	for _, part := range Amount(1).SplitProportionally([]Amount{1, Amount(math.NaN())}) {
+		assert.True(t, part.IsNaN())
+	}
+	assert.Equal(t, []Amount{2.5e19, 7.5e19}, Amount(1e20).SplitProportionally([]Amount{1, 3}), "beyond the CentAmount range")
+	// All zero weights put the whole amount into the last part also
+	// when it is split without rounding, instead of NaN parts from 0/0
+	assert.Equal(t, []Amount{0, 1e20}, Amount(1e20).SplitProportionally([]Amount{0, 0}), "zero weights beyond the CentAmount range")
 }
 
 func TestAmount_UnmarshalJSON(t *testing.T) {
@@ -292,6 +470,38 @@ func TestAmount_UnmarshalJSON(t *testing.T) {
 				t.Errorf("Amount.UnmarshalJSON(%s) got %f, want %f", tt.json, amount, tt.wantAmount)
 			}
 		})
+	}
+}
+
+// TestAmount_UnmarshalJSON_stringEscapes protects that a JSON string is
+// decoded as JSON before it is parsed as amount, like float.Tolerant and
+// DecimalAmount do. A JSON encoder may escape any rune, so "1\u002c5" is
+// the same JSON value as "1,5" and must decode to the same amount instead
+// of failing on the backslash of the escape.
+func TestAmount_UnmarshalJSON_stringEscapes(t *testing.T) {
+	valid := map[string]Amount{
+		"\"1\\u002c5\"":           1.5,
+		"\"\\u0031.234,56\"":      1234.56,
+		"\"\\u002d1,5\"":          -1.5,
+		"\"1.5\\t\"":              1.5,
+		"\"\\u004e\\u0061N\"":     Amount(math.NaN()),
+		"\"1\\u0027234\\u002e5\"": 1234.5,
+	}
+	for j, want := range valid {
+		var amount Amount
+		if assert.NoError(t, json.Unmarshal([]byte(j), &amount), "json.Unmarshal(%s)", j) {
+			assert.True(t, equalInclNaN(float64(want), float64(amount)), "json.Unmarshal(%s) = %v, want %v", j, amount, want)
+		}
+	}
+
+	var s struct{ A Amount }
+	require.NoError(t, json.Unmarshal([]byte("{\"A\":\"1\\u002c5\"}"), &s))
+	assert.Equal(t, Amount(1.5), s.A)
+
+	for _, j := range []string{"\"1\\u002c5", "\"1\\x2c5\"", "\"1\\u002c5\\u002c5\""} {
+		amount := Amount(666)
+		assert.Error(t, amount.UnmarshalJSON([]byte(j)), "Amount.UnmarshalJSON(%s)", j)
+		assert.Equal(t, Amount(666), amount, "a failed Amount.UnmarshalJSON(%s) must not modify the amount", j)
 	}
 }
 
@@ -406,4 +616,444 @@ func TestAmount_CentAmount(t *testing.T) {
 	assert.Equal(t, MaxCentAmount, Amount(math.Inf(1)).CentAmount(RoundHalfAwayFromZero))
 	assert.Equal(t, MinCentAmount, Amount(math.Inf(-1)).CentAmount(RoundHalfAwayFromZero))
 	assert.Equal(t, MaxCentAmount, Amount(1e30).CentAmount(RoundHalfAwayFromZero))
+}
+
+// TestNullableAmount pins that NullableAmount distinguishes a zero amount
+// (for example a free item) from a missing amount in Go, JSON and SQL.
+func TestNullableAmount(t *testing.T) {
+	t.Run("constructors", func(t *testing.T) {
+		zero := NullableAmountFrom(0)
+		assert.True(t, zero.IsNotNull(), "a zero amount is a valid amount, not NULL")
+		assert.Equal(t, Amount(0), zero.Get())
+
+		assert.True(t, NullableAmountFromPtr(nil).IsNull())
+
+		a := Amount(12.34)
+		fromPtr := NullableAmountFromPtr(&a)
+		a = 0
+		assert.Equal(t, Amount(12.34), fromPtr.Get(), "NullableAmountFromPtr must copy the pointed to value")
+	})
+
+	t.Run("JSON", func(t *testing.T) {
+		data, err := json.Marshal(NullableAmount{})
+		require.NoError(t, err)
+		assert.Equal(t, `null`, string(data))
+
+		data, err = json.Marshal(NullableAmountFrom(0))
+		require.NoError(t, err)
+		assert.Equal(t, `0`, string(data))
+
+		got := NullableAmountFrom(1)
+		require.NoError(t, json.Unmarshal([]byte(`null`), &got))
+		assert.True(t, got.IsNull(), "JSON null must clear a previously set amount")
+
+		// The tolerant string parsing of Amount.UnmarshalJSON
+		// must also work through the nullable wrapper
+		require.NoError(t, json.Unmarshal([]byte(`"1.234,56"`), &got))
+		assert.Equal(t, NullableAmountFrom(1234.56), got)
+	})
+
+	t.Run("SQL", func(t *testing.T) {
+		v, err := NullableAmount{}.Value()
+		require.NoError(t, err)
+		assert.Nil(t, v, "NULL must be written to SQL as nil, not as 0")
+
+		v, err = NullableAmountFrom(12.34).Value()
+		require.NoError(t, err)
+		assert.Equal(t, float64(12.34), v, "drivers need a plain float64, not the named Amount type")
+
+		got := NullableAmountFrom(1)
+		require.NoError(t, got.Scan(nil))
+		assert.True(t, got.IsNull(), "SQL NULL must scan as NULL")
+
+		// Postgres NUMERIC columns arrive as text bytes
+		require.NoError(t, got.Scan([]byte("1234.56")))
+		assert.Equal(t, NullableAmountFrom(1234.56), got)
+	})
+}
+
+// TestAmount_ScanString pins that amounts from CSV and bank exports in the
+// common real-world notations (German decimal comma, English decimal point,
+// French space and Swiss apostrophe grouping, leading or trailing sign) all
+// scan to the same value, and that validate rejects NaN and ±Inf.
+func TestAmount_ScanString(t *testing.T) {
+	tests := []struct {
+		source   string
+		validate bool
+		want     Amount
+		wantErr  bool
+	}{
+		{source: "1.234,56", validate: true, want: 1234.56},
+		{source: "1,234.56", validate: true, want: 1234.56},
+		{source: "1 234,56", validate: true, want: 1234.56},
+		{source: "1'234.56", validate: true, want: 1234.56},
+		{source: "1234,56", validate: true, want: 1234.56},
+		{source: " 1234.56 ", validate: true, want: 1234.56},
+		{source: "-12,34", validate: true, want: -12.34},
+		{source: "12,34-", validate: true, want: -12.34}, // trailing minus of accounting exports
+		{source: "+12,34", validate: true, want: 12.34},
+		{source: "1.234.567", validate: true, want: 1234567}, // repeated group separator is not a decimal separator
+		{source: "NaN", validate: false, want: Amount(math.NaN())},
+		{source: "-Inf", validate: false, want: Amount(math.Inf(-1))},
+		{source: "NaN", validate: true, wantErr: true},
+		{source: "Inf", validate: true, wantErr: true},
+		{source: "", validate: false, wantErr: true},
+		{source: "12,34 EUR", validate: false, wantErr: true},
+		{source: "1,23,45", validate: false, wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("%q validate=%t", tt.source, tt.validate), func(t *testing.T) {
+			a := Amount(666)
+			err := a.ScanString(tt.source, tt.validate)
+			if tt.wantErr {
+				assert.Error(t, err)
+				assert.Equal(t, Amount(666), a, "a failed scan must not modify the amount")
+				return
+			}
+			require.NoError(t, err)
+			assert.True(t, equalInclNaN(float64(tt.want), float64(a)), "got %v, want %v", float64(a), float64(tt.want))
+		})
+	}
+}
+
+// TestAmount_Cents pins that Cents rounds half away from zero
+// symmetrically for positive and negative amounts.
+func TestAmount_Cents(t *testing.T) {
+	tests := []struct {
+		amount Amount
+		want   int64
+	}{
+		{amount: 0, want: 0},
+		{amount: 1234.56, want: 123456},
+		{amount: -1234.56, want: -123456},
+		{amount: 0.125, want: 13}, // exactly representable half cent
+		{amount: -0.125, want: -13},
+		{amount: 0.1 + 0.2, want: 30}, // binary noise must not change the cents
+	}
+	for _, tt := range tests {
+		assert.Equal(t, tt.want, tt.amount.Cents(), "Amount(%v).Cents()", float64(tt.amount))
+	}
+}
+
+// TestAmount_RoundingConventionAgrees pins that every way of rounding or
+// formatting an Amount to cents gives the same result for half cent ties.
+//
+// The contract is to round the shortest decimal representation of the
+// float64, which is the decimal a human typed or a JSON number literal
+// carried, half away from zero. The binary value of most such literals is
+// slightly off: 0.145 is stored as 0.14499999999999999001, 2.675 as
+// 2.67499999999999982236. Rounding the binary value (or multiplying it by
+// 100 first) turns those into 0.14 and 2.67, so the same invoice amount
+// would have 15 cents in one place and 14 in another, depending on which
+// method computed it.
+func TestAmount_RoundingConventionAgrees(t *testing.T) {
+	tests := []struct {
+		amount Amount
+		cents  int64
+		str    string
+	}{
+		{amount: 0.145, cents: 15, str: "0.15"},
+		{amount: -0.145, cents: -15, str: "-0.15"},
+		{amount: 0.125, cents: 13, str: "0.13"}, // exactly representable tie
+		{amount: -0.125, cents: -13, str: "-0.13"},
+		{amount: 1.005, cents: 101, str: "1.01"},
+		{amount: 2.675, cents: 268, str: "2.68"},
+		{amount: -2.675, cents: -268, str: "-2.68"},
+		{amount: 0.285, cents: 29, str: "0.29"},
+		{amount: 1.115, cents: 112, str: "1.12"},
+		{amount: 8.345, cents: 835, str: "8.35"},
+		{amount: 1234.565, cents: 123457, str: "1234.57"},
+		{amount: 0.144999, cents: 14, str: "0.14"}, // not a tie
+		{amount: 0.1 + 0.2, cents: 30, str: "0.30"},
+		// Zero cents are formatted without a sign like the DecimalAmount,
+		// "EUR -0.00" would be stored by CurrencyAmount.Value
+		{amount: -0.004, cents: 0, str: "0.00"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.str, func(t *testing.T) {
+			a := tt.amount
+			rounded := Amount(tt.cents) / 100 // the float64 nearest to the rounded decimal
+			assert.Equal(t, tt.cents, a.Cents(), "Cents")
+			assert.Equal(t, CentAmount(tt.cents), a.CentAmount(RoundHalfAwayFromZero), "CentAmount")
+			assert.Equal(t, rounded, a.RoundToCents(), "RoundToCents")
+			assert.Equal(t, rounded, a.RoundToDecimals(2), "RoundToDecimals(2)")
+			assert.Equal(t, NewDecimalAmount(tt.cents, 2), a.DecimalAmount(2, RoundHalfAwayFromZero), "DecimalAmount(2)")
+			assert.Equal(t, NewDecimalAmount(tt.cents, 2), DecimalAmountFrom(a).RoundToCents(RoundHalfAwayFromZero), "DecimalAmountFrom")
+			assert.Equal(t, tt.str, a.String(), "String")
+			assert.Equal(t, tt.str, a.FormatSep(0, '.', 2), "FormatSep")
+			assert.Equal(t, strings.Replace(tt.str, ".", ",", 1), a.FormatSep(0, ',', 2), "FormatSep decimal comma")
+			assert.Equal(t, "EUR "+tt.str, CurrencyAmount{Currency: EUR, Amount: a}.String(), "CurrencyAmount.String")
+			assert.Equal(t, tt.str+" EUR", CurrencyAmount{Currency: EUR, Amount: a}.FormatSep(false, 0, '.', 2), "CurrencyAmount.FormatSep")
+			assert.Equal(t, Rate(rounded), Rate(a).RoundToDecimals(2), "Rate.RoundToDecimals(2)")
+			assert.Equal(t, tt.str, Rate(a).FormatSep(0, '.', 2), "Rate.FormatSep")
+		})
+	}
+}
+
+// TestAmount_RoundingOtherDecimals pins that RoundToDecimals, FormatSep
+// and DecimalAmount round the shortest decimal representation at any
+// number of decimal places, not only at cents, and that the non-finite
+// values pass through every method unchanged.
+func TestAmount_RoundingOtherDecimals(t *testing.T) {
+	// 1.0005 is stored as 1.000499999999999989, 1.45 as 1.4499999999999999556
+	assert.Equal(t, Amount(1.001), Amount(1.0005).RoundToDecimals(3))
+	assert.Equal(t, "1.001", Amount(1.0005).FormatSep(0, '.', 3))
+	assert.Equal(t, NewDecimalAmount(1001, 3), Amount(1.0005).DecimalAmount(3, RoundHalfAwayFromZero))
+	assert.Equal(t, Amount(1.5), Amount(1.45).RoundToDecimals(1))
+	assert.Equal(t, "1.5", Amount(1.45).FormatSep(0, '.', 1))
+	assert.Equal(t, "2", Amount(1.5).FormatSep(0, '.', 0), "FormatSep must round half away from zero, not to even")
+	assert.Equal(t, "-3", Amount(-2.5).FormatSep(0, '.', 0))
+	assert.Equal(t, "1,234.57", Amount(1234.565).FormatSep(',', '.', 2))
+	// Values with fewer decimals are padded, not rounded
+	assert.Equal(t, "0.1450", Amount(0.145).FormatSep(0, '.', 4))
+	assert.Equal(t, "0.145", Amount(0.145).FormatSep(0, '.', -1))
+	// Rounding modes other than half away from zero also see the decimal
+	assert.Equal(t, NewDecimalAmount(14, 2), Amount(0.145).DecimalAmount(2, RoundHalfToEven))
+	assert.Equal(t, NewDecimalAmount(15, 2), Amount(0.141).DecimalAmount(2, RoundUp))
+	assert.Equal(t, NewDecimalAmount(-15, 2), Amount(-0.141).DecimalAmount(2, RoundFloor))
+	assert.Equal(t, NewDecimalAmount(0, 2), Amount(0.001).DecimalAmount(2, RoundDown))
+	// Negative zero keeps its sign like math.Round does
+	assert.True(t, Amount(-0.001).RoundToCents().Signbit(), "-0.001 rounds to -0")
+
+	nan, posInf, negInf := Amount(math.NaN()), Amount(math.Inf(1)), Amount(math.Inf(-1))
+	assert.True(t, nan.RoundToCents().IsNaN())
+	assert.True(t, nan.RoundToDecimals(3).IsNaN())
+	assert.Equal(t, posInf, posInf.RoundToCents())
+	assert.Equal(t, negInf, negInf.RoundToDecimals(-2))
+	assert.Equal(t, "NaN", nan.String())
+	assert.Equal(t, "+Inf", posInf.String())
+	assert.Equal(t, "-Inf", negInf.FormatSep(',', '.', 2))
+	assert.True(t, nan.DecimalAmount(2, RoundHalfAwayFromZero).IsNaN())
+	assert.True(t, negInf.DecimalAmount(2, RoundHalfAwayFromZero).IsInf(-1))
+	// Beyond the DecimalAmount range a finite Amount maps to ±Inf
+	assert.True(t, Amount(1e300).DecimalAmount(0, RoundHalfAwayFromZero).IsInf(1))
+	assert.True(t, Amount(-1e17).DecimalAmount(2, RoundHalfAwayFromZero).IsInf(-1))
+	// 2^58 has the shortest decimal 288230376151711740, which still fits the
+	// coefficient maximum of 2^58-1, the next float64 288230376151711800 not
+	assert.Equal(t, NewDecimalAmount(288230376151711740, 0), Amount(1<<58).DecimalAmount(0, RoundHalfAwayFromZero))
+	assert.Equal(t, NewDecimalAmount(-288230376151711740, 0), Amount(-1<<58).DecimalAmount(0, RoundHalfAwayFromZero))
+	assert.True(t, Amount(math.Nextafter(1<<58, math.Inf(1))).DecimalAmount(0, RoundHalfAwayFromZero).IsInf(1))
+	assert.Panics(t, func() { Amount(1).DecimalAmount(MaxDecimalAmountScale+1, RoundHalfAwayFromZero) })
+	assert.Panics(t, func() { Amount(1).DecimalAmount(-1, RoundHalfAwayFromZero) })
+}
+
+// TestAmount_WithinOneCent pins the tolerance used to compare amounts
+// from different sources (e.g. invoice total vs. sum of line items)
+// where rounding of intermediate results can differ by one cent.
+func TestAmount_WithinOneCent(t *testing.T) {
+	tests := []struct {
+		a, b Amount
+		want bool
+	}{
+		{a: 10, b: 10, want: true},
+		{a: 10, b: 10.01, want: true},
+		{a: 10, b: 9.99, want: true},
+		{a: 10, b: 10.02, want: false},
+		{a: 10, b: 9.98, want: false},
+		{a: 0.1 + 0.2, b: 0.3, want: true},
+		{a: -5, b: -5.01, want: true},
+		{a: 0.01, b: -0.01, want: false},
+	}
+	for _, tt := range tests {
+		assert.Equal(t, tt.want, tt.a.WithinOneCent(tt.b), "Amount(%v).WithinOneCent(%v)", float64(tt.a), float64(tt.b))
+		assert.Equal(t, tt.want, tt.b.WithinOneCent(tt.a), "WithinOneCent must be symmetric")
+	}
+}
+
+// TestAmount_Rounding pins half away from zero rounding for RoundToInt
+// and RoundToDecimals, that RoundToDecimals(2) agrees with RoundToCents,
+// and that negative decimals round to tens, hundreds, etc.
+func TestAmount_Rounding(t *testing.T) {
+	assert.Equal(t, Amount(3), Amount(2.5).RoundToInt())
+	assert.Equal(t, Amount(-3), Amount(-2.5).RoundToInt())
+	assert.Equal(t, Amount(1), Amount(0.5).RoundToInt())
+	assert.Equal(t, Amount(2), Amount(2.4999).RoundToInt())
+
+	tests := []struct {
+		amount   Amount
+		decimals int
+		want     Amount
+	}{
+		{amount: 1.23456, decimals: 3, want: 1.235},
+		{amount: -1.23456, decimals: 3, want: -1.235},
+		{amount: 1.23456, decimals: 0, want: 1},
+		{amount: 123456, decimals: -3, want: 123000},
+		{amount: 123500, decimals: -3, want: 124000},
+		{amount: -123500, decimals: -3, want: -124000},
+	}
+	for _, tt := range tests {
+		assert.Equal(t, tt.want, tt.amount.RoundToDecimals(tt.decimals), "Amount(%v).RoundToDecimals(%d)", float64(tt.amount), tt.decimals)
+	}
+
+	for _, a := range []Amount{0.004, 0.005, 1.999, -1.995, 123456.789, 9999999.005} {
+		assert.Equal(t, a.RoundToCents(), a.RoundToDecimals(2), "Amount(%v)", float64(a))
+		assert.Equal(t, a.RoundToInt(), a.RoundToDecimals(0), "Amount(%v)", float64(a))
+	}
+}
+
+// TestAmount_PtrHelpers pins the nil handling of the pointer helpers
+// used for optional amounts, and that StringOr formats like String,
+// rounded to cents.
+func TestAmount_PtrHelpers(t *testing.T) {
+	var nilAmount *Amount
+	a := Amount(1234.567)
+
+	assert.Equal(t, Amount(1), AmountFromPtr(nil, 1))
+	assert.Equal(t, a, AmountFromPtr(&a, 1))
+
+	ptr := a.Ptr()
+	*ptr = 0
+	assert.Equal(t, Amount(1234.567), a, "Ptr must return a pointer to a copy")
+
+	assert.Equal(t, "n/a", nilAmount.StringOr("n/a"))
+	assert.Equal(t, "1234.57", a.Ptr().StringOr("n/a"))
+	assert.Equal(t, 1.5, nilAmount.FloatOr(1.5))
+	assert.Equal(t, 1234.567, a.Ptr().FloatOr(1.5))
+	assert.Equal(t, Amount(1.5), nilAmount.AmountOr(1.5))
+	assert.Equal(t, a, a.Ptr().AmountOr(1.5))
+}
+
+// TestAmount_Equal pins that Equal compares the pointed to values
+// (not the pointer identity) and treats nil as only equal to nil.
+func TestAmount_Equal(t *testing.T) {
+	a, b, c := Amount(12.34), Amount(12.34), Amount(12.35)
+	nan1, nan2 := Amount(math.NaN()), Amount(math.NaN())
+	var nilAmount *Amount
+
+	assert.True(t, nilAmount.Equal(nil))
+	assert.False(t, a.Ptr().Equal(nil))
+	assert.False(t, nilAmount.Equal(&a))
+	assert.True(t, (&a).Equal(&b), "different pointers to equal values")
+	assert.False(t, (&a).Equal(&c))
+	assert.True(t, (&nan1).Equal(&nan1), "the same pointer is always equal")
+	assert.False(t, (&nan1).Equal(&nan2), "NaN values are never equal")
+}
+
+// TestAmount_Sign pins the sign helpers that are used to book an amount
+// as debit or credit regardless of the sign it was parsed with
+// (e.g. credit notes with negative or positive totals).
+func TestAmount_Sign(t *testing.T) {
+	negZero := Amount(math.Copysign(0, -1))
+
+	assert.Equal(t, Amount(12.34), Amount(-12.34).Abs())
+	assert.Equal(t, Amount(math.Inf(1)), Amount(math.Inf(-1)).Abs())
+	assert.True(t, Amount(math.NaN()).Abs().IsNaN())
+	assert.False(t, negZero.Abs().Signbit())
+	assert.Equal(t, 12.34, Amount(-12.34).AbsFloat())
+
+	assert.Equal(t, Amount(-12.34), Amount(12.34).Inverted())
+	assert.Equal(t, Amount(12.34), Amount(-12.34).Inverted())
+	a := Amount(12.34)
+	a.Invert()
+	assert.Equal(t, Amount(-12.34), a, "Invert must change the amount in place")
+
+	for _, a := range []Amount{12.34, -12.34} {
+		assert.Equal(t, Amount(12.34), a.WithPosSign(true), "%v.WithPosSign(true)", float64(a))
+		assert.Equal(t, Amount(-12.34), a.WithPosSign(false), "%v.WithPosSign(false)", float64(a))
+		assert.Equal(t, Amount(-12.34), a.WithNegSign(true), "%v.WithNegSign(true)", float64(a))
+		assert.Equal(t, Amount(12.34), a.WithNegSign(false), "%v.WithNegSign(false)", float64(a))
+	}
+	assert.False(t, negZero.WithPosSign(true).Signbit())
+}
+
+// TestAmount_RateArithmetic pins the typical tax and currency calculations:
+// 20% VAT of a net amount via a rate or a percentage gives the same result,
+// and dividing by a rate is the inverse of multiplying by it.
+func TestAmount_RateArithmetic(t *testing.T) {
+	assert.Equal(t, Amount(40), Amount(200).MultipliedByRate(0.2))
+	assert.Equal(t, Amount(40), Amount(200).Percentage(20))
+	assert.Equal(t, Amount(80), Amount(100).DividedByRate(1.25))
+	assert.Equal(t, Amount(-50), Amount(-250).Percentage(20))
+	assert.Equal(t, Amount(22.8), Amount(119.99).Percentage(19).RoundToCents())
+
+	// Dividing by zero must produce a non-finite amount that Valid rejects
+	assert.False(t, Amount(100).DividedByRate(0).Valid())
+}
+
+// TestAmount_Valid pins that NaN and ±Inf, which ParseAmount accepts
+// without error, are rejected by all Valid methods.
+func TestAmount_Valid(t *testing.T) {
+	tests := []struct {
+		name        string
+		amount      Amount
+		valid       bool
+		positive    bool
+		greaterZero bool
+		smallerZero bool
+		nan         bool
+		inf         bool
+	}{
+		{name: "positive", amount: 12.34, valid: true, positive: true, greaterZero: true},
+		{name: "zero", amount: 0, valid: true, positive: true},
+		{name: "negative zero", amount: Amount(math.Copysign(0, -1)), valid: true, positive: true},
+		{name: "negative", amount: -12.34, valid: true, smallerZero: true},
+		{name: "NaN", amount: Amount(math.NaN()), nan: true},
+		{name: "+Inf", amount: Amount(math.Inf(1)), inf: true},
+		{name: "-Inf", amount: Amount(math.Inf(-1)), inf: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.valid, tt.amount.Valid(), "Valid")
+			assert.Equal(t, tt.positive, tt.amount.ValidAndPositive(), "ValidAndPositive")
+			assert.Equal(t, tt.greaterZero, tt.amount.ValidAndGreaterZero(), "ValidAndGreaterZero")
+			assert.Equal(t, tt.smallerZero, tt.amount.ValidAndSmallerZero(), "ValidAndSmallerZero")
+			assert.Equal(t, tt.nan, tt.amount.IsNaN(), "IsNaN")
+			assert.Equal(t, tt.inf, tt.amount.IsInf(), "IsInf")
+			assert.Equal(t, tt.valid, tt.amount.ValidAndHasSign(0), "ValidAndHasSign(0) accepts any sign")
+		})
+	}
+
+	assert.True(t, Amount(12.34).ValidAndHasSign(1))
+	assert.False(t, Amount(12.34).ValidAndHasSign(-1))
+	assert.True(t, Amount(-12.34).ValidAndHasSign(-1))
+	assert.False(t, Amount(-12.34).ValidAndHasSign(1))
+	assert.False(t, Amount(math.Inf(1)).ValidAndHasSign(1))
+	assert.False(t, Amount(math.Inf(-1)).ValidAndHasSign(-1))
+}
+
+// TestAmount_BigFloat pins that BigFloat carries the exact float64 value,
+// so high precision calculations start from the identical amount.
+func TestAmount_BigFloat(t *testing.T) {
+	f, acc := Amount(1234.56).BigFloat().Float64()
+	assert.Equal(t, 1234.56, f)
+	assert.Equal(t, big.Exact, acc)
+}
+
+// TestAmount_SplitProportionallyLargeWeights protects that weights whose sum
+// overflows float64 still split the amount by their ratio instead of
+// returning zero parts, which would make the whole amount disappear.
+func TestAmount_SplitProportionallyLargeWeights(t *testing.T) {
+	parts := Amount(1e20).SplitProportionally([]Amount{1e308, 1e308})
+	assert.Equal(t, []Amount{5e19, 5e19}, parts)
+}
+
+// benchAmounts are realistic amounts for the rounding and formatting
+// benchmarks: every other one is a cent amount as stored,
+// the rest are rate products with a long binary fraction.
+var benchAmounts = func() []Amount {
+	amounts := make([]Amount, len(benchCents))
+	for i, c := range benchCents {
+		amounts[i] = c.Amount()
+		if i%2 == 1 {
+			amounts[i] *= Amount(benchRates[i%len(benchRates)])
+		}
+	}
+	return amounts
+}()
+
+func BenchmarkAmount_RoundToCents(b *testing.B) {
+	i := 0
+	for b.Loop() {
+		benchAmounts[i%len(benchAmounts)].RoundToCents()
+		i++
+	}
+}
+
+func BenchmarkAmount_String(b *testing.B) {
+	b.ReportAllocs()
+	i := 0
+	for b.Loop() {
+		_ = benchAmounts[i%len(benchAmounts)].String()
+		i++
+	}
 }

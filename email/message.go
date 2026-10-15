@@ -128,47 +128,45 @@ func NewMessage(from Address, to AddressList, subject, body string, bodyHTML nul
 func (msg *Message) Recipients() []string {
 	var recipients []string
 	exists := func(a *mail.Address) bool {
-		return slices.Contains(recipients, a.Address)
+		return slices.Contains(recipients, addrSpec(a))
 	}
 	to, _ := msg.To.Parse()
 	for _, a := range to {
 		if !exists(a) {
-			recipients = append(recipients, a.Address)
+			recipients = append(recipients, addrSpec(a))
 		}
 	}
 	cc, _ := msg.Cc.Parse()
 	for _, a := range cc {
 		if !exists(a) {
-			recipients = append(recipients, a.Address)
+			recipients = append(recipients, addrSpec(a))
 		}
 	}
 	bcc, _ := msg.Bcc.Parse()
 	for _, a := range bcc {
 		if !exists(a) {
-			recipients = append(recipients, a.Address)
+			recipients = append(recipients, addrSpec(a))
 		}
 	}
 	return recipients
 }
 
 // ReferencesMessageIDs returns the message IDs listed in the References header.
+// The IDs are separated by whitespace as specified by RFC 5322 section 3.6.4,
+// commas are also accepted as separators. Empty entries are skipped.
 func (msg *Message) ReferencesMessageIDs() []string {
 	if msg.References.IsNull() {
 		return nil
 	}
-	var ids []string
-	for id := range strings.SplitSeq(string(msg.References), ",") {
-		if id = strutil.TrimSpace(id); id != "" {
-			ids = append(ids, id)
-		}
-	}
-	return ids
+	return strings.FieldsFunc(string(msg.References), func(r rune) bool {
+		return r == ',' || strutil.IsSpace(r)
+	})
 }
 
 // ParseMessage parses an email message from the passed data,
-// auto-detecting the format. JSON objects are unmarshalled directly,
-// data with a TNEF signature is parsed as TNEF, and everything else
-// is parsed as a MIME message.
+// auto-detecting the format. JSON objects (optionally surrounded
+// by whitespace) are unmarshalled directly, data with a TNEF signature
+// is parsed as TNEF, and everything else is parsed as a MIME message.
 func ParseMessage(data []byte) (msg *Message, err error) {
 	defer errs.WrapWithFuncParams(&err, data)
 
@@ -177,7 +175,7 @@ func ParseMessage(data []byte) (msg *Message, err error) {
 	}
 
 	// Fast check for JSON object
-	if data[0] == '{' && data[len(data)-1] == '}' {
+	if trimmed := bytes.TrimSpace(data); len(trimmed) > 0 && trimmed[0] == '{' && trimmed[len(trimmed)-1] == '}' {
 		err = json.Unmarshal(data, &msg)
 		if err != nil {
 			return nil, err
@@ -279,15 +277,36 @@ type ReplyTemplateData struct {
 // and are responsible to render the passed replyText and replyHTML
 // together with a quotation of the original message.
 // The passed replyText and replyHTML are not interpreted as templates.
+//
+// The subject of the reply is the original subject prefixed with "Re: "
+// unless it already starts with a case-insensitive "Re:" (RFC 5322 3.6.5).
+// The References of the reply are the original message's References
+// followed by its Message-ID, separated by spaces (RFC 5322 3.6.4).
+// Without References, the original message's In-Reply-To is used instead
+// if it holds a single message ID.
 func (msg *Message) NewReplyMessage(from Address, replyText, replyHTML string, keepAttachments bool, textTempl, htmlTempl string) (re *Message, err error) {
 	defer errs.WrapWithFuncParams(&err, from, replyText, replyHTML, keepAttachments, textTempl, htmlTempl)
+
+	subject := msg.Subject
+	if s := strings.TrimLeftFunc(subject, strutil.IsSpace); len(s) < 3 || !strings.EqualFold(s[:3], "re:") {
+		subject = "Re: " + subject
+	}
+	references := msg.ReferencesMessageIDs()
+	if len(references) == 0 {
+		if inReplyTo := strings.Fields(string(msg.InReplyTo)); len(inReplyTo) == 1 {
+			references = inReplyTo
+		}
+	}
+	if msg.MessageID.IsNotNull() {
+		references = append(references, msg.MessageID.Get())
+	}
 
 	re = &Message{
 		InReplyToProviderID: msg.ProviderID,
 		InReplyTo:           msg.MessageID,
-		References:          msg.MessageID,
+		References:          nullable.TrimmedString(strings.Join(references, " ")),
 		From:                from,
-		Subject:             "Re: " + msg.Subject,
+		Subject:             subject,
 		ExtraHeader:         make(Header),
 	}
 	if msg.ReplyTo.IsNotNull() {
@@ -344,7 +363,13 @@ func (msg *Message) NewReplyMessage(from Address, replyText, replyHTML string, k
 
 // BuildRawMessage encodes the message as a raw RFC 5322 MIME message,
 // building a multipart structure as needed for the plaintext body,
-// HTML body, and attachments.
+// HTML body, inline parts, and attachments.
+//
+// Attachments with Inline set are encoded as inline parts with their
+// ContentID within a multipart/related part together with the bodies,
+// all other attachments are encoded with an attachment disposition.
+// The To, Cc, and Bcc header fields are written once each
+// with all their addresses comma separated (RFC 5322 3.6.3).
 func (msg *Message) BuildRawMessage() (raw []byte, err error) {
 	defer errs.WrapWithFuncParams(&err)
 
@@ -385,25 +410,35 @@ func (msg *Message) BuildRawMessage() (raw []byte, err error) {
 		root = enmime.NewPart("multipart/alternative")
 		root.AddChild(part)
 	}
-	// if len(b.inlines) > 0 {
-	// 	part = root
-	// 	root = enmime.NewPart("multipart/related")
-	// 	root.AddChild(part)
-	// 	for _, ip := range b.inlines {
-	// part := enmime.NewPart(contentType)
-	// part.Content = content
-	// part.FileName = fileName
-	// part.Disposition = "inline"
-	// part.ContentID = contentID
-	// 		part.Header = make(textproto.MIMEHeader)
-	// 		root.AddChild(part)
-	// 	}
-	// }
-	if len(msg.Attachments) > 0 {
+	var inlines, attachments []*Attachment
+	for i, att := range msg.Attachments {
+		if att == nil {
+			return nil, errs.Errorf("attachment %d is nil", i)
+		}
+		if att.Inline {
+			inlines = append(inlines, att)
+		} else {
+			attachments = append(attachments, att)
+		}
+	}
+	if len(inlines) > 0 {
+		part = root
+		root = enmime.NewPart("multipart/related")
+		root.AddChild(part)
+		for _, att := range inlines {
+			part := enmime.NewPart(att.ContentType)
+			part.Content = att.Content
+			part.FileName = att.Filename
+			part.Disposition = "inline"
+			part.ContentID = att.ContentID
+			root.AddChild(part)
+		}
+	}
+	if len(attachments) > 0 {
 		part = root
 		root = enmime.NewPart("multipart/mixed")
 		root.AddChild(part)
-		for _, att := range msg.Attachments {
+		for _, att := range attachments {
 			part := enmime.NewPart(att.ContentType)
 			part.Content = att.Content
 			part.FileName = att.Filename
@@ -422,37 +457,53 @@ func (msg *Message) BuildRawMessage() (raw []byte, err error) {
 	if msg.References.IsNotNull() {
 		root.Header.Set("References", msg.References.Get())
 	}
-	root.Header.Set("From", string(msg.From))
-	if msg.ReplyTo.IsNotNull() {
-		root.Header.Set("Reply-To", string(msg.ReplyTo))
+	// The addresses are parsed and written with headerAddresses,
+	// so that a non-ASCII name is RFC 2047 encoded without the
+	// address part. The MIME encoder would otherwise encode the whole
+	// header value including the address part.
+	var from string
+	if msg.From != "" {
+		parsed, err := msg.From.Parse()
+		if err != nil {
+			return nil, err
+		}
+		from = headerAddresses(parsed)
 	}
-	tos, err := msg.To.Split()
+	root.Header.Set("From", from)
+	if msg.ReplyTo.IsNotNull() {
+		replyTo, err := msg.ReplyTo.Parse()
+		if err != nil {
+			return nil, err
+		}
+		root.Header.Set("Reply-To", headerAddresses(replyTo))
+	}
+	tos, err := msg.To.Parse()
 	if err != nil {
 		return nil, err
 	}
-	for _, to := range tos {
-		root.Header.Add("To", string(to))
+	if len(tos) > 0 {
+		root.Header.Set("To", headerAddresses(tos...))
 	}
-	deliveredTos, err := msg.DeliveredTo.Split()
+	deliveredTos, err := msg.DeliveredTo.Parse()
 	if err != nil {
 		return nil, err
 	}
 	for _, deliveredTo := range deliveredTos {
-		root.Header.Add("Delivered-To", string(deliveredTo))
+		root.Header.Add("Delivered-To", headerAddresses(deliveredTo))
 	}
-	ccs, err := msg.Cc.Split()
+	ccs, err := msg.Cc.Parse()
 	if err != nil {
 		return nil, err
 	}
-	for _, cc := range ccs {
-		root.Header.Set("Cc", string(cc))
+	if len(ccs) > 0 {
+		root.Header.Set("Cc", headerAddresses(ccs...))
 	}
-	bccs, err := msg.Bcc.Split()
+	bccs, err := msg.Bcc.Parse()
 	if err != nil {
 		return nil, err
 	}
-	for _, bcc := range bccs {
-		root.Header.Set("Bcc", string(bcc))
+	if len(bccs) > 0 {
+		root.Header.Set("Bcc", headerAddresses(bccs...))
 	}
 	root.Header.Set("Date", formatDate(msg.Date))
 	for key, vals := range msg.ExtraHeader {

@@ -2,9 +2,14 @@ package types
 
 import (
 	"encoding/json"
+	"fmt"
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/domonda/go-types/internal/collections"
 	"github.com/domonda/go-types/internal/collections/settest"
@@ -135,6 +140,11 @@ func TestSet_Map(t *testing.T) {
 	if want := NewSet(1, 2, 3); !set.Equal(want) {
 		t.Errorf("Map modified its receiver to %v", set)
 	}
+	// Documented: the result is never nil, also not for a nil set,
+	// so a caller can insert into it without a nil check
+	if got := Set[int](nil).Map(func(v int) (int, bool) { return v, true }); got == nil {
+		t.Error("Map of a nil set returned nil")
+	}
 	// Mapping several values onto the same result deduplicates them.
 	got = set.Map(func(int) (int, bool) { return 0, true })
 	if want := NewSet(0); !got.Equal(want) {
@@ -221,8 +231,8 @@ func TestSet_UnmarshalJSON(t *testing.T) {
 	})
 
 	t.Run("replaces the elements of an existing set", func(t *testing.T) {
-		// The existing map is reused, so the previous elements have to be
-		// cleared instead of merged with the unmarshalled ones.
+		// The unmarshalled elements must replace the previous ones,
+		// not be merged with them, as UnmarshalJSON assigns a new set.
 		set := NewSet(1, 2, 3)
 		if err := json.Unmarshal([]byte(`[9]`), &set); err != nil {
 			t.Fatalf("Unmarshal returned %v", err)
@@ -329,60 +339,6 @@ func TestSetToSortedSlice_LenCases(t *testing.T) {
 	}
 }
 
-// TestSet_DeprecatedMutators covers the pre-Insert API that is kept for
-// compatibility. It must stay behaviour compatible with the new methods,
-// because callers mix both while migrating.
-func TestSet_DeprecatedMutators(t *testing.T) {
-	t.Run("Add", func(t *testing.T) {
-		set := NewSet[int]()
-		set.Add(1)
-		set.Add(1)
-		if want := NewSet(1); !set.Equal(want) {
-			t.Errorf("after Add set = %v, want %v", set, want)
-		}
-	})
-
-	t.Run("AddSlice", func(t *testing.T) {
-		set := NewSet(1)
-		set.AddSlice([]int{2, 3, 2})
-		if want := NewSet(1, 2, 3); !set.Equal(want) {
-			t.Errorf("after AddSlice set = %v, want %v", set, want)
-		}
-		set.AddSlice(nil)
-		if want := NewSet(1, 2, 3); !set.Equal(want) {
-			t.Errorf("AddSlice(nil) changed the set to %v", set)
-		}
-	})
-
-	t.Run("AddSet", func(t *testing.T) {
-		set := NewSet(1)
-		set.AddSet(NewSet(1, 2))
-		if want := NewSet(1, 2); !set.Equal(want) {
-			t.Errorf("after AddSet set = %v, want %v", set, want)
-		}
-		set.AddSet(nil)
-		if want := NewSet(1, 2); !set.Equal(want) {
-			t.Errorf("AddSet(nil) changed the set to %v", set)
-		}
-	})
-
-	t.Run("DeleteSlice", func(t *testing.T) {
-		set := NewSet(1, 2, 3)
-		set.DeleteSlice([]int{2, 4})
-		if want := NewSet(1, 3); !set.Equal(want) {
-			t.Errorf("after DeleteSlice set = %v, want %v", set, want)
-		}
-	})
-
-	t.Run("DeleteSet", func(t *testing.T) {
-		set := NewSet(1, 2, 3)
-		set.DeleteSet(NewSet(2, 4))
-		if want := NewSet(1, 3); !set.Equal(want) {
-			t.Errorf("after DeleteSet set = %v, want %v", set, want)
-		}
-	})
-}
-
 // TestSet_UnmarshalJSON_DoesNotMutateSharedMap covers the aliasing bug an
 // adversarial review found: UnmarshalJSON used to clear and refill the
 // receiver's existing map when it was non-nil, so unmarshalling into a struct
@@ -407,4 +363,94 @@ func TestSet_UnmarshalJSON_DoesNotMutateSharedMap(t *testing.T) {
 	if cfg.Perms.Contains("write") {
 		t.Error("the unmarshalled field still aliases the default map")
 	}
+}
+
+// upperString normalizes in MarshalJSON and UnmarshalJSON
+// and implements Normalizable like money.Currency,
+// for TestSet_JSONKeepsStringValues.
+type upperString string
+
+func (s upperString) Normalized() (upperString, error) {
+	return upperString(strings.ToUpper(string(s))), nil
+}
+
+func (s upperString) MarshalJSON() ([]byte, error) {
+	return json.Marshal(strings.ToUpper(string(s)))
+}
+
+func (s *upperString) UnmarshalJSON(data []byte) error {
+	var str string
+	if err := json.Unmarshal(data, &str); err != nil {
+		return err
+	}
+	*s = upperString(strings.ToUpper(str))
+	return nil
+}
+
+// A Set of a string type with a normalizing MarshalJSON, like
+// Set[money.Currency], is written and read with its values as stored:
+// written normalized, "eur" and "EUR" would be the same JSON value and the
+// set would read back with fewer values than it was written with.
+func TestSet_JSONKeepsStringValues(t *testing.T) {
+	set := NewSet[upperString]("eur", "EUR", "usd")
+	data, err := json.Marshal(set)
+	require.NoError(t, err)
+	assert.Equal(t, `["EUR","eur","usd"]`, string(data))
+
+	var back Set[upperString]
+	require.NoError(t, json.Unmarshal(data, &back))
+	assert.Equal(t, set, back)
+}
+
+// lowerStatus is not normalizing: its JSON methods define the encoding
+// and reject unknown values, for TestSet_JSONUsesMethodsOfOtherStrings.
+type lowerStatus string
+
+func (s lowerStatus) MarshalJSON() ([]byte, error) {
+	return json.Marshal(strings.ToLower(string(s)))
+}
+
+func (s *lowerStatus) UnmarshalJSON(data []byte) error {
+	var str string
+	if err := json.Unmarshal(data, &str); err != nil {
+		return err
+	}
+	if str != "open" && str != "closed" {
+		return fmt.Errorf("invalid status %s", str)
+	}
+	*s = lowerStatus(strings.ToUpper(str))
+	return nil
+}
+
+// Only the values of a normalizing type are written and read as stored.
+// A Set of another string type must use the JSON methods of the type,
+// so that their validation still rejects bad input and the JSON
+// keeps the encoding that the type defines for its consumers.
+func TestSet_JSONUsesMethodsOfOtherStrings(t *testing.T) {
+	data, err := json.Marshal(NewSet[lowerStatus]("OPEN"))
+	require.NoError(t, err)
+	assert.Equal(t, `["open"]`, string(data), "MarshalJSON of the type")
+
+	var back Set[lowerStatus]
+	require.NoError(t, json.Unmarshal(data, &back))
+	assert.Equal(t, NewSet[lowerStatus]("OPEN"), back, "UnmarshalJSON of the type")
+
+	err = json.Unmarshal([]byte(`["open","bogus"]`), &back)
+	assert.ErrorContains(t, err, "invalid status bogus")
+}
+
+// tens normalizes but is no string, so a Set of it keeps the JSON
+// encoding of its kind instead of being written as stored strings.
+type tens int
+
+func (t tens) Normalized() (tens, error) { return t / 10 * 10, nil }
+
+func TestSet_JSONOfNormalizingNonString(t *testing.T) {
+	set := NewSet[tens](12, 25)
+	data, err := json.Marshal(set)
+	require.NoError(t, err)
+	assert.Equal(t, `[12,25]`, string(data))
+	var back Set[tens]
+	require.NoError(t, json.Unmarshal(data, &back))
+	assert.Equal(t, set, back)
 }

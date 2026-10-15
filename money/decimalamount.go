@@ -6,6 +6,7 @@ import (
 	"encoding"
 	"encoding/binary"
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"io"
 	"math"
@@ -17,6 +18,7 @@ import (
 	"github.com/invopop/jsonschema"
 
 	"github.com/domonda/go-types/float"
+	"github.com/domonda/go-types/internal"
 	"github.com/domonda/go-types/nullable"
 	"github.com/domonda/go-types/strutil"
 )
@@ -105,8 +107,9 @@ func (m RoundingMode) String() string {
 // the otherwise-unused scale value 31. Arithmetic never panics on overflow or
 // division by zero: overflow yields ±Inf, x/0 yields ±Inf (or NaN for 0/0), and
 // NaN propagates like IEEE floating point. Use Valid/IsFinite/IsNaN/IsInf to
-// test, mirroring Amount. (Explicit misuse — an out-of-range scale or decimals
-// argument — still panics.)
+// test, mirroring Amount, except that IsInf takes a sign argument.
+// (Explicit misuse — an out-of-range scale or decimals argument, or an
+// out-of-range coefficient passed to NewDecimalAmount — still panics.)
 //
 // The zero value is a valid finite amount of 0 with scale 0.
 type DecimalAmount struct {
@@ -150,30 +153,6 @@ const (
 	// decide when a trailing zero has to be stripped.
 	maxDecimalAmountDigits = 18
 )
-
-// pow5[i] == 5^i for i in 0..MaxDecimalAmountScale (5^18 < 2^42), used by the
-// int128 float-to-decimal conversion.
-var pow5 = [MaxDecimalAmountScale + 1]int64{
-	1,
-	5,
-	25,
-	125,
-	625,
-	3125,
-	15625,
-	78125,
-	390625,
-	1953125,
-	9765625,
-	48828125,
-	244140625,
-	1220703125,
-	6103515625,
-	30517578125,
-	152587890625,
-	762939453125,
-	3814697265625,
-}
 
 // decimalPow10[i] == 10^i for i in 0..MaxDecimalAmountScale.
 // 10^18 is the largest power of ten that fits in an int64.
@@ -348,12 +327,16 @@ func (a DecimalAmount) IsInf(sign int) bool {
 // coefficient is taken directly from the digits of str without a float64
 // round-trip, so values like 99999999999999.99 keep their last cent.
 //
-// Like ParseAmount, a lone separator group is treated as a decimal separator,
-// not a thousands separator: "1,000" and "1'000" parse to 1.000 (== 1), not
-// 1000. Pass acceptedDecimals to reject such ambiguous inputs.
+// Like ParseAmount, a lone '.' or ',' is treated as a decimal separator,
+// not a thousands separator: "1,000" parses to 1.000 (== 1), not 1000.
+// Pass acceptedDecimals to reject such ambiguous inputs. The apostrophe and
+// the space are only ever thousands separators, so "1'000" and "1 000"
+// parse to 1000, and one that can't separate thousands, like in "1'5",
+// is an error.
 //
 // The tokens "NaN", "Inf"/"+Inf"/"Infinity" and "-Inf"/"-Infinity" parse to the
-// corresponding non-finite values.
+// corresponding non-finite values. They are errors if acceptedDecimals are
+// passed, because a non-finite value has no decimals that could be accepted.
 //
 // Scientific notation like "1.5e2" is accepted and applied exactly by shifting
 // the scale, because JSON numbers and PostgreSQL float8 output may use it.
@@ -390,10 +373,11 @@ func ParseDecimalAmount(str string, acceptedDecimals ...int) (DecimalAmount, err
 	// The long "Infinity" spellings are not recognized by float.ParseDetails but
 	// are the PostgreSQL numeric literals emitted by Value.
 	switch str {
-	case "Infinity", "+Infinity":
-		return decimalInf(false), nil
-	case "-Infinity":
-		return decimalInf(true), nil
+	case "Infinity", "+Infinity", "-Infinity":
+		if len(acceptedDecimals) > 0 {
+			return DecimalAmount{}, errNonFiniteNotAccepted(str, acceptedDecimals)
+		}
+		return decimalInf(str == "-Infinity"), nil
 	}
 	// The exponent has to be split off before parsing because the coefficient is
 	// built from all digit runes of the mantissa, which must not include the
@@ -412,6 +396,9 @@ func ParseDecimalAmount(str string, acceptedDecimals ...int) (DecimalAmount, err
 		// does not recognize, like "1e1e1" or "1 e3". Their digits would end up
 		// in the coefficient, so reject them instead of parsing them wrongly.
 		return DecimalAmount{}, fmt.Errorf("money.DecimalAmount value %q has a malformed exponent", str)
+	}
+	if len(acceptedDecimals) > 0 && (math.IsNaN(f) || math.IsInf(f, 0)) {
+		return DecimalAmount{}, errNonFiniteNotAccepted(str, acceptedDecimals)
 	}
 	if math.IsNaN(f) {
 		return DecimalAmountNaN(), nil
@@ -815,26 +802,116 @@ func (a DecimalAmount) MulInt64(n int64) DecimalAmount {
 	return packReduced(hi, lo, a.Scale(), (ca < 0) != (n < 0))
 }
 
-// MultipliedByRate returns the amount multiplied by the float64 Rate. Because
-// Rate is a float64 the product is computed in floating point; the result is
-// the exact shortest decimal representation of that float64 product, so no
-// further precision is lost. Round to the final precision afterwards, e.g.
-// with RoundToCents. A non-finite product yields the corresponding NaN or ±Inf.
+// MultipliedByRate returns the amount multiplied by the float64 Rate.
+// Like Amount.CentAmount it uses the shortest decimal representation of the
+// rate, so 3.00 times 0.145 is exactly 0.435, which RoundToCents rounds to
+// 0.44, and not the 0.43499999999999994 of a float64 product. The product is
+// computed with Mul and returned without trailing zeros. It is exact unless
+// it needs more than MaxDecimalAmountScale decimal places, then Mul rounds
+// it half away from zero, so rounding it again, like to cents, can differ
+// by one from rounding the exact product. A rate whose
+// shortest decimal needs more than MaxDecimalAmountScale decimal places or
+// doesn't fit the coefficient range is multiplied in float64 precision.
+// Round to the final precision afterwards, e.g. with RoundToCents.
+// A non-finite product yields the corresponding NaN or ±Inf.
 func (a DecimalAmount) MultipliedByRate(rate Rate) DecimalAmount {
+	if r, ok := exactDecimalFromFloat(float64(rate)); ok {
+		return a.Mul(r, RoundHalfAwayFromZero).withoutTrailingZeros()
+	}
 	return decimalFromFloatShortest(a.Float()*float64(rate), 64)
 }
 
-// DividedByRate returns the amount divided by the float64 Rate. See
-// MultipliedByRate for the precision caveat. Division by a zero rate yields
-// ±Inf (or NaN for 0/0).
+// DividedByRate returns the amount divided by the float64 Rate, computed with
+// Div by the shortest decimal representation of the rate like
+// MultipliedByRate, so a quotient that doesn't terminate is rounded half away
+// from zero at the largest scale that fits. Division by a zero rate yields
+// ±Inf (or NaN for 0/0), with the sign of a negative zero rate.
 func (a DecimalAmount) DividedByRate(rate Rate) DecimalAmount {
+	// A zero rate is divided in float64, because the decimal zero
+	// has no sign and dividing by -0 must give -Inf for a positive amount
+	if r, ok := exactDecimalFromFloat(float64(rate)); ok && rate != 0 {
+		return a.Div(r, RoundHalfAwayFromZero).withoutTrailingZeros()
+	}
 	return decimalFromFloatShortest(a.Float()/float64(rate), 64)
 }
 
-// Percentage returns the amount multiplied by (percent / 100). See
-// MultipliedByRate for the precision caveat.
+// Percentage returns the amount multiplied by (percent / 100), computed
+// exactly with the shortest decimal representation of percent like
+// MultipliedByRate.
 func (a DecimalAmount) Percentage(percent float64) DecimalAmount {
+	if p, ok := exactDecimalFromFloat(percent); ok && p.Scale()+2 <= MaxDecimalAmountScale {
+		return a.Mul(packDecimalAmount(p.Coefficient(), p.Scale()+2), RoundHalfAwayFromZero).withoutTrailingZeros()
+	}
 	return decimalFromFloatShortest(a.Float()*percent/100, 64)
+}
+
+// exactDecimalFromFloat returns the shortest decimal representation of f,
+// the literal that parses back to f, as exact DecimalAmount, so 0.145 has the
+// coefficient 145 and scale 3. It returns false if f is not finite or if its
+// shortest representation needs more than MaxDecimalAmountScale decimal
+// places or doesn't fit the coefficient range.
+func exactDecimalFromFloat(f float64) (DecimalAmount, bool) {
+	if coefficient, scale, ok := shortestDecimalFast(f); ok {
+		return packDecimalAmount(coefficient, scale), true
+	}
+	return exactDecimalFromFloatFormatted(f)
+}
+
+// exactDecimalFromFloatFormatted is exactDecimalFromFloat without the
+// float64 fast path, parsing the digits formatted by strconv.FormatFloat.
+func exactDecimalFromFloatFormatted(f float64) (DecimalAmount, bool) {
+	d, err := ParseDecimalAmount(strconv.FormatFloat(f, 'f', -1, 64))
+	return d, err == nil && d.IsFinite()
+}
+
+// shortestDecimalFast returns the shortest decimal representation of f as
+// coefficient and scale, the digits that strconv.FormatFloat(f, 'f', -1, 64)
+// writes, and whether it could prove them with a few float64 operations,
+// which is an order of magnitude faster than formatting and parsing them.
+// It proves them for every f written with up to 15 significant digits
+// and at most MaxDecimalAmountScale decimal places.
+//
+// A decimal k·10^-s with float64 integers k and 10^s parses back to f if the
+// correctly rounded IEEE 754 division k/10^s equals f, because parsing rounds
+// the same way. Such a k lies within the rounding interval of f scaled by
+// 10^s, which is at most |f·10^s|·2^-52 wide, and the float64 f·10^s rounds
+// by at most |f·10^s|·2^-53. Below 2^50 these are less than 1/4 and 1/8, so
+// the interval holds one k at most, and that is math.Round of the float64
+// f·10^s. The relative bounds hold because a nonzero k·10^-s with s up to
+// MaxDecimalAmountScale never parses to a subnormal f.
+// Below 2^50 no integer other than f itself parses to f, and all k·10^-s that
+// do lie within a relative 2^-52 of f, so they share the position of their
+// leading digit unless one of them is a power of ten, which then is the only
+// one of the smallest scale. So the smallest scale has the fewest digits and
+// its k is the one FormatFloat writes. A k below 2^50 is never a midpoint
+// between two float64 values, which needs 54 significant bits, so this
+// doesn't depend on how a shortest algorithm treats the ends of the rounding
+// interval either.
+func shortestDecimalFast(f float64) (coefficient int64, scale int, ok bool) {
+	for scale = 0; scale <= MaxDecimalAmountScale; scale++ {
+		pow10 := math.Pow10(scale) // exact up to 10^22
+		scaled := f * pow10
+		if !(math.Abs(scaled) < 1<<50) { // also NaN and ±Inf
+			return 0, 0, false
+		}
+		if k := math.Round(scaled); k/pow10 == f {
+			return int64(k), scale, true
+		}
+	}
+	return 0, 0, false
+}
+
+// withoutTrailingZeros returns a with the trailing zero decimal places of its
+// coefficient removed, which is the shortest representation of its value.
+func (a DecimalAmount) withoutTrailingZeros() DecimalAmount {
+	if !a.IsFinite() {
+		return a
+	}
+	coeff, scale := a.Coefficient(), a.Scale()
+	for scale > 0 && coeff%10 == 0 {
+		coeff, scale = coeff/10, scale-1
+	}
+	return packDecimalAmount(coeff, scale)
 }
 
 // Mul returns the exact product a × b, computed in 128-bit integer arithmetic
@@ -1051,7 +1128,14 @@ func (a DecimalAmount) FormatSep(thousandsSep, decimalSep rune) string {
 // groups the integer part with ',' thousands separators (for %v, %s, %f and
 // %d), and the width with the '-' and '0' flags controls padding. Formatting
 // never panics.
+//
+// For %v the '+' flag is ignored because %+v means "add field names" in fmt,
+// which passes the flag on to the fields of a struct, so a struct with a
+// DecimalAmount field prints as {T:1234.50} like a struct with an int field.
 func (a DecimalAmount) Format(f fmt.State, verb rune) {
+	if verb == 'v' {
+		f = withoutPlusFlag{f}
+	}
 	if !a.IsFinite() {
 		if verb == 'v' && f.Flag('#') {
 			writeStr(f, a.GoString())
@@ -1095,6 +1179,14 @@ func (a DecimalAmount) Format(f fmt.State, verb rune) {
 	default:
 		fmt.Fprintf(f, "%%!%c(money.DecimalAmount=%s)", verb, a.String())
 	}
+}
+
+// withoutPlusFlag is a fmt.State that hides the '+' flag,
+// which DecimalAmount.Format ignores for the %v verb.
+type withoutPlusFlag struct{ fmt.State }
+
+func (s withoutPlusFlag) Flag(c int) bool {
+	return c != '+' && s.State.Flag(c)
 }
 
 // MarshalJSON implements json.Marshaler, encoding a finite amount as an unquoted
@@ -1148,6 +1240,14 @@ func (a *DecimalAmount) UnmarshalJSON(data []byte) error {
 // string (like String).
 func (a DecimalAmount) MarshalText() ([]byte, error) {
 	return []byte(a.String()), nil
+}
+
+// MarshalXMLAttr implements encoding/xml.MarshalerAttr by writing the
+// text of MarshalText, and no attribute for a nil pointer, because
+// encoding/xml calls MarshalText through a nil pointer attribute field
+// and panics.
+func (a *DecimalAmount) MarshalXMLAttr(name xml.Name) (xml.Attr, error) {
+	return internal.MarshalXMLAttrText(a, name)
 }
 
 // UnmarshalText implements encoding.TextUnmarshaler. An empty text is decoded
@@ -1360,18 +1460,6 @@ func (a DecimalAmount) formatBody(f fmt.State, prec int) string {
 	return b.String()
 }
 
-// mustDecimalFromFloat converts f to a DecimalAmount rounded to scale with the
-// given rounding mode. NaN, infinity and overflow yield the corresponding
-// non-finite value; it panics only on an out-of-range scale (a programmer
-// error).
-func mustDecimalFromFloat(f float64, scale int, rounding RoundingMode) DecimalAmount {
-	d, err := decimalFromFloatRounded(f, scale, rounding)
-	if err != nil {
-		panic(fmt.Sprintf("money.DecimalAmount from float %v: %s", f, err))
-	}
-	return d
-}
-
 // decimalFromFloatShortest converts f to the DecimalAmount given exactly by
 // the shortest decimal representation that round-trips to f at the given
 // bitSize (32 or 64), so no float precision is lost. A value whose shortest
@@ -1383,7 +1471,82 @@ func decimalFromFloatShortest(f float64, bitSize int) DecimalAmount {
 	if parsed, err := ParseDecimalAmount(strconv.FormatFloat(f, 'f', -1, bitSize)); err == nil {
 		return parsed
 	}
-	return mustDecimalFromFloat(f, MaxDecimalAmountScale, RoundHalfAwayFromZero)
+	return decimalFromFloatRounded(f, bitSize, MaxDecimalAmountScale, RoundHalfAwayFromZero)
+}
+
+// decimalFromFloatRounded converts f to a DecimalAmount at the given scale by
+// rounding the shortest decimal representation of f at the given bitSize
+// (32 or 64) with the given rounding mode. The shortest decimal is the literal
+// that parses back to f, so Amount(0.145) rounds to the 0.15 of its literal
+// and not to the 0.14 of its binary value 0.14499999999999999001.
+// A NaN or infinite f maps to the corresponding non-finite DecimalAmount and an
+// out-of-range value maps to ±Inf. It panics only for an out-of-range scale
+// (a programmer error).
+func decimalFromFloatRounded(f float64, bitSize, scale int, rounding RoundingMode) DecimalAmount {
+	if scale < 0 || scale > MaxDecimalAmountScale {
+		panic(fmt.Sprintf("money.DecimalAmount from float %v: scale %d out of range [0, %d]", f, scale, MaxDecimalAmountScale))
+	}
+	switch {
+	case math.IsNaN(f):
+		return DecimalAmountNaN()
+	case math.IsInf(f, 0):
+		return decimalInf(math.Signbit(f))
+	}
+	negative := math.Signbit(f)
+	intDigits, fracDigits, _ := strings.Cut(strconv.FormatFloat(math.Abs(f), 'f', -1, bitSize), ".")
+	digits := strings.TrimLeft(roundDecimalDigits(intDigits, fracDigits, scale, negative, rounding), "0")
+	var coeff int64
+	if digits != "" {
+		var err error
+		// The digits have no sign, so ParseInt only fails for too many of them
+		// and parsing them as signed needs no unsigned to signed conversion
+		coeff, err = strconv.ParseInt(digits, 10, 64)
+		if err != nil || coeff > maxDecimalAmountCoefficient {
+			return decimalInf(negative)
+		}
+	}
+	if negative {
+		coeff = -coeff
+	}
+	return packDecimalAmount(coeff, scale)
+}
+
+// roundDecimalDigits rounds the non-negative decimal number with the integer
+// digits intDigits and the fractional digits fracDigits to the given number of
+// decimal places with the rounding mode, where negative decimals round to tens,
+// hundreds, and so on. negative is the sign of the number for the rounding
+// modes that depend on it. It returns the digits of the rounded number times
+// 10^decimals, which may have leading zeros and are empty for zero.
+// Rounding the digits instead of a binary float keeps ties like 0.145 exact.
+func roundDecimalDigits(intDigits, fracDigits string, decimals int, negative bool, rounding RoundingMode) string {
+	digits := intDigits + fracDigits
+	keep := len(intDigits) + decimals // number of leading digits to keep
+	if keep >= len(digits) {
+		return digits + strings.Repeat("0", keep-len(digits))
+	}
+	kept, cut := "", "0"+digits // every digit is cut, after -keep zeros if keep < 0
+	switch {
+	case keep == 0:
+		cut = digits
+	case keep > 0:
+		kept, cut = digits[:keep], digits[keep:]
+	}
+	halfCmp, nonZero := compareCutFractionToHalf(cut)
+	odd := kept != "" && (kept[len(kept)-1]-'0')%2 == 1
+	if !nonZero || !roundAwayFromZero(rounding, negative, odd, halfCmp) {
+		return kept
+	}
+	// Add one to the last kept digit, carrying over nines
+	b := []byte(kept)
+	i := len(b) - 1
+	for ; i >= 0 && b[i] == '9'; i-- {
+		b[i] = '0'
+	}
+	if i < 0 {
+		return "1" + string(b)
+	}
+	b[i]++
+	return string(b)
 }
 
 // decimalDigits splits abs(coeff) into integer and fractional digit strings for
@@ -1723,130 +1886,6 @@ func roundAwayFromZero(mode RoundingMode, negative, quotientOdd bool, halfCmp in
 		return negative
 	default: // RoundHalfAwayFromZero
 		return true
-	}
-}
-
-// decimalFromFloatRounded converts f to a DecimalAmount at the given scale using
-// the exact value of the binary float64 and the given rounding mode, computed in
-// 128-bit integer arithmetic without heap allocation. A NaN or infinite f maps
-// to the corresponding non-finite DecimalAmount and an out-of-range value maps to
-// ±Inf. It returns an error only for an out-of-range scale (a programmer error).
-func decimalFromFloatRounded(f float64, scale int, rounding RoundingMode) (DecimalAmount, error) {
-	if scale < 0 || scale > MaxDecimalAmountScale {
-		return DecimalAmount{}, fmt.Errorf("money.DecimalAmount scale %d out of range [0, %d]", scale, MaxDecimalAmountScale)
-	}
-	switch {
-	case math.IsNaN(f):
-		return DecimalAmountNaN(), nil
-	case math.IsInf(f, 0):
-		return decimalInf(math.Signbit(f)), nil
-	case f == 0:
-		return packDecimalAmount(0, scale), nil
-	}
-	// Decompose |f| exactly as m·2^e with m a 53-bit integer mantissa. Then
-	// value·10^scale = m·2^e·10^scale = (m·5^scale)·2^(e+scale). Since m ≤ 2^53
-	// and 5^scale < 2^42, the product m·5^scale fits in 128 bits, and the
-	// remaining factor is a pure power of two, i.e. a shift.
-	negative := math.Signbit(f)
-	frac, exp := math.Frexp(f) // f = frac·2^exp, 0.5 ≤ |frac| < 1
-	m := uint64(math.Ldexp(math.Abs(frac), 53))
-	hi, lo := bits.Mul64(m, uint64(pow5[scale])) //#nosec G115 -- 5^scale is a positive int64
-	var mag uint64
-	var over bool
-	if s := (exp - 53) + scale; s >= 0 {
-		mag, over = shiftLeft128(hi, lo, s) // exact, no rounding
-	} else {
-		mag, over = shiftRightRound128(hi, lo, -s, negative, rounding)
-	}
-	if over || mag > uint64(maxDecimalAmountCoefficient) {
-		return decimalInf(negative), nil
-	}
-	coeff := int64(mag)
-	if negative {
-		coeff = -coeff
-	}
-	return packDecimalAmount(coeff, scale), nil
-}
-
-// shiftLeft128 returns ((hi,lo) << n) as a uint64, reporting overflow if the
-// result does not fit in 64 bits (the coefficient range is below 2^64).
-func shiftLeft128(hi, lo uint64, n int) (uint64, bool) {
-	if hi != 0 {
-		return 0, true // value ≥ 2^64, shifting left only grows it
-	}
-	if n >= 64 {
-		return 0, lo != 0
-	}
-	r := lo << n
-	if r>>n != lo {
-		return 0, true // high bits shifted out
-	}
-	return r, false
-}
-
-// shiftRightRound128 returns round((hi,lo) / 2^k) as a uint64 using the rounding
-// mode and sign, reporting overflow if the quotient does not fit in 64 bits.
-func shiftRightRound128(hi, lo uint64, k int, negative bool, rounding RoundingMode) (uint64, bool) {
-	var qHi, qLo uint64
-	switch {
-	case k == 0:
-		qHi, qLo = hi, lo
-	case k < 64:
-		qLo = lo>>k | hi<<(64-k)
-		qHi = hi >> k
-	case k < 128:
-		qLo = hi >> (k - 64)
-	}
-	if qHi != 0 {
-		return 0, true
-	}
-	// The bits shifted out determine rounding: the round bit is bit k-1 and the
-	// sticky bit is any set bit below it.
-	roundBit := bit128(hi, lo, k-1)
-	sticky := lowBitsNonzero128(hi, lo, k-1)
-	if roundBit == 0 && !sticky {
-		return qLo, false // exact
-	}
-	halfCmp := -1 // remainder below the halfway point
-	if roundBit != 0 {
-		if sticky {
-			halfCmp = +1 // above halfway
-		} else {
-			halfCmp = 0 // exactly halfway
-		}
-	}
-	if roundAwayFromZero(rounding, negative, qLo&1 == 1, halfCmp) {
-		qLo++
-		if qLo == 0 { // wrapped past uint64
-			return 0, true
-		}
-	}
-	return qLo, false
-}
-
-// bit128 returns bit i (0-based) of the 128-bit value (hi,lo), or 0 out of range.
-func bit128(hi, lo uint64, i int) uint64 {
-	switch {
-	case i < 0 || i >= 128:
-		return 0
-	case i < 64:
-		return lo >> i & 1
-	default:
-		return hi >> (i - 64) & 1
-	}
-}
-
-// lowBitsNonzero128 reports whether any of bits [0, n) of (hi,lo) are set.
-func lowBitsNonzero128(hi, lo uint64, n int) bool {
-	switch {
-	case n <= 0:
-		return false
-	case n >= 128:
-		return hi != 0 || lo != 0
-	case n <= 64:
-		return lo&(1<<n-1) != 0
-	default:
-		return lo != 0 || hi&(1<<(n-64)-1) != 0
 	}
 }
 

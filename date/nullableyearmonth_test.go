@@ -1,10 +1,13 @@
 package date
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/domonda/go-types/internal/normtest"
 )
 
 func TestNullableYearMonth_Validate(t *testing.T) {
@@ -56,6 +59,9 @@ func TestNullableYearMonth_ValidAndNotNull(t *testing.T) {
 		{name: "valid", ym: "2023-03", want: true},
 		{name: "null", ym: YearMonthNull, want: false},
 		{name: "invalid", ym: "2023-13", want: false},
+		// "0001-01" is the year-month of the zero time.Time, which IsNull
+		// reports as null like the zero dates of NullableDate.
+		{name: "zero 0001-01", ym: "0001-01", want: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -92,6 +98,10 @@ func TestNullableYearMonth_IsNull(t *testing.T) {
 	}{
 		{name: "null", ym: YearMonthNull, want: true},
 		{name: "empty", ym: "", want: true},
+		{name: "whitespace only", ym: " \t", want: true},
+		// The zero values are null like the zero dates of NullableDate
+		{name: "zero 0000-00", ym: "0000-00", want: true},
+		{name: "zero 0001-01", ym: "0001-01", want: true},
 		{name: "valid", ym: "2023-03", want: false},
 	}
 	for _, tt := range tests {
@@ -215,6 +225,8 @@ func TestNullableYearMonth_Compare(t *testing.T) {
 		{name: "null vs value", ym: YearMonthNull, other: "2023-03", want: -1},
 		{name: "value vs null", ym: "2023-03", other: YearMonthNull, want: 1},
 		{name: "both null", ym: YearMonthNull, other: YearMonthNull, want: 0},
+		{name: "whitespace is null", ym: "  ", other: YearMonthNull, want: 0},
+		{name: "equal when normalized", ym: "2023-07 ", other: "2023-07", want: 0},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -287,20 +299,18 @@ func TestNullableYearMonth_DateRange(t *testing.T) {
 		wantFrom  NullableDate
 		wantUntil NullableDate
 	}{
-		{name: "march 2023", ym: "2023-03", wantFrom: NullableDate("2023-03-01"), wantUntil: NullableDate("2023-03")},
+		{name: "march 2023", ym: "2023-03", wantFrom: NullableDate("2023-03-01"), wantUntil: NullableDate("2023-03-31")},
+		{name: "february 2024 (leap)", ym: "2024-02", wantFrom: NullableDate("2024-02-01"), wantUntil: NullableDate("2024-02-29")},
 		{name: "null", ym: YearMonthNull, wantFrom: Null, wantUntil: Null},
+		// An invalid year-month has no range, like YearMonth.DateRange
+		{name: "invalid", ym: "2023-13", wantFrom: Null, wantUntil: Null},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			gotFrom, gotUntil := tt.ym.DateRange()
 			require.Equal(t, tt.wantFrom, gotFrom)
-			if tt.ym.IsNull() {
-				require.Equal(t, tt.wantUntil, gotUntil)
-			} else {
-				// DateRange implementation has an issue, returns "YYYY-MM" instead of last day
-				// This test documents the actual behavior
-				require.True(t, gotUntil.Valid() || len(gotUntil) == 7)
-			}
+			// untilDate is the inclusive last day of the month, not "YYYY-MM"
+			require.Equal(t, tt.wantUntil, gotUntil)
 		})
 	}
 }
@@ -414,4 +424,85 @@ func TestNullableYearMonth_ContainsDate(t *testing.T) {
 			require.Equal(t, tt.want, got)
 		})
 	}
+}
+
+func TestNullableYearMonth_UnmarshalJSON(t *testing.T) {
+	type doc struct {
+		Period NullableYearMonth `json:"period"`
+	}
+	// JSON null must reset a field that holds a value, like for
+	// uu.NullableID and email.NullableAddress, else decoding a partial
+	// update with null into an existing struct keeps the old period.
+	d := doc{Period: "2024-01"}
+	require.NoError(t, json.Unmarshal([]byte(`{"period":null}`), &d))
+	require.Equal(t, YearMonthNull, d.Period)
+
+	// A JSON string is stored normalized if it is valid, a blank one as
+	// null, and an invalid one unchanged without an error, so one bad
+	// period doesn't fail a whole document; Validate reports it.
+	for str, want := range map[string]NullableYearMonth{
+		"2023-07":   "2023-07",
+		" 2023-07 ": "2023-07",
+		"2023-13":   "2023-13",
+		"bad":       "bad",
+		"":          YearMonthNull,
+		"  ":        YearMonthNull,
+	} {
+		d := doc{Period: "2024-01"}
+		data, err := json.Marshal(map[string]string{"period": str})
+		require.NoError(t, err)
+		require.NoError(t, json.Unmarshal(data, &d))
+		require.Equal(t, want, d.Period, "json.Unmarshal(%s)", data)
+	}
+
+	// Any other JSON value is an error and leaves the value unchanged.
+	for _, data := range []string{`202307`, `true`, `{}`, `["2023-07"]`} {
+		ym := NullableYearMonth("2024-01")
+		require.Error(t, json.Unmarshal([]byte(data), &ym), "json.Unmarshal(%s)", data)
+		require.Equal(t, NullableYearMonth("2024-01"), ym, "json.Unmarshal(%s)", data)
+	}
+}
+
+// A blank value is null, valid and normalizes to YearMonthNull,
+// like NullableDate, but it is not normalized itself.
+func TestNullableYearMonth_Normalized(t *testing.T) {
+	for input, want := range map[NullableYearMonth]NullableYearMonth{
+		"":          YearMonthNull,
+		" \t":       YearMonthNull,
+		"2023-07":   "2023-07",
+		" 2023-07 ": "2023-07",
+	} {
+		got, err := input.Normalized()
+		require.NoError(t, err, "%q", input)
+		require.Equal(t, want, got, "%q", input)
+		require.True(t, input.Valid(), "%q", input)
+		require.Equal(t, input == want, input.ValidAndNormalized(), "%q", input)
+	}
+	got, err := NullableYearMonth("2023-13").Normalized()
+	require.Error(t, err)
+	require.Equal(t, NullableYearMonth("2023-13"), got, "unchanged")
+}
+
+// TestNullableYearMonth_ReadingAndWriting checks the reading and writing
+// contract shared by the normalizing types, with a blank or zero
+// NullableYearMonth as null like for NullableDate.
+func TestNullableYearMonth_ReadingAndWriting(t *testing.T) {
+	normtest.Run(t, normtest.Spec[NullableYearMonth]{
+		Canonical:    "2023-07",
+		Variants:     []NullableYearMonth{" 2023-07 ", "\t2023-07\n"},
+		Invalid:      []NullableYearMonth{"2023-13", "2023-7", "0000-05", "07/2023", "bad"},
+		Blank:        []NullableYearMonth{"0001-01", "0000-00", " 0001-01 "},
+		Nullable:     true,
+		StoredString: true,
+	})
+}
+
+// A date or timestamp column scans as its year-month, like
+// NullableDate.Scan scans it as its date, and the zero time as null.
+func TestNullableYearMonth_ScanTime(t *testing.T) {
+	var ym NullableYearMonth
+	require.NoError(t, ym.Scan(time.Date(2023, 7, 15, 10, 0, 0, 0, time.UTC)))
+	require.Equal(t, NullableYearMonth("2023-07"), ym)
+	require.NoError(t, ym.Scan(time.Time{}))
+	require.Equal(t, YearMonthNull, ym)
 }

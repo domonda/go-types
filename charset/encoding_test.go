@@ -2,9 +2,11 @@ package charset
 
 import (
 	"encoding/binary"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func Test_UTF8Encoding(t *testing.T) {
@@ -140,4 +142,85 @@ func Test_AutoDecode_UTF32LEBOM(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, []byte("hi"), text)
 	assert.Equal(t, "UTF-32LE", encName)
+}
+
+func TestEncodingImpl_Charmap(t *testing.T) {
+	// The legacy single byte encodings are what invoices and bank
+	// statements from older systems use, the euro sign is the critical
+	// character because it sits at different positions or is missing.
+	tests := []struct {
+		encName string
+		text    string
+		want    []byte
+	}{
+		{encName: "Windows 1252", text: "Grüße 100 €", want: []byte{'G', 'r', 0xFC, 0xDF, 'e', ' ', '1', '0', '0', ' ', 0x80}},
+		{encName: "ISO 8859-15", text: "Grüße 100 €", want: []byte{'G', 'r', 0xFC, 0xDF, 'e', ' ', '1', '0', '0', ' ', 0xA4}},
+		{encName: "ISO 8859-1", text: "Grüße", want: []byte{'G', 'r', 0xFC, 0xDF, 'e'}},
+		{encName: "IBM Code Page 850", text: "Grüße", want: []byte{'G', 'r', 0x81, 0xE1, 'e'}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.encName, func(t *testing.T) {
+			enc := MustGetEncoding(tt.encName)
+			encoded, err := enc.Encode([]byte(tt.text))
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, encoded)
+
+			decoded, err := enc.Decode(encoded)
+			require.NoError(t, err)
+			assert.Equal(t, tt.text, string(decoded))
+		})
+	}
+}
+
+func TestEncodingImpl_UnsupportedRune(t *testing.T) {
+	// Text that can't be represented must be an error instead of being
+	// silently replaced, otherwise data would be lost without notice.
+	_, err := MustGetEncoding("ISO 8859-1").Encode([]byte("100 €"))
+	assert.Error(t, err)
+	_, err = MustGetEncoding("Windows 1252").Encode([]byte("世界"))
+	assert.Error(t, err)
+
+	// The encoder must still work after an error
+	encoded, err := MustGetEncoding("Windows 1252").Encode([]byte("ok"))
+	assert.NoError(t, err)
+	assert.Equal(t, []byte("ok"), encoded)
+}
+
+func TestEncodingImpl_NameStringBOM(t *testing.T) {
+	enc := MustGetEncoding("windows 1252")
+	assert.Equal(t, "Windows 1252", enc.Name())
+	assert.Equal(t, "Windows 1252 Encoding", enc.String())
+	// Legacy encodings have no byte order mark
+	assert.Equal(t, NoBOM, enc.BOM())
+}
+
+// TestEncodings_ConcurrentUse checks the documented thread safety of the
+// Encoding implementations. The x/text encoders and decoders they wrap are
+// stateful and not safe for concurrent use, run with -race to verify.
+func TestEncodings_ConcurrentUse(t *testing.T) {
+	const text = "Grüße 100 €"
+	for _, enc := range []Encoding{
+		MustGetEncoding("Windows 1252"),
+		MustGetEncoding("ISO 8859-15"),
+		UTF32Encoding(binary.BigEndian),
+	} {
+		t.Run(enc.Name(), func(t *testing.T) {
+			var wg sync.WaitGroup
+			for range 8 {
+				wg.Go(func() {
+					for range 100 {
+						encoded, err := enc.Encode([]byte(text))
+						if !assert.NoError(t, err) {
+							return
+						}
+						decoded, err := enc.Decode(encoded)
+						if !assert.NoError(t, err) || !assert.Equal(t, text, string(decoded)) {
+							return
+						}
+					}
+				})
+			}
+			wg.Wait()
+		})
+	}
 }
