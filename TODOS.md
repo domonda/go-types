@@ -253,7 +253,18 @@ time.
         but `ParseMIMEMessage` leaves such a `From` empty with an error.
         Accepting it needs a model of when Python joins encoded-words.
       - `email`: `ASCII` writes a long name as one encoded-word longer than
-        75 characters where a word of at most 75 would hold only ASCII text.
+        75 characters where a word of at most 75 would hold only ASCII text,
+        like the 108 characters of
+        `Müller GmbH & Co. KG, Niederlassung Frankfurt am Main (Buchhaltung)`.
+        From about 730 bytes of such a name, the header line of
+        `BuildRawMessage` is longer than the 998 octets of RFC 5322. Split
+        before an ASCII stretch so every word holds a rune that is not ASCII,
+        or allow ASCII words without specials, which Python writes as atoms.
+      - `email`: `=?utf-8?q?=28x=29?=: <ceo@corp.com>`, an ASCII comment word
+        before a `:`, is valid, but Python's header parser raises an
+        `IndexError` for it. A comment spread over several words, like the
+        `(renee.zellweger-smith@linkedin.example.com)` that every Go and
+        Python encoder splits, is refused, see the `Ivan Petrović` entry.
       - `email`: a non-ASCII name holding a literal encoded-word, like
         `Jürgen =?utf-8?q?x?=`, is valid as quoted UTF-8, but its `ASCII`
         form is refused. Python reads both forms as `Jürgenx` after
