@@ -103,21 +103,21 @@ Implements: `database/sql.Scanner`, `database/sql/driver.Valuer`, `json.Marshale
 
 ## Serialization
 
-`Code` and `NullableCode` follow the rules of [Reading and writing values](../README.md#reading-and-writing-values): reading normalizes, `Value` refuses an invalid code, and `fmt` prints the stored code.
+`Code` and `NullableCode` follow the rules of [Reading and writing values](../README.md#reading-and-writing-values): reading and writing only trim, so `"Deutschland"` stays `"Deutschland"`, and `fmt` prints the stored code.
 
 | Value                                    | SQL `Value()` | JSON (`json.Marshal`) | `MarshalText`, XML | `fmt`     |
 |------------------------------------------|---------------|-----------------------|--------------------|-----------|
 | `Code("")` (`Invalid`), `Code("  ")`     | `NULL`        | `""`                  | `""`               | as stored |
-| `Code("de")`, `Code("Deutschland")`      | `"DE"`        | `"DE"`                | `"DE"`             | as stored |
-| `Code("xx")` (invalid)                   | error         | `"xx"`                | `"xx"`             | `xx`      |
+| `Code(" de ")`, `Code("Deutschland")`    | `"de"`, `"Deutschland"` | `"de"`, `"Deutschland"` | `"de"`, `Deutschland` | as stored |
+| `Code("xx")` (invalid)                   | `"xx"`        | `"xx"`                | `"xx"`             | `xx`      |
 | `NullableCode` `Null` or whitespace only | `NULL`        | `null`                | `""`               | as stored |
-| `NullableCode("de")`                     | `"DE"`        | `"DE"`                | `"DE"`             | `de`      |
-| `NullableCode("xx")` (invalid)           | error         | `"xx"`                | `"xx"`             | `xx`      |
+| `NullableCode("de")`                     | `"de"`        | `"de"`                | `"de"`             | `de`      |
+| `NullableCode("xx")` (invalid)           | `"xx"`        | `"xx"`                | `"xx"`             | `xx`      |
 
 | Input                                              | `Code`                                             | `NullableCode`        |
 |----------------------------------------------------|----------------------------------------------------|-----------------------|
 | `Scan(nil)`                                        | `Invalid`                                          | `Null`                |
-| `Scan` of a string or `[]byte`, JSON string, XML element or attribute | normalized if valid, `Invalid` if blank, else as is, without error | same, `Null` if blank |
+| `Scan` of a string or `[]byte`, JSON string, XML element or attribute | trimmed, `Invalid` if blank, without mapping names or case | same, `Null` if blank |
 | `Scan` of other types                              | error                                              | error                 |
 | JSON `null`                                        | field left unchanged                               | `Null`                |
 | other JSON values                                  | error                                              | error                 |
@@ -133,9 +133,9 @@ An invalid code is read without error, so one bad row doesn't fail a whole query
 - **Few three-letter codes.** Only `"AUT"`, `"DEU"` and `"SUI"` are known. `"USA"`, `"GBR"` and `"CHE"` fail.
 - **EL and GR are different codes.** Both are valid EU members named Greece, but `Code("EL") != Code("GR")` and `Normalized` does not map one to the other. Greek VAT IDs (`vat.ID`) report `EL`. Map it yourself if you need ISO codes only: `if c == country.EL { c = country.GR }`.
 - **XK is not an ISO code.** Other systems may reject it.
-- **`Value` refuses invalid codes.** `Value` returns the error of `Normalized` for an invalid code, so the insert fails. `MarshalJSON` and `MarshalText` write it unchanged.
+- **`Value` writes invalid codes.** `Value`, `MarshalJSON` and `MarshalText` write the trimmed code, including `"xx"` and `"Deutschland"`. They do not return the error of `Normalized`.
 - **Whitespace.** `NullableCode("  ")` is null (SQL NULL, JSON `null`). `Code("  ")` is read as `Invalid` and written as SQL NULL, but it is invalid.
-- **`fmt` prints the stored code.** `fmt.Println(country.Code("de"))` prints `de`. A code read with `Scan` or from JSON or XML is already normalized; normalize a code built from a string yourself.
+- **`fmt` prints the stored code.** `fmt.Println(country.Code("de"))` prints `de`. A code read with `Scan` or from JSON or XML is only trimmed, so `"Deutschland"` stays `"Deutschland"`. Call `Normalized()` when you need the ISO code.
 
 ## Examples
 
@@ -199,8 +199,8 @@ func main() {
 	fmt.Println(v)
 
 	// Output:
-	// {"country":"DE","billing":null}
-	// AT
+	// {"country":"de","billing":null}
+	// at
 	// <nil>
 }
 ```

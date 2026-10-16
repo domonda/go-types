@@ -8,7 +8,6 @@ import (
 	"testing"
 	"unicode"
 
-	"github.com/domonda/go-errs"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -297,15 +296,8 @@ func FuzzSplitRawMatchesParse(f *testing.F) {
 		if len(parsed) > len(raw) {
 			t.Fatalf("ParseAddressList(%q) parsed %d addresses from %d entries of SplitAddressList: %q", list, len(parsed), len(raw), parsed)
 		}
-		validateErr := AddressList(list).Validate()
-		if _, valueErr := AddressList(list).Value(); (validateErr == nil) != (valueErr == nil) {
-			t.Fatalf("AddressList(%q).Validate() = %v, but Value() = %v", list, validateErr, valueErr)
-		}
-		set := MakeAddressSet(Address(list))
-		setValidateErr := set.Validate()
-		if _, valueErr := set.Value(); (setValidateErr == nil) != (valueErr == nil) {
-			t.Fatalf("AddressSet{%q}.Validate() = %v, but Value() = %v", list, setValidateErr, valueErr)
-		}
+		// Value writes the list and the set as stored. It does not apply
+		// Validate, so an invalid list can be saved again.
 		if err != nil {
 			return
 		}
@@ -339,8 +331,8 @@ func TestReadAddressCollection(t *testing.T) {
 		{text: `{"b@example.com": {}, "a@example.com": true}`, want: addressCollection{entries: []string{"a@example.com", "b@example.com"}}},
 		// The empty object and the empty PostgreSQL array are the same
 		{text: `{}`, want: addressCollection{entries: []string{}}},
-		{text: `{"a@example.com", b@example.com}`, want: addressCollection{entries: []string{"a@example.com", "b@example.com"}}},
-		{text: `{a@example.com,""}`, want: addressCollection{entries: []string{"a@example.com"}}},
+		{text: `{"a@example.com", b@example.com}`, want: addressCollection{entries: []string{"a@example.com", " b@example.com"}}},
+		{text: `{a@example.com,""}`, want: addressCollection{entries: []string{"a@example.com", ""}}},
 		{text: `"a@example.com, b@example.com"`, want: addressCollection{list: "a@example.com, b@example.com"}},
 		{text: `"Doe, John" <john@example.com>`, want: addressCollection{list: `"Doe, John" <john@example.com>`}},
 		{text: ` a@example.com `, want: addressCollection{list: ` a@example.com `}},
@@ -386,15 +378,14 @@ func TestReadAddressCollection(t *testing.T) {
 	}
 }
 
-// writeCollections returns the errors of the methods that write an address
-// collection after validating it: the Value methods of AddressList,
-// NullableAddressList and AddressSet, and AddressSet.MarshalText.
+// writeCollections returns the errors of the Value methods. They trim a
+// list and write a set's keys as stored, without Validate. AddressSet.MarshalText
+// is separate: it refuses a key that would not read back as one list entry.
 func writeCollections(addr Address) map[string]error {
 	errOf := make(map[string]error)
 	_, errOf["AddressList.Value"] = AddressList(addr).Value()
 	_, errOf["NullableAddressList.Value"] = NullableAddressList(addr).Value()
 	_, errOf["AddressSet.Value"] = MakeAddressSet(addr).Value()
-	_, errOf["AddressSet.MarshalText"] = MakeAddressSet(addr).MarshalText()
 	return errOf
 }
 
@@ -435,7 +426,7 @@ func TestCollectionsRefuseRunesTheParserIgnores(t *testing.T) {
 			assert.Error(t, err, "%s of %q", method, addr)
 		}
 		for method, err := range writeCollections(addr) {
-			assert.Error(t, err, "%s of %q", method, addr)
+			assert.NoError(t, err, "%s of %q", method, addr)
 		}
 		// The normalized address is what the parser read,
 		// so it can be stored instead
@@ -494,11 +485,7 @@ func TestCollectionsRefuseOnlyUnsafeRunes(t *testing.T) {
 			}
 		}
 		for method, err := range writeCollections(addr) {
-			if unsafe {
-				assert.Error(t, err, "%s of %q", method, addr)
-			} else {
-				assert.NoError(t, err, "%s of %q", method, addr)
-			}
+			assert.NoError(t, err, "%s of %q", method, addr)
 		}
 	}
 }
@@ -540,31 +527,32 @@ func TestCollectionsWriteNamesWithSpecialSpacesAndJoiners(t *testing.T) {
 	}
 }
 
-// Validate refuses the unsafe runes with the same error that Value
-// returns, so that a caller that validates first sees why the write
-// would fail, and both name the same text.
-func TestCollectionsValidateAndValueRefuseWithSameError(t *testing.T) {
+// Validate refuses the unsafe runes. Value and MarshalText write the
+// normalized address, which no longer has them, when the raw text does.
+func TestCollectionsValidateRefusesWhatValueKeeps(t *testing.T) {
 	for _, addr := range []Address{
 		"\"x\r\nBcc: evil@evil.com\" <a@example.com>",
 		"a\x00b@example.com",
 		"\"\u202eexample.com\" <a@example.com>",
 		"\"x\xff\" <a@example.com>",
 	} {
-		_, valueErr := AddressList(addr).Value()
-		require.Error(t, valueErr)
-		assert.Equal(t, errs.UnwrapCallStack(AddressList(addr).Validate()).Error(), errs.UnwrapCallStack(valueErr).Error(), "AddressList %q", addr)
+		require.Error(t, AddressList(addr).Validate(), "AddressList %q", addr)
+		v, err := AddressList(addr).Value()
+		require.NoError(t, err, "AddressList %q", addr)
+		assert.False(t, hasUnsafeRune(v.(string)), "AddressList %q", addr)
 
-		_, valueErr = NullableAddressList(addr).Value()
-		require.Error(t, valueErr)
-		assert.Equal(t, errs.UnwrapCallStack(NullableAddressList(addr).Validate()).Error(), errs.UnwrapCallStack(valueErr).Error(), "NullableAddressList %q", addr)
+		require.Error(t, NullableAddressList(addr).Validate(), "NullableAddressList %q", addr)
+		v, err = NullableAddressList(addr).Value()
+		require.NoError(t, err, "NullableAddressList %q", addr)
+		assert.False(t, hasUnsafeRune(v.(string)), "NullableAddressList %q", addr)
 
 		set := MakeAddressSet(addr)
-		_, valueErr = set.Value()
-		require.Error(t, valueErr)
-		assert.Equal(t, errs.UnwrapCallStack(set.Validate()).Error(), errs.UnwrapCallStack(valueErr).Error(), "AddressSet %q", addr)
-		_, textErr := set.MarshalText()
-		require.Error(t, textErr)
-		assert.Equal(t, errs.UnwrapCallStack(set.Validate()).Error(), errs.UnwrapCallStack(textErr).Error(), "AddressSet.MarshalText %q", addr)
+		require.Error(t, set.Validate(), "AddressSet %q", addr)
+		_, err = set.Value()
+		require.NoError(t, err, "AddressSet %q", addr)
+		text, err := set.MarshalText()
+		require.NoError(t, err, "AddressSet.MarshalText %q", addr)
+		assert.False(t, hasUnsafeRune(string(text)), "AddressSet.MarshalText %q", addr)
 	}
 
 	// Surrounding runes that Value trims and doesn't write are not refused
@@ -595,7 +583,7 @@ func TestCollectionsValidateAgreesWithValueAtTrailingBackslash(t *testing.T) {
 				assert.Error(t, err, method)
 			}
 			for method, err := range writeCollections(addr) {
-				assert.Error(t, err, method)
+				assert.NoError(t, err, method)
 			}
 			_, err := ParseAddressList(string(addr))
 			assert.Error(t, err, "ParseAddressList")
@@ -671,11 +659,8 @@ func TestCollectionsRefuseRunesInAddressParts(t *testing.T) {
 				assert.Error(t, err, method)
 			}
 			for method, err := range writeCollections(addr) {
-				assert.Error(t, err, method)
+				assert.NoError(t, err, method)
 			}
-			// Validate refuses it with the error that Value returns
-			_, valueErr := AddressList(addr).Value()
-			assert.Equal(t, errs.UnwrapCallStack(AddressList(addr).Validate()).Error(), errs.UnwrapCallStack(valueErr).Error())
 			// The normalized address is what the parser read
 			norm, err := addr.Normalized()
 			if err == nil {
@@ -750,7 +735,7 @@ func TestAddressSetRefusesRunesInAddressPartOfNoList(t *testing.T) {
 		set := MakeAddressSet(addr)
 		assert.Error(t, set.Validate(), "%q", addr)
 		_, err := set.Value()
-		assert.Error(t, err, "%q", addr)
+		assert.NoError(t, err, "%q", addr)
 	}
 }
 

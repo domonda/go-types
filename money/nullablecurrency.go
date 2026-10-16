@@ -145,23 +145,26 @@ func (n NullableCurrency) NormalizedOrNull() NullableCurrency {
 // Without validate it stores source like Scan, with validate it stores
 // the normalized currency or returns the error of Normalized.
 func (n *NullableCurrency) ScanString(source string, validate bool) error {
-	return internal.ScanStringNormalized(n, source, validate, true, NullableCurrency.Normalized, nil)
+	if validate {
+		return internal.ScanStringNormalized(n, source, true, true, NullableCurrency.Normalized, nil)
+	}
+	return internal.ScanStringNormalized(n, source, false, true, internal.TrimUpper[NullableCurrency], nil)
 }
 
 // Scan implements the database/sql.Scanner interface.
-// A valid currency is stored normalized, SQL NULL and a blank string as
-// CurrencyNull, and a currency that can't be normalized unchanged without
-// an error, so that one invalid value doesn't fail a whole query;
-// Validate reports it.
+// Surrounding whitespace is trimmed and letters are uppercased.
+// SQL NULL and a blank string are stored as CurrencyNull. An invalid
+// currency is kept after that prettification, without an error.
 func (n *NullableCurrency) Scan(value any) error {
-	return internal.ScanNormalized(n, value, NullableCurrency.Normalized, nil)
+	return internal.ScanNormalized(n, value, internal.TrimUpper[NullableCurrency], nil)
 }
 
 // Value implements the driver database/sql/driver.Valuer interface.
-// It returns the normalized currency, SQL NULL if the NullableCurrency
-// is null, or the error of Normalized for a currency that can't be normalized.
+// It returns the trimmed and uppercased currency, or SQL NULL if the
+// NullableCurrency is null. An invalid currency is written after that
+// prettification, not rejected.
 func (n NullableCurrency) Value() (driver.Value, error) {
-	return internal.ValueNormalized(n, NullableCurrency.Normalized, nil)
+	return internal.ValueNormalized(n, internal.TrimUpper[NullableCurrency], nil)
 }
 
 // Symbol returns the currency symbol like € for EUR if available,
@@ -185,10 +188,10 @@ func (n NullableCurrency) Currency() Currency {
 }
 
 // MarshalJSON implements encoding/json.Marshaler by writing the JSON null
-// value if the NullableCurrency is null, else the normalized currency,
-// or the currency unchanged if it can't be normalized.
+// value if the NullableCurrency is null, else the trimmed and uppercased
+// currency.
 func (n NullableCurrency) MarshalJSON() ([]byte, error) {
-	return internal.MarshalJSONNormalized(n, true, NullableCurrency.Normalized, nil)
+	return internal.MarshalJSONNormalized(n, true, internal.TrimUpper[NullableCurrency], nil)
 }
 
 // UnmarshalJSON implements encoding/json.Unmarshaler.
@@ -196,15 +199,15 @@ func (n NullableCurrency) MarshalJSON() ([]byte, error) {
 // NullableCurrency to null, so that decoding null into a field that holds
 // a value resets it, and any other JSON value is an error.
 func (n *NullableCurrency) UnmarshalJSON(data []byte) error {
-	return internal.UnmarshalJSONNormalized(n, data, true, NullableCurrency.Normalized, nil)
+	return internal.UnmarshalJSONNormalized(n, data, true, internal.TrimUpper[NullableCurrency], nil)
 }
 
 // MarshalText implements encoding.TextMarshaler like MarshalJSON,
 // but with "" for null, so that encoding/xml and strfmt write the
-// normalized currency. encoding/json writes map keys of string types
-// as they are and doesn't call MarshalText for them.
+// trimmed and uppercased currency. encoding/json writes map keys of
+// string types as they are and doesn't call MarshalText for them.
 func (n NullableCurrency) MarshalText() ([]byte, error) {
-	return internal.MarshalTextNormalized(n, NullableCurrency.Normalized, nil)
+	return internal.MarshalTextNormalized(n, internal.TrimUpper[NullableCurrency], nil)
 }
 
 // MarshalXMLAttr implements encoding/xml.MarshalerAttr by writing the
@@ -218,11 +221,11 @@ func (n *NullableCurrency) MarshalXMLAttr(name xml.Name) (xml.Attr, error) {
 // UnmarshalXML implements encoding/xml.Unmarshaler
 // by storing the text of the element like Scan stores it.
 func (n *NullableCurrency) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
-	return internal.UnmarshalXMLNormalized(n, d, start, NullableCurrency.Normalized, nil)
+	return internal.UnmarshalXMLNormalized(n, d, start, internal.TrimUpper[NullableCurrency], nil)
 }
 
 // UnmarshalXMLAttr implements encoding/xml.UnmarshalerAttr
 // by storing the attribute value like Scan stores it.
 func (n *NullableCurrency) UnmarshalXMLAttr(attr xml.Attr) error {
-	return internal.UnmarshalXMLAttrNormalized(n, attr, NullableCurrency.Normalized, nil)
+	return internal.UnmarshalXMLAttrNormalized(n, attr, internal.TrimUpper[NullableCurrency], nil)
 }

@@ -178,11 +178,13 @@ All three register the same `TypeFormatters`:
 The nullable money types `money.NullableAmount`, `money.NullableCentAmount` and
 `money.NullableDecimalAmount` need no formatter of their own: like every
 `nullable.Type[T]` they are formatted like the wrapped type, and as `config.Nil`
-for null. The types that normalize their `Value` and JSON, like `money.Currency`,
-`bank.IBAN` and `email.Address`, are formatted normalized by their `MarshalText`,
-an invalid value unchanged. The collections `email.AddressList` and
-`email.NullableAddressList` are formatted as stored, and `strfmt.Scan` reads the
-normalizing types with their `ScanString` method, normalized, see
+for null. `MarshalText` of `money.Currency`, `bank.IBAN` and `email.Address`
+trims, and uppercases the currency and the IBAN. It does not call
+`Normalized`, so an invalid value is written after that and `"€"` stays
+`"€"`. `email.AddressList` and `email.NullableAddressList` are written with
+the list string trimmed. `strfmt.Scan` reads these types with `ScanString`.
+The default config validates, so that call stores `Normalized`. Without
+`ValidateFunc` it only applies the same trim, or trim and uppercase. See
 [Reading and writing values](../README.md#reading-and-writing-values).
 
 ## MoneyFormat
@@ -204,7 +206,7 @@ type MoneyFormat struct {
 | `(*MoneyFormat).FormatCentAmount(money.CentAmount) string` | Like `FormatDecimalAmount` of the amount with scale 2. |
 | `(*MoneyFormat).FormatDecimalAmount(money.DecimalAmount) string` | Rounded half away from zero to `Precision` if it has more decimals, padded with zeros if it has fewer. A negative `Precision` writes the decimals of the amount's scale. NaN and ±Inf as `NaN`, `Inf`, `-Inf`. |
 | `(*MoneyFormat).FormatCurrencyAmount(money.CurrencyAmount) string` | The amount like `FormatAmount`, with the normalized currency code and a space before it if `CurrencyFirst`, else after it. No code for an empty currency. A `Precision` of 0 or more is raised to the 3 decimals of a currency like KWD: `KWD 1,234.567`. Other currencies and an amount without currency keep `Precision`. |
-| `(*MoneyFormat).FormatCurrencyDecimalAmount(money.CurrencyDecimalAmount) string` | Like `FormatCurrencyAmount` with the amount from `FormatDecimalAmount` and the same raised `Precision`. |
+| `(*MoneyFormat).FormatCurrencyDecimalAmount(money.CurrencyDecimalAmount) string` | The amount from `FormatDecimalAmount` with the same raised `Precision`. The currency is trimmed and uppercased, not passed through `Normalized`, so `"€"` stays `"€"`. |
 | `EnglishFloatFormat(precision) float.FormatDef`    | `{0, '.', precision, false}`: no grouping, trailing zeros trimmed. |
 | `GermanFloatFormat(precision) float.FormatDef`     | `{0, ',', precision, false}`.                      |
 

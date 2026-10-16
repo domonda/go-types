@@ -34,7 +34,10 @@ var _ types.NormalizableValidator[NullableBIC] = NullableBIC("")
 // Without validate it stores source like Scan, with validate it stores
 // the normalized BIC or returns the error of Normalized.
 func (bic *NullableBIC) ScanString(source string, validate bool) error {
-	return internal.ScanStringNormalized(bic, source, validate, true, NullableBIC.Normalized, nil)
+	if validate {
+		return internal.ScanStringNormalized(bic, source, true, true, NullableBIC.Normalized, nil)
+	}
+	return internal.ScanStringNormalized(bic, source, false, true, internal.TrimUpper[NullableBIC], nil)
 }
 
 // Valid returns true if bic is null or a valid SWIFT Business Identifier Code
@@ -89,18 +92,17 @@ func (bic NullableBIC) NormalizedOrNull() NullableBIC {
 }
 
 // Scan implements the database/sql.Scanner interface.
-// A valid BIC is stored normalized, SQL NULL and a blank string as BICNull,
-// and a BIC that can't be normalized unchanged without an error,
-// so that one invalid value doesn't fail a whole query; Validate reports it.
+// Surrounding whitespace is trimmed and letters are uppercased.
+// SQL NULL and a blank string are stored as BICNull. An invalid BIC
+// is kept after that prettification, without an error.
 func (bic *NullableBIC) Scan(value any) error {
-	return internal.ScanNormalized(bic, value, NullableBIC.Normalized, nil)
+	return internal.ScanNormalized(bic, value, internal.TrimUpper[NullableBIC], nil)
 }
 
 // MarshalJSON implements encoding/json.Marshaler by writing the JSON null
-// value if the NullableBIC is null, else the normalized BIC,
-// or the BIC unchanged if it can't be normalized.
+// value if the NullableBIC is null, else the trimmed and uppercased BIC.
 func (bic NullableBIC) MarshalJSON() ([]byte, error) {
-	return internal.MarshalJSONNormalized(bic, true, NullableBIC.Normalized, nil)
+	return internal.MarshalJSONNormalized(bic, true, internal.TrimUpper[NullableBIC], nil)
 }
 
 // UnmarshalJSON implements encoding/json.Unmarshaler.
@@ -108,15 +110,15 @@ func (bic NullableBIC) MarshalJSON() ([]byte, error) {
 // NullableBIC to null, so that decoding null into a field that holds
 // a value resets it, and any other JSON value is an error.
 func (bic *NullableBIC) UnmarshalJSON(data []byte) error {
-	return internal.UnmarshalJSONNormalized(bic, data, true, NullableBIC.Normalized, nil)
+	return internal.UnmarshalJSONNormalized(bic, data, true, internal.TrimUpper[NullableBIC], nil)
 }
 
 // MarshalText implements encoding.TextMarshaler like MarshalJSON,
 // but with "" for null, so that encoding/xml and strfmt write the
-// normalized BIC. encoding/json writes map keys of string types
-// as they are and doesn't call MarshalText for them.
+// trimmed and uppercased BIC. encoding/json writes map keys of string
+// types as they are and doesn't call MarshalText for them.
 func (bic NullableBIC) MarshalText() ([]byte, error) {
-	return internal.MarshalTextNormalized(bic, NullableBIC.Normalized, nil)
+	return internal.MarshalTextNormalized(bic, internal.TrimUpper[NullableBIC], nil)
 }
 
 // MarshalXMLAttr implements encoding/xml.MarshalerAttr by writing the
@@ -130,20 +132,21 @@ func (bic *NullableBIC) MarshalXMLAttr(name xml.Name) (xml.Attr, error) {
 // UnmarshalXML implements encoding/xml.Unmarshaler
 // by storing the text of the element like Scan stores it.
 func (bic *NullableBIC) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
-	return internal.UnmarshalXMLNormalized(bic, d, start, NullableBIC.Normalized, nil)
+	return internal.UnmarshalXMLNormalized(bic, d, start, internal.TrimUpper[NullableBIC], nil)
 }
 
 // UnmarshalXMLAttr implements encoding/xml.UnmarshalerAttr
 // by storing the attribute value like Scan stores it.
 func (bic *NullableBIC) UnmarshalXMLAttr(attr xml.Attr) error {
-	return internal.UnmarshalXMLAttrNormalized(bic, attr, NullableBIC.Normalized, nil)
+	return internal.UnmarshalXMLAttrNormalized(bic, attr, internal.TrimUpper[NullableBIC], nil)
 }
 
 // Value implements the driver database/sql/driver.Valuer interface.
-// It returns the normalized BIC, SQL NULL if the NullableBIC is null,
-// or the error of Normalized for a BIC that can't be normalized.
+// It returns the trimmed and uppercased BIC, or SQL NULL if the
+// NullableBIC is null. An invalid BIC is written after that
+// prettification, not rejected.
 func (bic NullableBIC) Value() (driver.Value, error) {
-	return internal.ValueNormalized(bic, NullableBIC.Normalized, nil)
+	return internal.ValueNormalized(bic, internal.TrimUpper[NullableBIC], nil)
 }
 
 // Set sets an BIC for this NullableBIC

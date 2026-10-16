@@ -13,8 +13,9 @@
 //     [CombinedValidator] / [CombinedValidatable], and [Validate],
 //     [TryValidate], and [DeepValidate] entry points for recursive
 //     reflection-based validation.
-//   - [Normalizable] / [NormalizableValidator]: interfaces implemented
-//     by types that round-trip through a canonical normalized form.
+//   - [Normalizable] / [NormalizableValidator]: interfaces for one
+//     canonical form via Normalized. SQL, JSON and XML reading and
+//     writing do not call it, except date.Date on SQL.
 //   - [FromPtr], [FromPtrOr]: generic pointer helpers.
 //   - [Yield], [Yield2], [YieldErr], [Seq2NilError]: adapters for the
 //     iter package introduced in Go 1.23.

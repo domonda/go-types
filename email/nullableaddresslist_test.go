@@ -292,8 +292,9 @@ func TestNullableAddressList_ValueAndMarshalJSONAsStored(t *testing.T) {
 		assert.Equal(t, tt.wantJSON, string(j), "json.Marshal(NullableAddressList(%q))", string(tt.n))
 	}
 
-	_, err := NullableAddressList("not an address").Value()
-	assert.Error(t, err, "Value() of an invalid list")
+	v, err := NullableAddressList(" not an address ").Value()
+	require.NoError(t, err)
+	assert.Equal(t, "not an address", v, "Value() of an invalid list is trimmed")
 	j, err := json.Marshal(NullableAddressList("not an address"))
 	require.NoError(t, err)
 	assert.Equal(t, `"not an address"`, string(j))
@@ -325,8 +326,11 @@ func TestNullableAddressList_UnmarshalText(t *testing.T) {
 	require.NoError(t, n.UnmarshalText(nil))
 	assert.True(t, n.IsNull(), "empty text must be NULL")
 
-	require.NoError(t, n.UnmarshalText([]byte("a@example.com, b@example.com")))
+	require.NoError(t, n.UnmarshalText([]byte(" a@example.com, b@example.com\n")))
 	assert.Equal(t, NullableAddressList("a@example.com, b@example.com"), n)
+
+	require.NoError(t, n.UnmarshalText([]byte(" \t ")))
+	assert.True(t, n.IsNull(), "whitespace-only text must be NULL")
 }
 
 func TestNullableAddressList_MarshalXMLAttr(t *testing.T) {

@@ -946,48 +946,6 @@ func TestParseAddressList_EscapedQuoteInName(t *testing.T) {
 	}
 }
 
-// TestNormalizeAddressForRead protects that Scan, UnmarshalJSON and the
-// other methods that use normalizeAddressForRead to skip building an
-// error they drop store and write exactly what Normalized returns:
-// the normalized address, or an address that can't be normalized
-// unchanged. Only the error differs, it has no call stack.
-func TestNormalizeAddressForRead(t *testing.T) {
-	addrs := []string{
-		"not an address",
-		"a@example.com junk",
-		`a@example.com (Mike (Sales))`,
-		`a@example.com (x (y)`,
-		`Doe (Sales <doe@example.com>`,
-		"\x00a@example.com\x00",
-	}
-	for addr := range validEmailAddresses {
-		addrs = append(addrs, addr)
-	}
-	for addr := range invalidEmailAddresses {
-		addrs = append(addrs, addr)
-	}
-	for _, addr := range addrs {
-		want, wantErr := Address(addr).Normalized()
-		got, err := normalizeAddressForRead(Address(addr))
-		assert.Equal(t, want, got, "Address %q", addr)
-		if wantErr != nil {
-			assert.ErrorIs(t, err, errInvalidAddress, "Address %q", addr)
-		} else {
-			assert.NoError(t, err, "Address %q", addr)
-		}
-
-		if NullableAddress(addr).IsNull() {
-			// Normalized returns null without error for a blank address,
-			// which the read methods store before normalizing
-			continue
-		}
-		wantNullable, wantErr := NullableAddress(addr).Normalized()
-		gotNullable, err := normalizeAddressForRead(NullableAddress(addr))
-		assert.Equal(t, wantNullable, gotNullable, "NullableAddress %q", addr)
-		assert.Equal(t, wantErr != nil, err != nil, "NullableAddress %q", addr)
-	}
-}
-
 // TestParseAddress_NestedComment protects that the comment after an
 // address is read with RFC 5322 nesting and quoted-pairs, like
 // SplitAddressList reads it: a comment that ended at its first ')'
@@ -1884,7 +1842,11 @@ func FuzzParseAddressListMatchesNetMail(f *testing.F) {
 		f.Add(list)
 	}
 	f.Fuzz(func(t *testing.T, list string) {
-		if v, err := AddressList(list).Value(); err == nil && v != nil {
+		if err := AddressList(list).Validate(); err == nil && strutil.TrimSpace(list) != "" {
+			v, err := AddressList(list).Value()
+			if err != nil || v == nil {
+				t.Fatalf("AddressList(%q).Value() = %v, %v", list, v, err)
+			}
 			stdlib, err := mail.ParseAddressList(v.(string))
 			if err == nil {
 				parsed, err := ParseAddressList(list)
@@ -1896,7 +1858,7 @@ func FuzzParseAddressListMatchesNetMail(f *testing.F) {
 				}
 			}
 		}
-		if _, err := MakeAddressSet(Address(list)).Value(); err == nil {
+		if err := MakeAddressSet(Address(list)).Validate(); err == nil {
 			stdlib, err := mail.ParseAddress(strutil.TrimSpace(list))
 			if err == nil {
 				parsed, err := ParseAddress(list)
@@ -1986,14 +1948,18 @@ func FuzzValidListHasTheAddressesOfItsText(f *testing.F) {
 		f.Add(list)
 	}
 	f.Fuzz(func(t *testing.T, list string) {
-		if v, err := AddressList(list).Value(); err == nil && v != nil {
+		if err := AddressList(list).Validate(); err == nil && strutil.TrimSpace(list) != "" {
+			v, err := AddressList(list).Value()
+			if err != nil || v == nil {
+				t.Fatalf("AddressList(%q).Value() = %v, %v", list, v, err)
+			}
 			parsed, err := ParseAddressList(list)
 			if err != nil {
 				t.Fatalf("AddressList(%q) is valid, but ParseAddressList fails: %v", list, err)
 			}
 			checkAddressesOfText(t, v.(string), parsed)
 		}
-		if _, err := MakeAddressSet(Address(list)).Value(); err == nil {
+		if err := MakeAddressSet(Address(list)).Validate(); err == nil {
 			parsed, err := ParseAddress(list)
 			if err != nil {
 				t.Fatalf("AddressSet{%q} is valid, but ParseAddress fails: %v", list, err)

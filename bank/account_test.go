@@ -134,18 +134,19 @@ func TestAccount_UnmarshalJSON_Edges(t *testing.T) {
 		// so values from a previous account must not survive
 		a := Account{IBAN: "AT611904300234573201", BIC: "COBADEFFXXX", Currency: "EUR", Holder: "John Doe"}
 		require.NoError(t, a.UnmarshalJSON([]byte(`"DE89 3704 0044 0532 0130 00"`)))
-		assert.Equal(t, Account{IBAN: "DE89370400440532013000"}, a)
+		assert.Equal(t, Account{IBAN: "DE89 3704 0044 0532 0130 00"}, a)
 	})
 
 	for _, j := range []string{
 		``,
 		`"`,
-		`"DE89370400440532013001"`, // invalid check sum
-		`"DE89370400440532013000`,  // not a JSON string
-		`""`,
+		`"DE89370400440532013000`, // not a JSON string
 		`{"iban": 1}`,
 		`{"iban": "DE89370400440532013000"`,
 		`[]`,
+		`true`,
+		`false`,
+		`123`,
 		`"\x"`,
 	} {
 		t.Run(j, func(t *testing.T) {
@@ -155,16 +156,36 @@ func TestAccount_UnmarshalJSON_Edges(t *testing.T) {
 			assert.Equal(t, Account{IBAN: "AT611904300234573201"}, a, "failed unmarshalling must not modify the Account")
 		})
 	}
+
+	t.Run("invalid checksum is kept", func(t *testing.T) {
+		a := Account{IBAN: "AT611904300234573201", BIC: "COBADEFFXXX"}
+		require.NoError(t, a.UnmarshalJSON([]byte(`"DE89370400440532013001"`)))
+		assert.Equal(t, Account{IBAN: "DE89370400440532013001"}, a)
+	})
+
+	t.Run("blank IBAN string clears the account", func(t *testing.T) {
+		a := Account{IBAN: "AT611904300234573201", BIC: "COBADEFFXXX"}
+		require.NoError(t, a.UnmarshalJSON([]byte(`""`)))
+		assert.Equal(t, Account{}, a)
+	})
 }
 
 func TestAccount_UnmarshalText_IBAN(t *testing.T) {
-	// Plain text IBANs with spaces and surrounding whitespace are normalized
+	// Plain text IBANs are trimmed and uppercased. Internal spaces stay,
+	// and an invalid checksum is kept.
 	var a Account
-	require.NoError(t, a.UnmarshalText([]byte(" DE89 3704 0044 0532 0130 00\n")))
-	assert.Equal(t, Account{IBAN: "DE89370400440532013000"}, a)
+	require.NoError(t, a.UnmarshalText([]byte(" de89 3704 0044 0532 0130 00\n")))
+	assert.Equal(t, Account{IBAN: "DE89 3704 0044 0532 0130 00"}, a)
 
-	err := a.UnmarshalText([]byte("DE89 3704 0044 0532 0130 01"))
-	assert.Error(t, err)
+	require.NoError(t, a.UnmarshalText([]byte("DE89 3704 0044 0532 0130 01")))
+	assert.Equal(t, Account{IBAN: "DE89 3704 0044 0532 0130 01"}, a)
+
+	kept := Account{IBAN: "AT611904300234573201", BIC: "COBADEFFXXX"}
+	for _, text := range []string{"NULL", "TRUE", "FALSE", "NIL"} {
+		a = kept
+		require.Error(t, a.UnmarshalText([]byte(text)))
+		assert.Equal(t, kept, a, "UnmarshalText(%s) must not clear the account", text)
+	}
 }
 
 func TestAccount_Scan(t *testing.T) {

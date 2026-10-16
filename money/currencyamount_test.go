@@ -374,8 +374,8 @@ func TestCurrencyAmount_SQL(t *testing.T) {
 // Value and JSON write the currency of a CurrencyAmount normalized like
 // Currency.Value, so the same amount can't reach SQL and JSON in different
 // spellings of its currency, while String shows the currency as stored.
-// Value refuses a currency that can't be normalized, JSON writes it
-// unchanged.
+// Value and JSON trim and uppercase the currency. An invalid currency
+// is written that way. Decimals still follow MinorUnits of the original currency.
 func TestCurrencyAmount_NormalizedCurrencyOutput(t *testing.T) {
 	tests := []struct {
 		ca         CurrencyAmount
@@ -384,8 +384,9 @@ func TestCurrencyAmount_NormalizedCurrencyOutput(t *testing.T) {
 		wantJSON   string
 	}{
 		{ca: CurrencyAmount{Currency: "eur", Amount: 1.5}, wantSQL: "EUR 1.50", wantString: "eur 1.50", wantJSON: `{"Currency":"EUR","Amount":1.5}`},
-		{ca: CurrencyAmount{Currency: "€", Amount: 1.5}, wantSQL: "EUR 1.50", wantString: "€ 1.50", wantJSON: `{"Currency":"EUR","Amount":1.5}`},
+		{ca: CurrencyAmount{Currency: "€", Amount: 1.5}, wantSQL: "€ 1.50", wantString: "€ 1.50", wantJSON: `{"Currency":"€","Amount":1.5}`},
 		{ca: CurrencyAmount{Currency: "jpy", Amount: 1234.5}, wantSQL: "JPY 1234.50", wantString: "jpy 1234.50", wantJSON: `{"Currency":"JPY","Amount":1234.5}`},
+		{ca: CurrencyAmount{Currency: "Kuwaiti Dinar", Amount: 1.2345}, wantSQL: "KUWAITI DINAR 1.235", wantString: "Kuwaiti Dinar 1.235", wantJSON: `{"Currency":"KUWAITI DINAR","Amount":1.2345}`},
 		{ca: CurrencyAmount{Amount: 1.5}, wantSQL: "1.50", wantString: "1.50", wantJSON: `{"Currency":"","Amount":1.5}`},
 	}
 	for _, tt := range tests {
@@ -399,10 +400,28 @@ func TestCurrencyAmount_NormalizedCurrencyOutput(t *testing.T) {
 		assert.JSONEq(t, tt.wantJSON, string(j), "json.Marshal of %#v", tt.ca)
 	}
 
-	invalid := CurrencyAmount{Currency: "XYZ", Amount: 1.5}
-	_, err := invalid.Value()
-	assert.Error(t, err, "Value of an invalid currency")
-	assert.Equal(t, "XYZ 1.50", invalid.String())
+	invalid := CurrencyAmount{Currency: "xyz", Amount: 1.5}
+	v, err := invalid.Value()
+	require.NoError(t, err)
+	assert.Equal(t, "XYZ 1.50", v, "Value writes an invalid currency trimmed and uppercased")
+
+	for _, tt := range []struct {
+		ca   CurrencyAmount
+		want Currency
+	}{
+		{ca: CurrencyAmount{Currency: "Canadian Dollar", Amount: 10}, want: "CANADIAN DOLLAR"},
+		{ca: CurrencyAmount{Currency: "Kuwaiti Dinar", Amount: 10}, want: "KUWAITI DINAR"},
+		{ca: CurrencyAmount{Currency: "€", Amount: 10}, want: "€"},
+		{ca: CurrencyAmount{Currency: "eur", Amount: 10}, want: "EUR"},
+	} {
+		written, err := tt.ca.Value()
+		require.NoError(t, err)
+		var back CurrencyAmount
+		require.NoError(t, back.Scan(written), "Scan(%v)", written)
+		assert.Equal(t, tt.want, back.Currency)
+		assert.Equal(t, tt.ca.Amount, back.Amount)
+	}
+	assert.Equal(t, "xyz 1.50", invalid.String())
 	j, err := json.Marshal(invalid)
 	require.NoError(t, err)
 	assert.JSONEq(t, `{"Currency":"XYZ","Amount":1.5}`, string(j))

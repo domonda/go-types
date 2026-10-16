@@ -103,11 +103,14 @@ const (
 // the zero dates "0000-00-00" and "0001-01-01" in any spelling, which have
 // no practical use as a date. A zero Date is not valid.
 //
-// Scan, UnmarshalJSON, UnmarshalXML and ScanString store a valid date
-// normalized, a zero one as "" and an invalid one unchanged. Value writes
-// the normalized date, SQL NULL for a zero one, and returns an error for
-// an invalid one. MarshalJSON and MarshalText write the normalized date,
-// "" for a zero one, or an invalid one unchanged, and fmt prints the date
+// Scan and Value fully normalize, because a database date is not free
+// text: a valid date is stored as YYYY-MM-DD, a zero date (see IsZero)
+// is "", Value writes SQL NULL for a zero date and returns an error for
+// a date that can't be normalized, and a time.Time from the driver is
+// its date. JSON, XML, MarshalText and ScanString without validate only
+// trim surrounding whitespace, including a zero date, and do not parse
+// another spelling into YYYY-MM-DD. ScanString with validate stores the
+// normalized date or returns the error of Normalized. fmt prints the date
 // as stored. Date has no UnmarshalText, so encoding/json reads and writes
 // the keys of a map[Date]V as given. See "Reading and writing values"
 // in the README of the module.
@@ -336,11 +339,14 @@ func FromUntilFromYearAndMonths(year, months string) (fromDate, untilDate Date, 
 }
 
 // ScanString implements the strfmt.Scannable interface.
-// Without validate it stores source like Scan, with validate it stores
-// the normalized date or returns the error of Normalized,
-// also for a blank source.
+// Without validate it trims surrounding whitespace, including a zero
+// date. With validate it stores the normalized date or returns the
+// error of Normalized, also for a blank or zero source.
 func (date *Date) ScanString(source string, validate bool) error {
-	return internal.ScanStringNormalized(date, source, validate, false, Date.Normalized, Date.IsZero)
+	if validate {
+		return internal.ScanStringNormalized(date, source, true, false, Date.Normalized, Date.IsZero)
+	}
+	return internal.ScanStringNormalized(date, source, false, false, marshalDateText, nil)
 }
 
 // ScanStringWithLang parses and assigns the source string as a Date using the given language hint.
@@ -405,8 +411,9 @@ const zeroDate Date = "0001-01-01"
 // "0001-01-01T00:00:00Z", "00.00.0000" or "0000-00-00 00:00:00".
 // "0001-01-01" is the zero value of time.Time, "0000-00-00" may be the zero
 // value of other date implementations, like MySQL.
-// A zero date has no practical use as a date: reading stores it as "",
-// Value writes it as SQL NULL, and it is not a valid Date.
+// A zero date has no practical use as a date and is not a valid Date.
+// SQL Scan, JSON and XML store it as "" and Value writes SQL NULL.
+// A time.Time on that calendar day is stored as "" too.
 func (date Date) IsZero() bool {
 	switch date {
 	case "", zeroDate, "0000-00-00":
@@ -862,15 +869,31 @@ func (date Date) BeforeTodayInUTC() bool {
 }
 
 // Scan implements the database/sql.Scanner interface.
-// A valid date from a string or []byte is stored normalized, a time.Time
-// as its date, SQL NULL and a zero date (see IsZero) as "", and a date
-// that can't be normalized unchanged without an error, so that one
-// invalid value doesn't fail a whole query; Validate reports it.
+// A valid date from a string or []byte is stored normalized, SQL NULL
+// and a zero date (see IsZero) as "", and a date that can't be normalized
+// unchanged without an error, so that one invalid value doesn't fail a
+// whole query; Validate reports it. A time.Time is stored as OfTime,
+// which is already YYYY-MM-DD or "" for the zero time, without parsing
+// it again.
 func (date *Date) Scan(value any) error {
 	if t, ok := value.(time.Time); ok {
-		value = string(OfTime(t))
+		*date = OfTime(t)
+		if date.IsZero() {
+			*date = ""
+		}
+		return nil
 	}
 	return internal.ScanNormalized(date, value, Date.Normalized, Date.IsZero)
+}
+
+// marshalDateText trims a date and stores a zero date as "", so a value
+// that IsZero reports as empty is not kept as text that is also null.
+func marshalDateText(date Date) (Date, error) {
+	trimmed, _ := internal.Trim(date)
+	if trimmed.IsZero() {
+		return "", nil
+	}
+	return trimmed, nil
 }
 
 // Value implements the database/sql/driver.Valuer interface.
@@ -880,27 +903,27 @@ func (date Date) Value() (driver.Value, error) {
 	return internal.ValueNormalized(date, Date.Normalized, Date.IsZero)
 }
 
-// MarshalJSON implements encoding/json.Marshaler by writing the
-// normalized date, "" for a zero date (see IsZero),
-// or the date unchanged if it can't be normalized.
+// MarshalJSON implements encoding/json.Marshaler by writing the date
+// with surrounding whitespace trimmed. A zero date is written as "",
+// like Value writes SQL NULL. A blank date is "".
 func (date Date) MarshalJSON() ([]byte, error) {
-	return internal.MarshalJSONNormalized(date, false, Date.Normalized, Date.IsZero)
+	return internal.MarshalJSONNormalized(date, false, marshalDateText, nil)
 }
 
 // UnmarshalJSON implements encoding/json.Unmarshaler.
-// A JSON string is stored like Scan stores it, JSON null leaves the Date
-// unchanged like encoding/json does for a string type, and any other
-// JSON value is an error.
+// A JSON string is stored with surrounding whitespace trimmed. A zero
+// date is stored as "", like Scan. JSON null leaves the Date unchanged like
+// encoding/json does for a string type, and any other JSON value is an error.
 func (date *Date) UnmarshalJSON(data []byte) error {
-	return internal.UnmarshalJSONNormalized(date, data, false, Date.Normalized, Date.IsZero)
+	return internal.UnmarshalJSONNormalized(date, data, false, marshalDateText, nil)
 }
 
 // MarshalText implements encoding.TextMarshaler like MarshalJSON,
-// so that encoding/xml and strfmt write the normalized date.
+// so that encoding/xml and strfmt write the trimmed date.
 // encoding/json writes map keys of string types as they are
 // and doesn't call MarshalText for them.
 func (date Date) MarshalText() ([]byte, error) {
-	return internal.MarshalTextNormalized(date, Date.Normalized, Date.IsZero)
+	return internal.MarshalTextNormalized(date, marshalDateText, nil)
 }
 
 // MarshalXMLAttr implements encoding/xml.MarshalerAttr by writing the
@@ -912,15 +935,15 @@ func (date *Date) MarshalXMLAttr(name xml.Name) (xml.Attr, error) {
 }
 
 // UnmarshalXML implements encoding/xml.Unmarshaler
-// by storing the text of the element like Scan stores it.
+// by storing the text of the element like UnmarshalJSON stores it.
 func (date *Date) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
-	return internal.UnmarshalXMLNormalized(date, d, start, Date.Normalized, Date.IsZero)
+	return internal.UnmarshalXMLNormalized(date, d, start, marshalDateText, nil)
 }
 
 // UnmarshalXMLAttr implements encoding/xml.UnmarshalerAttr
-// by storing the attribute value like Scan stores it.
+// by storing the attribute value like UnmarshalJSON stores it.
 func (date *Date) UnmarshalXMLAttr(attr xml.Attr) error {
-	return internal.UnmarshalXMLAttrNormalized(date, attr, Date.Normalized, Date.IsZero)
+	return internal.UnmarshalXMLAttrNormalized(date, attr, marshalDateText, nil)
 }
 
 // JSONSchema returns the JSON schema definition for the Date type.

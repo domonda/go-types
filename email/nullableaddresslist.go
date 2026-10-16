@@ -183,17 +183,17 @@ func (n *NullableAddressList) Scan(value any) error {
 }
 
 // Value implements the driver database/sql/driver.Valuer interface.
-// It returns SQL NULL if the NullableAddressList is null, else the list as
-// stored with the surrounding whitespace trimmed, or the error of Validate
-// for an invalid list, like AddressList.Value.
+// It returns SQL NULL if the NullableAddressList is null, else the list
+// with surrounding whitespace trimmed, like AddressList.Value.
+// An invalid list is written after that trim, not rejected.
 func (n NullableAddressList) Value() (driver.Value, error) {
 	return AddressList(n).Value()
 }
 
-// UnmarshalText implements encoding.TextUnmarshaler
-// by storing the text unchanged.
+// UnmarshalText implements encoding.TextUnmarshaler, used by encoding/xml,
+// by storing the text with surrounding whitespace trimmed.
 func (n *NullableAddressList) UnmarshalText(text []byte) error {
-	*n = NullableAddressList(text)
+	*n = NullableAddressList(strutil.TrimSpace(string(text)))
 	return nil
 }
 
@@ -214,24 +214,24 @@ func (n *NullableAddressList) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// MarshalJSON implements encoding/json.Marshaler by writing the JSON null
-// value if the NullableAddressList is null, else the list as stored
-// as JSON string.
+// MarshalJSON implements encoding/json.Marshaler by writing JSON null
+// if the NullableAddressList is null, else the list with surrounding
+// whitespace trimmed as a JSON string.
 func (n NullableAddressList) MarshalJSON() ([]byte, error) {
 	if n.IsNull() {
 		return []byte(`null`), nil
 	}
-	return json.Marshal(string(n))
+	return json.Marshal(string(strutil.TrimSpace(n)))
 }
 
 // MarshalText implements encoding.TextMarshaler by returning the list
-// as stored, or "" for null, so that encoding/xml and strfmt write it
-// unchanged.
+// with surrounding whitespace trimmed, or "" for null, so that
+// encoding/xml and strfmt write that text.
 func (n NullableAddressList) MarshalText() ([]byte, error) {
 	if n.IsNull() {
 		return nil, nil
 	}
-	return []byte(n), nil
+	return []byte(strutil.TrimSpace(n)), nil
 }
 
 // MarshalXMLAttr implements encoding/xml.MarshalerAttr by writing the

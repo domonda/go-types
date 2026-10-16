@@ -126,10 +126,9 @@ func TestCurrencyDecimalAmount_NormalizedCurrencyOutput(t *testing.T) {
 	require.NoError(t, err)
 	assert.JSONEq(t, `{"Currency":"EUR","Amount":1.50}`, string(data))
 
-	// Value refuses a currency that can't be normalized, so an invalid
-	// currency never reaches the database, like for CurrencyAmount.
-	_, err = CurrencyDecimalAmount{Currency: "XYZ", Amount: NewDecimalAmount(150, 2)}.Value()
-	assert.Error(t, err)
+	v, err = CurrencyDecimalAmount{Currency: "xyz", Amount: NewDecimalAmount(150, 2)}.Value()
+	require.NoError(t, err)
+	assert.Equal(t, "XYZ 1.50", v)
 }
 
 func TestCurrencyDecimalAmount_CurrencyAmount(t *testing.T) {

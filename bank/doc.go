@@ -14,11 +14,11 @@
 // [IBAN.Normalized] removes all whitespace before validating,
 // [BIC.Normalized] also removes all whitespace and appends "XXX"
 // to an 8 character BIC. Valid and Validate of both normalize first,
-// so they accept spaced input. Scan, JSON and XML decoding store the
-// normalized form of a valid value and an invalid value unchanged,
-// without validating it. Value and MarshalJSON write the normalized form,
-// and Value returns an error for an invalid value. Only [BIC.Parse] and
-// [BICParser] read the BIC as given.
+// so they accept spaced input. Scan, JSON, XML, Value and MarshalJSON
+// only trim and uppercase. Internal spaces stay, an 8 character BIC is
+// not extended, and an invalid value is written. [BIC.Parse] and
+// [BICParser] still read the BIC as given. [IBAN.ScanString] and
+// [BIC.ScanString] with validate still call Normalized.
 //
 // All four types write an empty value as SQL NULL, only NullableIBAN and
 // NullableBIC write JSON null. Account has no driver.Valuer and no

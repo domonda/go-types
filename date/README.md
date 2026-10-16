@@ -31,9 +31,9 @@ const (
 )
 ```
 
-A `Date` holds whatever string you assign. Methods normalize on demand, so `Date("25.12.2023")` is valid and behaves like `"2023-12-25"` in every method except `==`. Reading with `Scan`, JSON, XML and `ScanString` stores the canonical form; normalize a date built from a string yourself, with `Normalize`.
+A `Date` holds whatever string you assign. Methods normalize on demand, so `Date("25.12.2023")` is valid and behaves like `"2023-12-25"` in every method except `==`. SQL `Scan` and `Value` of a string store the canonical form and treat a zero date as blank. JSON, XML and `MarshalText` trim and also store a zero date as blank. `ScanString` without validate does the same. A `time.Time` from the driver is stored with `OfTime`, or as blank when that date is zero.
 
-A `Date` is zero, see `IsZero`, if it is empty, whitespace only, or one of the zero dates `"0000-00-00"` and `"0001-01-01"` in any spelling, like `"01.01.0001"` or Go's zero time `"0001-01-01T00:00:00Z"`. A zero date has no practical use as a date: it is not valid, reading stores it as `""`, and `Value` writes it as SQL NULL.
+A `Date` is zero, see `IsZero`, if it is empty, whitespace only, or one of the zero dates `"0000-00-00"` and `"0001-01-01"` in any spelling, like `"01.01.0001"` or Go's zero time `"0001-01-01T00:00:00Z"`. A zero date has no practical use as a date: it is not valid. SQL `Scan`, JSON and XML store it as `""` and `Value` writes SQL NULL.
 
 ### Parsing
 
@@ -51,7 +51,7 @@ Not supported: year-only or year-month strings (`"2014"`, `"2014-04"`), compact 
 
 Rules for numeric dates:
 
-- **Separators decide.** An ambiguous date with dots is day first like in Germany: `"05.06.2024"` is 2024-06-05. Other separators are day first too: `"05-06-2024"` and `"05 06 2024"` are 2024-06-05, and so is a mix like `"05/06.2024"`, with every language hint. Only slashes are written in both orders, month first in the US and day first in Britain, so only for them the hint decides. Without a hint they are month first like in the US: `"05/06/2024"` and `"05/06/24"` are 2024-05-06. `Scan`, JSON, XML and `ScanString` have no hint and read this way.
+- **Separators decide.** An ambiguous date with dots is day first like in Germany: `"05.06.2024"` is 2024-06-05. Other separators are day first too: `"05-06-2024"` and `"05 06 2024"` are 2024-06-05, and so is a mix like `"05/06.2024"`, with every language hint. Only slashes are written in both orders, month first in the US and day first in Britain, so only for them the hint decides. Without a hint they are month first like in the US: `"05/06/2024"` and `"05/06/24"` are 2024-05-06. SQL `Scan` and `ScanString` with validate have no hint and read this way. JSON, XML and `ScanString` without validate only trim.
 - **Language hint for slashes.** The first `lang` argument is a hint, normalized with `language.Code.Normalized`, so `language.EN`, `"EN"`, `" en"`, `"en-US"` and `"eng"` all mean English. A hint that can't be normalized, like `"english"`, is ignored like no hint. For a date with slashes English reads month first, every other language day first, so `"05/06/2024"` with `language.DE` is 2024-06-05. `"en-GB"` is English too and reads slashes month first. The hint doesn't change other separators: `"05.06.2024"` with `language.EN` is 2024-06-05.
 - **Only ambiguous dates.** The separators and the hint apply only when both numbers are 1 to 12. `"15.06.2024"`, `"15/06/2024"` and `"06/15/2024"` all give 2024-06-15 with any hint.
 - **Ordinal suffix.** A suffix like `"1st"` marks the day for ambiguous dates and wins over the hint and the separators: `"02 1st 2003"` and `"1st 02 2003"` are 2003-02-01, also with `language.EN`, and `"3rd/04/2024"` is 2024-04-03. A number with a suffix is never the month, so `"13 1st 2024"` is an error.
@@ -86,7 +86,7 @@ Rules for numeric dates:
 | `NormalizedOrNull(lang...)`        | Normalized form as `NullableDate`, or `Null`.      |
 | `IsZero()`                         | True for an empty or whitespace only date and the zero dates `"0000-00-00"` and `"0001-01-01"` in any spelling. |
 | `Nullable()`                       | Converts to `NullableDate`; zero dates become `Null`. |
-| `ScanString(source, validate)`     | Without `validate` like `Scan`. With `validate` assigns the normalized `source` or returns the error of `Normalized`, also for a blank or zero `source`. |
+| `ScanString(source, validate)`     | Without `validate` trims surrounding whitespace, including a zero date. With `validate` assigns the normalized `source` or returns the error of `Normalized`, also for a blank or zero `source`. |
 | `ScanStringWithLang(source, lang)` | Assigns the normalized `source` using the hint `lang`, `""` for a zero date. Returns `wasNormalized` (source was already `YYYY-MM-DD`), `monthMustBeFirst` (only month first is valid, like `"12/25/2023"`) and an error. Unchanged on error. |
 
 `monthMustBeFirst` lets you detect the date order of a whole document from one unambiguous date, then pass `language.EN` for the rest instead of a day first document language, so that its ambiguous dates with slashes are read month first. Dates with dots, dashes or spaces stay day first with every hint. It is false for an ambiguous date like `"05/06/2024"`, also when that is read month first because of its slashes.
@@ -235,9 +235,9 @@ const YearMonthNull NullableYearMonth = ""
 | `Compare(other)`                     | Compares the normalized values, invalid ones as stored. |
 | `Nullable()`                         | Plain conversion to `NullableYearMonth`.           |
 
-`YearMonth` reads and writes like `Date`, see [Serialization](#serialization).
+`YearMonth` trims on every path, including SQL, and keeps a zero period such as `"0001-01"`. See [Serialization](#serialization).
 
-`NullableYearMonth` has the same methods (null returns 0, `""`, `false` or null; `Normalized` returns `YearMonthNull` for null) plus `IsNull()` (the same as `IsZero()`, like for `NullableDate`), `IsNotNull()`, `ValidAndNotNull()`, `Get()` (panics if null), `GetOr(defaultYearMonth)`, `Set(ym)`, `SetNull()` and `StringOr(nullString)`. Its `Date` and `DateRange` return `NullableDate`. Implements `nullable.NullSetable[YearMonth]` and `types.NormalizableValidator`, and reads and writes like `NullableDate`.
+`NullableYearMonth` has the same methods (null returns 0, `""`, `false` or null; `Normalized` returns `YearMonthNull` for null) plus `IsNull()` (the same as `IsZero()`, like for `NullableDate`), `IsNotNull()`, `ValidAndNotNull()`, `Get()` (panics if null), `GetOr(defaultYearMonth)`, `Set(ym)`, `SetNull()` and `StringOr(nullString)`. Its `Date` and `DateRange` return `NullableDate`. Implements `nullable.NullSetable[YearMonth]` and `types.NormalizableValidator`. Reading and writing trim and keep `"0001-01"`; only a blank value is SQL NULL or JSON `null`.
 
 ## YearQuarter and NullableYearQuarter
 
@@ -267,9 +267,9 @@ const YearQuarterNull NullableYearQuarter = ""
 | `Compare(other)`                                   | Compares the normalized values, invalid ones as stored. |
 | `Nullable()`                                       | Plain conversion to `NullableYearQuarter`.         |
 
-`YearQuarter` reads and writes like `Date`, see [Serialization](#serialization).
+`YearQuarter` trims and uppercases on every path, including SQL, and keeps a zero period such as `"0001-Q1"`. See [Serialization](#serialization).
 
-`NullableYearQuarter` has the same methods plus the same null helpers as `NullableYearMonth`. Its `Date` and `DateRange` return `NullableDate`. Implements `nullable.NullSetable[YearQuarter]` and `types.NormalizableValidator`, and reads and writes like `NullableDate`.
+`NullableYearQuarter` has the same methods plus the same null helpers as `NullableYearMonth`. Its `Date` and `DateRange` return `NullableDate`. Implements `nullable.NullSetable[YearQuarter]` and `types.NormalizableValidator`. Reading and writing trim and uppercase, and keep `"0001-Q1"`; only a blank value is SQL NULL or JSON `null`.
 
 ## Format, Formatter and Parser
 
@@ -307,47 +307,51 @@ These plug dates into the [`strfmt`](../strfmt/README.md) package, which calls `
 
 ## Serialization
 
-`Date` and `NullableDate` follow the rules of [Reading and writing values](../README.md#reading-and-writing-values), with the zero dates as blank: reading normalizes, `Value` refuses an invalid date, and `fmt` prints the stored date. `YearMonth`, `YearQuarter` and their nullable types follow the same rules, with their zero values `"0001-01"`, `"0000-00"`, `"0001-Q1"` and `"0000-Q0"` as blank.
+`Date` and `NullableDate` fully normalize on SQL `Scan` and `Value`, with the zero dates as blank. A `time.Time` is stored with `OfTime`. JSON and XML only trim. `YearMonth` only trims on every path, and `YearQuarter` also uppercases. Their zero values are kept. `fmt` prints the stored text.
 
 | Value                                              | SQL `Value()`                              | JSON (`json.Marshal`)         | `MarshalText`, XML | `fmt`          |
 |----------------------------------------------------|--------------------------------------------|-------------------------------|--------------------|----------------|
 | `Date("")`, `Date("  ")`                           | `NULL`                                     | `""`                          | `""`               | as stored      |
-| `Date("0001-01-01")`, `Date("0000-00-00")`, `Date("01.01.0001")` | `NULL`                                     | `""`                          | `""`               | as stored      |
-| `Date("25.12.2023")` (valid, not normalized)       | `"2023-12-25"`                             | `"2023-12-25"`                | `"2023-12-25"`     | `25.12.2023`   |
-| `Date("2023-12-25")`                               | `"2023-12-25"`                             | `"2023-12-25"`                | `"2023-12-25"`     | `2023-12-25`   |
-| `Date("bad")` (invalid)                            | error                                      | `"bad"`                       | `"bad"`            | `bad`          |
-| `NullableDate` null or zero date                   | `NULL`                                     | `null`                        | `""`               | as stored      |
-| `NullableDate("25.12.2023")`                       | `"2023-12-25"`                             | `"2023-12-25"`                | `"2023-12-25"`     | `25.12.2023`   |
-| `NullableDate("bad")`                              | error                                      | `"bad"`                       | `"bad"`            | `bad`          |
+| `Date("0001-01-01")`, `Date("01.01.0001")`         | `NULL`                                     | `""`                          | `""`               | as stored |
+| `Date("25.12.2023")` (valid, not normalized)       | `"2023-12-25"`                             | `"25.12.2023"`                | `25.12.2023`       | `25.12.2023`   |
+| `Date("2023-12-25")`                               | `"2023-12-25"`                             | `"2023-12-25"`                | `2023-12-25`       | `2023-12-25`   |
+| `Date("bad")` (invalid)                            | error of `Normalized`                      | `"bad"`                       | `bad`              | `bad`          |
+| `NullableDate` null                               | `NULL`                                     | `null`                        | `""`               | as stored      |
+| `NullableDate("0001-01-01")`                       | `NULL`                                     | `null`                        | `""`               | `0001-01-01`   |
+| `NullableDate("25.12.2023")`                       | `"2023-12-25"`                             | `"25.12.2023"`                | `25.12.2023`       | `25.12.2023`   |
+| `NullableDate("bad")`                              | error of `Normalized`                      | `"bad"`                       | `bad`              | `bad`          |
 | `YearMonth(" 2023-07 ")`, `YearQuarter("2023-q3")` | `"2023-07"`, `"2023-Q3"`                   | `"2023-07"`, `"2023-Q3"`      | `2023-07`, `2023-Q3` | as stored      |
-| `YearMonth("0001-01")`, `YearQuarter("")` (zero)   | `NULL`                                     | `""`                          | `""`               | as stored      |
-| `YearMonth("2023-13")` (invalid)                   | error                                      | `"2023-13"`                   | `2023-13`          | `2023-13`      |
-| `NullableYearMonth`, `NullableYearQuarter` null or zero | `NULL`                                     | `null`                        | `""`               | as stored      |
+| `YearMonth("0001-01")`, `YearQuarter("0001-q1")`   | `"0001-01"`, `"0001-Q1"`                   | `"0001-01"`, `"0001-Q1"`      | `0001-01`, `0001-Q1` | as stored    |
+| `YearMonth("")`, `YearQuarter("  ")`               | `NULL`                                     | `""`                          | `""`               | as stored      |
+| `YearMonth("2023-13")` (invalid)                   | `"2023-13"`                                | `"2023-13"`                   | `2023-13`          | `2023-13`      |
+| `NullableYearMonth("")`, `NullableYearQuarter("  ")` | `NULL`                                   | `null`                        | `""`               | as stored      |
+| `NullableYearMonth("0001-01")`                     | `"0001-01"`                                | `"0001-01"`                   | `0001-01`          | `0001-01`      |
 
 Reading values:
 
 | Input                                              | `Date`                                             | `NullableDate`                       |
 |----------------------------------------------------|----------------------------------------------------|--------------------------------------|
 | `Scan(nil)`                                        | `""`                                               | `Null`                               |
-| `Scan` of a string or `[]byte`, JSON string, XML element or attribute | normalized if valid, `""` if blank or a zero date, else as is, without error | same, `Null` if blank or a zero date |
-| `Scan(time.Time)`                                  | its date, `""` if zero                             | its date, `Null` if zero             |
-| `Scan(time.Time)` into a `YearMonth`, `YearQuarter` | its month or quarter, `""` if zero                 | same, null if zero                   |
+| SQL `Scan` of a string or `[]byte`                 | normalized if valid, `""` if blank or a zero date, else as is, without error | same, `Null` if blank or a zero date |
+| JSON string, XML element or attribute              | trimmed, including a zero date                     | trimmed, `Null` only if blank        |
+| `Scan(time.Time)`                                  | `OfTime`, `""` if the time is zero                 | its date, `Null` if the time is zero |
+| `Scan(time.Time)` into a `YearMonth`, `YearQuarter` | `YearMonthOfTime` or `YearQuarterOfTime`, `""` if zero | same, null if the time is zero |
 | `Scan` of other types                              | error                                              | error                                |
 | JSON `null`                                        | field left unchanged                               | `Null`                               |
 | other JSON values                                  | error                                              | error                                |
 
-An invalid date is read without error, so one bad row doesn't fail a whole query, and kept for `Validate` to report. `YearMonth` and `YearQuarter` read like `Date`, and their nullable types like `NullableDate`.
+An invalid date is read without error, so one bad row doesn't fail a whole query, and kept for `Validate` to report. `YearMonth` and `YearQuarter` trim (and a quarter uppercases) on SQL as well as JSON and XML, and they keep a zero period.
 
 ## Gotchas
 
 - **Valid, Validate, Normalized, ValidAndNormalized.** `Valid` and `Validate` accept any parseable form: `Date("25.12.2023").Valid()` is true. `Normalized` returns the canonical form. `ValidAndNormalized` is true only for an exact `YYYY-MM-DD`. `Date("")` is invalid, `NullableDate("")` is valid.
-- **`==` compares raw strings.** `Date("25.12.2023") != Date("2023-12-25")`. Use `NormalizedEqual` or `Compare`, or normalize on input. Dates read with `Scan`, JSON or XML are already normalized.
-- **Zero dates are no dates.** `"0001-01-01"` and `"0000-00-00"`, also in another spelling like `"01.01.0001"`, are `IsZero()` and not valid. Reading stores them as `""`, `Value` writes SQL NULL, `Date` encodes them in JSON as `""` and `NullableDate` as `null`, and the comparisons treat them like an invalid date.
+- **`==` compares raw strings.** `Date("25.12.2023") != Date("2023-12-25")`. Use `NormalizedEqual` or `Compare`, or normalize on input. A string read with SQL `Scan` is canonical. JSON and XML only trim.
+- **Zero dates are no dates.** `"0001-01-01"` and `"0000-00-00"`, also in another spelling like `"01.01.0001"`, are `IsZero()` and not valid. SQL `Scan`, JSON and XML store them as `""` and `Value` writes SQL NULL. Comparisons treat them like an invalid date. `YearMonth("0001-01")` and `YearQuarter("0001-Q1")` are kept on every path, and they are not null.
 - **Slashes month first, dots day first.** Without a hint `"05/06/2024"` is May 6 and `"05.06.2024"` is June 5, other separators are day first. A hint only decides slashes: English month first, every other language day first. Dots, dashes and spaces are day first with every hint, so an ambiguous US date written `"05-06-2024"` is read as June 5 also with `language.EN`. Neither changes a date that has only one valid reading. Only the first `lang` argument is used.
 - **Two-digit years** pivot at 45: `"25.12.44"` is 2044-12-25, `"25.12.45"` is 1945-12-25.
 - **Invalid and zero dates become the zero time in arithmetic.** `Date("").AddDays(1)` and `Date("bad").AddDays(1)` return `"0001-01-02"`. Check `Valid` (or `IsZero`) before doing arithmetic. `Format` returns an invalid date unchanged with every layout: `Date("bad").Format("02.01.2006")` is `"bad"`. Comparisons don't use the zero time: `After`, `Before`, `WithinIncl`, `BetweenExcl`, `AfterTime` and `BeforeTime` are false for an invalid date, so `Date("bad").Before("2024-01-01")` and `Date("2024-01-01").EqualOrAfter("bad")` are false.
-- **Reading doesn't validate.** `Scan`, JSON and XML decoding store a valid date as `YYYY-MM-DD` and an invalid one as is, without an error. An invalid date is an error for `Value` and written unchanged by `MarshalJSON`.
-- **`fmt` prints the stored date.** `fmt.Println(date.Date("25.12.2023"))` prints `25.12.2023`. Use `Format(date.Layout)` or `MarshalText` for the normalized form.
+- **Reading doesn't validate.** SQL `Scan` stores a valid date as `YYYY-MM-DD` and an invalid one as is, without an error. JSON and XML only trim. An invalid date is an error for `Value` and written unchanged by `MarshalJSON`. `YearMonth` and `YearQuarter` write an invalid period after prettification, without an error.
+- **`fmt` prints the stored date.** `fmt.Println(date.Date("25.12.2023"))` prints `25.12.2023`. `MarshalText` only trims. Use `Format(date.Layout)` or `Normalized()` for `YYYY-MM-DD`.
 - **Null ordering.** `Null` is before every date: `Null.Before(d)` and `d.After(Null)` are true, `Null.BeforeToday()` is true.
 - **`Format.AssignString` with empty input** assigns a non-nil pointer to the zero time to a `*time.Time` destination, not nil.
 - **`ParseTimeDefaultLayouts` is a shared package variable.** Pass layouts to `ParseTime` instead of changing it.

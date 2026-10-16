@@ -37,8 +37,9 @@ func TestMoneyFormat_FormatCurrencyAmount(t *testing.T) {
 	f := GermanMoneyFormat(true)
 	assert.Equal(t, "1.234,50", f.FormatCurrencyAmount(noCurrency))
 
-	// The currency is written normalized like money.Currency.String
+	// Both formatters trim and uppercase the currency, so "eur" is "EUR" and "€" stays "€".
 	assert.Equal(t, "EUR 1.234,50", f.FormatCurrencyAmount(money.CurrencyAmount{Currency: "eur", Amount: 1234.5}))
+	assert.Equal(t, "€ 1.234,50", f.FormatCurrencyAmount(money.CurrencyAmount{Currency: "€", Amount: 1234.5}))
 }
 
 // TestMoneyFormat_FormatCurrencyDecimalAmount checks that a
@@ -70,8 +71,8 @@ func TestMoneyFormat_FormatCurrencyDecimalAmount(t *testing.T) {
 	f := GermanMoneyFormat(true)
 	assert.Equal(t, "1.234,50", f.FormatCurrencyDecimalAmount(money.CurrencyDecimalAmount{Amount: amount.Amount}))
 
-	// The currency is written normalized like by FormatCurrencyAmount
-	assert.Equal(t, "EUR 1.234,50", f.FormatCurrencyDecimalAmount(money.CurrencyDecimalAmount{Currency: "€", Amount: amount.Amount}))
+	// The currency is trimmed and uppercased, like Currency.MarshalText.
+	assert.Equal(t, "€ 1.234,50", f.FormatCurrencyDecimalAmount(money.CurrencyDecimalAmount{Currency: "€", Amount: amount.Amount}))
 }
 
 // TestMoneyFormat_CurrencyMinorUnits protects that the money formats keep

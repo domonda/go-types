@@ -12,6 +12,7 @@ import (
 
 	"github.com/domonda/go-types/country"
 	"github.com/domonda/go-types/internal/normtest"
+	"github.com/domonda/go-types/strutil"
 )
 
 var validBICs = []BIC{
@@ -86,18 +87,18 @@ func TestBIC_ValidateNormalizes(t *testing.T) {
 
 // Value and MarshalJSON write a BIC normalized to 11 characters, because
 // Validate accepts the 8 character form and whitespace: without
-// normalization "BKAU AT WW", "BKAUATWW" and "BKAUATWWXXX" would reach SQL
-// and JSON as three different strings for the same bank. A BIC that can't be normalized is refused by Value, because the
-// database is where an invalid value would stay, and written unchanged
-// by MarshalJSON, so a response that holds one still renders.
+// Value and MarshalJSON trim and uppercase. They do not append "XXX"
+// and do not remove spaces inside the BIC. An invalid BIC is written
+// after that prettification, not refused.
 func TestBIC_ValueAndMarshalJSONNormalize(t *testing.T) {
 	tests := []struct {
 		bic  BIC
 		want string
 	}{
 		{bic: "BKAUATWWXXX", want: "BKAUATWWXXX"},
-		{bic: "BKAUATWW", want: "BKAUATWWXXX"},
-		{bic: "BKAU AT WW", want: "BKAUATWWXXX"},
+		{bic: "BKAUATWW", want: "BKAUATWW"},
+		{bic: "BKAU AT WW", want: "BKAU AT WW"},
+		{bic: "bkauatww", want: "BKAUATWW"},
 		{bic: " GENODEF1JEV ", want: "GENODEF1JEV"},
 	}
 	for _, tt := range tests {
@@ -110,13 +111,14 @@ func TestBIC_ValueAndMarshalJSONNormalize(t *testing.T) {
 		assert.Equal(t, `"`+tt.want+`"`, string(j), "json.Marshal(BIC(%q))", string(tt.bic))
 	}
 
-	_, err := BIC("DEUTZZFF").Value()
-	assert.Error(t, err, "Value() of an invalid BIC")
-	j, err := json.Marshal(BIC("DEUTZZFF"))
+	v, err := BIC("deutzzff").Value()
+	require.NoError(t, err)
+	assert.Equal(t, "DEUTZZFF", v, "Value() of an invalid BIC is trimmed and uppercased")
+	j, err := json.Marshal(BIC("deutzzff"))
 	require.NoError(t, err)
 	assert.Equal(t, `"DEUTZZFF"`, string(j))
 
-	v, err := BIC("").Value()
+	v, err = BIC("").Value()
 	require.NoError(t, err)
 	assert.Nil(t, v, "an empty BIC is written as SQL NULL")
 }
@@ -271,7 +273,7 @@ func TestBIC_Normalize(t *testing.T) {
 				long, err := NormalizeBIC(string(tt.bic))
 				require.NoError(t, err)
 				assert.Equal(t, tt.wantLong, long)
-				assert.Equal(t, string(tt.wantLong), marshalText(t, tt.bic))
+				assert.Equal(t, strings.ToUpper(strutil.TrimSpace(string(tt.bic))), marshalText(t, tt.bic))
 				assert.Equal(t, NullableBIC(tt.wantLong), tt.bic.NormalizedOrNull())
 				assert.Equal(t, tt.bic == tt.wantLong, tt.bic.ValidAndNormalized())
 
@@ -290,7 +292,7 @@ func TestBIC_Normalize(t *testing.T) {
 			assert.Error(t, err)
 			assert.Equal(t, bic, short, "invalid BIC must be returned unchanged")
 			assert.Equal(t, BICNull, bic.NormalizedOrNull())
-			assert.Equal(t, string(bic), marshalText(t, bic), "MarshalText of an invalid BIC must write it unchanged")
+			assert.Equal(t, strings.ToUpper(strutil.TrimSpace(string(bic))), marshalText(t, bic), "MarshalText trims and uppercases an invalid BIC")
 			assert.False(t, bic.ValidAndNormalized())
 			assert.False(t, StringIsBIC(string(bic)))
 		}
@@ -383,7 +385,7 @@ func TestBIC_SQL(t *testing.T) {
 		{name: "bytes", value: []byte("BELADEBEXXX"), want: "BELADEBEXXX"},
 		{name: "NULL", value: nil, want: ""},
 		// Scan does not validate, so existing invalid data can still be read
-		{name: "invalid string", value: "invalid", want: "invalid"},
+		{name: "invalid string", value: "invalid", want: "INVALID"},
 		{name: "unsupported type", value: int64(1), wantErr: true},
 	}
 	for _, tt := range tests {
@@ -443,12 +445,13 @@ func marshalText(t *testing.T, v encoding.TextMarshaler) string {
 
 // TestBIC_ReadingAndWriting checks the reading and writing contract shared
 // by the normalizing types: every reading path stores a valid BIC
-// normalized to 11 characters and an invalid one unchanged, Value refuses
-// an invalid BIC, and fmt prints the stored BIC.
+// trimmed and uppercased, an 8-character BIC kept, an invalid BIC written
+// that way, and fmt prints the stored BIC.
 func TestBIC_ReadingAndWriting(t *testing.T) {
 	normtest.Run(t, normtest.Spec[BIC]{
 		Canonical: "BKAUATWWXXX",
 		Variants:  []BIC{"BKAUATWW", "BKAU AT WW", " BKAUATWWXXX "},
 		Invalid:   []BIC{"DEUTZZFF", "ABC"},
+		Prettify:  normtest.TrimUpper[BIC],
 	})
 }

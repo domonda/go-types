@@ -296,7 +296,7 @@ func TestYearQuarter_AddYears(t *testing.T) {
 		{name: "subtract 1 year", yq: "2023-Q2", years: -1, want: "2022-Q2"},
 		{name: "add 0 years", yq: "2023-Q2", years: 0, want: "2023-Q2"},
 		{name: "to the last year", yq: "2023-Q2", years: 9999 - 2023, want: "9999-Q2"},
-		// Past the years of Date the result is invalid, so that Value refuses it
+		// Past the years of Date the result is invalid. Value writes the trimmed text.
 		{name: "after the last year", yq: "9999-Q2", years: 1, want: "10000-Q2"},
 		// An invalid year-quarter has no year to add to. It must stay
 		// unchanged, so it stays invalid and Validate reports the original
@@ -327,7 +327,7 @@ func TestYearQuarter_AddQuarters(t *testing.T) {
 		{name: "add 0 quarters", yq: "2023-Q2", quarters: 0, want: "2023-Q2"},
 		{name: "add 2 years worth", yq: "2023-Q2", quarters: 8, want: "2025-Q2"},
 		{name: "last quarter", yq: "9999-Q3", quarters: 1, want: "9999-Q4"},
-		// Past the years of Date the result is invalid, so that Value refuses it
+		// Past the years of Date the result is invalid. Value writes the trimmed text.
 		{name: "after the last quarter", yq: "9999-Q4", quarters: 1, want: "10000-Q1"},
 		{name: "before the year 1", yq: "0001-Q2", quarters: -2, want: "0000-Q4"},
 		{name: "before the year 0", yq: "0001-Q4", quarters: -8, want: "-001-Q4"},
@@ -370,8 +370,8 @@ func TestYearQuarter_AddQuartersLikeTime(t *testing.T) {
 // service from a quarter count read from input: AddQuarters looped once
 // per year, which took 400ms for 1<<32 quarters and never returned for
 // math.MaxInt, whose sum with the quarter overflowed. The result must
-// come at once, match exact big.Int arithmetic and be invalid, so that
-// Value refuses it instead of writing a wrapped around year-quarter.
+// come at once, match exact big.Int arithmetic and be invalid.
+// Value writes that text. It does not wrap the year.
 func TestYearQuarter_AddQuartersExtremes(t *testing.T) {
 	type call struct {
 		yq       YearQuarter
@@ -407,8 +407,9 @@ func TestYearQuarter_AddQuartersExtremes(t *testing.T) {
 		year, quarter := new(big.Int).DivMod(total, big.NewInt(4), new(big.Int))
 		want := YearQuarter(fmt.Sprintf("%04d-Q%d", year, quarter.Int64()+1))
 		assert.Equal(t, want, got[i], "%s.AddQuarters(%d)", c.yq, c.quarters)
-		_, err := got[i].Value()
-		assert.Error(t, err, "Value of %s.AddQuarters(%d)", c.yq, c.quarters)
+		v, err := got[i].Value()
+		assert.NoError(t, err, "Value of %s.AddQuarters(%d)", c.yq, c.quarters)
+		assert.Equal(t, string(got[i]), v)
 		assert.Equal(t, got[i].Nullable(), c.yq.Nullable().AddQuarters(c.quarters), "NullableYearQuarter")
 	}
 }
@@ -434,9 +435,10 @@ func TestYearQuarter_ValueOfAValidDate(t *testing.T) {
 	assert.NoError(t, err, "NullableYearQuarter.Value")
 	assert.Equal(t, "9999-Q4", v)
 
-	// A year-quarter after the years of Date is still refused
-	_, err = YearQuarterFrom(10000, 1).Value()
-	assert.Error(t, err)
+	// A year-quarter after the years of Date is written as that text.
+	v, err = YearQuarterFrom(10000, 1).Value()
+	assert.NoError(t, err)
+	assert.Equal(t, "10000-Q1", v)
 }
 
 // Contains tests
@@ -666,9 +668,9 @@ func TestNullableYearQuarter_IsNull(t *testing.T) {
 		{name: "null", yq: YearQuarterNull, want: true},
 		{name: "empty", yq: "", want: true},
 		{name: "whitespace only", yq: " \t", want: true},
-		// The zero values are null like the zero dates of NullableDate
-		{name: "zero 0000-Q0", yq: "0000-Q0", want: true},
-		{name: "zero 0001-Q1", yq: "0001-Q1", want: true},
+		// A zero period is kept as text and is not null.
+		{name: "zero 0000-Q0", yq: "0000-Q0", want: false},
+		{name: "zero 0001-Q1", yq: "0001-Q1", want: false},
 		{name: "valid", yq: "2023-Q2", want: false},
 	}
 	for _, tt := range tests {
@@ -1071,7 +1073,7 @@ func TestYearQuarter_UnmarshalJSON(t *testing.T) {
 		`"2023-Q3"`:   "2023-Q3",
 		`" 2023-q3 "`: "2023-Q3",
 		`"2023-Q5"`:   "2023-Q5",
-		`"bad"`:       "bad",
+		`"bad"`:       "BAD",
 		`""`:          "",
 		`"  "`:        "",
 	} {
@@ -1092,7 +1094,7 @@ func TestYearQuarter_UnmarshalJSON(t *testing.T) {
 // TestYearQuarter_ReadingAndWriting checks the reading and writing contract
 // shared by the normalizing types, like for Date: every reading path stores
 // a valid year-quarter normalized, a zero one as "" and an invalid one
-// unchanged, Value refuses an invalid year-quarter, and fmt prints it as stored.
+// trimmed and uppercased, a zero quarter is kept, an invalid quarter is written, and fmt prints it as stored.
 func TestYearQuarter_ReadingAndWriting(t *testing.T) {
 	normtest.Run(t, normtest.Spec[YearQuarter]{
 		Canonical:    "2023-Q3",
@@ -1100,6 +1102,7 @@ func TestYearQuarter_ReadingAndWriting(t *testing.T) {
 		Invalid:      []YearQuarter{"2023-Q5", "2023-Q", "0000-Q2", "Q3/2023", "bad"},
 		Blank:        []YearQuarter{"0001-Q1", "0001-q1", "0000-Q0", " 0001-Q1 "},
 		StoredString: true,
+		Prettify:     normtest.TrimUpper[YearQuarter],
 	})
 }
 

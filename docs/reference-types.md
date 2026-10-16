@@ -204,7 +204,7 @@ type Finder interface {
 | `NewSet(3, 1, 2)`  | `[1,2,3]`      | `[1, 2, 3]`  |
 | `NewSet("b", "a")` | `["a","b"]`    | `["a", "b"]` |
 
-`MarshalJSON` writes elements of a normalizing string type, one that implements `types.Normalizable`, as stored, not with their own `MarshalJSON`, so elements whose `MarshalJSON` normalizes, like `money.Currency`, are not merged: `NewSet[money.Currency]("eur", "EUR")` marshals as `["EUR","eur"]` and reads back with both elements. Other elements, also of other string types, are written with their own `MarshalJSON`.
+`MarshalJSON` writes elements of a normalizing string type, one that implements `types.Normalizable`, as stored, not with their own `MarshalJSON`, so elements whose `MarshalJSON` changes the spelling, like `money.Currency` uppercasing, are not merged: `NewSet[money.Currency]("eur", "EUR")` marshals as `["EUR","eur"]` and reads back with both elements. Other elements, also of other string types, are written with their own `MarshalJSON`.
 
 `UnmarshalJSON` turns `null` into a nil set, `[]` into an empty non-nil set, and an array into a new set without duplicates, elements of a normalizing string type as given and other elements with their own `UnmarshalJSON`, so its validation still applies. It always assigns a new map, so a map shared with another variable is never changed. A JSON object is an error.
 

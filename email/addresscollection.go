@@ -229,6 +229,38 @@ func isPlaceholderList(list string) bool {
 // no-break space, the ideographic space, the zero width non-joiner and
 // joiner and the soft hyphen in names, and the left-to-right and
 // right-to-left marks, but not in address parts, see hasHiddenAddrSpecRune.
+// stripUnsafeRunes removes the runes hasUnsafeRune reports, so a value
+// that cannot be normalized is still written without a line break, a NUL
+// or a bidi override.
+func stripUnsafeRunes(text string) string {
+	var b strings.Builder
+	b.Grow(len(text))
+	for i := 0; i < len(text); {
+		c := text[i]
+		if c < utf8.RuneSelf {
+			if (c < ' ' && c != '\t') || c == 0x7f {
+				i++
+				continue
+			}
+			b.WriteByte(c)
+			i++
+			continue
+		}
+		r, size := utf8.DecodeRuneInString(text[i:])
+		switch {
+		case r == utf8.RuneError && size == 1,
+			r <= 0x9f,
+			r >= '\u202a' && r <= '\u202e',
+			r >= '\u2066' && r <= '\u2069':
+			i += size
+			continue
+		}
+		b.WriteString(text[i : i+size])
+		i += size
+	}
+	return b.String()
+}
+
 func hasUnsafeRune(text string) bool {
 	for i := 0; i < len(text); {
 		c := text[i]
@@ -393,6 +425,24 @@ func joinDisplayNameParts(list string, parts []listPart) []Address {
 	return entries
 }
 
+// collectionEntries keeps AddressSet keys as stored, including an empty
+// key. Address lists trim each element and skip one that is empty after
+// the trim, so a JSON array and a PostgreSQL array of the same padded
+// addresses become the same list.
+func collectionEntries(entries []string, typeName string) []string {
+	if typeName == "AddressSet" {
+		return entries
+	}
+	trimmed := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		entry = strutil.TrimSpace(entry)
+		if entry != "" {
+			trimmed = append(trimmed, entry)
+		}
+	}
+	return trimmed
+}
+
 // addressCollection is the text of an address collection
 // as read by readAddressCollection. The zero value is null.
 type addressCollection struct {
@@ -412,10 +462,12 @@ type addressCollection struct {
 // On the trimmed text, in this order:
 //
 //   - "", whitespace only, "null": null
-//   - "[" and valid JSON: a JSON array of strings, elements kept exactly
+//   - "[" and valid JSON: a JSON array of strings. A list trims each
+//     element and skips an empty one. A set keeps the elements as stored.
 //   - "{" and valid JSON: a JSON object, keys kept exactly in sorted order
-//   - "{...}" otherwise: a PostgreSQL array literal, elements trimmed
-//     and empty ones skipped
+//   - "{...}" otherwise: a PostgreSQL array literal. AddressList trims
+//     the elements and skips empty ones. AddressSet keeps them as stored,
+//     including their spaces, and skips only empty elements.
 //   - '"' and valid JSON: a JSON string, its content as address list
 //   - anything else: an address list, the text kept as given
 //
@@ -440,7 +492,7 @@ func readAddressCollection[T string | []byte](text T, typeName string) (addressC
 			if err != nil {
 				return addressCollection{}, errs.Errorf("can't read JSON array as email.%s because of: %w", typeName, err)
 			}
-			return addressCollection{entries: entries}, nil
+			return addressCollection{entries: collectionEntries(entries, typeName)}, nil
 		}
 
 	case trimmed[0] == '{':
@@ -455,23 +507,17 @@ func readAddressCollection[T string | []byte](text T, typeName string) (addressC
 					entries = append(entries, key)
 				}
 				slices.Sort(entries)
-				return addressCollection{entries: entries}, nil
+				return addressCollection{entries: collectionEntries(entries, typeName)}, nil
 			}
 		}
 		if trimmed[len(trimmed)-1] == '}' {
-			array, err := scanAddressArray(string(trimmed), typeName)
+			// AddressSet keys stay as stored. A list trims each element,
+			// so one that was only padding is empty and is not an entry.
+			array, err := scanAddressArray(string(trimmed), typeName, typeName != "AddressSet")
 			if err != nil {
 				return addressCollection{}, err
 			}
-			entries := make([]string, 0, len(array))
-			for _, addr := range array {
-				// scanAddressArray trims, so an element that was only
-				// padding is empty here and is not an entry
-				if addr != "" {
-					entries = append(entries, addr)
-				}
-			}
-			return addressCollection{entries: entries}, nil
+			return addressCollection{entries: collectionEntries(array, typeName)}, nil
 		}
 
 	case trimmed[0] == '"' && trimmed[len(trimmed)-1] == '"':

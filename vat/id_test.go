@@ -455,12 +455,15 @@ func TestID_FormatsAsStored(t *testing.T) {
 }
 
 func TestID_ScanString(t *testing.T) {
-	t.Run("valid input is stored normalized", func(t *testing.T) {
-		for _, validate := range []bool{true, false} {
-			var id ID
-			require.NoError(t, id.ScanString("de 167-015-661", validate))
-			assert.Equal(t, ID("DE167015661"), id)
-		}
+	t.Run("validate stores the normalized ID", func(t *testing.T) {
+		var id ID
+		require.NoError(t, id.ScanString("de 167-015-661", true))
+		assert.Equal(t, ID("DE167015661"), id)
+	})
+	t.Run("without validate trims and uppercases", func(t *testing.T) {
+		var id ID
+		require.NoError(t, id.ScanString(" de 167-015-661 ", false))
+		assert.Equal(t, ID("DE 167-015-661"), id)
 	})
 	t.Run("validate rejects invalid input and keeps the old value", func(t *testing.T) {
 		id := ID("ATU10223006")
@@ -468,10 +471,10 @@ func TestID_ScanString(t *testing.T) {
 		assert.ErrorIs(t, err, ErrInvalidID)
 		assert.Equal(t, ID("ATU10223006"), id)
 	})
-	t.Run("without validate invalid input is stored as is", func(t *testing.T) {
+	t.Run("without validate invalid input is trimmed and uppercased", func(t *testing.T) {
 		var id ID
 		require.NoError(t, id.ScanString("atu 1234 5678", false))
-		assert.Equal(t, ID("atu 1234 5678"), id)
+		assert.Equal(t, ID("ATU 1234 5678"), id)
 	})
 }
 
@@ -510,26 +513,24 @@ func TestID_Scan(t *testing.T) {
 func TestID_Value(t *testing.T) {
 	v, err := ID("at u 1022 3006").Value()
 	require.NoError(t, err)
-	assert.Equal(t, "ATU10223006", v)
+	assert.Equal(t, "AT U 1022 3006", v)
 
 	v, err = ID("ATU10223006").Value()
 	require.NoError(t, err)
 	assert.Equal(t, "ATU10223006", v)
 }
 
-// MarshalJSON writes an ID normalized like Value, because Validate accepts
-// formatted IDs like "atu 1022 3006": without normalization API consumers
-// would get the same ID in different spellings. An ID that can't be
-// normalized is written unchanged instead of failing the write.
+// MarshalJSON trims and uppercases an ID like Value. Internal spaces and
+// punctuation stay, and an invalid ID is written after that prettification.
 func TestID_MarshalJSON(t *testing.T) {
 	tests := []struct {
 		id   ID
 		want string
 	}{
 		{id: "ATU10223006", want: `"ATU10223006"`},
-		{id: "at u 1022 3006", want: `"ATU10223006"`},
-		{id: "NL 123 456 789 B 01", want: `"NL123456789B01"`},
-		{id: "invalid", want: `"invalid"`},
+		{id: "at u 1022 3006", want: `"AT U 1022 3006"`},
+		{id: "NL 123 456 789 B 01", want: `"NL 123 456 789 B 01"`},
+		{id: "invalid", want: `"INVALID"`},
 		{id: "", want: `""`},
 	}
 	for _, tt := range tests {
@@ -561,13 +562,13 @@ func TestID_JSONSchema(t *testing.T) {
 
 // TestID_ReadingAndWriting checks the reading and writing contract shared
 // by the normalizing types: every reading path stores a valid ID normalized
-// and an invalid one unchanged, Value refuses an invalid ID with an error
-// wrapping ErrInvalidID, and fmt prints the stored ID.
+// trimmed and uppercased, spaces kept, an invalid ID written that way,
+// and fmt prints the stored ID. Normalized still returns ErrInvalidID.
 func TestID_ReadingAndWriting(t *testing.T) {
 	normtest.Run(t, normtest.Spec[ID]{
-		Canonical:  "ATU10223006",
-		Variants:   []ID{"atu 1022 3006", "AT-U 1022.3006", " ATU10223006 "},
-		Invalid:    []ID{"ATU12345678", "not a VAT ID"},
-		InvalidErr: ErrInvalidID,
+		Canonical: "ATU10223006",
+		Variants:  []ID{"atu 1022 3006", "AT-U 1022.3006", " ATU10223006 "},
+		Invalid:   []ID{"ATU12345678", "not a VAT ID"},
+		Prettify:  normtest.TrimUpper[ID],
 	})
 }

@@ -58,10 +58,8 @@ func TestNullableDate_UnmarshalJSONResetsAndRejects(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(`{"paid":null}`), &d))
 	assert.Equal(t, Null, d.Paid)
 
-	// A JSON string is stored normalized if it is a valid date and
-	// unchanged without an error if not, so Validate can report it.
-	// A zero date is null.
-	for str, want := range map[string]NullableDate{"2023-12-25": "2023-12-25", "25.12.2023": "2023-12-25", "bad": "bad", "": Null, "0001-01-01T00:00:00Z": Null} {
+	// A JSON string is trimmed. A zero date is stored as null, like Scan.
+	for str, want := range map[string]NullableDate{"2023-12-25": "2023-12-25", "25.12.2023": "25.12.2023", "bad": "bad", "": Null, "0001-01-01T00:00:00Z": Null} {
 		d := doc{Paid: "2024-01-02"}
 		data, err := json.Marshal(map[string]string{"paid": str})
 		require.NoError(t, err)
@@ -887,11 +885,9 @@ func TestNullableDate_MarshalJSON(t *testing.T) {
 	}{
 		{date: Null, want: `{"d":null}`},
 		{date: "  ", want: `{"d":null}`},
-		// A zero date is NULL and must be marshalled as JSON null
 		{date: "0001-01-01", want: `{"d":null}`},
 		{date: "2023-12-25", want: `{"d":"2023-12-25"}`},
-		// Written normalized like Date, see TestDate_MarshalJSON
-		{date: "25.12.2023", want: `{"d":"2023-12-25"}`},
+		{date: "25.12.2023", want: `{"d":"25.12.2023"}`},
 		{date: "invalid", want: `{"d":"invalid"}`},
 	}
 	for _, tt := range tests {
@@ -923,7 +919,7 @@ func TestNullableDate_MarshalText(t *testing.T) {
 	}{
 		{date: Null, want: ""},
 		{date: "  ", want: ""},
-		{date: "25.12.2023", want: "2023-12-25"},
+		{date: "25.12.2023", want: "25.12.2023"},
 		{date: "invalid", want: "invalid"},
 	} {
 		text, err := tt.date.MarshalText()
@@ -963,9 +959,12 @@ func TestNullableDate_ZeroDateInOtherFormatIsNull(t *testing.T) {
 // shared by the normalizing types, with a blank or zero NullableDate as null.
 func TestNullableDate_ReadingAndWriting(t *testing.T) {
 	normtest.Run(t, normtest.Spec[NullableDate]{
-		Canonical: "2023-12-25",
-		Variants:  []NullableDate{"25.12.2023", "December 25, 2023", " 2023-12-25 ", "2023-12-25T10:00:00", "2023-12-25T00:00:00", "2023-12-25 00:00:00"},
-		Invalid:   []NullableDate{"invalid", "2023-02-30"},
+		Canonical:     "2023-12-25",
+		Variants:      []NullableDate{"25.12.2023", "December 25, 2023", " 2023-12-25 ", "2023-12-25T10:00:00", "2023-12-25T00:00:00", "2023-12-25 00:00:00"},
+		Invalid:       []NullableDate{"invalid", "2023-02-30"},
+		Prettify:      normtest.Trim[NullableDate],
+		SQLNormalized: true,
+		ZeroBlank:     true,
 		Blank: []NullableDate{
 			"0001-01-01", "0000-00-00", "01.01.0001", "0001-01-01T00:00:00Z", "0001-01-1 ", "0001-01-1.",
 			// The zero date of MySQL and other implementations in other spellings

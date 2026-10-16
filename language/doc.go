@@ -8,8 +8,9 @@
 // language names ("German").
 //
 // [Code.Valid] and [Code.Validate] normalize first and accept every
-// spelling that [Code.Normalized] accepts, because reading stores and
-// [Code.Value] writes the normalized code. [Code.ValidAndNormalized]
+// spelling that [Code.Normalized] accepts. Reading and [Code.Value] only
+// trim, so "EN" stays "EN". Call [Code.Normalized] for the ISO 639-1 code.
+// [Code.ValidAndNormalized]
 // only accepts a canonical lower-case code.
 //
 // The package includes:

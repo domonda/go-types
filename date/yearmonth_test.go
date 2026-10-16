@@ -304,7 +304,7 @@ func TestYearMonth_AddYears(t *testing.T) {
 		{name: "subtract 1 year", ym: "2023-03", years: -1, want: "2022-03"},
 		{name: "add 0 years", ym: "2023-03", years: 0, want: "2023-03"},
 		{name: "to the last year", ym: "2023-03", years: 9999 - 2023, want: "9999-03"},
-		// Past the years of Date the result is invalid, so that Value refuses it
+		// Past the years of Date the result is invalid. Value writes the trimmed text.
 		{name: "after the last year", ym: "9999-03", years: 1, want: "10000-03"},
 		// An invalid year-month has no year to add to. It must stay
 		// unchanged, so it stays invalid and Validate reports the original
@@ -499,9 +499,10 @@ func TestYearMonth_ValueOfAValidDate(t *testing.T) {
 	require.NoError(t, err, "NullableYearMonth.Value")
 	require.Equal(t, "9999-12", v)
 
-	// A year-month after the years of Date is still refused
-	_, err = YearMonthFrom(10000, time.January).Value()
-	require.Error(t, err)
+	// A year-month after the years of Date is written as that text.
+	v, err = YearMonthFrom(10000, time.January).Value()
+	require.NoError(t, err)
+	require.Equal(t, "10000-01", v)
 }
 
 // Normalized trims the surrounding whitespace, which a typed or OCR read
@@ -566,7 +567,7 @@ func TestYearMonth_UnmarshalJSON(t *testing.T) {
 // TestYearMonth_ReadingAndWriting checks the reading and writing contract
 // shared by the normalizing types, like for Date: every reading path stores
 // a valid year-month normalized, a zero one as "" and an invalid one
-// unchanged, Value refuses an invalid year-month, and fmt prints it as stored.
+// trimmed, a zero period is kept, an invalid year-month is written, and fmt prints it as stored.
 func TestYearMonth_ReadingAndWriting(t *testing.T) {
 	normtest.Run(t, normtest.Spec[YearMonth]{
 		Canonical:    "2023-07",
@@ -574,6 +575,7 @@ func TestYearMonth_ReadingAndWriting(t *testing.T) {
 		Invalid:      []YearMonth{"2023-13", "2023-7", "0000-05", "07/2023", "bad"},
 		Blank:        []YearMonth{"0001-01", "0000-00", " 0001-01 "},
 		StoredString: true,
+		Prettify:     normtest.Trim[YearMonth],
 	})
 }
 

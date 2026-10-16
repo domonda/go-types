@@ -223,13 +223,13 @@ func TestNullableCode_Scan(t *testing.T) {
 			t.Errorf(`Scan("") = %q, want Null`, string(n))
 		}
 	})
-	t.Run("string is stored normalized", func(t *testing.T) {
+	t.Run("string is stored trimmed", func(t *testing.T) {
 		var n NullableCode
 		if err := n.Scan("de"); err != nil {
 			t.Fatal(err)
 		}
-		if n != "DE" {
-			t.Errorf(`Scan("de") = %q, want "DE"`, string(n))
+		if n != "de" {
+			t.Errorf(`Scan("de") = %q, want "de"`, string(n))
 		}
 	})
 	t.Run("bytes are copied", func(t *testing.T) {
@@ -264,9 +264,8 @@ func TestNullableCode_Value(t *testing.T) {
 		{n: "  ", want: nil},
 		{n: "\t\n", want: nil},
 		{n: "DE", want: "DE"},
-		// Codes are written normalized so equal countries compare equal in SQL.
-		{n: "de", want: "DE"},
-		{n: "Schweiz", want: "CH"},
+		{n: "de", want: "de"},
+		{n: "Schweiz", want: "Schweiz"},
 	}
 	for _, tt := range tests {
 		got, err := tt.n.Value()
@@ -310,8 +309,7 @@ func TestNullableCode_JSON(t *testing.T) {
 		// Whitespace only normalizes to Null, so it is also JSON null.
 		{n: "  ", wantJSON: `{"country":null}`, wantBack: Null},
 		{n: "DE", wantJSON: `{"country":"DE"}`, wantBack: "DE"},
-		// JSON output is normalized like Code.
-		{n: "de", wantJSON: `{"country":"DE"}`, wantBack: "DE"},
+		{n: "de", wantJSON: `{"country":"de"}`, wantBack: "de"},
 	}
 	for _, tt := range tests {
 		t.Run(string(tt.n), func(t *testing.T) {
@@ -348,9 +346,8 @@ func TestNullableCode_UnmarshalJSON(t *testing.T) {
 		t.Errorf("json.Unmarshal of null kept %q, want Null", string(d.Country))
 	}
 
-	// A JSON string is stored normalized if it is a valid code,
-	// unchanged without an error if not, so Validate can report it.
-	for str, want := range map[string]NullableCode{"AT": "AT", "at": "AT", "XX": "XX", "": Null} {
+	// A JSON string is only trimmed, so case and names stay.
+	for str, want := range map[string]NullableCode{"AT": "AT", "at": "at", "XX": "XX", "": Null} {
 		d := doc{Country: "DE"}
 		data, _ := json.Marshal(map[string]string{"country": str})
 		if err := json.Unmarshal(data, &d); err != nil {
@@ -426,7 +423,7 @@ func TestNullableCode_ScanString(t *testing.T) {
 		t.Fatal(err)
 	}
 	if n != "AT" {
-		t.Errorf("valid input must be stored normalized, got %q", string(n))
+		t.Errorf("valid input must be stored trimmed, got %q", string(n))
 	}
 
 	if err := n.ScanString("Atlantis", true); err == nil {
@@ -452,5 +449,6 @@ func TestNullableCode_ReadingAndWriting(t *testing.T) {
 		Variants:  []NullableCode{"de", " DE ", "d", "Deutschland"},
 		Invalid:   []NullableCode{"XX", "Atlantis"},
 		Nullable:  true,
+		Prettify:  normtest.Trim[NullableCode],
 	})
 }

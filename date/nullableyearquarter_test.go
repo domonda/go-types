@@ -21,14 +21,14 @@ func TestNullableYearQuarter_UnmarshalJSON(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(`{"period":null}`), &d))
 	require.Equal(t, YearQuarterNull, d.Period)
 
-	// A JSON string is stored normalized if it is valid, a blank one as
-	// null, and an invalid one unchanged without an error, so one bad
-	// period doesn't fail a whole document; Validate reports it.
+	// A JSON string is trimmed and uppercased. A blank one is null.
+	// A zero quarter is kept. An invalid one is kept after that
+	// prettification, so one bad period doesn't fail a whole document.
 	for str, want := range map[string]NullableYearQuarter{
 		"2023-Q3":   "2023-Q3",
 		" 2023-q3 ": "2023-Q3",
 		"2023-Q5":   "2023-Q5",
-		"bad":       "bad",
+		"bad":       "BAD",
 		"":          YearQuarterNull,
 		"  ":        YearQuarterNull,
 	} {
@@ -76,10 +76,11 @@ func TestNullableYearQuarter_ReadingAndWriting(t *testing.T) {
 	normtest.Run(t, normtest.Spec[NullableYearQuarter]{
 		Canonical:    "2023-Q3",
 		Variants:     []NullableYearQuarter{"2023-q3", " 2023-Q3 ", "\t2023-q3\n"},
-		Invalid:      []NullableYearQuarter{"2023-Q5", "2023-Q", "0000-Q2", "Q3/2023", "bad"},
-		Blank:        []NullableYearQuarter{"0001-Q1", "0001-q1", "0000-Q0", " 0001-Q1 "},
+		Invalid:      []NullableYearQuarter{"2023-Q5", "2023-Q", "0000-Q2", "Q3/2023", "bad", "0001-Q1", "0001-q1", "0000-Q0", " 0001-Q1 "},
+		Blank:        nil,
 		Nullable:     true,
 		StoredString: true,
+		Prettify:     normtest.TrimUpper[NullableYearQuarter],
 	})
 }
 

@@ -228,10 +228,9 @@ func TestNullableCurrency_JSON(t *testing.T) {
 	}
 }
 
-// A non-null NullableCurrency is written normalized like Currency, see
-// TestCurrency_ValueAndMarshalJSONNormalize, and null stays SQL NULL and
-// JSON null, including the whitespace-only null. Value refuses an invalid
-// currency, JSON writes it unchanged.
+// A non-null NullableCurrency is trimmed and uppercased, and null stays
+// SQL NULL and JSON null, including the whitespace-only null. An invalid
+// currency is written that way.
 func TestNullableCurrency_ValueAndMarshalJSONNormalize(t *testing.T) {
 	tests := []struct {
 		n        NullableCurrency
@@ -241,7 +240,7 @@ func TestNullableCurrency_ValueAndMarshalJSONNormalize(t *testing.T) {
 		{n: CurrencyNull, wantSQL: nil, wantJSON: `null`},
 		{n: "  ", wantSQL: nil, wantJSON: `null`},
 		{n: "eur", wantSQL: "EUR", wantJSON: `"EUR"`},
-		{n: "$", wantSQL: "USD", wantJSON: `"USD"`},
+		{n: "$", wantSQL: "$", wantJSON: `"$"`},
 	}
 	for _, tt := range tests {
 		v, err := tt.n.Value()
@@ -253,9 +252,10 @@ func TestNullableCurrency_ValueAndMarshalJSONNormalize(t *testing.T) {
 		assert.Equal(t, tt.wantJSON, string(j), "json.Marshal(NullableCurrency(%q))", string(tt.n))
 	}
 
-	_, err := NullableCurrency("XYZ").Value()
-	assert.Error(t, err, "Value() of an invalid currency")
-	j, err := json.Marshal(NullableCurrency("XYZ"))
+	v, err := NullableCurrency("xyz").Value()
+	require.NoError(t, err)
+	assert.Equal(t, "XYZ", v, "Value() of an invalid currency is trimmed and uppercased")
+	j, err := json.Marshal(NullableCurrency("xyz"))
 	require.NoError(t, err)
 	assert.Equal(t, `"XYZ"`, string(j))
 }
@@ -263,9 +263,8 @@ func TestNullableCurrency_ValueAndMarshalJSONNormalize(t *testing.T) {
 // TestNullableCurrency_UnmarshalJSON pins that JSON null resets a field
 // that holds a value, like for uu.NullableID and email.NullableAddress,
 // else decoding a partial update with null into an existing struct keeps
-// the old currency. A JSON string is stored normalized if it is a valid
-// currency and unchanged without an error if not, so Validate can report
-// it, and any other JSON value is an error.
+// the old currency. A JSON string is trimmed and uppercased, without
+// symbol or name lookup, and any other JSON value is an error.
 func TestNullableCurrency_UnmarshalJSON(t *testing.T) {
 	type doc struct {
 		Currency NullableCurrency `json:"currency"`
@@ -274,7 +273,7 @@ func TestNullableCurrency_UnmarshalJSON(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(`{"currency":null}`), &d))
 	assert.Equal(t, NullableCurrency(CurrencyNull), d.Currency)
 
-	for str, want := range map[string]NullableCurrency{"USD": "USD", "usd": "USD", "€": "EUR", "XYZ": "XYZ", "": CurrencyNull} {
+	for str, want := range map[string]NullableCurrency{"USD": "USD", "usd": "USD", "€": "€", "xyz": "XYZ", "": CurrencyNull} {
 		d := doc{Currency: "EUR"}
 		data, err := json.Marshal(map[string]string{"currency": str})
 		require.NoError(t, err)
@@ -312,5 +311,6 @@ func TestNullableCurrency_ReadingAndWriting(t *testing.T) {
 		Variants:  []NullableCurrency{"eur", " EUR ", "€", "Euro"},
 		Invalid:   []NullableCurrency{"XYZ", "Atlantean Dollar"},
 		Nullable:  true,
+		Prettify:  normtest.TrimUpper[NullableCurrency],
 	})
 }

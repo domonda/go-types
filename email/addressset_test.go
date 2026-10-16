@@ -368,7 +368,7 @@ func TestAddressSet_ScanNonArray(t *testing.T) {
 		{name: "empty array", value: "{}", want: AddressSet{}},
 		// A hand written literal, unlike PostgreSQL output, may pad its
 		// elements. The padding is not part of the address.
-		{name: "padded elements", value: "{ a@example.com , b@example.com }", want: MakeAddressSet("a@example.com", "b@example.com")},
+		{name: "padded elements", value: "{ a@example.com , b@example.com }", want: MakeAddressSet(" a@example.com ", " b@example.com ")},
 		{name: "whitespace only array", value: "{ }", want: AddressSet{}},
 		// Regression cases for the array codec swap (nullable.SplitArray ->
 		// notnull.StringArray). Each behaves differently than before, so each
@@ -445,7 +445,7 @@ func TestAddressSet_ValueAndMarshalJSONAsStored(t *testing.T) {
 		{set: nil, wantSQL: nil, wantJSON: `null`},
 		{set: MakeAddressSet(), wantSQL: "{}", wantJSON: `[]`},
 		{set: MakeAddressSet("B@Example.com", "b@example.com", "a@example.com"), wantSQL: `{"B@Example.com","a@example.com","b@example.com"}`, wantJSON: `["B@Example.com","a@example.com","b@example.com"]`},
-		{set: MakeAddressSet(" a@example.com", "a@example.com"), wantSQL: `{"a@example.com"}`, wantJSON: `[" a@example.com","a@example.com"]`},
+		{set: MakeAddressSet(" a@example.com", "a@example.com"), wantSQL: `{" a@example.com","a@example.com"}`, wantJSON: `[" a@example.com","a@example.com"]`},
 	}
 	for _, tt := range tests {
 		v, err := tt.set.Value()
@@ -464,8 +464,8 @@ func TestAddressSet_ValueAndMarshalJSONAsStored(t *testing.T) {
 	}
 
 	invalid := MakeAddressSet("B@Example.com", "invalid", "")
-	if _, err := invalid.Value(); err == nil {
-		t.Errorf("Value() of %v returned no error for the invalid address", invalid)
+	if _, err := invalid.Value(); err != nil {
+		t.Errorf("Value() of %v = %v, want the keys as stored", invalid, err)
 	}
 	j, err := json.Marshal(invalid)
 	if err != nil || string(j) != `["","B@Example.com","invalid"]` {
@@ -490,6 +490,7 @@ func TestAddressSet_ValueScanRoundTrip(t *testing.T) {
 		// the double quotes that the array format has to escape.
 		MakeAddressSet(`"Doe, John" <john@example.com>`, "a@example.com"),
 		MakeAddressSet("single_quote'@example.com"),
+		MakeAddressSet("", "a@example.com"),
 	}
 	for _, want := range sets {
 		t.Run(want.String(), func(t *testing.T) {
@@ -696,20 +697,24 @@ func TestAddressSet_RoundTripsKeepSpellings(t *testing.T) {
 	assert.Equal(t, AddressList(`"Doe, John" <doe@example.com>, john@example.com`), norm, "normalizing merges the two spellings")
 }
 
-// MarshalText writes an address list, which can't hold every string as
-// one entry. An invalid address, or one that would read back as other
-// entries, is an error instead of a text that reads back as another set.
-// The surrounding whitespace of a valid address is trimmed, because it
-// is no part of the address.
+// MarshalText writes the keys as stored as an address list. A key that
+// SplitAddressList would not read back unchanged, including surrounding
+// whitespace, is an error. An invalid address that is one list entry is
+// written as stored.
 func TestAddressSet_MarshalText(t *testing.T) {
-	text, err := MakeAddressSet(" a@example.com", "b@example.com\t").MarshalText()
+	text, err := MakeAddressSet("a@example.com", "b@example.com").MarshalText()
 	require.NoError(t, err)
 	assert.Equal(t, "a@example.com, b@example.com", string(text))
 
-	for _, addr := range []Address{"not an address", ""} {
-		_, err := MakeAddressSet("a@example.com", addr).MarshalText()
-		assert.Error(t, err, "MarshalText of a set with %q", addr)
-	}
+	_, err = MakeAddressSet(" a@example.com", "b@example.com\t").MarshalText()
+	assert.Error(t, err, "padding would not read back as the same keys")
+
+	text, err = MakeAddressSet("a@example.com", "not an address").MarshalText()
+	require.NoError(t, err)
+	assert.Equal(t, "a@example.com, not an address", string(text))
+
+	_, err = MakeAddressSet("a@example.com", "").MarshalText()
+	assert.Error(t, err, "an empty key is not one list entry")
 
 	// The commas of an unquoted display name read back as one entry
 	text, err = MakeAddressSet("a@example.com", "Doe, John <john@example.com>").MarshalText()

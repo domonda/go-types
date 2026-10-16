@@ -7,6 +7,23 @@ Releases are numbered like the `VERSION` file and the git tags, without the
 `v` prefix; the entry from before the first version is dated.
 See [TODOS.md](./TODOS.md) for what still blocks a `v1.0.0` cut.
 
+## [1.0.0-beta.2] - 2026-10-16
+
+### Changed
+
+- SQL, JSON, and XML reading and writing trim surrounding whitespace instead of rewriting a value into its canonical form. IBAN, BIC, VAT IDs, currency codes, and year-quarters are also uppercased. An invalid value is written back. `Normalized()`, `Validate()`, and `ScanString` with validate still rewrite and reject.
+- `country.Code` and `language.Code` only trim, so `Deutschland` and `EN` stay as written.
+- `date.Date` still fully normalizes a string on SQL `Scan` and `Value`. JSON, XML and text also store a zero date as blank. A `time.Time` from the driver is stored with `OfTime`, or as blank when that date is zero.
+- `YearMonth` trims on every path and keeps `0001-01`. `YearQuarter` also uppercases and keeps `0001-Q1`. A kept zero period is not null, so `Get` returns it.
+- Email addresses and address lists only trim. An address set keeps its keys as stored. `Value` does not validate.
+- A currency amount's `Value` writes the trimmed and uppercased currency text and still uses the original currency's minor units, so a name such as `Kuwaiti Dinar` keeps three decimals. `Scan` reads that text back with the same currency spelling.
+
+### Fixed
+
+- `bank.Account` no longer treats a JSON boolean or number, or the placeholders `NULL`, `TRUE`, `FALSE` and `NIL`, as an IBAN. A bare IBAN from `Scan` or `UnmarshalText` is still trimmed and uppercased.
+- An email address or list that contains a line break, a NUL or a bidi override is written as its normalized form, or without those runes when it cannot be normalized.
+- An address list read from a JSON array trims each element, like a PostgreSQL array. An address set keeps an empty key through `Scan(Value())`.
+
 ## [1.0.0-beta.1] - 2026-10-15
 
 ### Added

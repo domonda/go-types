@@ -388,9 +388,9 @@ func (s *upperString) UnmarshalJSON(data []byte) error {
 }
 
 // A Set of a string type with a normalizing MarshalJSON, like
-// Set[money.Currency], is written and read with its values as stored:
-// written normalized, "eur" and "EUR" would be the same JSON value and the
-// set would read back with fewer values than it was written with.
+// Set[money.Currency], is written and read with its values as stored.
+// If those values were written through MarshalJSON, "eur" and "EUR" would
+// be the same JSON value and the set would read back with fewer values.
 func TestSet_JSONKeepsStringValues(t *testing.T) {
 	set := NewSet[upperString]("eur", "EUR", "usd")
 	data, err := json.Marshal(set)

@@ -95,7 +95,7 @@ func ParseCurrencyDecimalAmount(str string, acceptedDecimals ...int) (result Cur
 // String implements the fmt.Stringer interface, placing the currency as stored
 // before the amount and using the amount's own scale (unlike CurrencyAmount.String, which
 // rounds to the minor unit of the currency). Value writes the same format
-// with the normalized currency.
+// with the trimmed and uppercased currency.
 func (ca CurrencyDecimalAmount) String() string {
 	return ca.format(string(ca.Currency), true, 0, '.')
 }
@@ -141,15 +141,16 @@ func (ca *CurrencyDecimalAmount) ScanString(source string, validate bool) error 
 	return nil
 }
 
-// Scan implements the database/sql.Scanner interface using
-// ParseCurrencyDecimalAmount.
+// Scan implements the database/sql.Scanner interface.
+// Text written by Value is read back with the same currency spelling
+// and the amount's scale. Other text is parsed with ParseCurrencyDecimalAmount.
 func (ca *CurrencyDecimalAmount) Scan(value any) (err error) {
 	var parsed CurrencyDecimalAmount
 	switch x := value.(type) {
 	case string:
-		parsed, err = ParseCurrencyDecimalAmount(x)
+		parsed, err = scanCurrencyDecimalAmountText(x)
 	case []byte:
-		parsed, err = ParseCurrencyDecimalAmount(string(x))
+		parsed, err = scanCurrencyDecimalAmountText(string(x))
 	case float64:
 		err = parsed.Amount.Scan(x)
 	default:
@@ -162,9 +163,20 @@ func (ca *CurrencyDecimalAmount) Scan(value any) (err error) {
 	return nil
 }
 
+func scanCurrencyDecimalAmountText(str string) (CurrencyDecimalAmount, error) {
+	if currency, amount, ok := splitWrittenCurrencyAmount(str); ok {
+		parsed, err := ParseDecimalAmount(amount)
+		if err != nil {
+			return CurrencyDecimalAmount{}, err
+		}
+		pretty, _ := internal.TrimUpper(Currency(currency))
+		return CurrencyDecimalAmount{Currency: pretty, Amount: parsed}, nil
+	}
+	return ParseCurrencyDecimalAmount(str)
+}
+
 // Value implements the database/sql/driver.Valuer interface by writing the
-// format of String with the normalized currency, or returning the error of
-// Currency.Normalized for a currency that can't be normalized.
+// format of String with the trimmed and uppercased currency.
 func (ca CurrencyDecimalAmount) Value() (driver.Value, error) {
 	currency, err := ca.Currency.normalizedForValue()
 	if err != nil {
