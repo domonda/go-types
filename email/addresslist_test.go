@@ -399,6 +399,10 @@ func TestAddressList_XML(t *testing.T) {
 	require.NoError(t, xml.Unmarshal([]byte(raw), &padded))
 	assert.Equal(t, AddressList("b@example.com"), padded.To)
 	assert.Equal(t, NullableAddressList("a@example.com"), padded.Cc)
+
+	var fromJSON AddressList
+	require.NoError(t, fromJSON.UnmarshalJSON([]byte(`["  a@example.com  ","  c@example.com  "]`)))
+	assert.Equal(t, AddressList("a@example.com, c@example.com"), fromJSON)
 }
 
 func TestAddressList_MarshalXMLAttr(t *testing.T) {

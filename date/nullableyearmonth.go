@@ -12,6 +12,7 @@ import (
 	types "github.com/domonda/go-types"
 	"github.com/domonda/go-types/internal"
 	"github.com/domonda/go-types/nullable"
+	"github.com/domonda/go-types/strutil"
 )
 
 // YearMonthNull is the null value for NullableYearMonth (empty string).
@@ -67,18 +68,19 @@ func (ym NullableYearMonth) ValidAndNotNull() bool {
 	return ym.IsNotNull() && YearMonth(ym).Valid()
 }
 
-// IsZero returns true if the year-month is zero like YearMonth.IsZero,
-// which is the same as IsNull.
+// IsZero returns true if the year-month is zero like YearMonth.IsZero.
+// A zero period such as "0001-01" is not null: reading and writing keep
+// that text, and IsNull is false for it.
 func (ym NullableYearMonth) IsZero() bool {
 	return YearMonth(ym).IsZero()
 }
 
-// IsNull returns true if the NullableYearMonth is null or zero, see YearMonth.IsZero,
-// which includes a string of only whitespace and the zero values
-// like "0000-00", like NullableDate.IsNull includes the zero dates.
+// IsNull returns true if the NullableYearMonth is empty or whitespace only.
+// A zero period such as "0001-01" is kept and is not null, so Get returns
+// it and callers that skip null values do not drop a stored period.
 // IsNull implements the nullable.Nullable interface.
 func (ym NullableYearMonth) IsNull() bool {
-	return YearMonth(ym).IsZero()
+	return strutil.TrimSpace(ym) == ""
 }
 
 // IsNotNull returns true if the NullableYearMonth is not null, see IsNull.

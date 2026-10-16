@@ -158,15 +158,17 @@ func (ca *CurrencyAmount) ScanString(source string, validate bool) error {
 	return nil
 }
 
-// Scan implements the database/sql.Scanner interface
-// using ParseCurrencyAmount.
+// Scan implements the database/sql.Scanner interface.
+// Text written by Value is read back with the same currency spelling,
+// including a symbol or a multi-word name. Other text is parsed with
+// ParseCurrencyAmount.
 func (ca *CurrencyAmount) Scan(value any) (err error) {
 	var parsed CurrencyAmount
 	switch x := value.(type) {
 	case string:
-		parsed, err = ParseCurrencyAmount(x)
+		parsed, err = scanCurrencyAmountText(x)
 	case []byte:
-		parsed, err = ParseCurrencyAmount(string(x))
+		parsed, err = scanCurrencyAmountText(string(x))
 	case float64:
 		parsed.Amount = Amount(x)
 	default:
@@ -177,6 +179,38 @@ func (ca *CurrencyAmount) Scan(value any) (err error) {
 	}
 	*ca = parsed
 	return nil
+}
+
+// splitWrittenCurrencyAmount splits text written by Value into the
+// currency prefix and the amount, which is the last field. The amount
+// must parse with ParseAmount. "10.00 EUR" does not match, so the caller
+// can still use ParseCurrencyAmount for an amount written before its code.
+func splitWrittenCurrencyAmount(str string) (currency, amount string, ok bool) {
+	str = strutil.TrimSpace(str)
+	if str == "" {
+		return "", "", false
+	}
+	amount = str
+	if i := strings.LastIndexByte(str, ' '); i >= 0 {
+		amount = str[i+1:]
+		currency = strutil.TrimSpace(str[:i])
+	}
+	if _, err := ParseAmount(amount); err != nil {
+		return "", "", false
+	}
+	return currency, amount, true
+}
+
+func scanCurrencyAmountText(str string) (CurrencyAmount, error) {
+	if currency, amount, ok := splitWrittenCurrencyAmount(str); ok {
+		parsed, err := ParseAmount(amount)
+		if err != nil {
+			return CurrencyAmount{}, err
+		}
+		pretty, _ := internal.TrimUpper(Currency(currency))
+		return CurrencyAmount{Currency: pretty, Amount: parsed}, nil
+	}
+	return ParseCurrencyAmount(str)
 }
 
 // Value implements the database/sql/driver.Valuer interface

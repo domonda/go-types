@@ -139,6 +139,10 @@ func (a *Account) UnmarshalJSON(j []byte) (err error) {
 		return fmt.Errorf("can't unmarshal `%s` as bank.Account", j)
 	} else {
 		trimmed, _ := internal.TrimUpper(IBAN(j))
+		switch trimmed {
+		case "NULL", "TRUE", "FALSE", "NIL":
+			return fmt.Errorf("can't unmarshal `%s` as bank.Account", j)
+		}
 		iban = trimmed
 	}
 	a.IBAN = iban

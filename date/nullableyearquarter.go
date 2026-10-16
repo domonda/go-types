@@ -12,6 +12,7 @@ import (
 	types "github.com/domonda/go-types"
 	"github.com/domonda/go-types/internal"
 	"github.com/domonda/go-types/nullable"
+	"github.com/domonda/go-types/strutil"
 )
 
 // YearQuarterNull is the null value for NullableYearQuarter (empty string).
@@ -67,18 +68,18 @@ func (yq NullableYearQuarter) ValidAndNotNull() bool {
 	return yq.IsNotNull() && YearQuarter(yq).Valid()
 }
 
-// IsZero returns true if the year-quarter is zero like YearQuarter.IsZero,
-// which is the same as IsNull.
+// IsZero returns true if the year-quarter is zero like YearQuarter.IsZero.
+// A zero period such as "0001-Q1" is not null: reading and writing keep
+// that text, and IsNull is false for it.
 func (yq NullableYearQuarter) IsZero() bool {
 	return YearQuarter(yq).IsZero()
 }
 
-// IsNull returns true if the NullableYearQuarter is null or zero, see YearQuarter.IsZero,
-// which includes a string of only whitespace and the zero values
-// like "0000-Q0", like NullableDate.IsNull includes the zero dates.
+// IsNull returns true if the NullableYearQuarter is empty or whitespace only.
+// A zero period such as "0001-Q1" is kept and is not null, so Get returns it.
 // IsNull implements the nullable.Nullable interface.
 func (yq NullableYearQuarter) IsNull() bool {
-	return YearQuarter(yq).IsZero()
+	return strutil.TrimSpace(yq) == ""
 }
 
 // IsNotNull returns true if the NullableYearQuarter is not null, see IsNull.

@@ -191,7 +191,7 @@ func (YearMonth) JSONSchema() *jsonschema.Schema {
 // "0001-01" is treated as zero because "0001-01-01" is the zero value of time.Time.
 // "0000-00" may be the zero value of other date implementations.
 // A zero year-month is not a valid YearMonth. Reading and Value keep the
-// trimmed text, including "0001-01". IsNull is still true for it, so Get panics.
+// trimmed text, including "0001-01". That text is not null, so Get returns it.
 func (ym YearMonth) IsZero() bool {
 	switch strutil.TrimSpace(ym) {
 	case "", "0000-00", "0001-01":

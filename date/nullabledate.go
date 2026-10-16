@@ -80,6 +80,13 @@ func (n NullableDate) IsNull() bool {
 	return Date(n).IsZero()
 }
 
+// marshalNullableDateText trims a date and stores a zero date as Null,
+// so JSON and XML do not keep text that IsNull reports as empty.
+func marshalNullableDateText(n NullableDate) (NullableDate, error) {
+	d, err := marshalDateText(Date(n))
+	return NullableDate(d), err
+}
+
 // IsNotNull returns true if the NullableDate is not null.
 func (n NullableDate) IsNotNull() bool {
 	return !n.IsNull()
@@ -147,7 +154,7 @@ func (n *NullableDate) ScanString(source string, validate bool) error {
 	if validate {
 		return internal.ScanStringNormalized(n, source, true, true, NullableDate.Normalized, NullableDate.IsNull)
 	}
-	return internal.ScanStringNormalized(n, source, false, true, internal.Trim[NullableDate], nil)
+	return internal.ScanStringNormalized(n, source, false, true, marshalNullableDateText, nil)
 }
 
 // ScanStringWithLang parses and assigns the source string as a NullableDate using the given language hint.
@@ -587,6 +594,9 @@ func (n NullableDate) Format(layout string) string {
 func (n *NullableDate) Scan(value any) error {
 	if t, ok := value.(time.Time); ok {
 		*n = NullableDate(OfTime(t))
+		if n.IsZero() {
+			*n = Null
+		}
 		return nil
 	}
 	return internal.ScanNormalized(n, value, NullableDate.Normalized, NullableDate.IsNull)
@@ -601,9 +611,9 @@ func (n NullableDate) Value() (driver.Value, error) {
 
 // MarshalJSON implements encoding/json.Marshaler by writing JSON null
 // if the NullableDate is blank, else the date with surrounding whitespace
-// trimmed. A zero date is written as that text, unlike Value.
+// trimmed. A zero date is written as JSON null, like Value writes SQL NULL.
 func (n NullableDate) MarshalJSON() ([]byte, error) {
-	return internal.MarshalJSONNormalized(n, true, internal.Trim[NullableDate], nil)
+	return internal.MarshalJSONNormalized(n, true, marshalNullableDateText, nil)
 }
 
 // MarshalText implements encoding.TextMarshaler like MarshalJSON,
@@ -611,7 +621,7 @@ func (n NullableDate) MarshalJSON() ([]byte, error) {
 // trimmed date. encoding/json writes map keys of string types as they
 // are and doesn't call MarshalText for them.
 func (n NullableDate) MarshalText() ([]byte, error) {
-	return internal.MarshalTextNormalized(n, internal.Trim[NullableDate], nil)
+	return internal.MarshalTextNormalized(n, marshalNullableDateText, nil)
 }
 
 // MarshalXMLAttr implements encoding/xml.MarshalerAttr by writing the
@@ -628,19 +638,19 @@ func (n *NullableDate) MarshalXMLAttr(name xml.Name) (xml.Attr, error) {
 // that decoding null into a field that holds a value resets it, and any
 // other JSON value is an error.
 func (n *NullableDate) UnmarshalJSON(data []byte) error {
-	return internal.UnmarshalJSONNormalized(n, data, true, internal.Trim[NullableDate], nil)
+	return internal.UnmarshalJSONNormalized(n, data, true, marshalNullableDateText, nil)
 }
 
 // UnmarshalXML implements encoding/xml.Unmarshaler
 // by storing the text of the element like UnmarshalJSON stores it.
 func (n *NullableDate) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
-	return internal.UnmarshalXMLNormalized(n, d, start, internal.Trim[NullableDate], nil)
+	return internal.UnmarshalXMLNormalized(n, d, start, marshalNullableDateText, nil)
 }
 
 // UnmarshalXMLAttr implements encoding/xml.UnmarshalerAttr
 // by storing the attribute value like UnmarshalJSON stores it.
 func (n *NullableDate) UnmarshalXMLAttr(attr xml.Attr) error {
-	return internal.UnmarshalXMLAttrNormalized(n, attr, internal.Trim[NullableDate], nil)
+	return internal.UnmarshalXMLAttrNormalized(n, attr, marshalNullableDateText, nil)
 }
 
 // JSONSchema returns the JSON schema definition for the NullableDate type.

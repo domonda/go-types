@@ -76,8 +76,8 @@ func TestNullableYearQuarter_ReadingAndWriting(t *testing.T) {
 	normtest.Run(t, normtest.Spec[NullableYearQuarter]{
 		Canonical:    "2023-Q3",
 		Variants:     []NullableYearQuarter{"2023-q3", " 2023-Q3 ", "\t2023-q3\n"},
-		Invalid:      []NullableYearQuarter{"2023-Q5", "2023-Q", "0000-Q2", "Q3/2023", "bad"},
-		Blank:        []NullableYearQuarter{"0001-Q1", "0001-q1", "0000-Q0", " 0001-Q1 "},
+		Invalid:      []NullableYearQuarter{"2023-Q5", "2023-Q", "0000-Q2", "Q3/2023", "bad", "0001-Q1", "0001-q1", "0000-Q0", " 0001-Q1 "},
+		Blank:        nil,
 		Nullable:     true,
 		StoredString: true,
 		Prettify:     normtest.TrimUpper[NullableYearQuarter],

@@ -179,6 +179,13 @@ func TestAccount_UnmarshalText_IBAN(t *testing.T) {
 
 	require.NoError(t, a.UnmarshalText([]byte("DE89 3704 0044 0532 0130 01")))
 	assert.Equal(t, Account{IBAN: "DE89 3704 0044 0532 0130 01"}, a)
+
+	kept := Account{IBAN: "AT611904300234573201", BIC: "COBADEFFXXX"}
+	for _, text := range []string{"NULL", "TRUE", "FALSE", "NIL"} {
+		a = kept
+		require.Error(t, a.UnmarshalText([]byte(text)))
+		assert.Equal(t, kept, a, "UnmarshalText(%s) must not clear the account", text)
+	}
 }
 
 func TestAccount_Scan(t *testing.T) {

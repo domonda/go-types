@@ -404,6 +404,23 @@ func TestCurrencyAmount_NormalizedCurrencyOutput(t *testing.T) {
 	v, err := invalid.Value()
 	require.NoError(t, err)
 	assert.Equal(t, "XYZ 1.50", v, "Value writes an invalid currency trimmed and uppercased")
+
+	for _, tt := range []struct {
+		ca   CurrencyAmount
+		want Currency
+	}{
+		{ca: CurrencyAmount{Currency: "Canadian Dollar", Amount: 10}, want: "CANADIAN DOLLAR"},
+		{ca: CurrencyAmount{Currency: "Kuwaiti Dinar", Amount: 10}, want: "KUWAITI DINAR"},
+		{ca: CurrencyAmount{Currency: "€", Amount: 10}, want: "€"},
+		{ca: CurrencyAmount{Currency: "eur", Amount: 10}, want: "EUR"},
+	} {
+		written, err := tt.ca.Value()
+		require.NoError(t, err)
+		var back CurrencyAmount
+		require.NoError(t, back.Scan(written), "Scan(%v)", written)
+		assert.Equal(t, tt.want, back.Currency)
+		assert.Equal(t, tt.ca.Amount, back.Amount)
+	}
 	assert.Equal(t, "xyz 1.50", invalid.String())
 	j, err := json.Marshal(invalid)
 	require.NoError(t, err)

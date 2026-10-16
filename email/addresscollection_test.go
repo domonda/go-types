@@ -332,7 +332,7 @@ func TestReadAddressCollection(t *testing.T) {
 		// The empty object and the empty PostgreSQL array are the same
 		{text: `{}`, want: addressCollection{entries: []string{}}},
 		{text: `{"a@example.com", b@example.com}`, want: addressCollection{entries: []string{"a@example.com", " b@example.com"}}},
-		{text: `{a@example.com,""}`, want: addressCollection{entries: []string{"a@example.com"}}},
+		{text: `{a@example.com,""}`, want: addressCollection{entries: []string{"a@example.com", ""}}},
 		{text: `"a@example.com, b@example.com"`, want: addressCollection{list: "a@example.com, b@example.com"}},
 		{text: `"Doe, John" <john@example.com>`, want: addressCollection{list: `"Doe, John" <john@example.com>`}},
 		{text: ` a@example.com `, want: addressCollection{list: ` a@example.com `}},
@@ -527,8 +527,8 @@ func TestCollectionsWriteNamesWithSpecialSpacesAndJoiners(t *testing.T) {
 	}
 }
 
-// Validate still refuses the unsafe runes. Value and MarshalText write
-// the text as stored, so a row that already holds one can be saved again.
+// Validate refuses the unsafe runes. Value and MarshalText write the
+// normalized address, which no longer has them, when the raw text does.
 func TestCollectionsValidateRefusesWhatValueKeeps(t *testing.T) {
 	for _, addr := range []Address{
 		"\"x\r\nBcc: evil@evil.com\" <a@example.com>",
@@ -539,18 +539,20 @@ func TestCollectionsValidateRefusesWhatValueKeeps(t *testing.T) {
 		require.Error(t, AddressList(addr).Validate(), "AddressList %q", addr)
 		v, err := AddressList(addr).Value()
 		require.NoError(t, err, "AddressList %q", addr)
-		assert.Equal(t, string(addr), v, "AddressList %q", addr)
+		assert.False(t, hasUnsafeRune(v.(string)), "AddressList %q", addr)
 
 		require.Error(t, NullableAddressList(addr).Validate(), "NullableAddressList %q", addr)
-		_, err = NullableAddressList(addr).Value()
+		v, err = NullableAddressList(addr).Value()
 		require.NoError(t, err, "NullableAddressList %q", addr)
+		assert.False(t, hasUnsafeRune(v.(string)), "NullableAddressList %q", addr)
 
 		set := MakeAddressSet(addr)
 		require.Error(t, set.Validate(), "AddressSet %q", addr)
 		_, err = set.Value()
 		require.NoError(t, err, "AddressSet %q", addr)
-		_, err = set.MarshalText()
+		text, err := set.MarshalText()
 		require.NoError(t, err, "AddressSet.MarshalText %q", addr)
+		assert.False(t, hasUnsafeRune(string(text)), "AddressSet.MarshalText %q", addr)
 	}
 
 	// Surrounding runes that Value trims and doesn't write are not refused

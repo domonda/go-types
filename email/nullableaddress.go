@@ -200,7 +200,7 @@ func (n *NullableAddress) Scan(value any) error {
 // It returns the trimmed address, or SQL NULL if the NullableAddress is
 // null. An invalid address is written after that trim, not rejected.
 func (n NullableAddress) Value() (driver.Value, error) {
-	return internal.ValueNormalized(n, internal.Trim[NullableAddress], nil)
+	return Address(n).Value()
 }
 
 // UnmarshalJSON implements encoding/json.Unmarshaler.
@@ -237,7 +237,10 @@ func (n *NullableAddress) ScanString(source string, validate bool) error {
 // MarshalJSON implements encoding/json.Marshaler by writing JSON null
 // if the NullableAddress is null, else the trimmed address.
 func (n NullableAddress) MarshalJSON() ([]byte, error) {
-	return internal.MarshalJSONNormalized(n, true, internal.Trim[NullableAddress], nil)
+	if n.IsNull() {
+		return []byte("null"), nil
+	}
+	return Address(n).MarshalJSON()
 }
 
 // MarshalText implements encoding.TextMarshaler like MarshalJSON,
@@ -245,7 +248,10 @@ func (n NullableAddress) MarshalJSON() ([]byte, error) {
 // trimmed address. encoding/json writes map keys of string types as
 // they are and doesn't call MarshalText for them.
 func (n NullableAddress) MarshalText() ([]byte, error) {
-	return internal.MarshalTextNormalized(n, internal.Trim[NullableAddress], nil)
+	if n.IsNull() {
+		return []byte{}, nil
+	}
+	return Address(n).MarshalText()
 }
 
 // MarshalXMLAttr implements encoding/xml.MarshalerAttr by writing the

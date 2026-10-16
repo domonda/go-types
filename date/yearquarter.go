@@ -194,7 +194,7 @@ func (YearQuarter) JSONSchema() *jsonschema.Schema {
 // "0001-Q1" is treated as zero because "0001-01-01" is the zero value of time.Time.
 // "0000-Q0" may be the zero value of other date implementations.
 // A zero year-quarter is not a valid YearQuarter. Reading and Value keep the
-// trimmed and uppercased text, including "0001-Q1". IsNull is still true for it, so Get panics.
+// trimmed and uppercased text, including "0001-Q1". That text is not null, so Get returns it.
 func (yq YearQuarter) IsZero() bool {
 	switch strings.ToUpper(string(strutil.TrimSpace(yq))) {
 	case "", "0000-Q0", "0001-Q1":

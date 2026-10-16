@@ -37,8 +37,9 @@ func TestMoneyFormat_FormatCurrencyAmount(t *testing.T) {
 	f := GermanMoneyFormat(true)
 	assert.Equal(t, "1.234,50", f.FormatCurrencyAmount(noCurrency))
 
-	// FormatCurrencyAmount still writes the normalized currency code
+	// Both formatters trim and uppercase the currency, so "eur" is "EUR" and "€" stays "€".
 	assert.Equal(t, "EUR 1.234,50", f.FormatCurrencyAmount(money.CurrencyAmount{Currency: "eur", Amount: 1234.5}))
+	assert.Equal(t, "€ 1.234,50", f.FormatCurrencyAmount(money.CurrencyAmount{Currency: "€", Amount: 1234.5}))
 }
 
 // TestMoneyFormat_FormatCurrencyDecimalAmount checks that a

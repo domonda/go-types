@@ -31,9 +31,9 @@ const (
 )
 ```
 
-A `Date` holds whatever string you assign. Methods normalize on demand, so `Date("25.12.2023")` is valid and behaves like `"2023-12-25"` in every method except `==`. SQL `Scan` and `Value` of a string store the canonical form and treat a zero date as blank. JSON, XML, `MarshalText` and `ScanString` without validate only trim, and they keep a zero date. A `time.Time` from the driver is stored with `OfTime`.
+A `Date` holds whatever string you assign. Methods normalize on demand, so `Date("25.12.2023")` is valid and behaves like `"2023-12-25"` in every method except `==`. SQL `Scan` and `Value` of a string store the canonical form and treat a zero date as blank. JSON, XML and `MarshalText` trim and also store a zero date as blank. `ScanString` without validate does the same. A `time.Time` from the driver is stored with `OfTime`, or as blank when that date is zero.
 
-A `Date` is zero, see `IsZero`, if it is empty, whitespace only, or one of the zero dates `"0000-00-00"` and `"0001-01-01"` in any spelling, like `"01.01.0001"` or Go's zero time `"0001-01-01T00:00:00Z"`. A zero date has no practical use as a date: it is not valid. SQL `Scan` stores it as `""` and `Value` writes SQL NULL. JSON and XML keep the trimmed text.
+A `Date` is zero, see `IsZero`, if it is empty, whitespace only, or one of the zero dates `"0000-00-00"` and `"0001-01-01"` in any spelling, like `"01.01.0001"` or Go's zero time `"0001-01-01T00:00:00Z"`. A zero date has no practical use as a date: it is not valid. SQL `Scan`, JSON and XML store it as `""` and `Value` writes SQL NULL.
 
 ### Parsing
 
@@ -312,12 +312,12 @@ These plug dates into the [`strfmt`](../strfmt/README.md) package, which calls `
 | Value                                              | SQL `Value()`                              | JSON (`json.Marshal`)         | `MarshalText`, XML | `fmt`          |
 |----------------------------------------------------|--------------------------------------------|-------------------------------|--------------------|----------------|
 | `Date("")`, `Date("  ")`                           | `NULL`                                     | `""`                          | `""`               | as stored      |
-| `Date("0001-01-01")`, `Date("01.01.0001")`         | `NULL`                                     | `"0001-01-01"`, `"01.01.0001"` | `0001-01-01`, `01.01.0001` | as stored |
+| `Date("0001-01-01")`, `Date("01.01.0001")`         | `NULL`                                     | `""`                          | `""`               | as stored |
 | `Date("25.12.2023")` (valid, not normalized)       | `"2023-12-25"`                             | `"25.12.2023"`                | `25.12.2023`       | `25.12.2023`   |
 | `Date("2023-12-25")`                               | `"2023-12-25"`                             | `"2023-12-25"`                | `2023-12-25`       | `2023-12-25`   |
 | `Date("bad")` (invalid)                            | error of `Normalized`                      | `"bad"`                       | `bad`              | `bad`          |
 | `NullableDate` null                               | `NULL`                                     | `null`                        | `""`               | as stored      |
-| `NullableDate("0001-01-01")`                       | `NULL`                                     | `"0001-01-01"`                | `0001-01-01`       | `0001-01-01`   |
+| `NullableDate("0001-01-01")`                       | `NULL`                                     | `null`                        | `""`               | `0001-01-01`   |
 | `NullableDate("25.12.2023")`                       | `"2023-12-25"`                             | `"25.12.2023"`                | `25.12.2023`       | `25.12.2023`   |
 | `NullableDate("bad")`                              | error of `Normalized`                      | `"bad"`                       | `bad`              | `bad`          |
 | `YearMonth(" 2023-07 ")`, `YearQuarter("2023-q3")` | `"2023-07"`, `"2023-Q3"`                   | `"2023-07"`, `"2023-Q3"`      | `2023-07`, `2023-Q3` | as stored      |
@@ -346,7 +346,7 @@ An invalid date is read without error, so one bad row doesn't fail a whole query
 
 - **Valid, Validate, Normalized, ValidAndNormalized.** `Valid` and `Validate` accept any parseable form: `Date("25.12.2023").Valid()` is true. `Normalized` returns the canonical form. `ValidAndNormalized` is true only for an exact `YYYY-MM-DD`. `Date("")` is invalid, `NullableDate("")` is valid.
 - **`==` compares raw strings.** `Date("25.12.2023") != Date("2023-12-25")`. Use `NormalizedEqual` or `Compare`, or normalize on input. A string read with SQL `Scan` is canonical. JSON and XML only trim.
-- **Zero dates are no dates.** `"0001-01-01"` and `"0000-00-00"`, also in another spelling like `"01.01.0001"`, are `IsZero()` and not valid. SQL `Scan` stores them as `""` and `Value` writes SQL NULL. JSON and XML keep the trimmed text, so `Date("0001-01-01")` marshals as `"0001-01-01"`. Comparisons treat them like an invalid date. `YearMonth("0001-01")` and `YearQuarter("0001-Q1")` are kept on every path.
+- **Zero dates are no dates.** `"0001-01-01"` and `"0000-00-00"`, also in another spelling like `"01.01.0001"`, are `IsZero()` and not valid. SQL `Scan`, JSON and XML store them as `""` and `Value` writes SQL NULL. Comparisons treat them like an invalid date. `YearMonth("0001-01")` and `YearQuarter("0001-Q1")` are kept on every path, and they are not null.
 - **Slashes month first, dots day first.** Without a hint `"05/06/2024"` is May 6 and `"05.06.2024"` is June 5, other separators are day first. A hint only decides slashes: English month first, every other language day first. Dots, dashes and spaces are day first with every hint, so an ambiguous US date written `"05-06-2024"` is read as June 5 also with `language.EN`. Neither changes a date that has only one valid reading. Only the first `lang` argument is used.
 - **Two-digit years** pivot at 45: `"25.12.44"` is 2044-12-25, `"25.12.45"` is 1945-12-25.
 - **Invalid and zero dates become the zero time in arithmetic.** `Date("").AddDays(1)` and `Date("bad").AddDays(1)` return `"0001-01-02"`. Check `Valid` (or `IsZero`) before doing arithmetic. `Format` returns an invalid date unchanged with every layout: `Date("bad").Format("02.01.2006")` is `"bad"`. Comparisons don't use the zero time: `After`, `Before`, `WithinIncl`, `BetweenExcl`, `AfterTime` and `BeforeTime` are false for an invalid date, so `Date("bad").Before("2024-01-01")` and `Date("2024-01-01").EqualOrAfter("bad")` are false.

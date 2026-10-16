@@ -248,17 +248,21 @@ func headerAddresses(addrs ...*mail.Address) string {
 // It returns the list with surrounding whitespace trimmed, or SQL NULL
 // for a blank list. An invalid list is written after that trim, not rejected.
 func (l AddressList) Value() (driver.Value, error) {
-	list := strutil.TrimSpace(l)
-	if list == "" {
-		return nil, nil
+	list, err := writableList(l)
+	if err != nil || list == "" {
+		return nil, err
 	}
-	return string(list), nil
+	return list, nil
 }
 
 // MarshalJSON implements encoding/json.Marshaler by writing the list
 // with surrounding whitespace trimmed as a JSON string.
 func (l AddressList) MarshalJSON() ([]byte, error) {
-	return json.Marshal(string(strutil.TrimSpace(l)))
+	list, err := writableList(l)
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(list)
 }
 
 // UnmarshalJSON implements encoding/json.Unmarshaler.
@@ -283,7 +287,29 @@ func (l *AddressList) UnmarshalJSON(data []byte) error {
 // with surrounding whitespace trimmed, so that encoding/xml and strfmt
 // write that text.
 func (l AddressList) MarshalText() ([]byte, error) {
-	return []byte(strutil.TrimSpace(l)), nil
+	list, err := writableList(l)
+	if err != nil {
+		return nil, err
+	}
+	return []byte(list), nil
+}
+
+// writableList trims a list. When the text has a header-breaking rune it
+// returns the normalized list, or the error of Normalized. A blank list
+// is empty and not an error.
+func writableList(l AddressList) (string, error) {
+	list := string(strutil.TrimSpace(l))
+	if list == "" {
+		return "", nil
+	}
+	if !hasUnsafeRune(list) {
+		return list, nil
+	}
+	norm, err := AddressList(list).Normalized()
+	if err != nil {
+		return stripUnsafeRunes(list), nil
+	}
+	return string(norm), nil
 }
 
 // MarshalXMLAttr implements encoding/xml.MarshalerAttr by writing the

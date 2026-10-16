@@ -490,6 +490,7 @@ func TestAddressSet_ValueScanRoundTrip(t *testing.T) {
 		// the double quotes that the array format has to escape.
 		MakeAddressSet(`"Doe, John" <john@example.com>`, "a@example.com"),
 		MakeAddressSet("single_quote'@example.com"),
+		MakeAddressSet("", "a@example.com"),
 	}
 	for _, want := range sets {
 		t.Run(want.String(), func(t *testing.T) {

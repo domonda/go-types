@@ -1842,7 +1842,7 @@ func FuzzParseAddressListMatchesNetMail(f *testing.F) {
 		f.Add(list)
 	}
 	f.Fuzz(func(t *testing.T, list string) {
-		if err := AddressList(list).Validate(); err == nil {
+		if err := AddressList(list).Validate(); err == nil && strutil.TrimSpace(list) != "" {
 			v, err := AddressList(list).Value()
 			if err != nil || v == nil {
 				t.Fatalf("AddressList(%q).Value() = %v, %v", list, v, err)
@@ -1948,7 +1948,7 @@ func FuzzValidListHasTheAddressesOfItsText(f *testing.F) {
 		f.Add(list)
 	}
 	f.Fuzz(func(t *testing.T, list string) {
-		if err := AddressList(list).Validate(); err == nil {
+		if err := AddressList(list).Validate(); err == nil && strutil.TrimSpace(list) != "" {
 			v, err := AddressList(list).Value()
 			if err != nil || v == nil {
 				t.Fatalf("AddressList(%q).Value() = %v, %v", list, v, err)

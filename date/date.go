@@ -346,7 +346,7 @@ func (date *Date) ScanString(source string, validate bool) error {
 	if validate {
 		return internal.ScanStringNormalized(date, source, true, false, Date.Normalized, Date.IsZero)
 	}
-	return internal.ScanStringNormalized(date, source, false, false, internal.Trim[Date], nil)
+	return internal.ScanStringNormalized(date, source, false, false, marshalDateText, nil)
 }
 
 // ScanStringWithLang parses and assigns the source string as a Date using the given language hint.
@@ -412,8 +412,8 @@ const zeroDate Date = "0001-01-01"
 // "0001-01-01" is the zero value of time.Time, "0000-00-00" may be the zero
 // value of other date implementations, like MySQL.
 // A zero date has no practical use as a date and is not a valid Date.
-// SQL Scan stores it as "" and Value writes SQL NULL. JSON and XML keep
-// the trimmed text. IsNull is still true for that text, so Get panics.
+// SQL Scan, JSON and XML store it as "" and Value writes SQL NULL.
+// A time.Time on that calendar day is stored as "" too.
 func (date Date) IsZero() bool {
 	switch date {
 	case "", zeroDate, "0000-00-00":
@@ -878,9 +878,22 @@ func (date Date) BeforeTodayInUTC() bool {
 func (date *Date) Scan(value any) error {
 	if t, ok := value.(time.Time); ok {
 		*date = OfTime(t)
+		if date.IsZero() {
+			*date = ""
+		}
 		return nil
 	}
 	return internal.ScanNormalized(date, value, Date.Normalized, Date.IsZero)
+}
+
+// marshalDateText trims a date and stores a zero date as "", so a value
+// that IsZero reports as empty is not kept as text that is also null.
+func marshalDateText(date Date) (Date, error) {
+	trimmed, _ := internal.Trim(date)
+	if trimmed.IsZero() {
+		return "", nil
+	}
+	return trimmed, nil
 }
 
 // Value implements the database/sql/driver.Valuer interface.
@@ -891,18 +904,18 @@ func (date Date) Value() (driver.Value, error) {
 }
 
 // MarshalJSON implements encoding/json.Marshaler by writing the date
-// with surrounding whitespace trimmed. A zero date is written as that
-// text, unlike Value. A blank date is "".
+// with surrounding whitespace trimmed. A zero date is written as "",
+// like Value writes SQL NULL. A blank date is "".
 func (date Date) MarshalJSON() ([]byte, error) {
-	return internal.MarshalJSONNormalized(date, false, internal.Trim[Date], nil)
+	return internal.MarshalJSONNormalized(date, false, marshalDateText, nil)
 }
 
 // UnmarshalJSON implements encoding/json.Unmarshaler.
-// A JSON string is stored with surrounding whitespace trimmed, including
-// a zero date, unlike Scan. JSON null leaves the Date unchanged like
+// A JSON string is stored with surrounding whitespace trimmed. A zero
+// date is stored as "", like Scan. JSON null leaves the Date unchanged like
 // encoding/json does for a string type, and any other JSON value is an error.
 func (date *Date) UnmarshalJSON(data []byte) error {
-	return internal.UnmarshalJSONNormalized(date, data, false, internal.Trim[Date], nil)
+	return internal.UnmarshalJSONNormalized(date, data, false, marshalDateText, nil)
 }
 
 // MarshalText implements encoding.TextMarshaler like MarshalJSON,
@@ -910,7 +923,7 @@ func (date *Date) UnmarshalJSON(data []byte) error {
 // encoding/json writes map keys of string types as they are
 // and doesn't call MarshalText for them.
 func (date Date) MarshalText() ([]byte, error) {
-	return internal.MarshalTextNormalized(date, internal.Trim[Date], nil)
+	return internal.MarshalTextNormalized(date, marshalDateText, nil)
 }
 
 // MarshalXMLAttr implements encoding/xml.MarshalerAttr by writing the
@@ -924,13 +937,13 @@ func (date *Date) MarshalXMLAttr(name xml.Name) (xml.Attr, error) {
 // UnmarshalXML implements encoding/xml.Unmarshaler
 // by storing the text of the element like UnmarshalJSON stores it.
 func (date *Date) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
-	return internal.UnmarshalXMLNormalized(date, d, start, internal.Trim[Date], nil)
+	return internal.UnmarshalXMLNormalized(date, d, start, marshalDateText, nil)
 }
 
 // UnmarshalXMLAttr implements encoding/xml.UnmarshalerAttr
 // by storing the attribute value like UnmarshalJSON stores it.
 func (date *Date) UnmarshalXMLAttr(attr xml.Attr) error {
-	return internal.UnmarshalXMLAttrNormalized(date, attr, internal.Trim[Date], nil)
+	return internal.UnmarshalXMLAttrNormalized(date, attr, marshalDateText, nil)
 }
 
 // JSONSchema returns the JSON schema definition for the Date type.

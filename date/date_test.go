@@ -1945,6 +1945,7 @@ func TestDate_ReadingAndWriting(t *testing.T) {
 		Invalid:       []Date{"invalid", "2023-02-30"},
 		Prettify:      normtest.Trim[Date],
 		SQLNormalized: true,
+		ZeroBlank:     true,
 		Blank: []Date{
 			"0001-01-01", "0000-00-00", "01.01.0001", "0001-01-01T00:00:00Z", "0001-01-1 ", "0001-01-1.",
 			// The zero date of MySQL and other implementations in other spellings

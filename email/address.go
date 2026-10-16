@@ -3,6 +3,7 @@ package email
 import (
 	"database/sql/driver"
 	"encoding/base64"
+	"encoding/json"
 	"encoding/xml"
 	"mime"
 	"net/mail"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/domonda/go-types"
 	"github.com/domonda/go-types/internal"
+	"github.com/domonda/go-types/strutil"
 )
 
 // Compile-time check that Address implements types.NormalizableValidator[Address]
@@ -229,15 +231,26 @@ func (a *Address) Scan(value any) error {
 
 // Value implements the driver database/sql/driver.Valuer interface.
 // It returns the trimmed address, or SQL NULL for a blank one.
-// An invalid address is written after that trim, not rejected.
+// An invalid address is written after that trim. A control character,
+// a bidi override or invalid UTF-8 is rejected, so a display name with
+// a line break is not stored where a mail header would read it as another
+// recipient.
 func (a Address) Value() (driver.Value, error) {
-	return internal.ValueNormalized(a, internal.Trim[Address], nil)
+	text, err := writableAddress(a)
+	if err != nil || text == "" {
+		return nil, err
+	}
+	return text, nil
 }
 
 // MarshalJSON implements encoding/json.Marshaler by writing the
 // trimmed address, or "" for a blank Address.
 func (a Address) MarshalJSON() ([]byte, error) {
-	return internal.MarshalJSONNormalized(a, false, internal.Trim[Address], nil)
+	text, err := writableAddress(a)
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(text)
 }
 
 // UnmarshalJSON implements encoding/json.Unmarshaler.
@@ -253,7 +266,11 @@ func (a *Address) UnmarshalJSON(data []byte) error {
 // encoding/json writes map keys of string types as they are
 // and doesn't call MarshalText for them.
 func (a Address) MarshalText() ([]byte, error) {
-	return internal.MarshalTextNormalized(a, internal.Trim[Address], nil)
+	text, err := writableAddress(a)
+	if err != nil {
+		return nil, err
+	}
+	return []byte(text), nil
 }
 
 // MarshalXMLAttr implements encoding/xml.MarshalerAttr by writing the
@@ -293,6 +310,25 @@ func (a *Address) ScanString(source string, validate bool) error {
 func (a Address) Validate() error {
 	_, err := a.Parse()
 	return err
+}
+
+// writableAddress trims a. When the text has a control character, a bidi
+// override or invalid UTF-8, it returns the normalized address, which no
+// longer has those runes, or the error of Normalized. A blank address is
+// empty and not an error.
+func writableAddress(a Address) (string, error) {
+	text := strutil.TrimSpace(string(a))
+	if text == "" {
+		return "", nil
+	}
+	if !hasUnsafeRune(text) {
+		return text, nil
+	}
+	norm, err := Address(text).Normalized()
+	if err != nil {
+		return stripUnsafeRunes(text), nil
+	}
+	return string(norm), nil
 }
 
 // Valid returns true if the Address is a valid email address format.

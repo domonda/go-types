@@ -93,9 +93,12 @@ type Spec[T any] struct {
 	// and what Scan and Value apply unless SQLNormalized is set. It must
 	// not fail. Nil selects the strict contract described on the package.
 	Prettify func(T) T
+	// ZeroBlank stores Blank values as empty on every path, including
+	// JSON, XML and MarshalText.
+	ZeroBlank bool
 	// SQLNormalized makes Scan and Value use Normalized. Prettify must be
-	// set. JSON, XML and MarshalText still use Prettify, so a zero date in
-	// Blank is empty from Scan and Value and only trimmed in JSON and XML.
+	// set. JSON, XML and MarshalText still use Prettify, unless ZeroBlank
+	// is set, in which case every Blank value is empty on those paths too.
 	SQLNormalized bool
 }
 
@@ -227,7 +230,7 @@ func Run[T Type[T], P Ptr[T]](t *testing.T, spec Spec[T]) {
 		for _, input := range blank {
 			for path, got := range read(t, input) {
 				want := T("")
-				if spec.Prettify != nil && !spaceBlank(input) && (!sqlRead(path) || !spec.SQLNormalized) {
+				if spec.Prettify != nil && !spec.ZeroBlank && !spaceBlank(input) && (!sqlRead(path) || !spec.SQLNormalized) {
 					want = spec.Prettify(input)
 				}
 				if got != want {
@@ -385,7 +388,7 @@ func Run[T Type[T], P Ptr[T]](t *testing.T, spec Spec[T]) {
 			check(input, string(want), string(jsonString(string(want))))
 		}
 		for _, input := range blank {
-			if spec.Prettify != nil && !spaceBlank(input) {
+			if spec.Prettify != nil && !spec.ZeroBlank && !spaceBlank(input) {
 				want := spec.Prettify(input)
 				check(input, string(want), string(jsonString(string(want))))
 				continue

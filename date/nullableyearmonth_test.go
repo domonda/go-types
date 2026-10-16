@@ -99,9 +99,9 @@ func TestNullableYearMonth_IsNull(t *testing.T) {
 		{name: "null", ym: YearMonthNull, want: true},
 		{name: "empty", ym: "", want: true},
 		{name: "whitespace only", ym: " \t", want: true},
-		// The zero values are null like the zero dates of NullableDate
-		{name: "zero 0000-00", ym: "0000-00", want: true},
-		{name: "zero 0001-01", ym: "0001-01", want: true},
+		// A zero period is kept as text and is not null.
+		{name: "zero 0000-00", ym: "0000-00", want: false},
+		{name: "zero 0001-01", ym: "0001-01", want: false},
 		{name: "valid", ym: "2023-03", want: false},
 	}
 	for _, tt := range tests {
@@ -110,6 +110,7 @@ func TestNullableYearMonth_IsNull(t *testing.T) {
 			require.Equal(t, tt.want, got)
 		})
 	}
+	require.Equal(t, YearMonth("0001-01"), NullableYearMonth("0001-01").Get())
 }
 
 func TestNullableYearMonth_IsNotNull(t *testing.T) {
@@ -490,8 +491,8 @@ func TestNullableYearMonth_ReadingAndWriting(t *testing.T) {
 	normtest.Run(t, normtest.Spec[NullableYearMonth]{
 		Canonical:    "2023-07",
 		Variants:     []NullableYearMonth{" 2023-07 ", "\t2023-07\n"},
-		Invalid:      []NullableYearMonth{"2023-13", "2023-7", "0000-05", "07/2023", "bad"},
-		Blank:        []NullableYearMonth{"0001-01", "0000-00", " 0001-01 "},
+		Invalid:      []NullableYearMonth{"2023-13", "2023-7", "0000-05", "07/2023", "bad", "0001-01", "0000-00", " 0001-01 "},
+		Blank:        nil,
 		Nullable:     true,
 		StoredString: true,
 		Prettify:     normtest.Trim[NullableYearMonth],

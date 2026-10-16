@@ -480,6 +480,28 @@ func (set *AddressSet) UnmarshalText(text []byte) error {
 	return nil
 }
 
+// withoutUnsafeRunes returns set, or its normalized form when a key has
+// a control character, a bidi override or invalid UTF-8. Normalization
+// removes those runes. A set without them is returned unchanged, including
+// an empty key.
+func (set AddressSet) withoutUnsafeRunes() (AddressSet, error) {
+	for addr := range set {
+		if !hasUnsafeRune(string(addr)) {
+			continue
+		}
+		norm, err := set.Normalized()
+		if err == nil {
+			return norm, nil
+		}
+		safe := make(AddressSet, len(set))
+		for key := range set {
+			safe[Address(stripUnsafeRunes(string(key)))] = struct{}{}
+		}
+		return safe, nil
+	}
+	return set, nil
+}
+
 // Value implements the driver database/sql/driver.Valuer interface
 // by writing the addresses as stored, in sorted order, as a PostgreSQL
 // array. Keys are not trimmed or validated. A nil set is written as SQL
@@ -488,8 +510,12 @@ func (set AddressSet) Value() (driver.Value, error) {
 	if set == nil {
 		return nil, nil
 	}
-	addrs := make([]string, 0, len(set))
-	for _, addr := range set.Sorted() {
+	written, err := set.withoutUnsafeRunes()
+	if err != nil {
+		return nil, err
+	}
+	addrs := make([]string, 0, len(written))
+	for _, addr := range written.Sorted() {
 		addrs = append(addrs, string(addr))
 	}
 	return notnull.StringArray(addrs).Value()
@@ -515,8 +541,12 @@ func (set AddressSet) MarshalText() ([]byte, error) {
 	if len(set) == 0 {
 		return nil, nil
 	}
-	addrs := make([]string, 0, len(set))
-	for _, addr := range set.Sorted() {
+	written, err := set.withoutUnsafeRunes()
+	if err != nil {
+		return nil, err
+	}
+	addrs := make([]string, 0, len(written))
+	for _, addr := range written.Sorted() {
 		addrs = append(addrs, string(addr))
 	}
 	text := strings.Join(addrs, ", ")

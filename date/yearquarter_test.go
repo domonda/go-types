@@ -668,9 +668,9 @@ func TestNullableYearQuarter_IsNull(t *testing.T) {
 		{name: "null", yq: YearQuarterNull, want: true},
 		{name: "empty", yq: "", want: true},
 		{name: "whitespace only", yq: " \t", want: true},
-		// The zero values are null like the zero dates of NullableDate
-		{name: "zero 0000-Q0", yq: "0000-Q0", want: true},
-		{name: "zero 0001-Q1", yq: "0001-Q1", want: true},
+		// A zero period is kept as text and is not null.
+		{name: "zero 0000-Q0", yq: "0000-Q0", want: false},
+		{name: "zero 0001-Q1", yq: "0001-Q1", want: false},
 		{name: "valid", yq: "2023-Q2", want: false},
 	}
 	for _, tt := range tests {

@@ -45,8 +45,9 @@ func (format *MoneyFormat) FormatAmount(amount money.Amount) string {
 }
 
 // FormatCurrencyAmount formats a currency-tagged monetary amount as a string,
-// placing the currency code before or after the number according to
-// format.CurrencyFirst, and applying the configured separators and precision.
+// placing the trimmed and uppercased currency before or after the number
+// according to format.CurrencyFirst, and applying the configured separators
+// and precision. A symbol such as "€" stays "€".
 // For a currency with more than 2 decimals in its minor unit, like KWD,
 // see money.Currency.MinorUnits, a precision of zero or more is raised to
 // them, so that "KWD 1,234.567" keeps the fils of the Kuwaiti dinar like
@@ -56,7 +57,9 @@ func (format *MoneyFormat) FormatAmount(amount money.Amount) string {
 // of 0 writes whole euros. A precision of -1 writes the shortest form.
 func (format *MoneyFormat) FormatCurrencyAmount(currencyAmount money.CurrencyAmount) string {
 	precision := format.currencyPrecision(currencyAmount.Currency)
-	return currencyAmount.FormatSep(format.CurrencyFirst, format.ThousandsSep, format.DecimalSep, precision)
+	amountStr := currencyAmount.Amount.FormatSep(format.ThousandsSep, format.DecimalSep, precision)
+	currency, _ := currencyAmount.Currency.MarshalText()
+	return internal.JoinCurrencyAmount(string(currency), amountStr, format.CurrencyFirst)
 }
 
 // FormatCurrencyDecimalAmount formats a currency-tagged decimal amount like

@@ -58,9 +58,8 @@ func TestNullableDate_UnmarshalJSONResetsAndRejects(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(`{"paid":null}`), &d))
 	assert.Equal(t, Null, d.Paid)
 
-	// A JSON string is only trimmed, including a zero date.
-	// SQL Scan is what still stores a zero date as null.
-	for str, want := range map[string]NullableDate{"2023-12-25": "2023-12-25", "25.12.2023": "25.12.2023", "bad": "bad", "": Null, "0001-01-01T00:00:00Z": "0001-01-01T00:00:00Z"} {
+	// A JSON string is trimmed. A zero date is stored as null, like Scan.
+	for str, want := range map[string]NullableDate{"2023-12-25": "2023-12-25", "25.12.2023": "25.12.2023", "bad": "bad", "": Null, "0001-01-01T00:00:00Z": Null} {
 		d := doc{Paid: "2024-01-02"}
 		data, err := json.Marshal(map[string]string{"paid": str})
 		require.NoError(t, err)
@@ -886,8 +885,7 @@ func TestNullableDate_MarshalJSON(t *testing.T) {
 	}{
 		{date: Null, want: `{"d":null}`},
 		{date: "  ", want: `{"d":null}`},
-		// A zero date is kept in JSON. SQL Value still writes it as NULL.
-		{date: "0001-01-01", want: `{"d":"0001-01-01"}`},
+		{date: "0001-01-01", want: `{"d":null}`},
 		{date: "2023-12-25", want: `{"d":"2023-12-25"}`},
 		{date: "25.12.2023", want: `{"d":"25.12.2023"}`},
 		{date: "invalid", want: `{"d":"invalid"}`},
@@ -953,7 +951,7 @@ func TestNullableDate_ZeroDateInOtherFormatIsNull(t *testing.T) {
 	assert.Nil(t, v)
 	j, err := json.Marshal(n)
 	require.NoError(t, err)
-	assert.Equal(t, `"01.01.0001"`, string(j))
+	assert.Equal(t, `null`, string(j))
 	assert.False(t, NullableDate("02.01.0001").IsNull())
 }
 
@@ -966,6 +964,7 @@ func TestNullableDate_ReadingAndWriting(t *testing.T) {
 		Invalid:       []NullableDate{"invalid", "2023-02-30"},
 		Prettify:      normtest.Trim[NullableDate],
 		SQLNormalized: true,
+		ZeroBlank:     true,
 		Blank: []NullableDate{
 			"0001-01-01", "0000-00-00", "01.01.0001", "0001-01-01T00:00:00Z", "0001-01-1 ", "0001-01-1.",
 			// The zero date of MySQL and other implementations in other spellings
