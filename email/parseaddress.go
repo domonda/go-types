@@ -271,28 +271,6 @@ func singleAddressProblem(addr string, parsed parsedAddress, ok bool) string {
 	return ""
 }
 
-// errInvalidAddress is the error of normalizeAddressForRead.
-// It has no call stack like the error of ParseAddress,
-// because the callers of normalizeAddressForRead drop it.
-var errInvalidAddress = errors.New("invalid email address")
-
-// normalizeAddressForRead is the Normalized method of Address and
-// NullableAddress for their methods that keep an address that can't be
-// normalized unchanged and drop the error: Scan, UnmarshalJSON,
-// UnmarshalXML, UnmarshalXMLAttr, MarshalJSON and MarshalText.
-// It returns errInvalidAddress instead of the error of ParseAddress,
-// whose call stack costs more than the parsing. Unlike Normalized of
-// NullableAddress it returns errInvalidAddress for a blank address,
-// which the callers handle before.
-func normalizeAddressForRead[S Address | NullableAddress](s S) (S, error) {
-	addr := sanitizeAddr(string(s))
-	parsed, ok := parseAddress(addr)
-	if singleAddressProblem(addr, parsed, ok) != "" {
-		return s, errInvalidAddress
-	}
-	return S(AddressFrom(parsed.addr)), nil
-}
-
 // specRange is the byte range of the address part of a parsed address,
 // from the start of its local part to the end of its domain, or of other
 // text that other parsers read as part of an address, see

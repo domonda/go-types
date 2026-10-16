@@ -28,7 +28,7 @@ func TestNullableYearQuarter_UnmarshalJSON(t *testing.T) {
 		"2023-Q3":   "2023-Q3",
 		" 2023-q3 ": "2023-Q3",
 		"2023-Q5":   "2023-Q5",
-		"bad":       "bad",
+		"bad":       "BAD",
 		"":          YearQuarterNull,
 		"  ":        YearQuarterNull,
 	} {
@@ -80,6 +80,7 @@ func TestNullableYearQuarter_ReadingAndWriting(t *testing.T) {
 		Blank:        []NullableYearQuarter{"0001-Q1", "0001-q1", "0000-Q0", " 0001-Q1 "},
 		Nullable:     true,
 		StoredString: true,
+		Prettify:     normtest.TrimUpper[NullableYearQuarter],
 	})
 }
 

@@ -60,7 +60,7 @@ func TestNullableIBAN_Valid(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, normIBAN, norm)
 	assert.Equal(t, normIBAN, spacedIBAN.NormalizedOrNull())
-	assert.Equal(t, string(normIBAN), marshalText(t, spacedIBAN))
+	assert.Equal(t, string(spacedIBAN), marshalText(t, spacedIBAN))
 
 	spaced, err := normIBAN.NormalizedWithSpaces()
 	require.NoError(t, err)
@@ -154,12 +154,15 @@ func TestNullableIBAN_ScanString(t *testing.T) {
 		})
 	}
 
-	t.Run("normalizes valid IBAN", func(t *testing.T) {
-		for _, validate := range []bool{true, false} {
-			var iban NullableIBAN
-			require.NoError(t, iban.ScanString("DE89 3704 0044 0532 0130 00", validate))
-			assert.Equal(t, NullableIBAN("DE89370400440532013000"), iban)
-		}
+	t.Run("validate normalizes a valid IBAN", func(t *testing.T) {
+		var iban NullableIBAN
+		require.NoError(t, iban.ScanString("DE89 3704 0044 0532 0130 00", true))
+		assert.Equal(t, NullableIBAN("DE89370400440532013000"), iban)
+	})
+	t.Run("without validate trims and uppercases", func(t *testing.T) {
+		var iban NullableIBAN
+		require.NoError(t, iban.ScanString(" de89 3704 0044 0532 0130 00 ", false))
+		assert.Equal(t, NullableIBAN("DE89 3704 0044 0532 0130 00"), iban)
 	})
 	t.Run("validate rejects invalid IBAN", func(t *testing.T) {
 		iban := NullableIBAN("unchanged")
@@ -250,10 +253,9 @@ func TestNullableIBAN_JSON(t *testing.T) {
 	assert.Equal(t, NullableIBAN("DE89370400440532013000"), got.IBAN)
 }
 
-// A non-null NullableIBAN is written normalized like IBAN, see
-// TestIBAN_ValueAndMarshalJSONNormalize, and null stays SQL NULL and
-// JSON null, including the whitespace-only null. Value refuses an invalid
-// IBAN, JSON writes it unchanged.
+// A non-null NullableIBAN is trimmed and uppercased like IBAN, and null
+// stays SQL NULL and JSON null, including the whitespace-only null.
+// An invalid IBAN is written after that prettification, not refused.
 func TestNullableIBAN_ValueAndMarshalJSONNormalize(t *testing.T) {
 	tests := []struct {
 		iban     NullableIBAN
@@ -262,7 +264,7 @@ func TestNullableIBAN_ValueAndMarshalJSONNormalize(t *testing.T) {
 	}{
 		{iban: IBANNull, wantSQL: nil, wantJSON: `null`},
 		{iban: "  ", wantSQL: nil, wantJSON: `null`},
-		{iban: "DE89 3704 0044 0532 0130 00", wantSQL: "DE89370400440532013000", wantJSON: `"DE89370400440532013000"`},
+		{iban: "DE89 3704 0044 0532 0130 00", wantSQL: "DE89 3704 0044 0532 0130 00", wantJSON: `"DE89 3704 0044 0532 0130 00"`},
 	}
 	for _, tt := range tests {
 		v, err := tt.iban.Value()
@@ -274,9 +276,10 @@ func TestNullableIBAN_ValueAndMarshalJSONNormalize(t *testing.T) {
 		assert.Equal(t, tt.wantJSON, string(j), "json.Marshal(NullableIBAN(%q))", string(tt.iban))
 	}
 
-	_, err := NullableIBAN("DE00 1234").Value()
-	assert.Error(t, err, "Value() of an invalid IBAN")
-	j, err := json.Marshal(NullableIBAN("DE00 1234"))
+	v, err := NullableIBAN("de00 1234").Value()
+	require.NoError(t, err)
+	assert.Equal(t, "DE00 1234", v, "Value() of an invalid IBAN is trimmed and uppercased")
+	j, err := json.Marshal(NullableIBAN("de00 1234"))
 	require.NoError(t, err)
 	assert.Equal(t, `"DE00 1234"`, string(j))
 }
@@ -292,9 +295,8 @@ func TestNullableIBAN_UnmarshalJSON(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(`{"iban":null}`), &o))
 	assert.Equal(t, IBANNull, o.IBAN)
 
-	// A JSON string is stored normalized if it is a valid IBAN and
-	// unchanged without an error if not, so Validate can report it.
-	for str, want := range map[string]NullableIBAN{"DE89370400440532013000": "DE89370400440532013000", "DE89 3704 0044 0532 0130 00": "DE89370400440532013000", "invalid": "invalid", "": IBANNull} {
+	// A JSON string is trimmed and uppercased, including an invalid IBAN.
+	for str, want := range map[string]NullableIBAN{"DE89370400440532013000": "DE89370400440532013000", "de89 3704 0044 0532 0130 00": "DE89 3704 0044 0532 0130 00", "invalid": "INVALID", "": IBANNull} {
 		o := obj{IBAN: "AT611904300234573201"}
 		data, err := json.Marshal(map[string]string{"iban": str})
 		require.NoError(t, err)
@@ -328,5 +330,6 @@ func TestNullableIBAN_ReadingAndWriting(t *testing.T) {
 		Variants:  []NullableIBAN{"DE89 3704 0044 0532 0130 00", " DE89370400440532013000\n"},
 		Invalid:   []NullableIBAN{"DE00 1234", "de89370400440532013000"},
 		Nullable:  true,
+		Prettify:  normtest.TrimUpper[NullableIBAN],
 	})
 }

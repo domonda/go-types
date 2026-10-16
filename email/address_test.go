@@ -273,9 +273,9 @@ func TestAddress_ValueAndMarshalJSONNormalize(t *testing.T) {
 		want string
 	}{
 		{addr: `john@example.com`, want: `john@example.com`},
-		{addr: `John.Doe@Example.com`, want: `john.doe@example.com`},
-		{addr: `John Doe <John@Example.com>`, want: `"John Doe" <john@example.com>`},
-		{addr: `=?utf-8?q?J=C3=BCrgen?= <j@example.com>`, want: `"Jürgen" <j@example.com>`},
+		{addr: `John.Doe@Example.com`, want: `John.Doe@Example.com`},
+		{addr: ` John Doe <John@Example.com> `, want: `John Doe <John@Example.com>`},
+		{addr: `=?utf-8?q?J=C3=BCrgen?= <j@example.com>`, want: `=?utf-8?q?J=C3=BCrgen?= <j@example.com>`},
 	}
 	for _, tt := range tests {
 		v, err := tt.addr.Value()
@@ -289,13 +289,14 @@ func TestAddress_ValueAndMarshalJSONNormalize(t *testing.T) {
 		assert.Equal(t, tt.want, got, "json.Marshal(Address(%q))", string(tt.addr))
 	}
 
-	_, err := Address(`not an address`).Value()
-	assert.Error(t, err, "Value() of an invalid address")
+	v, err := Address(` not an address `).Value()
+	require.NoError(t, err)
+	assert.Equal(t, "not an address", v, "Value() of an invalid address is trimmed")
 	j, err := json.Marshal(Address(`not an address`))
 	require.NoError(t, err)
 	assert.Equal(t, `"not an address"`, string(j))
 
-	v, err := Address(``).Value()
+	v, err = Address(``).Value()
 	require.NoError(t, err)
 	assert.Nil(t, v, "an empty Address is written as SQL NULL")
 }
@@ -310,16 +311,16 @@ func TestAddress_MarshalTextAndASCII(t *testing.T) {
 		wantStr   string
 		wantASCII string
 	}{
-		{addr: `John@Example.com`, wantStr: `john@example.com`, wantASCII: `john@example.com`},
-		{addr: `John Doe <John@Example.com>`, wantStr: `"John Doe" <john@example.com>`, wantASCII: `"John Doe" <john@example.com>`},
-		{addr: `Jürgen Müller <J@Example.com>`, wantStr: `"Jürgen Müller" <j@example.com>`, wantASCII: `=?utf-8?q?J=C3=BCrgen_M=C3=BCller?= <j@example.com>`},
+		{addr: `John@Example.com`, wantStr: `John@Example.com`, wantASCII: `john@example.com`},
+		{addr: `John Doe <John@Example.com>`, wantStr: `John Doe <John@Example.com>`, wantASCII: `"John Doe" <john@example.com>`},
+		{addr: `Jürgen Müller <J@Example.com>`, wantStr: `Jürgen Müller <J@Example.com>`, wantASCII: `=?utf-8?q?J=C3=BCrgen_M=C3=BCller?= <j@example.com>`},
 		// The address part is quoted like the parser reads it back,
 		// net/mail would write 'abc@example.com, which is abc@example.com
 		{addr: `"N" <"'abc"@example.com>`, wantStr: `"N" <"'abc"@example.com>`, wantASCII: `"N" <"'abc"@example.com>`},
 		// A quoted local part with an angle bracket without name is written
 		// in angle brackets, so that it doesn't read back as a display name,
 		// see TestAddress_NormalizedIsIdempotent
-		{addr: `<"<a@b.com>"@Example.com>`, wantStr: `<"<a@b.com>"@example.com>`, wantASCII: `<"<a@b.com>"@example.com>`},
+		{addr: `<"<a@b.com>"@Example.com>`, wantStr: `<"<a@b.com>"@Example.com>`, wantASCII: `<"<a@b.com>"@example.com>`},
 		{addr: `not an address`, wantStr: `not an address`, wantASCII: `not an address`},
 	}
 	for _, tt := range tests {
@@ -329,7 +330,8 @@ func TestAddress_MarshalTextAndASCII(t *testing.T) {
 
 	// The ASCII form parses back to the same normalized address
 	ascii := Address(Address(`Jürgen Müller <J@Example.com>`).ASCII())
-	assert.Equal(t, `"Jürgen Müller" <j@example.com>`, marshalText(t, ascii))
+	assert.Equal(t, ascii.ASCII(), string(ascii), "ASCII of an already encoded address stays that text")
+	assert.Equal(t, string(ascii), marshalText(t, ascii))
 
 	// A long non-ASCII name with special characters is written as one
 	// B encoded-word, if a word of at most the 75 characters of RFC 2047
@@ -350,7 +352,7 @@ func TestAddress_MarshalTextAndASCII(t *testing.T) {
 	for word := range strings.FieldsSeq(split.ASCII()) {
 		assert.LessOrEqual(t, len(word), 75, word)
 	}
-	assert.Equal(t, string(split), marshalText(t, Address(split.ASCII())))
+	assert.Equal(t, split.ASCII(), marshalText(t, Address(split.ASCII())))
 
 	// A word with only ASCII text Python's email package writes unencoded
 	// and unquoted when it writes the header, also one with a phrase end
@@ -385,7 +387,7 @@ func TestAddress_MarshalTextAndASCII(t *testing.T) {
 	// TestParseAddress_EncodedWordThatPythonDecodesAfterWriting.
 	const literal = "=?utf-8?q?x?="
 	encoded := Address(`"=\?utf-8?q?x?=" <A@example.com>`)
-	assert.Equal(t, `"=\?utf-8?q?x?=" <a@example.com>`, marshalText(t, encoded))
+	assert.Equal(t, `"=\?utf-8?q?x?=" <A@example.com>`, marshalText(t, encoded))
 	assert.Equal(t, `"=\?utf-8?q?x?=" <a@example.com>`, encoded.ASCII())
 	for _, written := range []string{marshalText(t, encoded), encoded.ASCII()} {
 		name, err := Address(written).NamePart()
@@ -526,6 +528,7 @@ func TestAddress_ReadingAndWriting(t *testing.T) {
 		Canonical: `"John Doe" <john@example.com>`,
 		Variants:  []Address{`John Doe <John@Example.com>`, ` "John Doe" <JOHN@example.com> `},
 		Invalid:   []Address{"not an address", "john@"},
+		Prettify:  normtest.Trim[Address],
 	})
 }
 
@@ -538,13 +541,13 @@ func TestAddress_StrfmtScan(t *testing.T) {
 	validating := strfmt.NewScanConfig()
 	lenient := strfmt.NewScanConfig()
 	lenient.ValidateFunc = nil
-	for _, config := range []*strfmt.ScanConfig{validating, lenient} {
-		var addr Address
-		require.NoError(t, strfmt.Scan(reflect.ValueOf(&addr).Elem(), "John Doe <John@Example.com>", config))
-		assert.Equal(t, Address(`"John Doe" <john@example.com>`), addr)
-	}
-
 	var addr Address
+	require.NoError(t, strfmt.Scan(reflect.ValueOf(&addr).Elem(), "John Doe <John@Example.com>", validating))
+	assert.Equal(t, Address(`"John Doe" <john@example.com>`), addr)
+	require.NoError(t, strfmt.Scan(reflect.ValueOf(&addr).Elem(), "John Doe <John@Example.com>", lenient))
+	assert.Equal(t, Address("John Doe <John@Example.com>"), addr)
+
+	addr = ""
 	require.NoError(t, strfmt.Scan(reflect.ValueOf(&addr).Elem(), "not an address", lenient))
 	assert.Equal(t, Address("not an address"), addr)
 	assert.Error(t, strfmt.Scan(reflect.ValueOf(&addr).Elem(), "not an address", validating))

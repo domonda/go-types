@@ -12,9 +12,11 @@ import (
 //
 // It uses the same array codec that AddressSet.Value writes with, so that a
 // quoted element, or one containing the separator or an escaped quote, is
-// decoded rather than carried through with its quotes attached. Every element
-// is then trimmed, because a hand written literal may pad them with spaces;
-// callers skip the elements that are empty afterwards.
+// decoded rather than carried through with its quotes attached. When trim
+// is true, every element is then trimmed, because a hand written literal
+// of an address list may pad them with spaces; callers skip the elements
+// that are empty afterwards. An address set passes trim false so its keys
+// stay as stored.
 //
 // notnull.SplitArrayValues decodes the same values from a PostgreSQL
 // literal and additionally accepts JSON arrays and the unquoted [a,b]
@@ -24,14 +26,16 @@ import (
 // instead of passing their text through as an address.
 //
 // typeName is the email type being scanned, used only in the error message.
-func scanAddressArray(literal, typeName string) ([]string, error) {
+func scanAddressArray(literal, typeName string, trim bool) ([]string, error) {
 	var array notnull.StringArray
 	err := array.Scan(literal)
 	if err != nil {
 		return nil, fmt.Errorf("can't scan SQL array string %q as email.%s because of: %w", literal, typeName, err)
 	}
-	for i, addr := range array {
-		array[i] = strutil.TrimSpace(addr)
+	if trim {
+		for i, addr := range array {
+			array[i] = strutil.TrimSpace(addr)
+		}
 	}
 	return array, nil
 }

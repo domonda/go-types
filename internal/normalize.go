@@ -8,40 +8,50 @@ import (
 	"encoding/xml"
 	"errors"
 	"reflect"
+	"strings"
 
 	"github.com/domonda/go-errs"
 
 	"github.com/domonda/go-types/strutil"
 )
 
-// The helpers in this file implement the reading and writing contract
-// shared by the normalizing string types of the domain packages,
-// like country.Code, vat.ID or date.Date:
+// The helpers in this file implement the reading and writing of the
+// string types of the domain packages. Each helper takes a function
+// that returns the text to store:
 //
-//   - Reading (Scan, UnmarshalJSON, UnmarshalXML, UnmarshalXMLAttr)
-//     stores a valid value normalized, a blank value as "" and an
-//     invalid value unchanged, without an error, so that one bad value
-//     doesn't fail a whole query or document and Validate can report it.
-//   - Value writes the normalized value, SQL NULL for a blank value,
-//     and returns the error of normalize for an invalid value,
-//     because the database is where an invalid value would stay.
-//   - MarshalJSON and MarshalText write the normalized value,
-//     "" for a blank value and an invalid value unchanged.
-//     MarshalXMLAttr writes MarshalText, and no attribute for a nil pointer.
+//   - Marshalling (Scan, Value, MarshalJSON, UnmarshalJSON, MarshalText,
+//     UnmarshalXML, UnmarshalXMLAttr, and ScanString with validate false)
+//     passes Trim or TrimUpper. Those always succeed, so every value is
+//     prettified and written back, including one Normalized would reject
+//     or rewrite. A blank value is "" on read and SQL NULL from Value.
+//   - ScanString with validate true, and date.Date Scan and Value, pass
+//     Normalized. On read an invalid value is kept unchanged and without
+//     an error. Value returns the error of that function.
 //
-// Each helper takes the Normalized method of the type as normalize,
-// which must return its receiver unchanged together with an error
-// for a value that can't be normalized. isBlank reports values that
-// mean "no value", a nil isBlank uses IsBlank. nullable is true for
-// a nullable type, whose blank value is null.
+// MarshalXMLAttr writes MarshalText, and no attribute for a nil pointer.
+// isBlank reports values that mean "no value"; a nil isBlank uses IsBlank.
+// nullable is true for a nullable type, whose blank value is null.
+
+// Trim returns s with surrounding whitespace removed.
+// The error is always nil, so the reading and writing helpers apply it
+// to every value, including one the type's Normalized rejects.
+func Trim[S ~string](s S) (S, error) {
+	return S(strutil.TrimSpace(string(s))), nil
+}
+
+// TrimUpper returns s with surrounding whitespace removed and letters
+// uppercased. The error is always nil, like Trim.
+func TrimUpper[S ~string](s S) (S, error) {
+	return S(strings.ToUpper(strutil.TrimSpace(string(s)))), nil
+}
 
 // IsBlank reports whether s is empty after strutil.TrimSpace.
 func IsBlank[S ~string](s S) bool {
 	return strutil.TrimSpace(s) == ""
 }
 
-// NormalizedOrRaw returns "" for a blank s, the normalized s if it can be
-// normalized, or else s unchanged.
+// NormalizedOrRaw returns "" for a blank s, the result of normalize when
+// that succeeds, or else s unchanged.
 func NormalizedOrRaw[S ~string](s S, normalize func(S) (S, error), isBlank func(S) bool) S {
 	if isBlank == nil {
 		isBlank = IsBlank[S]
@@ -99,8 +109,8 @@ func ScanStringNormalized[S ~string](dst *S, source string, validate, nullable b
 }
 
 // ValueNormalized implements database/sql/driver.Valuer for a normalizing
-// string type: SQL NULL for a blank value, the normalized value as string,
-// or the error of normalize for a value that can't be normalized.
+// string type: SQL NULL for a blank value, the result of normalize as
+// string, or the error of normalize when it fails.
 func ValueNormalized[S ~string](s S, normalize func(S) (S, error), isBlank func(S) bool) (driver.Value, error) {
 	if isBlank == nil {
 		isBlank = IsBlank[S]

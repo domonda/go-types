@@ -71,7 +71,7 @@ On failure it returns the input unchanged and the error of `Normalized`.
 
 ## Serialization
 
-`Code` follows the rules of [Reading and writing values](../README.md#reading-and-writing-values): reading normalizes, `Value` refuses an invalid code, and `fmt` prints the stored code.
+`Code` follows the rules of [Reading and writing values](../README.md#reading-and-writing-values): reading and writing only trim, so `"EN"` stays `"EN"`, and `fmt` prints the stored code.
 
 | Value                  | SQL `Value()` | JSON (`json.Marshal`) | `MarshalText`, XML | `fmt`     |
 |------------------------|---------------|-----------------------|--------------------|-----------|

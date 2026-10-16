@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/domonda/go-types/internal/xmlattrtest"
+	"github.com/domonda/go-types/strutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -330,19 +331,20 @@ func TestAddressList_ValueAndMarshalJSONAsStored(t *testing.T) {
 		}
 	}
 
-	invalid := AddressList(`a@example.com, not an address`)
-	_, err := invalid.Value()
-	assert.Error(t, err, "Value() of an invalid list")
+	invalid := AddressList(` a@example.com, not an address `)
+	v, err := invalid.Value()
+	require.NoError(t, err)
+	assert.Equal(t, `a@example.com, not an address`, v, "Value() of an invalid list is trimmed")
 
 	for _, l := range []AddressList{`A@Example.com,  Jürgen <J@Example.com>`, ` a@example.com `, `  `, ``, invalid} {
 		j, err := json.Marshal(l)
 		require.NoError(t, err)
 		var str string
 		require.NoError(t, json.Unmarshal(j, &str))
-		assert.Equal(t, string(l), str, "json.Marshal(AddressList(%q))", string(l))
+		assert.Equal(t, string(strutil.TrimSpace(l)), str, "json.Marshal(AddressList(%q))", string(l))
 		var back AddressList
 		require.NoError(t, json.Unmarshal(j, &back))
-		assert.Equal(t, l, back, "JSON round trip of %q", string(l))
+		assert.Equal(t, AddressList(strutil.TrimSpace(l)), back, "JSON round trip of %q", string(l))
 	}
 
 	// Text after a placeholder is no list without addresses: other
@@ -354,7 +356,7 @@ func TestAddressList_ValueAndMarshalJSONAsStored(t *testing.T) {
 	} {
 		assert.Error(t, hidden.Validate(), hidden)
 		_, err := hidden.Value()
-		assert.Error(t, err, "Value() of %q", hidden)
+		assert.NoError(t, err, "Value() of %q", hidden)
 	}
 }
 

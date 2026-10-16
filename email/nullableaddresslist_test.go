@@ -292,8 +292,9 @@ func TestNullableAddressList_ValueAndMarshalJSONAsStored(t *testing.T) {
 		assert.Equal(t, tt.wantJSON, string(j), "json.Marshal(NullableAddressList(%q))", string(tt.n))
 	}
 
-	_, err := NullableAddressList("not an address").Value()
-	assert.Error(t, err, "Value() of an invalid list")
+	v, err := NullableAddressList(" not an address ").Value()
+	require.NoError(t, err)
+	assert.Equal(t, "not an address", v, "Value() of an invalid list is trimmed")
 	j, err := json.Marshal(NullableAddressList("not an address"))
 	require.NoError(t, err)
 	assert.Equal(t, `"not an address"`, string(j))

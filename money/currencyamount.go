@@ -86,7 +86,7 @@ func ParseCurrencyAmount(str string, acceptedDecimals ...int) (result CurrencyAm
 // without thousands grouping. Never fewer than two decimal places,
 // because the amount of a currency without a minor unit, like JPY,
 // can still have a fraction. Value writes the same format with the
-// normalized currency. An amount without currency is formatted with
+// trimmed and uppercased currency. An amount without currency is formatted with
 // two decimal places.
 // String implements the fmt.Stringer interface.
 func (ca CurrencyAmount) String() string {
@@ -180,9 +180,7 @@ func (ca *CurrencyAmount) Scan(value any) (err error) {
 }
 
 // Value implements the database/sql/driver.Valuer interface
-// by writing the format of String with the normalized currency,
-// or returning the error of Currency.Normalized for a currency
-// that can't be normalized.
+// by writing the format of String with the trimmed and uppercased currency.
 func (ca CurrencyAmount) Value() (driver.Value, error) {
 	currency, err := ca.Currency.normalizedForValue()
 	if err != nil {

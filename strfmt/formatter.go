@@ -60,8 +60,8 @@ func (format *MoneyFormat) FormatCurrencyAmount(currencyAmount money.CurrencyAmo
 }
 
 // FormatCurrencyDecimalAmount formats a currency-tagged decimal amount like
-// FormatCurrencyAmount formats a currency-tagged amount, placing the normalized
-// currency code before or after the number according to format.CurrencyFirst,
+// FormatCurrencyAmount formats a currency-tagged amount, placing the trimmed
+// and uppercased currency before or after the number according to format.CurrencyFirst,
 // with the number formatted by FormatDecimalAmount with the precision raised
 // to the decimals of the minor unit of the currency like FormatCurrencyAmount.
 func (format *MoneyFormat) FormatCurrencyDecimalAmount(currencyAmount money.CurrencyDecimalAmount) string {

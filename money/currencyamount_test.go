@@ -384,7 +384,7 @@ func TestCurrencyAmount_NormalizedCurrencyOutput(t *testing.T) {
 		wantJSON   string
 	}{
 		{ca: CurrencyAmount{Currency: "eur", Amount: 1.5}, wantSQL: "EUR 1.50", wantString: "eur 1.50", wantJSON: `{"Currency":"EUR","Amount":1.5}`},
-		{ca: CurrencyAmount{Currency: "€", Amount: 1.5}, wantSQL: "EUR 1.50", wantString: "€ 1.50", wantJSON: `{"Currency":"EUR","Amount":1.5}`},
+		{ca: CurrencyAmount{Currency: "€", Amount: 1.5}, wantSQL: "€ 1.50", wantString: "€ 1.50", wantJSON: `{"Currency":"€","Amount":1.5}`},
 		{ca: CurrencyAmount{Currency: "jpy", Amount: 1234.5}, wantSQL: "JPY 1234.50", wantString: "jpy 1234.50", wantJSON: `{"Currency":"JPY","Amount":1234.5}`},
 		{ca: CurrencyAmount{Amount: 1.5}, wantSQL: "1.50", wantString: "1.50", wantJSON: `{"Currency":"","Amount":1.5}`},
 	}
@@ -399,10 +399,11 @@ func TestCurrencyAmount_NormalizedCurrencyOutput(t *testing.T) {
 		assert.JSONEq(t, tt.wantJSON, string(j), "json.Marshal of %#v", tt.ca)
 	}
 
-	invalid := CurrencyAmount{Currency: "XYZ", Amount: 1.5}
-	_, err := invalid.Value()
-	assert.Error(t, err, "Value of an invalid currency")
-	assert.Equal(t, "XYZ 1.50", invalid.String())
+	invalid := CurrencyAmount{Currency: "xyz", Amount: 1.5}
+	v, err := invalid.Value()
+	require.NoError(t, err)
+	assert.Equal(t, "XYZ 1.50", v, "Value writes an invalid currency trimmed and uppercased")
+	assert.Equal(t, "xyz 1.50", invalid.String())
 	j, err := json.Marshal(invalid)
 	require.NoError(t, err)
 	assert.JSONEq(t, `{"Currency":"XYZ","Amount":1.5}`, string(j))

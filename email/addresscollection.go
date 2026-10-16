@@ -414,8 +414,9 @@ type addressCollection struct {
 //   - "", whitespace only, "null": null
 //   - "[" and valid JSON: a JSON array of strings, elements kept exactly
 //   - "{" and valid JSON: a JSON object, keys kept exactly in sorted order
-//   - "{...}" otherwise: a PostgreSQL array literal, elements trimmed
-//     and empty ones skipped
+//   - "{...}" otherwise: a PostgreSQL array literal. AddressList trims
+//     the elements and skips empty ones. AddressSet keeps them as stored,
+//     including their spaces, and skips only empty elements.
 //   - '"' and valid JSON: a JSON string, its content as address list
 //   - anything else: an address list, the text kept as given
 //
@@ -459,14 +460,14 @@ func readAddressCollection[T string | []byte](text T, typeName string) (addressC
 			}
 		}
 		if trimmed[len(trimmed)-1] == '}' {
-			array, err := scanAddressArray(string(trimmed), typeName)
+			// AddressSet keys stay as stored. A list trims each element,
+			// so one that was only padding is empty and is not an entry.
+			array, err := scanAddressArray(string(trimmed), typeName, typeName != "AddressSet")
 			if err != nil {
 				return addressCollection{}, err
 			}
 			entries := make([]string, 0, len(array))
 			for _, addr := range array {
-				// scanAddressArray trims, so an element that was only
-				// padding is empty here and is not an entry
 				if addr != "" {
 					entries = append(entries, addr)
 				}

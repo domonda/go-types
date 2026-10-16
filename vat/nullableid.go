@@ -187,30 +187,32 @@ func (n NullableID) Number() string {
 // Without validate it stores source like Scan, with validate it stores
 // the normalized ID or returns the error of Normalized.
 func (n *NullableID) ScanString(source string, validate bool) error {
-	return internal.ScanStringNormalized(n, source, validate, true, NullableID.Normalized, nil)
+	if validate {
+		return internal.ScanStringNormalized(n, source, true, true, NullableID.Normalized, nil)
+	}
+	return internal.ScanStringNormalized(n, source, false, true, internal.TrimUpper[NullableID], nil)
 }
 
 // Scan implements the database/sql.Scanner interface.
-// A valid ID is stored normalized, SQL NULL and a blank string as Null,
-// and an ID that can't be normalized unchanged without an error,
-// so that one invalid value doesn't fail a whole query; Validate reports it.
+// Surrounding whitespace is trimmed and letters are uppercased.
+// SQL NULL and a blank string are stored as Null. An invalid ID is
+// kept after that prettification, without an error.
 func (n *NullableID) Scan(value any) error {
-	return internal.ScanNormalized(n, value, NullableID.Normalized, nil)
+	return internal.ScanNormalized(n, value, internal.TrimUpper[NullableID], nil)
 }
 
 // Value implements the driver database/sql/driver.Valuer interface.
-// It returns the normalized ID, SQL NULL if the NullableID is null,
-// or the error of Normalized wrapping ErrInvalidID
-// for an ID that can't be normalized.
+// It returns the trimmed and uppercased ID, or SQL NULL if the
+// NullableID is null. An invalid ID is written after that
+// prettification, not rejected.
 func (n NullableID) Value() (driver.Value, error) {
-	return internal.ValueNormalized(n, NullableID.Normalized, nil)
+	return internal.ValueNormalized(n, internal.TrimUpper[NullableID], nil)
 }
 
 // MarshalJSON implements encoding/json.Marshaler by writing the JSON null
-// value if the NullableID is null, else the normalized ID,
-// or the ID unchanged if it can't be normalized.
+// value if the NullableID is null, else the trimmed and uppercased ID.
 func (n NullableID) MarshalJSON() ([]byte, error) {
-	return internal.MarshalJSONNormalized(n, true, NullableID.Normalized, nil)
+	return internal.MarshalJSONNormalized(n, true, internal.TrimUpper[NullableID], nil)
 }
 
 // UnmarshalJSON implements encoding/json.Unmarshaler.
@@ -218,15 +220,15 @@ func (n NullableID) MarshalJSON() ([]byte, error) {
 // NullableID to null, so that decoding null into a field that holds
 // a value resets it, and any other JSON value is an error.
 func (n *NullableID) UnmarshalJSON(data []byte) error {
-	return internal.UnmarshalJSONNormalized(n, data, true, NullableID.Normalized, nil)
+	return internal.UnmarshalJSONNormalized(n, data, true, internal.TrimUpper[NullableID], nil)
 }
 
 // MarshalText implements encoding.TextMarshaler like MarshalJSON,
 // but with "" for null, so that encoding/xml and strfmt write the
-// normalized ID. encoding/json writes map keys of string types
-// as they are and doesn't call MarshalText for them.
+// trimmed and uppercased ID. encoding/json writes map keys of string
+// types as they are and doesn't call MarshalText for them.
 func (n NullableID) MarshalText() ([]byte, error) {
-	return internal.MarshalTextNormalized(n, NullableID.Normalized, nil)
+	return internal.MarshalTextNormalized(n, internal.TrimUpper[NullableID], nil)
 }
 
 // MarshalXMLAttr implements encoding/xml.MarshalerAttr by writing the
@@ -240,13 +242,13 @@ func (n *NullableID) MarshalXMLAttr(name xml.Name) (xml.Attr, error) {
 // UnmarshalXML implements encoding/xml.Unmarshaler
 // by storing the text of the element like Scan stores it.
 func (n *NullableID) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
-	return internal.UnmarshalXMLNormalized(n, d, start, NullableID.Normalized, nil)
+	return internal.UnmarshalXMLNormalized(n, d, start, internal.TrimUpper[NullableID], nil)
 }
 
 // UnmarshalXMLAttr implements encoding/xml.UnmarshalerAttr
 // by storing the attribute value like Scan stores it.
 func (n *NullableID) UnmarshalXMLAttr(attr xml.Attr) error {
-	return internal.UnmarshalXMLAttrNormalized(n, attr, NullableID.Normalized, nil)
+	return internal.UnmarshalXMLAttrNormalized(n, attr, internal.TrimUpper[NullableID], nil)
 }
 
 // JSONSchema returns the JSON schema for NullableID, describing it with the

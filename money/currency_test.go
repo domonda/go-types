@@ -206,7 +206,7 @@ func TestCurrency_ScanString(t *testing.T) {
 	}{
 		{source: "eur", validate: true, want: EUR},
 		{source: " € ", validate: true, want: EUR},
-		{source: "US Dollar", validate: false, want: USD},
+		{source: "US Dollar", validate: false, want: "US DOLLAR"},
 		{source: "XYZ", validate: true, wantErr: true},
 		{source: "", validate: true, wantErr: true},
 		{source: "XYZ", validate: false, want: "XYZ"},
@@ -337,8 +337,8 @@ func TestCurrency_ValueAndMarshalJSONNormalize(t *testing.T) {
 	}{
 		{c: EUR, want: "EUR"},
 		{c: "eur", want: "EUR"},
-		{c: " € ", want: "EUR"},
-		{c: "Canadian Dollar", want: "CAD"},
+		{c: " € ", want: "€"},
+		{c: "Canadian Dollar", want: "CANADIAN DOLLAR"},
 	}
 	for _, tt := range tests {
 		v, err := tt.c.Value()
@@ -350,9 +350,10 @@ func TestCurrency_ValueAndMarshalJSONNormalize(t *testing.T) {
 		assert.Equal(t, `"`+tt.want+`"`, string(j), "json.Marshal(Currency(%q))", string(tt.c))
 	}
 
-	_, err := Currency("XYZ").Value()
-	assert.Error(t, err, "Value() of an invalid currency")
-	j, err := json.Marshal(Currency("XYZ"))
+	v, err := Currency("xyz").Value()
+	require.NoError(t, err)
+	assert.Equal(t, "XYZ", v, "Value() of an invalid currency is trimmed and uppercased")
+	j, err := json.Marshal(Currency("xyz"))
 	require.NoError(t, err)
 	assert.Equal(t, `"XYZ"`, string(j), "json.Marshal of an invalid currency")
 
@@ -680,5 +681,6 @@ func TestCurrency_ReadingAndWriting(t *testing.T) {
 		Variants:     []Currency{"eur", " EUR ", "€", "Euro"},
 		Invalid:      []Currency{"XYZ", "Atlantean Dollar"},
 		StoredString: true,
+		Prettify:     normtest.TrimUpper[Currency],
 	})
 }

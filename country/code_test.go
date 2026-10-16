@@ -314,15 +314,13 @@ func TestCode_EnglishName(t *testing.T) {
 }
 
 func TestCode_Scan(t *testing.T) {
-	t.Run("string is stored normalized", func(t *testing.T) {
-		// Scan normalizes, so a code read from the database
-		// compares equal to the constant of the same country.
+	t.Run("string is trimmed without changing case", func(t *testing.T) {
 		var c Code
-		if err := c.Scan("de"); err != nil {
+		if err := c.Scan(" de "); err != nil {
 			t.Fatal(err)
 		}
-		if c != DE {
-			t.Errorf("Scan(\"de\") = %q, want %q", string(c), "DE")
+		if c != "de" {
+			t.Errorf("Scan(\" de \") = %q, want %q", string(c), "de")
 		}
 	})
 	t.Run("bytes are copied", func(t *testing.T) {
@@ -363,9 +361,9 @@ func TestCode_Value(t *testing.T) {
 		// Invalid is the empty string and must be written as SQL NULL.
 		{c: Invalid, want: nil},
 		{c: DE, want: "DE"},
-		// Codes are written normalized so equal countries compare equal in SQL.
-		{c: "de", want: "DE"},
-		{c: "Österreich", want: "AT"},
+		// Letter case and names are kept. Only surrounding space is removed.
+		{c: "de", want: "de"},
+		{c: " Österreich ", want: "Österreich"},
 	}
 	for _, tt := range tests {
 		t.Run(string(tt.c), func(t *testing.T) {
@@ -403,9 +401,8 @@ func TestCode_MarshalJSON(t *testing.T) {
 		want string
 	}{
 		{c: DE, want: `"DE"`},
-		// JSON output is normalized so API consumers always see ISO codes.
-		{c: "de", want: `"DE"`},
-		{c: "Deutschland", want: `"DE"`},
+		{c: "de", want: `"de"`},
+		{c: "Deutschland", want: `"Deutschland"`},
 		{c: Invalid, want: `""`},
 	}
 	for _, tt := range tests {
@@ -458,15 +455,22 @@ func TestCode_JSONSchema(t *testing.T) {
 }
 
 func TestCode_ScanString(t *testing.T) {
-	t.Run("valid input is stored normalized", func(t *testing.T) {
-		for _, validate := range []bool{true, false} {
-			var c Code
-			if err := c.ScanString(" österreich ", validate); err != nil {
-				t.Fatal(err)
-			}
-			if c != AT {
-				t.Errorf("ScanString(validate=%t) = %q, want AT", validate, string(c))
-			}
+	t.Run("validate stores the normalized code", func(t *testing.T) {
+		var c Code
+		if err := c.ScanString(" österreich ", true); err != nil {
+			t.Fatal(err)
+		}
+		if c != AT {
+			t.Errorf("ScanString(validate=true) = %q, want AT", string(c))
+		}
+	})
+	t.Run("without validate only trims", func(t *testing.T) {
+		var c Code
+		if err := c.ScanString(" österreich ", false); err != nil {
+			t.Fatal(err)
+		}
+		if c != "österreich" {
+			t.Errorf("ScanString(validate=false) = %q, want österreich", string(c))
 		}
 	})
 	t.Run("validate rejects invalid input and keeps the old value", func(t *testing.T) {
@@ -513,5 +517,6 @@ func TestCode_ReadingAndWriting(t *testing.T) {
 		Variants:     []Code{"de", " DE ", "d", "Deutschland"},
 		Invalid:      []Code{"XX", "Atlantis"},
 		StoredString: true,
+		Prettify:     normtest.Trim[Code],
 	})
 }

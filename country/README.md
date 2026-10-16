@@ -103,7 +103,7 @@ Implements: `database/sql.Scanner`, `database/sql/driver.Valuer`, `json.Marshale
 
 ## Serialization
 
-`Code` and `NullableCode` follow the rules of [Reading and writing values](../README.md#reading-and-writing-values): reading normalizes, `Value` refuses an invalid code, and `fmt` prints the stored code.
+`Code` and `NullableCode` follow the rules of [Reading and writing values](../README.md#reading-and-writing-values): reading and writing only trim, so `"Deutschland"` stays `"Deutschland"`, and `fmt` prints the stored code.
 
 | Value                                    | SQL `Value()` | JSON (`json.Marshal`) | `MarshalText`, XML | `fmt`     |
 |------------------------------------------|---------------|-----------------------|--------------------|-----------|

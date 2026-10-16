@@ -15,14 +15,13 @@ import (
 	"github.com/domonda/go-types/internal"
 	"github.com/domonda/go-types/mapset"
 	"github.com/domonda/go-types/notnull"
-	"github.com/domonda/go-types/strutil"
 )
 
 // AddressSet is a set of unique email addresses.
 //
-// AddressSet is a collection: every format reads and writes the addresses
-// as stored, because normalizing could merge two of them and the set would
-// read back with fewer elements than it was written with. Use Normalized
+// AddressSet keeps every key as stored. Reading and writing do not trim,
+// lowercase or otherwise rewrite a key, because that could merge two of
+// them and the set would read back with fewer elements. Use Normalized
 // or NormalizedAddressList to normalize the addresses.
 //
 // Value writes the set as a PostgreSQL array text literal
@@ -418,11 +417,11 @@ func (set AddressSet) ValidAndNormalized() bool {
 }
 
 // Scan implements the database/sql.Scanner interface.
-// The elements of a PostgreSQL array (from a text[] column) are trimmed,
-// the elements of a JSON array and the keys of a JSON object (from a json
-// or jsonb column) are kept exactly, and a plain address list or a JSON
-// string is split with SplitAddressList. The addresses are not normalized
-// or validated, so that one invalid value doesn't fail a whole query;
+// The elements of a PostgreSQL array (from a text[] column), a JSON array
+// and the keys of a JSON object (from a json or jsonb column) are kept
+// exactly, and a plain address list or a JSON string is split with
+// SplitAddressList. The addresses are not trimmed, normalized or
+// validated, so that one invalid value doesn't fail a whole query;
 // Validate reports it. SQL NULL, a blank string and "null" scan as nil
 // set, an empty array or object as empty set. Other SQL types are an error.
 func (set *AddressSet) Scan(value any) error {
@@ -482,48 +481,18 @@ func (set *AddressSet) UnmarshalText(text []byte) error {
 }
 
 // Value implements the driver database/sql/driver.Valuer interface
-// by writing the addresses as stored in sorted order as PostgreSQL array,
-// with the surrounding whitespace of valid addresses trimmed and duplicates
-// that this creates removed, or an error if an address is invalid,
-// also for a line break, a NUL or a bidi override within it, or a rune in
-// its address part that the parser drops, see Validate.
-// A nil set is written as SQL NULL, an empty set as "{}".
+// by writing the addresses as stored, in sorted order, as a PostgreSQL
+// array. Keys are not trimmed or validated. A nil set is written as SQL
+// NULL, an empty set as "{}".
 func (set AddressSet) Value() (driver.Value, error) {
 	if set == nil {
 		return nil, nil
 	}
-	addrs, err := set.writableAddresses(false)
-	if err != nil {
-		return nil, err
-	}
-	return notnull.StringArray(addrs).Value()
-}
-
-// writableAddresses returns the addresses of the set for Value and
-// MarshalText: sorted, with the surrounding whitespace trimmed and the
-// duplicates that this creates removed, or an error for an address that
-// Validate refuses, or if asListEntry is true, that would not read back
-// as one entry of an address list with SplitAddressList.
-func (set AddressSet) writableAddresses(asListEntry bool) ([]string, error) {
 	addrs := make([]string, 0, len(set))
 	for _, addr := range set.Sorted() {
-		trimmed := strutil.TrimSpace(addr)
-		// The same check and error as in Validate
-		if err := checkSafeRunes(string(trimmed), "email.AddressSet address", true); err != nil {
-			return nil, err
-		}
-		if err := trimmed.Validate(); err != nil {
-			return nil, errs.Errorf("invalid address %q in email.AddressSet: %w", string(addr), err)
-		}
-		if asListEntry {
-			if entries := SplitAddressList(string(trimmed)); len(entries) != 1 || entries[0] != trimmed {
-				return nil, errs.Errorf("address %q in email.AddressSet is no single entry of an address list", string(addr))
-			}
-		}
-		addrs = append(addrs, string(trimmed))
+		addrs = append(addrs, string(addr))
 	}
-	slices.Sort(addrs)
-	return slices.Compact(addrs), nil
+	return notnull.StringArray(addrs).Value()
 }
 
 // MarshalJSON implements encoding/json.Marshaler by writing the addresses
@@ -538,16 +507,17 @@ func (set AddressSet) MarshalJSON() ([]byte, error) {
 }
 
 // MarshalText implements encoding.TextMarshaler, used by encoding/xml, by
-// writing the addresses as stored in sorted order as address list, with
-// the surrounding whitespace of valid addresses trimmed, or an error if an
-// address is invalid, also for a line break or a NUL within it or a rune
-// in its address part that the parser drops, see Validate, or would not
-// read back as one entry of the list.
-// A nil or empty set is written as "".
+// writing the addresses as stored, in sorted order, as an address list.
+// Keys are not trimmed. It returns an error when SplitAddressList would
+// not read the text back as the same keys, because a comma-separated list
+// cannot hold every key. A nil or empty set is written as "".
 func (set AddressSet) MarshalText() ([]byte, error) {
-	addrs, err := set.writableAddresses(true)
-	if err != nil {
-		return nil, err
+	if len(set) == 0 {
+		return nil, nil
+	}
+	addrs := make([]string, 0, len(set))
+	for _, addr := range set.Sorted() {
+		addrs = append(addrs, string(addr))
 	}
 	text := strings.Join(addrs, ", ")
 	// Each address reads back alone, but an unclosed comment like in

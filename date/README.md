@@ -307,7 +307,7 @@ These plug dates into the [`strfmt`](../strfmt/README.md) package, which calls `
 
 ## Serialization
 
-`Date` and `NullableDate` follow the rules of [Reading and writing values](../README.md#reading-and-writing-values), with the zero dates as blank: reading normalizes, `Value` refuses an invalid date, and `fmt` prints the stored date. `YearMonth`, `YearQuarter` and their nullable types follow the same rules, with their zero values `"0001-01"`, `"0000-00"`, `"0001-Q1"` and `"0000-Q0"` as blank.
+`Date` and `NullableDate` fully normalize on SQL `Scan` and `Value`, with the zero dates as blank. A `time.Time` is stored with `OfTime`. JSON and XML only trim. `YearMonth` only trims on every path, and `YearQuarter` also uppercases. Their zero values are kept. `fmt` prints the stored text.
 
 | Value                                              | SQL `Value()`                              | JSON (`json.Marshal`)         | `MarshalText`, XML | `fmt`          |
 |----------------------------------------------------|--------------------------------------------|-------------------------------|--------------------|----------------|

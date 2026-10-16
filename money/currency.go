@@ -28,14 +28,17 @@ func StringIsCurrency(str string) bool {
 // Currency("").Valid() == false
 // NullableCurrency("").Valid() == true
 //
-// Scan, UnmarshalJSON, UnmarshalXML and ScanString store a valid currency
-// normalized, a blank one as CurrencyNull and an invalid one unchanged.
-// Value writes the normalized currency, SQL NULL for a blank one, and
-// returns an error for an invalid one. MarshalJSON and MarshalText write
-// the normalized currency or an invalid one unchanged, and fmt prints the
-// currency as stored. Currency has no UnmarshalText, so encoding/json reads
-// and writes the keys of a map[Currency]V as given. See "Reading and
-// writing values" in the README of the module.
+// Scan, UnmarshalJSON, UnmarshalXML and ScanString without validate trim
+// surrounding whitespace and uppercase the letters. A blank currency is
+// CurrencyNull. An invalid currency is kept after that prettification,
+// without an error: a symbol or a name is not rewritten to an ISO code.
+// Value, MarshalJSON and MarshalText write the same text, and Value writes
+// SQL NULL for a blank currency. They do not reject an invalid currency.
+// ScanString with validate stores the normalized currency or returns the
+// error of Normalized. fmt prints the currency as stored. Currency has no
+// UnmarshalText, so encoding/json reads and writes the keys of a
+// map[Currency]V as given. See "Reading and writing values" in the README
+// of the module.
 type Currency string //#enum
 
 // NormalizeCurrency returns str as normalized Currency or an error.
@@ -48,7 +51,10 @@ func NormalizeCurrency(str string) (Currency, error) {
 // the normalized currency or returns the error of Normalized,
 // also for a blank source.
 func (c *Currency) ScanString(source string, validate bool) error {
-	return internal.ScanStringNormalized(c, source, validate, false, Currency.Normalized, nil)
+	if validate {
+		return internal.ScanStringNormalized(c, source, true, false, Currency.Normalized, nil)
+	}
+	return internal.ScanStringNormalized(c, source, false, false, internal.TrimUpper[Currency], nil)
 }
 
 // GetOrDefault returns the value c references if it is valid and c is not nil.
@@ -203,25 +209,25 @@ func (c Currency) IsEUR() bool {
 }
 
 // Scan implements the database/sql.Scanner interface.
-// A valid currency is stored normalized, SQL NULL and a blank string as
-// CurrencyNull, and a currency that can't be normalized unchanged without
-// an error, so that one invalid value doesn't fail a whole query;
-// Validate reports it.
+// Surrounding whitespace is trimmed and letters are uppercased.
+// SQL NULL and a blank string are stored as CurrencyNull. An invalid
+// currency is kept after that prettification, without an error.
 func (c *Currency) Scan(value any) error {
-	return internal.ScanNormalized(c, value, Currency.Normalized, nil)
+	return internal.ScanNormalized(c, value, internal.TrimUpper[Currency], nil)
 }
 
 // Value implements the driver database/sql/driver.Valuer interface.
-// It returns the normalized currency, SQL NULL for a blank Currency,
-// or the error of Normalized for a currency that can't be normalized.
+// It returns the trimmed and uppercased currency, or SQL NULL for a
+// blank one. An invalid currency is written after that prettification,
+// not rejected.
 func (c Currency) Value() (driver.Value, error) {
-	return internal.ValueNormalized(c, Currency.Normalized, nil)
+	return internal.ValueNormalized(c, internal.TrimUpper[Currency], nil)
 }
 
 // normalizedForValue returns the currency that the Value methods of
-// CurrencyAmount and CurrencyDecimalAmount write: the currency of Value,
-// "" for a blank one, for which Value returns SQL NULL, or the error of
-// Normalized for a currency that can't be normalized.
+// CurrencyAmount and CurrencyDecimalAmount write: the trimmed and
+// uppercased currency of Value, or "" for a blank one, for which Value
+// returns SQL NULL.
 func (c Currency) normalizedForValue() (Currency, error) {
 	currency, err := c.Value()
 	if err != nil {
@@ -232,10 +238,9 @@ func (c Currency) normalizedForValue() (Currency, error) {
 }
 
 // MarshalJSON implements encoding/json.Marshaler by writing the
-// normalized currency, "" for a blank Currency, or the currency
-// unchanged if it can't be normalized.
+// trimmed and uppercased currency, or "" for a blank Currency.
 func (c Currency) MarshalJSON() ([]byte, error) {
-	return internal.MarshalJSONNormalized(c, false, Currency.Normalized, nil)
+	return internal.MarshalJSONNormalized(c, false, internal.TrimUpper[Currency], nil)
 }
 
 // UnmarshalJSON implements encoding/json.Unmarshaler.
@@ -243,15 +248,15 @@ func (c Currency) MarshalJSON() ([]byte, error) {
 // Currency unchanged like encoding/json does for a string type,
 // and any other JSON value is an error.
 func (c *Currency) UnmarshalJSON(data []byte) error {
-	return internal.UnmarshalJSONNormalized(c, data, false, Currency.Normalized, nil)
+	return internal.UnmarshalJSONNormalized(c, data, false, internal.TrimUpper[Currency], nil)
 }
 
 // MarshalText implements encoding.TextMarshaler like MarshalJSON,
-// so that encoding/xml and strfmt write the normalized currency.
+// so that encoding/xml and strfmt write the trimmed and uppercased currency.
 // encoding/json writes map keys of string types as they are
 // and doesn't call MarshalText for them.
 func (c Currency) MarshalText() ([]byte, error) {
-	return internal.MarshalTextNormalized(c, Currency.Normalized, nil)
+	return internal.MarshalTextNormalized(c, internal.TrimUpper[Currency], nil)
 }
 
 // MarshalXMLAttr implements encoding/xml.MarshalerAttr by writing the
@@ -265,13 +270,13 @@ func (c *Currency) MarshalXMLAttr(name xml.Name) (xml.Attr, error) {
 // UnmarshalXML implements encoding/xml.Unmarshaler
 // by storing the text of the element like Scan stores it.
 func (c *Currency) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
-	return internal.UnmarshalXMLNormalized(c, d, start, Currency.Normalized, nil)
+	return internal.UnmarshalXMLNormalized(c, d, start, internal.TrimUpper[Currency], nil)
 }
 
 // UnmarshalXMLAttr implements encoding/xml.UnmarshalerAttr
 // by storing the attribute value like Scan stores it.
 func (c *Currency) UnmarshalXMLAttr(attr xml.Attr) error {
-	return internal.UnmarshalXMLAttrNormalized(c, attr, Currency.Normalized, nil)
+	return internal.UnmarshalXMLAttrNormalized(c, attr, internal.TrimUpper[Currency], nil)
 }
 
 // Symbol returns the currency symbol like € for EUR if available,

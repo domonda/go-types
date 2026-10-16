@@ -70,8 +70,8 @@ func TestMoneyFormat_FormatCurrencyDecimalAmount(t *testing.T) {
 	f := GermanMoneyFormat(true)
 	assert.Equal(t, "1.234,50", f.FormatCurrencyDecimalAmount(money.CurrencyDecimalAmount{Amount: amount.Amount}))
 
-	// The currency is written normalized like by FormatCurrencyAmount
-	assert.Equal(t, "EUR 1.234,50", f.FormatCurrencyDecimalAmount(money.CurrencyDecimalAmount{Currency: "€", Amount: amount.Amount}))
+	// The currency is trimmed and uppercased, like Currency.MarshalText.
+	assert.Equal(t, "€ 1.234,50", f.FormatCurrencyDecimalAmount(money.CurrencyDecimalAmount{Currency: "€", Amount: amount.Amount}))
 }
 
 // TestMoneyFormat_CurrencyMinorUnits protects that the money formats keep

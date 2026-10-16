@@ -233,7 +233,7 @@ func TestNullableID_ScanString(t *testing.T) {
 	assert.Equal(t, NullableID("DE167015661"), n, "failed validation keeps the old value")
 
 	require.NoError(t, n.ScanString("atu 1234 5678", false))
-	assert.Equal(t, NullableID("atu 1234 5678"), n, "without validate invalid input is stored as is")
+	assert.Equal(t, NullableID("ATU 1234 5678"), n, "without validate invalid input is trimmed and uppercased")
 }
 
 func TestNullableID_Scan(t *testing.T) {
@@ -281,7 +281,7 @@ func TestNullableID_Value(t *testing.T) {
 
 	v, err = NullableID("at u 1022 3006").Value()
 	require.NoError(t, err)
-	assert.Equal(t, "ATU10223006", v, "valid IDs are written normalized")
+	assert.Equal(t, "AT U 1022 3006", v, "IDs are written trimmed and uppercased")
 }
 
 // Scan(Value()) must give back the same value, including NULL.
@@ -313,10 +313,10 @@ func TestNullableID_JSON(t *testing.T) {
 		require.NoError(t, err)
 		assert.JSONEq(t, `{"vat":null}`, string(data))
 	})
-	t.Run("value is normalized like ID.MarshalJSON", func(t *testing.T) {
+	t.Run("value is trimmed and uppercased like ID.MarshalJSON", func(t *testing.T) {
 		data, err := json.Marshal(doc{VAT: "at u 1022 3006"})
 		require.NoError(t, err)
-		assert.JSONEq(t, `{"vat":"ATU10223006"}`, string(data))
+		assert.JSONEq(t, `{"vat":"AT U 1022 3006"}`, string(data))
 	})
 	t.Run("value round-trip", func(t *testing.T) {
 		data, err := json.Marshal(doc{VAT: "ATU10223006"})
@@ -342,7 +342,7 @@ func TestNullableID_UnmarshalJSON(t *testing.T) {
 
 	// A JSON string is stored normalized if it is a valid ID and
 	// unchanged without an error if not, so Validate can report it.
-	for str, want := range map[string]NullableID{"ATU10223006": "ATU10223006", "atu 1022 3006": "ATU10223006", "bad": "bad", "": Null} {
+	for str, want := range map[string]NullableID{"ATU10223006": "ATU10223006", "atu 1022 3006": "ATU 1022 3006", "bad": "BAD", "": Null} {
 		d := doc{VAT: "DE167015661"}
 		data, err := json.Marshal(map[string]string{"vat": str})
 		require.NoError(t, err)
@@ -384,10 +384,10 @@ func TestNullableID_JSONSchema(t *testing.T) {
 // shared by the normalizing types, with a blank NullableID as null.
 func TestNullableID_ReadingAndWriting(t *testing.T) {
 	normtest.Run(t, normtest.Spec[NullableID]{
-		Canonical:  "ATU10223006",
-		Variants:   []NullableID{"atu 1022 3006", "AT-U 1022.3006", " ATU10223006 "},
-		Invalid:    []NullableID{"ATU12345678", "not a VAT ID"},
-		Nullable:   true,
-		InvalidErr: ErrInvalidID,
+		Canonical: "ATU10223006",
+		Variants:  []NullableID{"atu 1022 3006", "AT-U 1022.3006", " ATU10223006 "},
+		Invalid:   []NullableID{"ATU12345678", "not a VAT ID"},
+		Nullable:  true,
+		Prettify:  normtest.TrimUpper[NullableID],
 	})
 }

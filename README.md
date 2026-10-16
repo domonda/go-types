@@ -139,15 +139,18 @@ The [docs index](docs/README.md) lists everything. By what you need:
 
 ## Reading and writing values
 
-The identifier and code types read and write every format the same way:
-`country.Code`, `money.Currency`, `language.Code`, `vat.ID`, `bank.IBAN`,
-`bank.BIC`, `date.Date`, `date.YearMonth`, `date.YearQuarter`,
-`email.Address` and their `Nullable` variants.
-Reading normalizes what it can and keeps the rest, writing to SQL refuses
-invalid values, and printing shows what is stored. The tables use
-`country.Code` and `country.NullableCode`; the other types differ only in
-the spellings they accept, see
-[lenient parsing](docs/explanation-lenient-parsing.md).
+SQL, JSON, XML and text only prettify a value. They trim surrounding
+whitespace, and uppercase letters where the type is written in upper case:
+`bank.IBAN`, `bank.BIC`, `vat.ID`, `money.Currency`, `date.YearQuarter`.
+`country.Code`, `language.Code`, `email.Address` and `date.YearMonth` are
+only trimmed, so `"Deutschland"` stays `"Deutschland"` and `"EN"` stays
+`"EN"`. An invalid value is written back after that prettification.
+`Value` does not refuse it. `Normalized()` is unchanged and is what
+`ScanString(s, true)` stores. Printing shows what is stored.
+
+`date.Date` is the exception on SQL. `Scan` and `Value` fully normalize,
+because a database date is not free text. A `time.Time` from the driver is
+stored with `OfTime`, which is already `YYYY-MM-DD`. JSON and XML only trim.
 
 ### Methods per format
 
@@ -165,38 +168,37 @@ the spellings they accept, see
 | Input                    | `Scan`, JSON, XML, `ScanString(s, false)` | `ScanString(s, true)`               |
 |--------------------------|-------------------------------------------|-------------------------------------|
 | `"DE"`                   | `"DE"`                                    | `"DE"`                              |
-| `"de"`, `" DE "`         | `"DE"`                                    | `"DE"`                              |
+| `" de "`                 | `"de"`                                    | `"DE"`                              |
+| `"Deutschland"`          | `"Deutschland"`                           | `"DE"`                              |
 | `"XX"`                   | `"XX"`, no error                          | error                               |
 | `""`, `"  "`             | `""`                                      | `Code`: error, `NullableCode`: null |
 | SQL `NULL`               | `""`                                      |                                     |
 | JSON `null`              | `Code`: unchanged, `NullableCode`: `""`   |                                     |
 | JSON number, SQL integer | error                                     |                                     |
 
-For `date.Date` and `date.NullableDate` the zero dates `0001-01-01` and
-`0000-00-00`, and spellings of them like `01.01.0001`, are blank too. SQL
-`DATE` and `TIMESTAMP` columns, which drivers return as `time.Time`, read as
-their date part, and the zero `time.Time` as `""`. The same goes for
-`0001-01` and `0000-00` of `date.YearMonth`, `0001-Q1` and `0000-Q0` of
-`date.YearQuarter` and their nullable types, which read a `time.Time` as
-its month or quarter.
+For `date.Date` and `date.NullableDate`, SQL `Scan` and `Value` treat the
+zero dates `0001-01-01` and `0000-00-00`, and spellings of them like
+`01.01.0001`, as blank. JSON and XML only trim, so those spellings stay.
+A `time.Time` from the driver is stored with `OfTime`, and the zero
+`time.Time` as `""`. `date.YearMonth` and `date.YearQuarter` read a
+`time.Time` as its month or quarter the same way, and keep a zero value
+such as `"0001-01"` or `"0001-Q1"` when it is already text.
 
-Reading never fails because of the text itself. An invalid value is kept as
-given, so one bad row doesn't fail a whole query or JSON document, and
-`types.DeepValidate` reports it together with its field path.
+Reading never fails because of the text itself. An invalid value is kept
+after prettification, so one bad row doesn't fail a whole query or JSON
+document, and `types.DeepValidate` reports it together with its field path.
 
 ### Writing
 
 | Value in Go             | `Value` (SQL) | `MarshalJSON`                        | `MarshalText`, XML | `fmt`, `String` |
 |-------------------------|---------------|--------------------------------------|--------------------|-----------------|
 | `"DE"`                  | `DE`          | `"DE"`                               | `DE`               | `DE`            |
-| `"de"`, converted in Go | `DE`          | `"DE"`                               | `DE`               | `de`            |
-| `"XX"`                  | error         | `"XX"`                               | `XX`               | `XX`            |
+| `"de"`, converted in Go | `de`          | `"de"`                               | `de`               | `de`            |
+| `"XX"`                  | `XX`          | `"XX"`                               | `XX`               | `XX`            |
 | `""`                    | `NULL`        | `Code`: `""`, `NullableCode`: `null` | empty              | empty           |
 
-`Value` is the last check before data is stored for good, so it returns an
-error for an invalid value. JSON, XML and text write an invalid value
-unchanged, so a response or log that contains one still renders. `fmt`,
-templates and `String` show the value as it is stored, without normalizing.
+`fmt`, templates and `String` show the value as it is stored. `Normalized()`
+is the canonical spelling, and it is not applied while reading or writing.
 
 XML writes `<country>DE</country>` for an element and `country="DE"` for an
 attribute field. A nil `*country.Code` attribute field is left out, with or
@@ -214,10 +216,10 @@ non-pointer `,chardata` field.
 | `vat.ID`, `bank.IBAN`, `bank.BIC`, `date.Date`, `email.Address` | no `String()` method, `fmt` prints the stored value |
 | `NullableX` variants                               | blank is null; `StringOr(alt)` returns `alt` only for null; `ScanString` also reads `NULL`, `null` and `nil` as null |
 | `language.Code`                                    | no nullable variant, its `""` is null              |
-| `email.AddressList`, `email.NullableAddressList`   | collections, stored unchanged in every format; `Value` returns an error for an invalid list; normalize with `Normalized()` |
-| `email.AddressSet`, `types.Set[T]`                 | elements as given in every format, so `{"a@x.com", "A@x.com"}` keeps two elements; `AddressSet` writes a PostgreSQL `text[]` array in SQL, a sorted array as JSON, and an address list as text and XML; convert with `AddressList()` to store a plain string in any database; `Value` and `MarshalText` trim valid elements and return an error for an invalid one; normalize with `Normalized()` or `NormalizedAddressList()` |
+| `email.AddressList`, `email.NullableAddressList`   | the list string is trimmed; addresses are not parsed or lowercased; `Value` does not reject an invalid list; normalize with `Normalized()` |
+| `email.AddressSet`, `types.Set[T]`                 | keys as stored, so `{"a@x.com", "A@x.com"}` and a padded key stay distinct; `AddressSet` writes a PostgreSQL `text[]` array in SQL, a sorted array as JSON, and an address list as text and XML; `MarshalText` refuses a key that would not read back as one list entry; normalize with `Normalized()` or `NormalizedAddressList()` |
 | Scan and `UnmarshalJSON` of the email collections  | read a PostgreSQL array, a JSON array, a JSON object with the addresses as keys, a JSON string and a plain address list |
-| `money.CurrencyAmount`, `money.CurrencyDecimalAmount` | currency normalized in `Value`, JSON and `strfmt`, as stored in `String` |
+| `money.CurrencyAmount`, `money.CurrencyDecimalAmount` | currency trimmed and uppercased in `Value` and JSON, as stored in `String` |
 | `notnull.TrimmedString`, `nullable.TrimmedString`  | trimmed when read and in `String`                  |
 | `notnull.TrimmedString`, `nullable.TrimmedString`, `account.Number`, `account.NullableNumber` | `encoding/json` reads the keys of a map of them trimmed, so `" a"` and `"a"` merge into one key |
 
@@ -237,17 +239,15 @@ These rules decide how every type behaves, and how an inconsistency between
 types gets resolved. Types that don't follow a rule yet are tracked in
 [TODOS.md](TODOS.md).
 
-- **Be generous in accepting input, be canonical in generating output.**
-  Parsing, normalizing, validating and scanning accept every common way people
-  and other systems write a value: `country.Code("de")`,
-  `vat.ID("atu 1022 3006")` and `money.Currency("€")` are valid input.
-  Reading from SQL, JSON and XML stores the canonical form, and what a type
-  writes, its `Value`, its JSON, XML and text, is the canonical form:
-  `country.Code("de")` is stored and marshalled as `DE`. Lenient validation
-  and canonical output belong together, a value that passes `Validate` must
-  never be stored in another spelling, and `Value` refuses a value that has
-  no canonical form. The canonical form is UTF-8 for readability, the email
-  types have an extra `ASCII()` for message headers.
+- **Be generous in accepting input, and do not rewrite stored data.**
+  `Normalized()` and `Validate()` accept every common spelling:
+  `country.Code("de")`, `vat.ID("atu 1022 3006")` and `money.Currency("€")`
+  are valid input. Reading and writing do not apply that canonical form.
+  They only trim, and uppercase where the type is written in upper case, so
+  a value already in the database is not replaced by a stricter spelling.
+  `date.Date` on SQL is the exception, and `uu.ID` stays fully canonical.
+  Call `Normalized()` when a comparison or a map key needs the canonical
+  form. The email types have an extra `ASCII()` for message headers.
 - **Show what is stored.** `fmt`, templates and `String` print a value as it
   is stored, never normalized, so a log can't show a non-canonical or invalid
   value as if it were the canonical one.

@@ -21,16 +21,16 @@ var _ types.NormalizableValidator[YearQuarter] = YearQuarter("")
 // YearQuarter represents a calendar year and quarter in format YYYY-Q# (e.g., "2023-Q1").
 // See NullableYearQuarter for a nullable version of this type.
 //
-// YearQuarter reads and writes like Date.
-// Normalized trims the surrounding whitespace and upper-cases a "q" like
-// PeriodRange accepts it.
-// Scan, UnmarshalJSON, UnmarshalXML and ScanString store a valid
-// year-quarter normalized, a zero one (see IsZero) as "" and an invalid
-// one unchanged. Value writes the normalized year-quarter, SQL NULL for a
-// zero one, and returns an error for an invalid one. MarshalJSON and
-// MarshalText write the normalized year-quarter, "" for a zero one, or an
-// invalid one unchanged, and fmt prints the year-quarter as stored.
-// See "Reading and writing values" in the README of the module.
+// Scan, UnmarshalJSON, UnmarshalXML, MarshalJSON, MarshalText, Value
+// and ScanString without validate trim surrounding whitespace and
+// uppercase the letters, so "2024-q1" becomes "2024-Q1". A zero
+// year-quarter such as "0001-Q1" is kept. They do not reject an invalid
+// year-quarter. A time.Time from the driver is still its year-quarter,
+// and the zero time.Time is "". Value writes SQL NULL only for a blank
+// year-quarter. ScanString with validate stores the normalized
+// year-quarter or returns the error of Normalized. fmt prints the
+// year-quarter as stored. See "Reading and writing values" in the README
+// of the module.
 type YearQuarter string
 
 // YearQuarterFrom creates a YearQuarter from the given year and quarter values.
@@ -108,35 +108,39 @@ func (yq YearQuarter) ValidAndNormalized() bool {
 // the normalized year-quarter or returns the error of Normalized,
 // also for a zero source.
 func (yq *YearQuarter) ScanString(source string, validate bool) error {
-	return internal.ScanStringNormalized(yq, source, validate, false, YearQuarter.Normalized, YearQuarter.IsZero)
+	if validate {
+		return internal.ScanStringNormalized(yq, source, true, false, YearQuarter.Normalized, YearQuarter.IsZero)
+	}
+	return internal.ScanStringNormalized(yq, source, false, false, internal.TrimUpper[YearQuarter], nil)
 }
 
 // Scan implements the database/sql.Scanner interface.
-// A valid year-quarter from a string or []byte is stored normalized,
-// a time.Time as its year-quarter in the location of the time like
-// Date.Scan, SQL NULL and a zero year-quarter (see IsZero) as "", and
-// a year-quarter that can't be normalized unchanged without an error,
-// so that one invalid value doesn't fail a whole query; Validate
-// reports it.
+// Surrounding whitespace is trimmed and letters are uppercased.
+// A time.Time is stored as its year-quarter in the location of the time,
+// and the zero time.Time as "". SQL NULL and a blank string are "".
+// A zero year-quarter such as "0001-Q1" is kept. An invalid year-quarter
+// is kept after that prettification, without an error.
 func (yq *YearQuarter) Scan(value any) error {
 	if t, ok := value.(time.Time); ok {
-		value = string(YearQuarterOfTime(t))
+		*yq = YearQuarterOfTime(t)
+		return nil
 	}
-	return internal.ScanNormalized(yq, value, YearQuarter.Normalized, YearQuarter.IsZero)
+	return internal.ScanNormalized(yq, value, internal.TrimUpper[YearQuarter], nil)
 }
 
 // Value implements the database/sql/driver.Valuer interface.
-// It returns the normalized year-quarter, SQL NULL for a zero year-quarter (see IsZero),
-// or the error of Normalized for a year-quarter that can't be normalized.
+// It returns the trimmed and uppercased year-quarter, or SQL NULL for a
+// blank one. A zero year-quarter such as "0001-Q1" is written as that text.
+// An invalid year-quarter is written after that prettification, not rejected.
 func (yq YearQuarter) Value() (driver.Value, error) {
-	return internal.ValueNormalized(yq, YearQuarter.Normalized, YearQuarter.IsZero)
+	return internal.ValueNormalized(yq, internal.TrimUpper[YearQuarter], nil)
 }
 
-// MarshalJSON implements encoding/json.Marshaler by writing the
-// normalized year-quarter, "" for a zero year-quarter (see IsZero),
-// or the year-quarter unchanged if it can't be normalized.
+// MarshalJSON implements encoding/json.Marshaler by writing the trimmed
+// and uppercased year-quarter, or "" for a blank one. A zero year-quarter
+// is written as that text.
 func (yq YearQuarter) MarshalJSON() ([]byte, error) {
-	return internal.MarshalJSONNormalized(yq, false, YearQuarter.Normalized, YearQuarter.IsZero)
+	return internal.MarshalJSONNormalized(yq, false, internal.TrimUpper[YearQuarter], nil)
 }
 
 // UnmarshalJSON implements encoding/json.Unmarshaler.
@@ -144,15 +148,15 @@ func (yq YearQuarter) MarshalJSON() ([]byte, error) {
 // YearQuarter unchanged like encoding/json does for a string type,
 // and any other JSON value is an error.
 func (yq *YearQuarter) UnmarshalJSON(data []byte) error {
-	return internal.UnmarshalJSONNormalized(yq, data, false, YearQuarter.Normalized, YearQuarter.IsZero)
+	return internal.UnmarshalJSONNormalized(yq, data, false, internal.TrimUpper[YearQuarter], nil)
 }
 
 // MarshalText implements encoding.TextMarshaler like MarshalJSON,
-// so that encoding/xml and strfmt write the normalized year-quarter.
+// so that encoding/xml and strfmt write the trimmed and uppercased year-quarter.
 // encoding/json writes map keys of string types as they are
 // and doesn't call MarshalText for them.
 func (yq YearQuarter) MarshalText() ([]byte, error) {
-	return internal.MarshalTextNormalized(yq, YearQuarter.Normalized, YearQuarter.IsZero)
+	return internal.MarshalTextNormalized(yq, internal.TrimUpper[YearQuarter], nil)
 }
 
 // MarshalXMLAttr implements encoding/xml.MarshalerAttr by writing the
@@ -166,13 +170,13 @@ func (yq *YearQuarter) MarshalXMLAttr(name xml.Name) (xml.Attr, error) {
 // UnmarshalXML implements encoding/xml.Unmarshaler
 // by storing the text of the element like Scan stores it.
 func (yq *YearQuarter) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
-	return internal.UnmarshalXMLNormalized(yq, d, start, YearQuarter.Normalized, YearQuarter.IsZero)
+	return internal.UnmarshalXMLNormalized(yq, d, start, internal.TrimUpper[YearQuarter], nil)
 }
 
 // UnmarshalXMLAttr implements encoding/xml.UnmarshalerAttr
 // by storing the attribute value like Scan stores it.
 func (yq *YearQuarter) UnmarshalXMLAttr(attr xml.Attr) error {
-	return internal.UnmarshalXMLAttrNormalized(yq, attr, YearQuarter.Normalized, YearQuarter.IsZero)
+	return internal.UnmarshalXMLAttrNormalized(yq, attr, internal.TrimUpper[YearQuarter], nil)
 }
 
 // JSONSchema returns the JSON schema definition for the YearQuarter type.

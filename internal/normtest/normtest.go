@@ -1,21 +1,22 @@
 // Package normtest provides a reusable conformance test for the reading and
-// writing contract of the normalizing string types of this module, like
-// country.Code, vat.ID or date.Date:
+// writing contract of the string types of this module, like country.Code,
+// vat.ID or date.Date.
 //
-//   - Reading (Scan, ScanString without validation, JSON, XML elements and
-//     attributes) stores a valid value normalized, a blank value as "" and
-//     an invalid value unchanged, without an error. One bad value must not
-//     fail a whole query or document; Validate reports it instead.
-//   - Value writes the normalized value, SQL NULL for a blank value, and
-//     returns an error for an invalid value, because the database is where
-//     an invalid value would stay.
-//   - MarshalJSON, MarshalText and so XML write the normalized value and an
-//     invalid value unchanged, so a response or log that holds one still
-//     renders.
-//   - fmt prints the stored value: the types have no normalizing String.
+// With Prettify set, reading and writing trim, and uppercase when the
+// function does, including a value Normalized would reject or rewrite.
+// Value does not return an error for that value. A whitespace-only value
+// is still empty, and SQL NULL from Value. ScanString with validate still
+// stores Canonical or returns an error.
 //
-// Running the same specification against every type keeps the types from
-// drifting apart again, which is how the contract got inconsistent before.
+// With SQLNormalized set, Scan and Value keep using Normalized: a variant
+// becomes Canonical, the extra Blank entries are empty, and Value returns
+// an error for an invalid value. JSON, XML and MarshalText use Prettify.
+//
+// Without Prettify the strict contract is checked: every path stores
+// Canonical, an invalid value stays unchanged, and Value returns an error
+// for it.
+//
+// fmt prints the stored value. The types have no normalizing String.
 //
 // It is only imported from _test.go files.
 package normtest
@@ -32,7 +33,20 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/domonda/go-types/strutil"
 )
+
+// Trim is the prettify function of the types that only remove surrounding
+// whitespace while reading and writing.
+func Trim[T ~string](v T) T {
+	return T(strutil.TrimSpace(string(v)))
+}
+
+// TrimUpper is the prettify function of the types that also uppercase.
+func TrimUpper[T ~string](v T) T {
+	return T(strings.ToUpper(strutil.TrimSpace(string(v))))
+}
 
 // Type is a normalizing string type with its writing methods.
 type Type[T any] interface {
@@ -75,6 +89,14 @@ type Spec[T any] struct {
 	// date.YearMonth and date.YearQuarter have it. All other types have no
 	// String.
 	StoredString bool
+	// Prettify is what JSON, XML, MarshalText and ScanString(false) apply,
+	// and what Scan and Value apply unless SQLNormalized is set. It must
+	// not fail. Nil selects the strict contract described on the package.
+	Prettify func(T) T
+	// SQLNormalized makes Scan and Value use Normalized. Prettify must be
+	// set. JSON, XML and MarshalText still use Prettify, so a zero date in
+	// Blank is empty from Scan and Value and only trimmed in JSON and XML.
+	SQLNormalized bool
 }
 
 type xmlDoc[T any] struct {
@@ -110,6 +132,26 @@ func Run[T Type[T], P Ptr[T]](t *testing.T, spec Spec[T]) {
 	valid := append([]T{spec.Canonical}, spec.Variants...)
 	blank := append([]T{"", "   ", "\t"}, spec.Blank...)
 	typeName := reflect.TypeFor[T]().String()
+	spaceBlank := func(v T) bool {
+		return strutil.TrimSpace(string(v)) == ""
+	}
+	// textStored is what JSON, XML, MarshalText and ScanString(false) store.
+	textStored := func(v T) T {
+		if spec.Prettify != nil {
+			return spec.Prettify(v)
+		}
+		return spec.Canonical
+	}
+	// sqlStored is what Scan and Value store for a variant.
+	sqlStored := func(v T) T {
+		if spec.Prettify != nil && !spec.SQLNormalized {
+			return spec.Prettify(v)
+		}
+		return spec.Canonical
+	}
+	sqlRead := func(path string) bool {
+		return strings.HasPrefix(path, "Scan(")
+	}
 
 	// read stores input through every reading path and returns
 	// what each path stored, keyed by the path name.
@@ -153,31 +195,43 @@ func Run[T Type[T], P Ptr[T]](t *testing.T, spec Spec[T]) {
 		return got
 	}
 
-	t.Run("reading normalizes a valid value", func(t *testing.T) {
+	t.Run("reading a valid value", func(t *testing.T) {
 		for _, input := range valid {
 			for path, got := range read(t, input) {
-				if got != spec.Canonical {
-					t.Errorf("%s of %q stored %q, want %q", path, input, got, spec.Canonical)
+				want := textStored(input)
+				if sqlRead(path) {
+					want = sqlStored(input)
+				}
+				if got != want {
+					t.Errorf("%s of %q stored %q, want %q", path, input, got, want)
 				}
 			}
 		}
 	})
 
-	t.Run("reading keeps an invalid value without error", func(t *testing.T) {
+	t.Run("reading an invalid value without error", func(t *testing.T) {
 		for _, input := range spec.Invalid {
 			for path, got := range read(t, input) {
-				if got != input {
-					t.Errorf("%s of invalid %q stored %q, want it unchanged", path, input, got)
+				want := input
+				if spec.Prettify != nil && (!sqlRead(path) || !spec.SQLNormalized) {
+					want = spec.Prettify(input)
+				}
+				if got != want {
+					t.Errorf("%s of invalid %q stored %q, want %q", path, input, got, want)
 				}
 			}
 		}
 	})
 
-	t.Run("reading stores a blank value as empty", func(t *testing.T) {
+	t.Run("reading a blank value", func(t *testing.T) {
 		for _, input := range blank {
 			for path, got := range read(t, input) {
-				if got != "" {
-					t.Errorf("%s of blank %q stored %q, want \"\"", path, input, got)
+				want := T("")
+				if spec.Prettify != nil && !spaceBlank(input) && (!sqlRead(path) || !spec.SQLNormalized) {
+					want = spec.Prettify(input)
+				}
+				if got != want {
+					t.Errorf("%s of blank %q stored %q, want %q", path, input, got, want)
 				}
 			}
 		}
@@ -256,12 +310,20 @@ func Run[T Type[T], P Ptr[T]](t *testing.T, spec Spec[T]) {
 	t.Run("Value", func(t *testing.T) {
 		for _, input := range valid {
 			got, err := input.Value()
-			if err != nil || got != string(spec.Canonical) {
-				t.Errorf("Value() of %q = %#v, %v; want %q, nil", input, got, err, spec.Canonical)
+			want := string(sqlStored(input))
+			if err != nil || got != want {
+				t.Errorf("Value() of %q = %#v, %v; want %q, nil", input, got, err, want)
 			}
 		}
 		for _, input := range spec.Invalid {
 			got, err := input.Value()
+			if spec.Prettify != nil && !spec.SQLNormalized {
+				want := string(spec.Prettify(input))
+				if err != nil || got != want {
+					t.Errorf("Value() of invalid %q = %#v, %v; want %q, nil", input, got, err, want)
+				}
+				continue
+			}
 			if err == nil {
 				t.Errorf("Value() of invalid %q = %#v, nil; want an error", input, got)
 			}
@@ -271,6 +333,13 @@ func Run[T Type[T], P Ptr[T]](t *testing.T, spec Spec[T]) {
 		}
 		for _, input := range blank {
 			got, err := input.Value()
+			if spec.Prettify != nil && !spec.SQLNormalized && !spaceBlank(input) {
+				want := string(spec.Prettify(input))
+				if err != nil || got != want {
+					t.Errorf("Value() of blank %q = %#v, %v; want %q, nil", input, got, err, want)
+				}
+				continue
+			}
 			if err != nil || got != nil {
 				t.Errorf("Value() of blank %q = %#v, %v; want SQL NULL", input, got, err)
 			}
@@ -302,12 +371,25 @@ func Run[T Type[T], P Ptr[T]](t *testing.T, spec Spec[T]) {
 			}
 		}
 		for _, input := range valid {
-			check(input, string(spec.Canonical), string(jsonString(string(spec.Canonical))))
+			want := spec.Canonical
+			if spec.Prettify != nil {
+				want = spec.Prettify(input)
+			}
+			check(input, string(want), string(jsonString(string(want))))
 		}
 		for _, input := range spec.Invalid {
-			check(input, string(input), string(jsonString(string(input))))
+			want := input
+			if spec.Prettify != nil {
+				want = spec.Prettify(input)
+			}
+			check(input, string(want), string(jsonString(string(want))))
 		}
 		for _, input := range blank {
+			if spec.Prettify != nil && !spaceBlank(input) {
+				want := spec.Prettify(input)
+				check(input, string(want), string(jsonString(string(want))))
+				continue
+			}
 			wantJSON := `""`
 			if spec.Nullable {
 				wantJSON = `null`
@@ -340,12 +422,12 @@ func Run[T Type[T], P Ptr[T]](t *testing.T, spec Spec[T]) {
 				t.Fatalf("Value() of %q error: %v", input, err)
 			}
 			var scanned T
-			if err := P(&scanned).Scan(sqlValue); err != nil || scanned != spec.Canonical {
-				t.Errorf("Scan(Value()) of %q = %q, %v; want %q", input, scanned, err, spec.Canonical)
+			if err := P(&scanned).Scan(sqlValue); err != nil || scanned != sqlStored(input) {
+				t.Errorf("Scan(Value()) of %q = %q, %v; want %q", input, scanned, err, sqlStored(input))
 			}
 		}
-		// JSON and XML write an invalid value unchanged and read it back
-		// unchanged, so they round-trip every value
+		// JSON and XML write the prettified value and read it back,
+		// so they round-trip every value that prettify does not change further.
 		roundTrip := func(input, want T) {
 			t.Helper()
 			data, err := json.Marshal(input)
@@ -366,10 +448,18 @@ func Run[T Type[T], P Ptr[T]](t *testing.T, spec Spec[T]) {
 			}
 		}
 		for _, input := range valid {
-			roundTrip(input, spec.Canonical)
+			want := spec.Canonical
+			if spec.Prettify != nil {
+				want = spec.Prettify(input)
+			}
+			roundTrip(input, want)
 		}
 		for _, input := range spec.Invalid {
-			roundTrip(input, input)
+			want := input
+			if spec.Prettify != nil {
+				want = spec.Prettify(input)
+			}
+			roundTrip(input, want)
 		}
 	})
 

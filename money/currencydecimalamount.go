@@ -95,7 +95,7 @@ func ParseCurrencyDecimalAmount(str string, acceptedDecimals ...int) (result Cur
 // String implements the fmt.Stringer interface, placing the currency as stored
 // before the amount and using the amount's own scale (unlike CurrencyAmount.String, which
 // rounds to the minor unit of the currency). Value writes the same format
-// with the normalized currency.
+// with the trimmed and uppercased currency.
 func (ca CurrencyDecimalAmount) String() string {
 	return ca.format(string(ca.Currency), true, 0, '.')
 }
@@ -163,8 +163,7 @@ func (ca *CurrencyDecimalAmount) Scan(value any) (err error) {
 }
 
 // Value implements the database/sql/driver.Valuer interface by writing the
-// format of String with the normalized currency, or returning the error of
-// Currency.Normalized for a currency that can't be normalized.
+// format of String with the trimmed and uppercased currency.
 func (ca CurrencyDecimalAmount) Value() (driver.Value, error) {
 	currency, err := ca.Currency.normalizedForValue()
 	if err != nil {

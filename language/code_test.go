@@ -331,10 +331,10 @@ func TestCode_ValueAndMarshalJSONNormalize(t *testing.T) {
 		want string
 	}{
 		{c: DE, want: "de"},
-		{c: "EN", want: "en"},
-		{c: " eng ", want: "en"},
-		{c: "en-US", want: "en"},
-		{c: "ger", want: "de"},
+		{c: "EN", want: "EN"},
+		{c: " eng ", want: "eng"},
+		{c: "en-US", want: "en-US"},
+		{c: "ger", want: "ger"},
 	}
 	for _, tt := range tests {
 		v, err := tt.c.Value()
@@ -346,9 +346,10 @@ func TestCode_ValueAndMarshalJSONNormalize(t *testing.T) {
 		assert.Equal(t, `"`+tt.want+`"`, string(j), "json.Marshal(Code(%q))", string(tt.c))
 	}
 
-	_, err := Code("xx").Value()
-	assert.Error(t, err, "Value() of an invalid code")
-	j, err := json.Marshal(Code("xx"))
+	v, err := Code(" xx ").Value()
+	require.NoError(t, err)
+	assert.Equal(t, driver.Value("xx"), v, "Value() of an invalid code is trimmed")
+	j, err := json.Marshal(Code(" xx "))
 	require.NoError(t, err)
 	assert.Equal(t, `"xx"`, string(j), "json.Marshal of an invalid code")
 
@@ -383,5 +384,6 @@ func TestCode_ReadingAndWriting(t *testing.T) {
 		Variants:     []Code{"EN", " en ", "eng", "en-US", "en_GB"},
 		Invalid:      []Code{"xx", "English"},
 		StoredString: true,
+		Prettify:     normtest.Trim[Code],
 	})
 }

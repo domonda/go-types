@@ -494,6 +494,7 @@ func TestNullableYearMonth_ReadingAndWriting(t *testing.T) {
 		Blank:        []NullableYearMonth{"0001-01", "0000-00", " 0001-01 "},
 		Nullable:     true,
 		StoredString: true,
+		Prettify:     normtest.Trim[NullableYearMonth],
 	})
 }
 

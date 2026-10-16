@@ -190,19 +190,17 @@ func (n *NullableAddress) SetNull() {
 }
 
 // Scan implements the database/sql.Scanner interface.
-// A valid address is stored normalized, SQL NULL and a blank string as
-// AddressNull, and an address that can't be normalized unchanged without
-// an error, so that one invalid value doesn't fail a whole query;
-// Validate reports it.
+// Surrounding whitespace is trimmed. SQL NULL and a blank string are
+// AddressNull. An invalid address is kept after that trim, without an error.
 func (n *NullableAddress) Scan(value any) error {
-	return internal.ScanNormalized(n, value, normalizeAddressForRead, nil)
+	return internal.ScanNormalized(n, value, internal.Trim[NullableAddress], nil)
 }
 
 // Value implements the driver database/sql/driver.Valuer interface.
-// It returns the normalized address, SQL NULL if the NullableAddress is
-// null, or the error of Normalized for an address that can't be normalized.
+// It returns the trimmed address, or SQL NULL if the NullableAddress is
+// null. An invalid address is written after that trim, not rejected.
 func (n NullableAddress) Value() (driver.Value, error) {
-	return internal.ValueNormalized(n, NullableAddress.Normalized, nil)
+	return internal.ValueNormalized(n, internal.Trim[NullableAddress], nil)
 }
 
 // UnmarshalJSON implements encoding/json.Unmarshaler.
@@ -210,19 +208,19 @@ func (n NullableAddress) Value() (driver.Value, error) {
 // NullableAddress to null, so that decoding null into a field that holds
 // a value resets it, and any other JSON value is an error.
 func (n *NullableAddress) UnmarshalJSON(data []byte) error {
-	return internal.UnmarshalJSONNormalized(n, data, true, normalizeAddressForRead, nil)
+	return internal.UnmarshalJSONNormalized(n, data, true, internal.Trim[NullableAddress], nil)
 }
 
 // UnmarshalXML implements encoding/xml.Unmarshaler
 // by storing the text of the element like Scan stores it.
 func (n *NullableAddress) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
-	return internal.UnmarshalXMLNormalized(n, d, start, normalizeAddressForRead, nil)
+	return internal.UnmarshalXMLNormalized(n, d, start, internal.Trim[NullableAddress], nil)
 }
 
 // UnmarshalXMLAttr implements encoding/xml.UnmarshalerAttr
 // by storing the attribute value like Scan stores it.
 func (n *NullableAddress) UnmarshalXMLAttr(attr xml.Attr) error {
-	return internal.UnmarshalXMLAttrNormalized(n, attr, normalizeAddressForRead, nil)
+	return internal.UnmarshalXMLAttrNormalized(n, attr, internal.Trim[NullableAddress], nil)
 }
 
 // ScanString implements the strfmt.Scannable interface.
@@ -231,25 +229,23 @@ func (n *NullableAddress) UnmarshalXMLAttr(attr xml.Attr) error {
 // the normalized address or returns the error of Normalized.
 func (n *NullableAddress) ScanString(source string, validate bool) error {
 	if !validate {
-		// Like Scan, without building the error that it drops
-		return internal.ScanStringNormalized(n, source, false, true, normalizeAddressForRead[NullableAddress], nil)
+		return internal.ScanStringNormalized(n, source, false, true, internal.Trim[NullableAddress], nil)
 	}
 	return internal.ScanStringNormalized(n, source, true, true, NullableAddress.Normalized, nil)
 }
 
-// MarshalJSON implements encoding/json.Marshaler by writing the JSON null
-// value if the NullableAddress is null, else the normalized address,
-// or the address unchanged if it can't be normalized.
+// MarshalJSON implements encoding/json.Marshaler by writing JSON null
+// if the NullableAddress is null, else the trimmed address.
 func (n NullableAddress) MarshalJSON() ([]byte, error) {
-	return internal.MarshalJSONNormalized(n, true, normalizeAddressForRead, nil)
+	return internal.MarshalJSONNormalized(n, true, internal.Trim[NullableAddress], nil)
 }
 
 // MarshalText implements encoding.TextMarshaler like MarshalJSON,
 // but with "" for null, so that encoding/xml and strfmt write the
-// normalized address. encoding/json writes map keys of string types
-// as they are and doesn't call MarshalText for them.
+// trimmed address. encoding/json writes map keys of string types as
+// they are and doesn't call MarshalText for them.
 func (n NullableAddress) MarshalText() ([]byte, error) {
-	return internal.MarshalTextNormalized(n, normalizeAddressForRead, nil)
+	return internal.MarshalTextNormalized(n, internal.Trim[NullableAddress], nil)
 }
 
 // MarshalXMLAttr implements encoding/xml.MarshalerAttr by writing the

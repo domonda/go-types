@@ -310,7 +310,7 @@ func TestNullableAddress_ValueAndMarshalJSONNormalize(t *testing.T) {
 	}{
 		{n: AddressNull, wantSQL: nil, wantJSON: `null`},
 		{n: "  ", wantSQL: nil, wantJSON: `null`},
-		{n: `Zoë Bäcker <Zoe@Example.com>`, wantSQL: `"Zoë Bäcker" <zoe@example.com>`, wantJSON: `"\"Zoë Bäcker\" \u003czoe@example.com\u003e"`},
+		{n: `Zoë Bäcker <Zoe@Example.com>`, wantSQL: `Zoë Bäcker <Zoe@Example.com>`, wantJSON: `"Zoë Bäcker \u003cZoe@Example.com\u003e"`},
 	}
 	for _, tt := range tests {
 		v, err := tt.n.Value()
@@ -322,8 +322,9 @@ func TestNullableAddress_ValueAndMarshalJSONNormalize(t *testing.T) {
 		assert.Equal(t, tt.wantJSON, string(j), "json.Marshal(NullableAddress(%q))", string(tt.n))
 	}
 
-	_, err := NullableAddress(`not an address`).Value()
-	assert.Error(t, err, "Value() of an invalid address")
+	v, err := NullableAddress(` not an address `).Value()
+	require.NoError(t, err)
+	assert.Equal(t, driver.Value("not an address"), v, "Value() of an invalid address is trimmed")
 	j, err := json.Marshal(NullableAddress(`not an address`))
 	require.NoError(t, err)
 	assert.Equal(t, `"not an address"`, string(j))
@@ -342,7 +343,7 @@ func TestNullableAddress_MarshalTextASCIIStringOr(t *testing.T) {
 	}{
 		{n: AddressNull, wantText: ``, wantASCII: ``, wantStringOr: `none`},
 		{n: `  `, wantText: ``, wantASCII: ``, wantStringOr: `none`},
-		{n: `Zoë <Zoe@Example.com>`, wantText: `"Zoë" <zoe@example.com>`, wantASCII: `=?utf-8?q?Zo=C3=AB?= <zoe@example.com>`, wantStringOr: `Zoë <Zoe@Example.com>`},
+		{n: `Zoë <Zoe@Example.com>`, wantText: `Zoë <Zoe@Example.com>`, wantASCII: `=?utf-8?q?Zo=C3=AB?= <zoe@example.com>`, wantStringOr: `Zoë <Zoe@Example.com>`},
 		{n: `not an address`, wantText: `not an address`, wantASCII: `not an address`, wantStringOr: `not an address`},
 	}
 	for _, tt := range tests {
@@ -370,6 +371,7 @@ func TestNullableAddress_ReadingAndWriting(t *testing.T) {
 		Variants:  []NullableAddress{`John Doe <John@Example.com>`, ` "John Doe" <JOHN@example.com> `},
 		Invalid:   []NullableAddress{"not an address", "john@"},
 		Nullable:  true,
+		Prettify:  normtest.Trim[NullableAddress],
 	})
 }
 

@@ -11,6 +11,7 @@ import (
 
 	"github.com/domonda/go-types/country"
 	"github.com/domonda/go-types/internal/normtest"
+	"github.com/domonda/go-types/strutil"
 )
 
 var toNormalizeIBANs = map[string]IBAN{
@@ -188,7 +189,7 @@ func TestIBAN_Normalized_Rejects(t *testing.T) {
 			if strings.TrimSpace(string(tt.iban)) == "" {
 				assert.Equal(t, "", marshalText(t, tt.iban), "MarshalText of a blank IBAN")
 			} else {
-				assert.Equal(t, string(tt.iban), marshalText(t, tt.iban), "MarshalText of an invalid IBAN must write it unchanged")
+				assert.Equal(t, strings.ToUpper(strutil.TrimSpace(string(tt.iban))), marshalText(t, tt.iban), "MarshalText trims and uppercases an invalid IBAN")
 			}
 
 			spaced, err := tt.iban.NormalizedWithSpaces()
@@ -220,7 +221,7 @@ func TestIBAN_Normalized_Whitespace(t *testing.T) {
 			assert.Equal(t, want, norm)
 			assert.True(t, iban.Valid())
 			assert.True(t, StringIsIBAN(string(iban)))
-			assert.Equal(t, string(want), marshalText(t, iban))
+			assert.Equal(t, strings.ToUpper(strutil.TrimSpace(string(iban))), marshalText(t, iban))
 			assert.Equal(t, NullableIBAN(want), iban.NormalizedOrNull())
 			assert.Equal(t, iban == want, iban.ValidAndNormalized(), "only the form without whitespace is normalized")
 		})
@@ -266,12 +267,15 @@ func TestIBAN_JSONSchema(t *testing.T) {
 }
 
 func TestIBAN_ScanString(t *testing.T) {
-	t.Run("normalizes valid IBAN", func(t *testing.T) {
-		for _, validate := range []bool{true, false} {
-			var iban IBAN
-			require.NoError(t, iban.ScanString("DE89 3704 0044 0532 0130 00", validate))
-			assert.Equal(t, IBAN("DE89370400440532013000"), iban)
-		}
+	t.Run("validate normalizes a valid IBAN", func(t *testing.T) {
+		var iban IBAN
+		require.NoError(t, iban.ScanString("DE89 3704 0044 0532 0130 00", true))
+		assert.Equal(t, IBAN("DE89370400440532013000"), iban)
+	})
+	t.Run("without validate trims and uppercases", func(t *testing.T) {
+		var iban IBAN
+		require.NoError(t, iban.ScanString(" de89 3704 0044 0532 0130 00 ", false))
+		assert.Equal(t, IBAN("DE89 3704 0044 0532 0130 00"), iban)
 	})
 	t.Run("validate rejects invalid IBAN", func(t *testing.T) {
 		iban := IBAN("unchanged")
@@ -296,7 +300,7 @@ func TestIBAN_SQL(t *testing.T) {
 		{name: "bytes", value: []byte("DE89370400440532013000"), want: "DE89370400440532013000"},
 		{name: "NULL", value: nil, want: ""},
 		// Scan does not validate, so existing invalid data can still be read
-		{name: "invalid string", value: "invalid", want: "invalid"},
+		{name: "invalid string", value: "invalid", want: "INVALID"},
 		{name: "unsupported type", value: int64(1), wantErr: true},
 	}
 	for _, tt := range tests {
@@ -332,20 +336,16 @@ func TestIBAN_SQL(t *testing.T) {
 	})
 }
 
-// Value and MarshalJSON write an IBAN normalized, because Validate accepts
-// the IBAN grouped with spaces as printed on statements: without
-// normalization the grouped and the compact IBAN would reach SQL and JSON
-// as different strings. A IBAN that can't be normalized is refused by Value, because the
-// database is where an invalid value would stay, and written unchanged
-// by MarshalJSON, so a response that holds one still renders.
+// Value and MarshalJSON trim and uppercase. Internal spaces stay, and
+// an invalid IBAN is written after that prettification, not refused.
 func TestIBAN_ValueAndMarshalJSONNormalize(t *testing.T) {
 	tests := []struct {
 		iban IBAN
 		want string
 	}{
 		{iban: "DE89370400440532013000", want: "DE89370400440532013000"},
-		{iban: "DE89 3704 0044 0532 0130 00", want: "DE89370400440532013000"},
-		{iban: " AT61 1904 3002 3457 3201 ", want: "AT611904300234573201"},
+		{iban: "DE89 3704 0044 0532 0130 00", want: "DE89 3704 0044 0532 0130 00"},
+		{iban: " at61 1904 3002 3457 3201 ", want: "AT61 1904 3002 3457 3201"},
 	}
 	for _, tt := range tests {
 		v, err := tt.iban.Value()
@@ -357,13 +357,14 @@ func TestIBAN_ValueAndMarshalJSONNormalize(t *testing.T) {
 		assert.Equal(t, `"`+tt.want+`"`, string(j), "json.Marshal(IBAN(%q))", string(tt.iban))
 	}
 
-	_, err := IBAN("DE00 1234").Value()
-	assert.Error(t, err, "Value() of an invalid IBAN")
-	j, err := json.Marshal(IBAN("DE00 1234"))
+	v, err := IBAN("de00 1234").Value()
+	require.NoError(t, err)
+	assert.Equal(t, "DE00 1234", v, "Value() of an invalid IBAN is trimmed and uppercased")
+	j, err := json.Marshal(IBAN("de00 1234"))
 	require.NoError(t, err)
 	assert.Equal(t, `"DE00 1234"`, string(j))
 
-	v, err := IBAN("").Value()
+	v, err = IBAN("").Value()
 	require.NoError(t, err)
 	assert.Nil(t, v, "an empty IBAN is written as SQL NULL")
 }
@@ -424,5 +425,6 @@ func TestIBAN_ReadingAndWriting(t *testing.T) {
 		Canonical: "DE89370400440532013000",
 		Variants:  []IBAN{"DE89 3704 0044 0532 0130 00", " DE89370400440532013000\n"},
 		Invalid:   []IBAN{"DE00 1234", "de89370400440532013000"},
+		Prettify:  normtest.TrimUpper[IBAN],
 	})
 }

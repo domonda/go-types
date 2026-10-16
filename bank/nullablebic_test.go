@@ -46,7 +46,7 @@ func TestNullableBIC_Valid(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, normBIC, norm)
 	assert.Equal(t, normBIC, shortBIC.NormalizedOrNull())
-	assert.Equal(t, string(normBIC), marshalText(t, shortBIC))
+	assert.Equal(t, string(shortBIC), marshalText(t, shortBIC))
 	assert.Equal(t, string(normBIC), normBIC.StringOr("default"))
 }
 
@@ -222,10 +222,9 @@ func TestNullableBIC_JSON(t *testing.T) {
 	assert.Equal(t, NullableBIC("BELADEBEXXX"), got.BIC)
 }
 
-// A non-null NullableBIC is written normalized like BIC, see
-// TestBIC_ValueAndMarshalJSONNormalize, and null stays SQL NULL and
-// JSON null, including the whitespace-only null. Value refuses an invalid
-// BIC, JSON writes it unchanged.
+// A non-null NullableBIC is trimmed and uppercased like BIC, and null
+// stays SQL NULL and JSON null, including the whitespace-only null.
+// An invalid BIC is written after that prettification, not refused.
 func TestNullableBIC_ValueAndMarshalJSONNormalize(t *testing.T) {
 	tests := []struct {
 		bic      NullableBIC
@@ -234,7 +233,7 @@ func TestNullableBIC_ValueAndMarshalJSONNormalize(t *testing.T) {
 	}{
 		{bic: BICNull, wantSQL: nil, wantJSON: `null`},
 		{bic: "  ", wantSQL: nil, wantJSON: `null`},
-		{bic: "BKAU AT WW", wantSQL: "BKAUATWWXXX", wantJSON: `"BKAUATWWXXX"`},
+		{bic: "BKAU AT WW", wantSQL: "BKAU AT WW", wantJSON: `"BKAU AT WW"`},
 	}
 	for _, tt := range tests {
 		v, err := tt.bic.Value()
@@ -246,9 +245,10 @@ func TestNullableBIC_ValueAndMarshalJSONNormalize(t *testing.T) {
 		assert.Equal(t, tt.wantJSON, string(j), "json.Marshal(NullableBIC(%q))", string(tt.bic))
 	}
 
-	_, err := NullableBIC("DEUTZZFF").Value()
-	assert.Error(t, err, "Value() of an invalid BIC")
-	j, err := json.Marshal(NullableBIC("DEUTZZFF"))
+	v, err := NullableBIC("deutzzff").Value()
+	require.NoError(t, err)
+	assert.Equal(t, "DEUTZZFF", v, "Value() of an invalid BIC is trimmed and uppercased")
+	j, err := json.Marshal(NullableBIC("deutzzff"))
 	require.NoError(t, err)
 	assert.Equal(t, `"DEUTZZFF"`, string(j))
 }
@@ -264,9 +264,8 @@ func TestNullableBIC_UnmarshalJSON(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(`{"bic":null}`), &o))
 	assert.Equal(t, BICNull, o.BIC)
 
-	// A JSON string is stored normalized if it is a valid BIC and
-	// unchanged without an error if not, so Validate can report it.
-	for str, want := range map[string]NullableBIC{"BELADEBEXXX": "BELADEBEXXX", "BELADEBE": "BELADEBEXXX", "nope": "nope", "": BICNull} {
+	// A JSON string is trimmed and uppercased, including an invalid BIC.
+	for str, want := range map[string]NullableBIC{"BELADEBEXXX": "BELADEBEXXX", "beladebe": "BELADEBE", "nope": "NOPE", "": BICNull} {
 		o := obj{BIC: "GENODEF1JEV"}
 		data, err := json.Marshal(map[string]string{"bic": str})
 		require.NoError(t, err)
@@ -299,5 +298,6 @@ func TestNullableBIC_ReadingAndWriting(t *testing.T) {
 		Variants:  []NullableBIC{"BKAUATWW", "BKAU AT WW", " BKAUATWWXXX "},
 		Invalid:   []NullableBIC{"DEUTZZFF", "ABC"},
 		Nullable:  true,
+		Prettify:  normtest.TrimUpper[NullableBIC],
 	})
 }

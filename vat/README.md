@@ -141,7 +141,7 @@ var IDFinder idFinder
 
 ## Serialization
 
-`ID` and `NullableID` follow the rules of [Reading and writing values](../README.md#reading-and-writing-values): reading normalizes, `Value` refuses an invalid ID, and `fmt` prints the stored ID.
+`ID` and `NullableID` follow the rules of [Reading and writing values](../README.md#reading-and-writing-values): reading and writing trim and uppercase, and `fmt` prints the stored ID.
 
 | Value                         | SQL `Value()`                 | JSON (`json.Marshal`) | `MarshalText`, XML | `fmt`           |
 |-------------------------------|-------------------------------|-----------------------|--------------------|-----------------|

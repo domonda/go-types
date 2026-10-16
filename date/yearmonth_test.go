@@ -499,9 +499,10 @@ func TestYearMonth_ValueOfAValidDate(t *testing.T) {
 	require.NoError(t, err, "NullableYearMonth.Value")
 	require.Equal(t, "9999-12", v)
 
-	// A year-month after the years of Date is still refused
-	_, err = YearMonthFrom(10000, time.January).Value()
-	require.Error(t, err)
+	// A year-month after the years of Date is written as that text.
+	v, err = YearMonthFrom(10000, time.January).Value()
+	require.NoError(t, err)
+	require.Equal(t, "10000-01", v)
 }
 
 // Normalized trims the surrounding whitespace, which a typed or OCR read
@@ -574,6 +575,7 @@ func TestYearMonth_ReadingAndWriting(t *testing.T) {
 		Invalid:      []YearMonth{"2023-13", "2023-7", "0000-05", "07/2023", "bad"},
 		Blank:        []YearMonth{"0001-01", "0000-00", " 0001-01 "},
 		StoredString: true,
+		Prettify:     normtest.Trim[YearMonth],
 	})
 }
 

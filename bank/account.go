@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/domonda/go-types/internal"
 	"github.com/domonda/go-types/money"
 	"github.com/domonda/go-types/nullable"
 )
@@ -93,7 +94,8 @@ func (a *Account) Scan(value any) (err error) {
 // UnmarshalJSON implements encoding/json.Unmarshaler.
 // Supports unmarshalling from JSON objects or IBAN strings.
 // If the input is a JSON object, it unmarshals into the full Account structure.
-// If the input is an IBAN string, it creates an Account with only the IBAN set.
+// If the input is an IBAN string, it creates an Account with only that IBAN,
+// trimmed and uppercased, without requiring it to be a valid IBAN.
 func (a *Account) UnmarshalJSON(j []byte) (err error) {
 	if len(j) < 2 {
 		return fmt.Errorf("too short to unmarshal as bank.Account: `%s`", j)
@@ -119,21 +121,22 @@ func (a *Account) UnmarshalJSON(j []byte) (err error) {
 		*a = Account(acc)
 		return nil
 	}
-	// Unmarshal j as an IBAN string
+	// Unmarshal j as an IBAN string. A JSON string is trimmed and
+	// uppercased by IBAN.UnmarshalJSON. UnmarshalText passes a bare
+	// IBAN, which is trimmed and uppercased here. Either way an invalid
+	// IBAN is kept. A JSON value that is not an object or a string is
+	// still an error.
 	var iban IBAN
 	if beg == '"' && end == '"' {
-		// JSON string
 		err := json.Unmarshal(j, &iban)
 		if err != nil {
 			return fmt.Errorf("can't unmarshal `%s` for bank.Account: %w", j, err)
 		}
+	} else if beg == '{' || beg == '[' || beg == '"' {
+		return fmt.Errorf("can't unmarshal `%s` as bank.Account", j)
 	} else {
-		// Non-JSON text from UnmarshalText
-		iban = IBAN(j)
-	}
-	iban, err = iban.Normalized()
-	if err != nil {
-		return fmt.Errorf("can't parse `%s` as IBAN for bank.Account: %w", j, err)
+		trimmed, _ := internal.TrimUpper(IBAN(j))
+		iban = trimmed
 	}
 	a.IBAN = iban
 	a.BIC.SetNull()

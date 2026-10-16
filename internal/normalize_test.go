@@ -31,9 +31,22 @@ func zeroIsBlank(c upperCode) bool {
 	return IsBlank(c) || strings.TrimSpace(string(c)) == "0"
 }
 
-// NormalizedOrRaw is the rule every reading method and the writing methods
-// other than Value apply: canonical if possible, empty if blank, else the
-// input unchanged, so no input is lost and no reading fails on content.
+// NormalizedOrRaw applies normalize when it succeeds, returns empty for a
+// blank value, and keeps the input when normalize fails, so no reading
+// fails on content. Trim and TrimUpper always succeed, so they prettify
+// a value Normalized would reject.
+func TestTrim(t *testing.T) {
+	trimmed, err := Trim(upperCode("  de "))
+	require.NoError(t, err)
+	assert.Equal(t, upperCode("de"), trimmed)
+	upper, err := TrimUpper(upperCode("  de "))
+	require.NoError(t, err)
+	assert.Equal(t, upperCode("DE"), upper)
+	kept, err := TrimUpper(upperCode("xx"))
+	require.NoError(t, err)
+	assert.Equal(t, upperCode("XX"), kept, "prettify does not reject")
+}
+
 func TestNormalizedOrRaw(t *testing.T) {
 	assert.Equal(t, upperCode("DE"), NormalizedOrRaw(upperCode(" de "), upperCode.Normalized, nil))
 	assert.Equal(t, upperCode("xx"), NormalizedOrRaw(upperCode("xx"), upperCode.Normalized, nil), "invalid input unchanged")

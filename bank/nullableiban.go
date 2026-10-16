@@ -35,7 +35,10 @@ var _ types.NormalizableValidator[NullableIBAN] = NullableIBAN("")
 // Without validate it stores source like Scan, with validate it stores
 // the normalized IBAN or returns the error of Normalized.
 func (iban *NullableIBAN) ScanString(source string, validate bool) error {
-	return internal.ScanStringNormalized(iban, source, validate, true, NullableIBAN.Normalized, nil)
+	if validate {
+		return internal.ScanStringNormalized(iban, source, true, true, NullableIBAN.Normalized, nil)
+	}
+	return internal.ScanStringNormalized(iban, source, false, true, internal.TrimUpper[NullableIBAN], nil)
 }
 
 // Valid returns true if iban is null or a valid International Bank Account Number
@@ -113,18 +116,17 @@ func (iban NullableIBAN) NormalizedWithSpaces() (NullableIBAN, error) {
 }
 
 // Scan implements the database/sql.Scanner interface.
-// A valid IBAN is stored normalized, SQL NULL and a blank string as IBANNull,
-// and a IBAN that can't be normalized unchanged without an error,
-// so that one invalid value doesn't fail a whole query; Validate reports it.
+// Surrounding whitespace is trimmed and letters are uppercased.
+// SQL NULL and a blank string are stored as IBANNull. An invalid IBAN
+// is kept after that prettification, without an error.
 func (iban *NullableIBAN) Scan(value any) error {
-	return internal.ScanNormalized(iban, value, NullableIBAN.Normalized, nil)
+	return internal.ScanNormalized(iban, value, internal.TrimUpper[NullableIBAN], nil)
 }
 
 // MarshalJSON implements encoding/json.Marshaler by writing the JSON null
-// value if the NullableIBAN is null, else the normalized IBAN,
-// or the IBAN unchanged if it can't be normalized.
+// value if the NullableIBAN is null, else the trimmed and uppercased IBAN.
 func (iban NullableIBAN) MarshalJSON() ([]byte, error) {
-	return internal.MarshalJSONNormalized(iban, true, NullableIBAN.Normalized, nil)
+	return internal.MarshalJSONNormalized(iban, true, internal.TrimUpper[NullableIBAN], nil)
 }
 
 // UnmarshalJSON implements encoding/json.Unmarshaler.
@@ -132,15 +134,15 @@ func (iban NullableIBAN) MarshalJSON() ([]byte, error) {
 // NullableIBAN to null, so that decoding null into a field that holds
 // a value resets it, and any other JSON value is an error.
 func (iban *NullableIBAN) UnmarshalJSON(data []byte) error {
-	return internal.UnmarshalJSONNormalized(iban, data, true, NullableIBAN.Normalized, nil)
+	return internal.UnmarshalJSONNormalized(iban, data, true, internal.TrimUpper[NullableIBAN], nil)
 }
 
 // MarshalText implements encoding.TextMarshaler like MarshalJSON,
 // but with "" for null, so that encoding/xml and strfmt write the
-// normalized IBAN. encoding/json writes map keys of string types
-// as they are and doesn't call MarshalText for them.
+// trimmed and uppercased IBAN. encoding/json writes map keys of string
+// types as they are and doesn't call MarshalText for them.
 func (iban NullableIBAN) MarshalText() ([]byte, error) {
-	return internal.MarshalTextNormalized(iban, NullableIBAN.Normalized, nil)
+	return internal.MarshalTextNormalized(iban, internal.TrimUpper[NullableIBAN], nil)
 }
 
 // MarshalXMLAttr implements encoding/xml.MarshalerAttr by writing the
@@ -154,20 +156,21 @@ func (iban *NullableIBAN) MarshalXMLAttr(name xml.Name) (xml.Attr, error) {
 // UnmarshalXML implements encoding/xml.Unmarshaler
 // by storing the text of the element like Scan stores it.
 func (iban *NullableIBAN) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
-	return internal.UnmarshalXMLNormalized(iban, d, start, NullableIBAN.Normalized, nil)
+	return internal.UnmarshalXMLNormalized(iban, d, start, internal.TrimUpper[NullableIBAN], nil)
 }
 
 // UnmarshalXMLAttr implements encoding/xml.UnmarshalerAttr
 // by storing the attribute value like Scan stores it.
 func (iban *NullableIBAN) UnmarshalXMLAttr(attr xml.Attr) error {
-	return internal.UnmarshalXMLAttrNormalized(iban, attr, NullableIBAN.Normalized, nil)
+	return internal.UnmarshalXMLAttrNormalized(iban, attr, internal.TrimUpper[NullableIBAN], nil)
 }
 
 // Value implements the driver database/sql/driver.Valuer interface.
-// It returns the normalized IBAN, SQL NULL if the NullableIBAN is null,
-// or the error of Normalized for a IBAN that can't be normalized.
+// It returns the trimmed and uppercased IBAN, or SQL NULL if the
+// NullableIBAN is null. An invalid IBAN is written after that
+// prettification, not rejected.
 func (iban NullableIBAN) Value() (driver.Value, error) {
-	return internal.ValueNormalized(iban, NullableIBAN.Normalized, nil)
+	return internal.ValueNormalized(iban, internal.TrimUpper[NullableIBAN], nil)
 }
 
 // Set sets an IBAN for this NullableIBAN

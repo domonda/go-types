@@ -1010,8 +1010,9 @@ func TestDate_MarshalJSON(t *testing.T) {
 		want string
 	}{
 		{date: "2023-12-25", want: `"2023-12-25"`},
-		{date: "25.12.2023", want: `"2023-12-25"`},
-		{date: "December 25, 2023", want: `"2023-12-25"`},
+		{date: "25.12.2023", want: `"25.12.2023"`},
+		{date: "December 25, 2023", want: `"December 25, 2023"`},
+		{date: " 2023-12-25 ", want: `"2023-12-25"`},
 		{date: "invalid", want: `"invalid"`},
 		{date: "", want: `""`},
 	}
@@ -1031,7 +1032,8 @@ func TestDate_MarshalText(t *testing.T) {
 		date Date
 		want string
 	}{
-		{date: "25.12.2023", want: "2023-12-25"},
+		{date: "25.12.2023", want: "25.12.2023"},
+		{date: " 2023-12-25 ", want: "2023-12-25"},
 		{date: "invalid", want: "invalid"},
 	} {
 		text, err := tt.date.MarshalText()
@@ -1042,7 +1044,7 @@ func TestDate_MarshalText(t *testing.T) {
 	type row struct{ D Date }
 	data, err := xml.Marshal(row{D: "25.12.2023"})
 	require.NoError(t, err)
-	assert.Equal(t, `<row><D>2023-12-25</D></row>`, string(data))
+	assert.Equal(t, `<row><D>25.12.2023</D></row>`, string(data))
 }
 
 // Additional constructor function tests
@@ -1728,20 +1730,21 @@ func TestDate_ReadingWithoutHintFollowsSeparators(t *testing.T) {
 			}
 			jsonDoc := fmt.Sprintf(`{"date":%q,"nullable":%q}`, source, source)
 			require.NoError(t, json.Unmarshal([]byte(jsonDoc), &doc))
-			assert.Equal(t, want, doc.Date, "UnmarshalJSON")
-			assert.Equal(t, want.Nullable(), doc.Nullable, "NullableDate.UnmarshalJSON")
+			assert.Equal(t, Date(source), doc.Date, "UnmarshalJSON")
+			assert.Equal(t, NullableDate(source), doc.Nullable, "NullableDate.UnmarshalJSON")
 
 			doc.Date, doc.Nullable = "", ""
 			xmlDoc := fmt.Sprintf(`<doc nullable=%q><date>%s</date></doc>`, source, source)
 			require.NoError(t, xml.Unmarshal([]byte(xmlDoc), &doc))
-			assert.Equal(t, want, doc.Date, "UnmarshalXML")
-			assert.Equal(t, want.Nullable(), doc.Nullable, "NullableDate.UnmarshalXMLAttr")
+			assert.Equal(t, Date(source), doc.Date, "UnmarshalXML")
+			assert.Equal(t, NullableDate(source), doc.Nullable, "NullableDate.UnmarshalXMLAttr")
 
-			for _, validate := range []bool{false, true} {
-				d = ""
-				require.NoError(t, d.ScanString(source, validate))
-				assert.Equal(t, want, d, "ScanString(validate=%t)", validate)
-			}
+			d = ""
+			require.NoError(t, d.ScanString(source, false))
+			assert.Equal(t, Date(source), d, "ScanString(validate=false)")
+			d = ""
+			require.NoError(t, d.ScanString(source, true))
+			assert.Equal(t, want, d, "ScanString(validate=true)")
 
 			var n NullableDate
 			require.NoError(t, n.Scan(source))
@@ -1937,9 +1940,11 @@ func TestDate_ValidAndNormalizedYearZero(t *testing.T) {
 // refuses an invalid date, and fmt prints the stored date.
 func TestDate_ReadingAndWriting(t *testing.T) {
 	normtest.Run(t, normtest.Spec[Date]{
-		Canonical: "2023-12-25",
-		Variants:  []Date{"25.12.2023", "December 25, 2023", " 2023-12-25 ", "2023-12-25T10:00:00", "2023-12-25T00:00:00", "2023-12-25 00:00:00"},
-		Invalid:   []Date{"invalid", "2023-02-30"},
+		Canonical:     "2023-12-25",
+		Variants:      []Date{"25.12.2023", "December 25, 2023", " 2023-12-25 ", "2023-12-25T10:00:00", "2023-12-25T00:00:00", "2023-12-25 00:00:00"},
+		Invalid:       []Date{"invalid", "2023-02-30"},
+		Prettify:      normtest.Trim[Date],
+		SQLNormalized: true,
 		Blank: []Date{
 			"0001-01-01", "0000-00-00", "01.01.0001", "0001-01-01T00:00:00Z", "0001-01-1 ", "0001-01-1.",
 			// The zero date of MySQL and other implementations in other spellings

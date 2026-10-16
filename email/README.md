@@ -270,7 +270,7 @@ type Attachment struct {
 
 ## Serialization
 
-`Address` and `NullableAddress` follow the rules of [Reading and writing values](../README.md#reading-and-writing-values): reading normalizes, `Value` refuses an invalid address, and `fmt` prints the stored address. The collections `AddressList`, `NullableAddressList` and `AddressSet` keep their addresses as stored in every format, because normalizing rewrites every entry and could merge two elements of a set. Their `Value` still refuses an invalid list or address.
+`Address` and `NullableAddress` follow the rules of [Reading and writing values](../README.md#reading-and-writing-values): reading and writing only trim, and `fmt` prints the stored address. `AddressList` and `NullableAddressList` trim the list string. `AddressSet` keeps its keys as stored, because trimming or normalizing could merge two elements.
 
 | Type                  | `Value()` writes                                   | `Scan` accepts                                     | JSON                                               | Text and XML                                       |
 |-----------------------|----------------------------------------------------|----------------------------------------------------|----------------------------------------------------|----------------------------------------------------|

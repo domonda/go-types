@@ -241,7 +241,7 @@ func TestNullableCurrency_ValueAndMarshalJSONNormalize(t *testing.T) {
 		{n: CurrencyNull, wantSQL: nil, wantJSON: `null`},
 		{n: "  ", wantSQL: nil, wantJSON: `null`},
 		{n: "eur", wantSQL: "EUR", wantJSON: `"EUR"`},
-		{n: "$", wantSQL: "USD", wantJSON: `"USD"`},
+		{n: "$", wantSQL: "$", wantJSON: `"$"`},
 	}
 	for _, tt := range tests {
 		v, err := tt.n.Value()
@@ -253,9 +253,10 @@ func TestNullableCurrency_ValueAndMarshalJSONNormalize(t *testing.T) {
 		assert.Equal(t, tt.wantJSON, string(j), "json.Marshal(NullableCurrency(%q))", string(tt.n))
 	}
 
-	_, err := NullableCurrency("XYZ").Value()
-	assert.Error(t, err, "Value() of an invalid currency")
-	j, err := json.Marshal(NullableCurrency("XYZ"))
+	v, err := NullableCurrency("xyz").Value()
+	require.NoError(t, err)
+	assert.Equal(t, "XYZ", v, "Value() of an invalid currency is trimmed and uppercased")
+	j, err := json.Marshal(NullableCurrency("xyz"))
 	require.NoError(t, err)
 	assert.Equal(t, `"XYZ"`, string(j))
 }
@@ -274,7 +275,7 @@ func TestNullableCurrency_UnmarshalJSON(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(`{"currency":null}`), &d))
 	assert.Equal(t, NullableCurrency(CurrencyNull), d.Currency)
 
-	for str, want := range map[string]NullableCurrency{"USD": "USD", "usd": "USD", "€": "EUR", "XYZ": "XYZ", "": CurrencyNull} {
+	for str, want := range map[string]NullableCurrency{"USD": "USD", "usd": "USD", "€": "€", "xyz": "XYZ", "": CurrencyNull} {
 		d := doc{Currency: "EUR"}
 		data, err := json.Marshal(map[string]string{"currency": str})
 		require.NoError(t, err)
@@ -312,5 +313,6 @@ func TestNullableCurrency_ReadingAndWriting(t *testing.T) {
 		Variants:  []NullableCurrency{"eur", " EUR ", "€", "Euro"},
 		Invalid:   []NullableCurrency{"XYZ", "Atlantean Dollar"},
 		Nullable:  true,
+		Prettify:  normtest.TrimUpper[NullableCurrency],
 	})
 }

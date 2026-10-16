@@ -37,14 +37,16 @@ const ErrInvalidID errs.Sentinel = "invalid VAT ID"
 // ID is a european VAT ID.
 // See NullableID for a nullable version of this type.
 //
-// Scan, UnmarshalJSON, UnmarshalXML and ScanString store a valid ID
-// normalized, a blank one as "" and an invalid one unchanged.
-// Value writes the normalized ID, SQL NULL for a blank one, and returns
-// an error wrapping ErrInvalidID for an invalid one. MarshalJSON and
-// MarshalText write the normalized ID or an invalid one unchanged,
-// and fmt prints the ID as stored. ID has no UnmarshalText, so
-// encoding/json reads and writes the keys of a map[ID]V as given.
-// See "Reading and writing values" in the README of the module.
+// Scan, UnmarshalJSON, UnmarshalXML and ScanString without validate trim
+// surrounding whitespace and uppercase the letters. Punctuation stays.
+// A blank ID is "". An invalid ID is kept after that prettification,
+// without an error. Value, MarshalJSON and MarshalText write the same
+// text, and Value writes SQL NULL for a blank ID. They do not reject an
+// invalid ID. ScanString with validate stores the normalized ID or
+// returns the error of Normalized. fmt prints the ID as stored. ID has
+// no UnmarshalText, so encoding/json reads and writes the keys of a
+// map[ID]V as given. See "Reading and writing values" in the README
+// of the module.
 type ID string
 
 // NormalizeVATID returns str as normalized VAT ID or an error.
@@ -210,30 +212,31 @@ func (id ID) Number() string {
 // the normalized ID or returns the error of Normalized,
 // also for a blank source.
 func (id *ID) ScanString(source string, validate bool) error {
-	return internal.ScanStringNormalized(id, source, validate, false, ID.Normalized, nil)
+	if validate {
+		return internal.ScanStringNormalized(id, source, true, false, ID.Normalized, nil)
+	}
+	return internal.ScanStringNormalized(id, source, false, false, internal.TrimUpper[ID], nil)
 }
 
 // Scan implements the database/sql.Scanner interface.
-// A valid ID is stored normalized, SQL NULL and a blank string as "",
-// and an ID that can't be normalized unchanged without an error,
-// so that one invalid value doesn't fail a whole query; Validate reports it.
+// Surrounding whitespace is trimmed and letters are uppercased.
+// SQL NULL and a blank string are stored as "". An invalid ID is
+// kept after that prettification, without an error.
 func (id *ID) Scan(value any) error {
-	return internal.ScanNormalized(id, value, ID.Normalized, nil)
+	return internal.ScanNormalized(id, value, internal.TrimUpper[ID], nil)
 }
 
 // Value implements the driver database/sql/driver.Valuer interface.
-// It returns the normalized ID, SQL NULL for a blank ID,
-// or the error of Normalized wrapping ErrInvalidID
-// for an ID that can't be normalized.
+// It returns the trimmed and uppercased ID, or SQL NULL for a blank one.
+// An invalid ID is written after that prettification, not rejected.
 func (id ID) Value() (driver.Value, error) {
-	return internal.ValueNormalized(id, ID.Normalized, nil)
+	return internal.ValueNormalized(id, internal.TrimUpper[ID], nil)
 }
 
 // MarshalJSON implements encoding/json.Marshaler by writing the
-// normalized ID, "" for a blank ID, or the ID unchanged
-// if it can't be normalized.
+// trimmed and uppercased ID, or "" for a blank ID.
 func (id ID) MarshalJSON() ([]byte, error) {
-	return internal.MarshalJSONNormalized(id, false, ID.Normalized, nil)
+	return internal.MarshalJSONNormalized(id, false, internal.TrimUpper[ID], nil)
 }
 
 // UnmarshalJSON implements encoding/json.Unmarshaler.
@@ -241,15 +244,15 @@ func (id ID) MarshalJSON() ([]byte, error) {
 // unchanged like encoding/json does for a string type, and any other
 // JSON value is an error.
 func (id *ID) UnmarshalJSON(data []byte) error {
-	return internal.UnmarshalJSONNormalized(id, data, false, ID.Normalized, nil)
+	return internal.UnmarshalJSONNormalized(id, data, false, internal.TrimUpper[ID], nil)
 }
 
 // MarshalText implements encoding.TextMarshaler like MarshalJSON,
-// so that encoding/xml and strfmt write the normalized ID.
+// so that encoding/xml and strfmt write the trimmed and uppercased ID.
 // encoding/json writes map keys of string types as they are
 // and doesn't call MarshalText for them.
 func (id ID) MarshalText() ([]byte, error) {
-	return internal.MarshalTextNormalized(id, ID.Normalized, nil)
+	return internal.MarshalTextNormalized(id, internal.TrimUpper[ID], nil)
 }
 
 // MarshalXMLAttr implements encoding/xml.MarshalerAttr by writing the
@@ -263,13 +266,13 @@ func (id *ID) MarshalXMLAttr(name xml.Name) (xml.Attr, error) {
 // UnmarshalXML implements encoding/xml.Unmarshaler
 // by storing the text of the element like Scan stores it.
 func (id *ID) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
-	return internal.UnmarshalXMLNormalized(id, d, start, ID.Normalized, nil)
+	return internal.UnmarshalXMLNormalized(id, d, start, internal.TrimUpper[ID], nil)
 }
 
 // UnmarshalXMLAttr implements encoding/xml.UnmarshalerAttr
 // by storing the attribute value like Scan stores it.
 func (id *ID) UnmarshalXMLAttr(attr xml.Attr) error {
-	return internal.UnmarshalXMLAttrNormalized(id, attr, ID.Normalized, nil)
+	return internal.UnmarshalXMLAttrNormalized(id, attr, internal.TrimUpper[ID], nil)
 }
 
 // JSONSchema returns the JSON schema for ID, describing it as a string with

@@ -17,14 +17,16 @@ import (
 // Code represents a language code in its normalized form as an ISO 639-1 two-character language code.
 // The empty Code is Null, there is no separate nullable type.
 //
-// Scan, UnmarshalJSON and UnmarshalXML store a valid code normalized,
-// a blank one as Null and an invalid one unchanged. Value writes the
-// normalized code, SQL NULL for Null, and returns an error for an invalid
-// one. MarshalJSON and MarshalText write the normalized code or an
-// invalid one unchanged, and fmt prints the code as stored. Code has no
-// UnmarshalText, so encoding/json reads and writes the keys of a
-// map[Code]V as given. See "Reading and writing values" in the README
-// of the module.
+// Scan, UnmarshalJSON, UnmarshalXML and ScanString without validate trim
+// surrounding whitespace and leave the letter case unchanged, so " EN "
+// becomes "EN" and "en-US" stays "en-US". A blank code is Null. Value,
+// MarshalJSON and MarshalText write the trimmed text, and Value writes
+// SQL NULL for a blank code. They do not reject an invalid code and do
+// not strip region or script subtags. ScanString with validate stores the
+// normalized code or returns the error of Normalized. fmt prints the code
+// as stored. Code has no UnmarshalText, so encoding/json reads and writes
+// the keys of a map[Code]V as given. See "Reading and writing values" in
+// the README of the module.
 type Code string //#enum
 
 // Null is an empty string and will be treated as SQL NULL.
@@ -204,11 +206,11 @@ func (c Code) LanguageName() string {
 }
 
 // Scan implements the database/sql.Scanner interface.
-// A valid code is stored normalized, SQL NULL and a blank string as Null,
-// and a code that can't be normalized unchanged without an error,
-// so that one invalid value doesn't fail a whole query; Validate reports it.
+// Surrounding whitespace is trimmed and the letter case is left unchanged.
+// SQL NULL and a blank string are stored as Null. An invalid code is
+// kept after that trim, without an error.
 func (c *Code) Scan(value any) error {
-	return internal.ScanNormalized(c, value, Code.Normalized, nil)
+	return internal.ScanNormalized(c, value, internal.Trim[Code], nil)
 }
 
 // ScanString implements the strfmt.Scannable interface.
@@ -216,21 +218,23 @@ func (c *Code) Scan(value any) error {
 // the normalized code or returns the error of Normalized,
 // also for a blank source.
 func (c *Code) ScanString(source string, validate bool) error {
-	return internal.ScanStringNormalized(c, source, validate, false, Code.Normalized, nil)
+	if validate {
+		return internal.ScanStringNormalized(c, source, true, false, Code.Normalized, nil)
+	}
+	return internal.ScanStringNormalized(c, source, false, false, internal.Trim[Code], nil)
 }
 
 // Value implements the driver database/sql/driver.Valuer interface.
-// It returns the normalized code, SQL NULL for Null or a blank Code,
-// or the error of Normalized for a code that can't be normalized.
+// It returns the trimmed code, or SQL NULL for Null or a blank Code.
+// An invalid code is written after that trim, not rejected.
 func (c Code) Value() (driver.Value, error) {
-	return internal.ValueNormalized(c, Code.Normalized, nil)
+	return internal.ValueNormalized(c, internal.Trim[Code], nil)
 }
 
 // MarshalJSON implements encoding/json.Marshaler by writing the
-// normalized code, "" for a blank Code, or the code unchanged
-// if it can't be normalized.
+// trimmed code, or "" for a blank Code.
 func (c Code) MarshalJSON() ([]byte, error) {
-	return internal.MarshalJSONNormalized(c, false, Code.Normalized, nil)
+	return internal.MarshalJSONNormalized(c, false, internal.Trim[Code], nil)
 }
 
 // UnmarshalJSON implements encoding/json.Unmarshaler.
@@ -238,15 +242,15 @@ func (c Code) MarshalJSON() ([]byte, error) {
 // unchanged like encoding/json does for a string type, and any other
 // JSON value is an error.
 func (c *Code) UnmarshalJSON(data []byte) error {
-	return internal.UnmarshalJSONNormalized(c, data, false, Code.Normalized, nil)
+	return internal.UnmarshalJSONNormalized(c, data, false, internal.Trim[Code], nil)
 }
 
 // MarshalText implements encoding.TextMarshaler like MarshalJSON,
-// so that encoding/xml and strfmt write the normalized code.
+// so that encoding/xml and strfmt write the trimmed code.
 // encoding/json writes map keys of string types as they are
 // and doesn't call MarshalText for them.
 func (c Code) MarshalText() ([]byte, error) {
-	return internal.MarshalTextNormalized(c, Code.Normalized, nil)
+	return internal.MarshalTextNormalized(c, internal.Trim[Code], nil)
 }
 
 // MarshalXMLAttr implements encoding/xml.MarshalerAttr by writing the
@@ -260,13 +264,13 @@ func (c *Code) MarshalXMLAttr(name xml.Name) (xml.Attr, error) {
 // UnmarshalXML implements encoding/xml.Unmarshaler
 // by storing the text of the element like Scan stores it.
 func (c *Code) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
-	return internal.UnmarshalXMLNormalized(c, d, start, Code.Normalized, nil)
+	return internal.UnmarshalXMLNormalized(c, d, start, internal.Trim[Code], nil)
 }
 
 // UnmarshalXMLAttr implements encoding/xml.UnmarshalerAttr
 // by storing the attribute value like Scan stores it.
 func (c *Code) UnmarshalXMLAttr(attr xml.Attr) error {
-	return internal.UnmarshalXMLAttrNormalized(c, attr, Code.Normalized, nil)
+	return internal.UnmarshalXMLAttrNormalized(c, attr, internal.Trim[Code], nil)
 }
 
 // JSONSchema returns the JSON schema definition for the Code type.

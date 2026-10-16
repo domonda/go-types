@@ -47,15 +47,15 @@ func NormalizeAddressList(list string) (normalized []string, err error) {
 // use NullableAddressList for lists that can be empty.
 // Validate and Valid accept an empty list.
 //
-// AddressList is a collection: every format reads and writes the list
-// as stored, because normalizing would rewrite every entry. Scan and
-// UnmarshalJSON also read a PostgreSQL array, a JSON array and a JSON
-// object with the addresses as keys, see Scan. Value writes the list
-// as a plain string that works with every database, SQL NULL for a blank
-// list, and returns an error for an invalid list. MarshalJSON writes the
-// list as JSON string, so MarshalJSON and UnmarshalJSON round-trip every
-// list. Use Normalized to normalize the list. See "Reading and writing
-// values" in the README of the module.
+// AddressList trims surrounding whitespace on SQL, JSON and XML read and
+// write. It does not parse, lowercase or rejoin the addresses, because
+// that would rewrite every entry. Scan and UnmarshalJSON also read a
+// PostgreSQL array, a JSON array and a JSON object with the addresses as
+// keys, see Scan. PostgreSQL array elements are trimmed. Value writes the
+// trimmed list as a plain string that works with every database, SQL NULL
+// for a blank list, and does not reject an invalid list. Use Normalized
+// to normalize the list. See "Reading and writing values" in the README
+// of the module.
 type AddressList string
 
 // AddressListJoin creates an AddressList by joining multiple Address values
@@ -245,33 +245,28 @@ func headerAddresses(addrs ...*mail.Address) string {
 }
 
 // Value implements the driver database/sql/driver.Valuer interface.
-// It returns the list as stored with the surrounding whitespace trimmed,
-// SQL NULL for a blank list, or the error of Validate for an invalid list,
-// also for a line break, a NUL or a bidi override within the list,
-// or a rune in an address part that the parser drops, see Validate.
+// It returns the list with surrounding whitespace trimmed, or SQL NULL
+// for a blank list. An invalid list is written after that trim, not rejected.
 func (l AddressList) Value() (driver.Value, error) {
 	list := strutil.TrimSpace(l)
 	if list == "" {
 		return nil, nil
 	}
-	if err := list.Validate(); err != nil {
-		return nil, err
-	}
 	return string(list), nil
 }
 
-// MarshalJSON implements encoding/json.Marshaler
-// by writing the list as stored as JSON string.
+// MarshalJSON implements encoding/json.Marshaler by writing the list
+// with surrounding whitespace trimmed as a JSON string.
 func (l AddressList) MarshalJSON() ([]byte, error) {
-	return json.Marshal(string(l))
+	return json.Marshal(string(strutil.TrimSpace(l)))
 }
 
 // UnmarshalJSON implements encoding/json.Unmarshaler.
-// A JSON string is stored unchanged, so MarshalJSON and UnmarshalJSON
-// round-trip every list. A JSON array of strings or an object with the
-// addresses as keys is joined with ", ". JSON null leaves the AddressList
-// unchanged like encoding/json does for a string type,
-// and any other JSON value is an error.
+// A JSON string is stored with surrounding whitespace trimmed. A JSON
+// array of strings or an object with the addresses as keys is joined
+// with ", " and then trimmed. JSON null leaves the AddressList unchanged
+// like encoding/json does for a string type, and any other JSON value
+// is an error.
 func (l *AddressList) UnmarshalJSON(data []byte) error {
 	if bytes.Equal(data, []byte(`null`)) {
 		return nil
@@ -280,14 +275,15 @@ func (l *AddressList) UnmarshalJSON(data []byte) error {
 	if err != nil {
 		return err
 	}
-	l.setCollection(c, false)
+	l.setCollection(c, true)
 	return nil
 }
 
 // MarshalText implements encoding.TextMarshaler by returning the list
-// as stored, so that encoding/xml and strfmt write it unchanged.
+// with surrounding whitespace trimmed, so that encoding/xml and strfmt
+// write that text.
 func (l AddressList) MarshalText() ([]byte, error) {
-	return []byte(l), nil
+	return []byte(strutil.TrimSpace(l)), nil
 }
 
 // MarshalXMLAttr implements encoding/xml.MarshalerAttr by writing the
@@ -296,6 +292,24 @@ func (l AddressList) MarshalText() ([]byte, error) {
 // and panics.
 func (l *AddressList) MarshalXMLAttr(name xml.Name) (xml.Attr, error) {
 	return internal.MarshalXMLAttrText(l, name)
+}
+
+// UnmarshalXML implements encoding/xml.Unmarshaler by storing the text
+// of the element with surrounding whitespace trimmed.
+func (l *AddressList) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	var str string
+	if err := d.DecodeElement(&str, &start); err != nil {
+		return err
+	}
+	*l = AddressList(strutil.TrimSpace(str))
+	return nil
+}
+
+// UnmarshalXMLAttr implements encoding/xml.UnmarshalerAttr by storing
+// the attribute value with surrounding whitespace trimmed.
+func (l *AddressList) UnmarshalXMLAttr(attr xml.Attr) error {
+	*l = AddressList(strutil.TrimSpace(attr.Value))
+	return nil
 }
 
 // Nullable converts the AddressList to a NullableAddressList type.
@@ -321,15 +335,16 @@ func (l *AddressList) Scan(value any) error {
 }
 
 // setCollection stores the address collection c read by Scan or
-// UnmarshalJSON, with the entries joined with ", " and a plain
-// list trimmed if trim is true.
+// UnmarshalJSON, with the entries joined with ", ". If trim is true
+// the stored list has its surrounding whitespace removed.
 func (l *AddressList) setCollection(c addressCollection, trim bool) {
 	switch {
 	case c.entries != nil:
 		*l = AddressListJoinStrings(c.entries...)
-	case trim:
-		*l = AddressList(strutil.TrimSpace(c.list))
 	default:
 		*l = AddressList(c.list)
+	}
+	if trim {
+		*l = AddressList(strutil.TrimSpace(*l))
 	}
 }

@@ -224,7 +224,7 @@ The tag paths start below the root element, which is not checked.
 
 ## Serialization
 
-`IBAN`, `BIC`, and their nullable variants follow the rules of [Reading and writing values](../README.md#reading-and-writing-values): `Scan`, JSON and XML decoding store a valid IBAN compact and a valid BIC with 11 characters, and an invalid value unchanged without an error. `Value` writes the normalized form and returns an error for an invalid value, `MarshalJSON` and `MarshalText` write an invalid value unchanged, and `fmt` prints the stored value.
+`IBAN`, `BIC`, and their nullable variants follow the rules of [Reading and writing values](../README.md#reading-and-writing-values): `Scan`, JSON and XML trim and uppercase. Internal spaces stay, and an 8-character BIC is not extended. `fmt` prints the stored value.
 
 | Type                          | `Value()` writes                                   | `Scan` accepts                                     | JSON                                               | Text and XML                                       |
 |-------------------------------|----------------------------------------------------|----------------------------------------------------|----------------------------------------------------|----------------------------------------------------|

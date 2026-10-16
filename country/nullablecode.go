@@ -153,25 +153,24 @@ func (n NullableCode) StringOr(defaultString string) string {
 }
 
 // Scan implements the database/sql.Scanner interface.
-// A valid code is stored normalized, SQL NULL and a blank string as Null,
-// and a code that can't be normalized unchanged without an error,
-// so that one invalid value doesn't fail a whole query; Validate reports it.
+// Surrounding whitespace is trimmed and the letter case is left unchanged.
+// SQL NULL and a blank string are stored as Null. An invalid code is
+// kept after that trim, without an error.
 func (n *NullableCode) Scan(value any) error {
-	return internal.ScanNormalized(n, value, NullableCode.Normalized, nil)
+	return internal.ScanNormalized(n, value, internal.Trim[NullableCode], nil)
 }
 
 // Value implements the driver database/sql/driver.Valuer interface.
-// It returns the normalized code, SQL NULL if the NullableCode is null,
-// or the error of Normalized for a code that can't be normalized.
+// It returns the trimmed code, or SQL NULL if the NullableCode is null.
+// An invalid code is written after that trim, not rejected.
 func (n NullableCode) Value() (driver.Value, error) {
-	return internal.ValueNormalized(n, NullableCode.Normalized, nil)
+	return internal.ValueNormalized(n, internal.Trim[NullableCode], nil)
 }
 
 // MarshalJSON implements encoding/json.Marshaler by writing the JSON null
-// value if the NullableCode is null, else the normalized code,
-// or the code unchanged if it can't be normalized.
+// value if the NullableCode is null, else the trimmed code.
 func (n NullableCode) MarshalJSON() ([]byte, error) {
-	return internal.MarshalJSONNormalized(n, true, NullableCode.Normalized, nil)
+	return internal.MarshalJSONNormalized(n, true, internal.Trim[NullableCode], nil)
 }
 
 // UnmarshalJSON implements encoding/json.Unmarshaler.
@@ -179,15 +178,15 @@ func (n NullableCode) MarshalJSON() ([]byte, error) {
 // NullableCode to null, so that decoding null into a field that holds
 // a value resets it, and any other JSON value is an error.
 func (n *NullableCode) UnmarshalJSON(data []byte) error {
-	return internal.UnmarshalJSONNormalized(n, data, true, NullableCode.Normalized, nil)
+	return internal.UnmarshalJSONNormalized(n, data, true, internal.Trim[NullableCode], nil)
 }
 
 // MarshalText implements encoding.TextMarshaler like MarshalJSON,
 // but with "" for null, so that encoding/xml and strfmt write the
-// normalized code. encoding/json writes map keys of string types
-// as they are and doesn't call MarshalText for them.
+// trimmed code. encoding/json writes map keys of string types as they
+// are and doesn't call MarshalText for them.
 func (n NullableCode) MarshalText() ([]byte, error) {
-	return internal.MarshalTextNormalized(n, NullableCode.Normalized, nil)
+	return internal.MarshalTextNormalized(n, internal.Trim[NullableCode], nil)
 }
 
 // MarshalXMLAttr implements encoding/xml.MarshalerAttr by writing the
@@ -201,13 +200,13 @@ func (n *NullableCode) MarshalXMLAttr(name xml.Name) (xml.Attr, error) {
 // UnmarshalXML implements encoding/xml.Unmarshaler
 // by storing the text of the element like Scan stores it.
 func (n *NullableCode) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
-	return internal.UnmarshalXMLNormalized(n, d, start, NullableCode.Normalized, nil)
+	return internal.UnmarshalXMLNormalized(n, d, start, internal.Trim[NullableCode], nil)
 }
 
 // UnmarshalXMLAttr implements encoding/xml.UnmarshalerAttr
 // by storing the attribute value like Scan stores it.
 func (n *NullableCode) UnmarshalXMLAttr(attr xml.Attr) error {
-	return internal.UnmarshalXMLAttrNormalized(n, attr, NullableCode.Normalized, nil)
+	return internal.UnmarshalXMLAttrNormalized(n, attr, internal.Trim[NullableCode], nil)
 }
 
 // JSONSchema returns the JSON schema definition for the NullableCode type.
@@ -230,5 +229,8 @@ func (NullableCode) JSONSchema() *jsonschema.Schema {
 // Without validate it stores source like Scan, with validate it stores
 // the normalized code or returns the error of Normalized.
 func (n *NullableCode) ScanString(source string, validate bool) error {
-	return internal.ScanStringNormalized(n, source, validate, true, NullableCode.Normalized, nil)
+	if validate {
+		return internal.ScanStringNormalized(n, source, true, true, NullableCode.Normalized, nil)
+	}
+	return internal.ScanStringNormalized(n, source, false, true, internal.Trim[NullableCode], nil)
 }

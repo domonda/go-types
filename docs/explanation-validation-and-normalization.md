@@ -257,27 +257,28 @@ exists on `bank.IBAN`, `bank.BIC`, their nullable types, `country.NullableCode`,
 
 ## Reading and writing
 
-Because `Validate` accepts every spelling that `Normalized` accepts, the
-types normalize where a value crosses the boundary of the program, so
-`"eur"` and `"EUR"` can't reach a database column, an API response or a
-comparison in Go as two different currencies. The
+`Validate` accepts every spelling that `Normalized` accepts. Reading and
+writing do not apply that canonical form. They trim surrounding whitespace,
+and uppercase where the type is written in upper case, and they write an
+invalid value back after that. `date.Date` fully normalizes on SQL only,
+and a `time.Time` from the driver is stored with `OfTime`. `uu.ID` stays
+fully canonical. The
 [README](../README.md#reading-and-writing-values) has the tables for every
 format.
 
 - **Reading** with `Scan`, `UnmarshalJSON`, `UnmarshalXML`,
-  `UnmarshalXMLAttr` and `ScanString` stores a valid value normalized, a
-  blank value as the empty value and an invalid value unchanged, without an
-  error. One bad value doesn't fail a whole query or document, and
-  `Validate` reports it, with its field path from `DeepValidate`. A value
-  read from SQL, JSON or XML is canonical if it is valid, so `==` and map
-  lookups work on it.
-- **`Value`** writes the normalized value, SQL `NULL` for a blank value, and
-  returns the error of `Normalized` for an invalid value, because the
-  database is where an invalid value would stay.
+  `UnmarshalXMLAttr` and `ScanString` without validate stores the prettified
+  value, and a blank value as the empty value, without an error. One bad
+  value doesn't fail a whole query or document, and `Validate` reports it,
+  with its field path from `DeepValidate`. `ScanString` with validate stores
+  `Normalized` or returns its error.
+- **`Value`** writes the prettified value and SQL `NULL` for a blank value.
+  It does not return the error of `Normalized`. `date.Date.Value` does,
+  because a database date has one spelling.
 - **`MarshalJSON` and `MarshalText`**, which `encoding/xml` and `strfmt`
-  use, write the normalized value and an invalid value unchanged, so a
-  response or log that contains one still renders. A null value of a
-  nullable type is JSON `null` and the empty text.
+  use, write the prettified value, so a response or log that contains an
+  invalid value still renders. A null value of a nullable type is JSON
+  `null` and the empty text.
 - **`fmt` and `String`** show the stored value. Most of the types have no
   `String` method, so `fmt` prints the underlying string, and
   `country.Code`, `language.Code` and `money.Currency` have the `String`

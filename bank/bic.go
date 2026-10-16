@@ -33,13 +33,15 @@ func StringIsBIC(str string) bool {
 // BIC represents a SWIFT Business Identifier Code (also known as SWIFT-Code).
 // See NullableBIC for a nullable version of this type.
 //
-// Scan, UnmarshalJSON, UnmarshalXML and ScanString store a valid BIC
-// normalized with 11 characters, a blank one as "" and an invalid one
-// unchanged. Value writes the normalized BIC, SQL NULL for a blank one,
-// and returns an error for an invalid one. MarshalJSON and MarshalText
-// write the normalized BIC or an invalid one unchanged, and fmt prints
-// the BIC as stored. BIC has no UnmarshalText, so encoding/json reads
-// and writes the keys of a map[BIC]V as given. See "Reading and writing
+// Scan, UnmarshalJSON, UnmarshalXML and ScanString without validate trim
+// surrounding whitespace and uppercase the letters. A blank BIC is "".
+// An invalid BIC is kept after that prettification, without an error,
+// and an 8-character BIC is not extended to 11. Value, MarshalJSON and
+// MarshalText write the same text, and Value writes SQL NULL for a blank
+// BIC. They do not reject an invalid BIC. ScanString with validate stores
+// the normalized BIC or returns the error of Normalized. fmt prints the
+// BIC as stored. BIC has no UnmarshalText, so encoding/json reads and
+// writes the keys of a map[BIC]V as given. See "Reading and writing
 // values" in the README of the module.
 type BIC string
 
@@ -48,7 +50,10 @@ type BIC string
 // the normalized BIC or returns the error of Normalized,
 // also for a blank source.
 func (bic *BIC) ScanString(source string, validate bool) error {
-	return internal.ScanStringNormalized(bic, source, validate, false, BIC.Normalized, nil)
+	if validate {
+		return internal.ScanStringNormalized(bic, source, true, false, BIC.Normalized, nil)
+	}
+	return internal.ScanStringNormalized(bic, source, false, false, internal.TrimUpper[BIC], nil)
 }
 
 // Valid returns true if this is a valid SWIFT Business Identifier Code.
@@ -239,18 +244,17 @@ func (bic BIC) ReceiverPaysFees() bool {
 }
 
 // Scan implements the database/sql.Scanner interface.
-// A valid BIC is stored normalized, SQL NULL and a blank string as "",
-// and a BIC that can't be normalized unchanged without an error,
-// so that one invalid value doesn't fail a whole query; Validate reports it.
+// Surrounding whitespace is trimmed and letters are uppercased.
+// SQL NULL and a blank string are stored as "". An invalid BIC is
+// kept after that prettification, without an error.
 func (bic *BIC) Scan(value any) error {
-	return internal.ScanNormalized(bic, value, BIC.Normalized, nil)
+	return internal.ScanNormalized(bic, value, internal.TrimUpper[BIC], nil)
 }
 
 // MarshalJSON implements encoding/json.Marshaler by writing the
-// normalized BIC, "" for a blank BIC, or the BIC unchanged
-// if it can't be normalized.
+// trimmed and uppercased BIC, or "" for a blank BIC.
 func (bic BIC) MarshalJSON() ([]byte, error) {
-	return internal.MarshalJSONNormalized(bic, false, BIC.Normalized, nil)
+	return internal.MarshalJSONNormalized(bic, false, internal.TrimUpper[BIC], nil)
 }
 
 // UnmarshalJSON implements encoding/json.Unmarshaler.
@@ -258,15 +262,15 @@ func (bic BIC) MarshalJSON() ([]byte, error) {
 // unchanged like encoding/json does for a string type, and any other
 // JSON value is an error.
 func (bic *BIC) UnmarshalJSON(data []byte) error {
-	return internal.UnmarshalJSONNormalized(bic, data, false, BIC.Normalized, nil)
+	return internal.UnmarshalJSONNormalized(bic, data, false, internal.TrimUpper[BIC], nil)
 }
 
 // MarshalText implements encoding.TextMarshaler like MarshalJSON,
-// so that encoding/xml and strfmt write the normalized BIC.
+// so that encoding/xml and strfmt write the trimmed and uppercased BIC.
 // encoding/json writes map keys of string types as they are
 // and doesn't call MarshalText for them.
 func (bic BIC) MarshalText() ([]byte, error) {
-	return internal.MarshalTextNormalized(bic, BIC.Normalized, nil)
+	return internal.MarshalTextNormalized(bic, internal.TrimUpper[BIC], nil)
 }
 
 // MarshalXMLAttr implements encoding/xml.MarshalerAttr by writing the
@@ -280,20 +284,20 @@ func (bic *BIC) MarshalXMLAttr(name xml.Name) (xml.Attr, error) {
 // UnmarshalXML implements encoding/xml.Unmarshaler
 // by storing the text of the element like Scan stores it.
 func (bic *BIC) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
-	return internal.UnmarshalXMLNormalized(bic, d, start, BIC.Normalized, nil)
+	return internal.UnmarshalXMLNormalized(bic, d, start, internal.TrimUpper[BIC], nil)
 }
 
 // UnmarshalXMLAttr implements encoding/xml.UnmarshalerAttr
 // by storing the attribute value like Scan stores it.
 func (bic *BIC) UnmarshalXMLAttr(attr xml.Attr) error {
-	return internal.UnmarshalXMLAttrNormalized(bic, attr, BIC.Normalized, nil)
+	return internal.UnmarshalXMLAttrNormalized(bic, attr, internal.TrimUpper[BIC], nil)
 }
 
 // Value implements the driver database/sql/driver.Valuer interface.
-// It returns the normalized BIC, SQL NULL for a blank BIC,
-// or the error of Normalized for a BIC that can't be normalized.
+// It returns the trimmed and uppercased BIC, or SQL NULL for a blank one.
+// An invalid BIC is written after that prettification, not rejected.
 func (bic BIC) Value() (driver.Value, error) {
-	return internal.ValueNormalized(bic, BIC.Normalized, nil)
+	return internal.ValueNormalized(bic, internal.TrimUpper[BIC], nil)
 }
 
 // JSONSchema returns the JSON schema definition for the BIC type.

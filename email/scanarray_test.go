@@ -36,7 +36,7 @@ func TestScanAddressArray(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := scanAddressArray(tt.literal, "TestType")
+			got, err := scanAddressArray(tt.literal, "TestType", true)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("scanAddressArray() error = %v, wantErr %t", err, tt.wantErr)
 			}
@@ -57,5 +57,20 @@ func TestScanAddressArray(t *testing.T) {
 				}
 			}
 		})
+	}
+
+	// An address set keeps the padding a list trims off.
+	got, err := scanAddressArray(`{ a@x.com , b@x.com }`, "AddressSet", false)
+	if err != nil {
+		t.Fatalf("scanAddressArray(trim=false) error = %v", err)
+	}
+	want := []string{" a@x.com ", " b@x.com "}
+	if len(got) != len(want) {
+		t.Fatalf("scanAddressArray(trim=false) = %q, want %q", got, want)
+	}
+	for i := range got {
+		if got[i] != want[i] {
+			t.Errorf("scanAddressArray(trim=false)[%d] = %q, want %q", i, got[i], want[i])
+		}
 	}
 }

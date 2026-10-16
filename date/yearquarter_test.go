@@ -407,8 +407,9 @@ func TestYearQuarter_AddQuartersExtremes(t *testing.T) {
 		year, quarter := new(big.Int).DivMod(total, big.NewInt(4), new(big.Int))
 		want := YearQuarter(fmt.Sprintf("%04d-Q%d", year, quarter.Int64()+1))
 		assert.Equal(t, want, got[i], "%s.AddQuarters(%d)", c.yq, c.quarters)
-		_, err := got[i].Value()
-		assert.Error(t, err, "Value of %s.AddQuarters(%d)", c.yq, c.quarters)
+		v, err := got[i].Value()
+		assert.NoError(t, err, "Value of %s.AddQuarters(%d)", c.yq, c.quarters)
+		assert.Equal(t, string(got[i]), v)
 		assert.Equal(t, got[i].Nullable(), c.yq.Nullable().AddQuarters(c.quarters), "NullableYearQuarter")
 	}
 }
@@ -434,9 +435,10 @@ func TestYearQuarter_ValueOfAValidDate(t *testing.T) {
 	assert.NoError(t, err, "NullableYearQuarter.Value")
 	assert.Equal(t, "9999-Q4", v)
 
-	// A year-quarter after the years of Date is still refused
-	_, err = YearQuarterFrom(10000, 1).Value()
-	assert.Error(t, err)
+	// A year-quarter after the years of Date is written as that text.
+	v, err = YearQuarterFrom(10000, 1).Value()
+	assert.NoError(t, err)
+	assert.Equal(t, "10000-Q1", v)
 }
 
 // Contains tests
@@ -1071,7 +1073,7 @@ func TestYearQuarter_UnmarshalJSON(t *testing.T) {
 		`"2023-Q3"`:   "2023-Q3",
 		`" 2023-q3 "`: "2023-Q3",
 		`"2023-Q5"`:   "2023-Q5",
-		`"bad"`:       "bad",
+		`"bad"`:       "BAD",
 		`""`:          "",
 		`"  "`:        "",
 	} {
@@ -1100,6 +1102,7 @@ func TestYearQuarter_ReadingAndWriting(t *testing.T) {
 		Invalid:      []YearQuarter{"2023-Q5", "2023-Q", "0000-Q2", "Q3/2023", "bad"},
 		Blank:        []YearQuarter{"0001-Q1", "0001-q1", "0000-Q0", " 0001-Q1 "},
 		StoredString: true,
+		Prettify:     normtest.TrimUpper[YearQuarter],
 	})
 }
 
