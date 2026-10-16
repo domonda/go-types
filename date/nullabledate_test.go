@@ -58,9 +58,8 @@ func TestNullableDate_UnmarshalJSONResetsAndRejects(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(`{"paid":null}`), &d))
 	assert.Equal(t, Null, d.Paid)
 
-	// A JSON string is stored normalized if it is a valid date and
-	// unchanged without an error if not, so Validate can report it.
-	// A zero date is null.
+	// A JSON string is only trimmed, including a zero date.
+	// SQL Scan is what still stores a zero date as null.
 	for str, want := range map[string]NullableDate{"2023-12-25": "2023-12-25", "25.12.2023": "25.12.2023", "bad": "bad", "": Null, "0001-01-01T00:00:00Z": "0001-01-01T00:00:00Z"} {
 		d := doc{Paid: "2024-01-02"}
 		data, err := json.Marshal(map[string]string{"paid": str})

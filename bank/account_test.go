@@ -144,6 +144,9 @@ func TestAccount_UnmarshalJSON_Edges(t *testing.T) {
 		`{"iban": 1}`,
 		`{"iban": "DE89370400440532013000"`,
 		`[]`,
+		`true`,
+		`false`,
+		`123`,
 		`"\x"`,
 	} {
 		t.Run(j, func(t *testing.T) {
@@ -171,7 +174,7 @@ func TestAccount_UnmarshalText_IBAN(t *testing.T) {
 	// Plain text IBANs are trimmed and uppercased. Internal spaces stay,
 	// and an invalid checksum is kept.
 	var a Account
-	require.NoError(t, a.UnmarshalText([]byte(" DE89 3704 0044 0532 0130 00\n")))
+	require.NoError(t, a.UnmarshalText([]byte(" de89 3704 0044 0532 0130 00\n")))
 	assert.Equal(t, Account{IBAN: "DE89 3704 0044 0532 0130 00"}, a)
 
 	require.NoError(t, a.UnmarshalText([]byte("DE89 3704 0044 0532 0130 01")))

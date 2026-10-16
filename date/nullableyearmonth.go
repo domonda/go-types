@@ -177,7 +177,7 @@ func (ym *NullableYearMonth) UnmarshalJSON(data []byte) error {
 
 // MarshalText implements encoding.TextMarshaler like MarshalJSON,
 // but with "" for null, so that encoding/xml and strfmt write the
-// normalized year-month. encoding/json writes map keys of string types
+// trimmed year-month, including a zero period. encoding/json writes map keys of string types
 // as they are and doesn't call MarshalText for them.
 func (ym NullableYearMonth) MarshalText() ([]byte, error) {
 	return internal.MarshalTextNormalized(ym, internal.Trim[NullableYearMonth], nil)

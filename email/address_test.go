@@ -260,13 +260,9 @@ func TestAddress_Normalized_InvalidReturnsInput(t *testing.T) {
 	assert.Equal(t, addr, norm)
 }
 
-// Value and MarshalJSON write an Address normalized, because Validate
-// accepts other spellings like an upper case address part or an
-// RFC 2047 encoded name: without normalization the same address would
-// reach SQL and JSON as different strings. Value refuses an address that
-// can't be normalized, because the database is where an invalid value
-// would stay, and MarshalJSON writes it unchanged, so a response that
-// holds one still renders.
+// Value and MarshalJSON only trim. Validate still accepts other spellings,
+// so the same address can reach SQL and JSON in different strings until
+// Normalized is called. An invalid address is written after the trim.
 func TestAddress_ValueAndMarshalJSONNormalize(t *testing.T) {
 	tests := []struct {
 		addr Address
@@ -301,7 +297,7 @@ func TestAddress_ValueAndMarshalJSONNormalize(t *testing.T) {
 	assert.Nil(t, v, "an empty Address is written as SQL NULL")
 }
 
-// MarshalText writes the normalized address with a non-ASCII name as UTF-8
+// MarshalText only trims. A non-ASCII name stays as stored. ASCII writes the normalized address with a non-ASCII name as UTF-8
 // for readability, ASCII the same with the name RFC 2047 encoded for
 // message headers. Both write the original if it can't be normalized,
 // so an invalid address is still shown instead of an empty string.
@@ -521,8 +517,8 @@ func marshalText(t *testing.T, v encoding.TextMarshaler) string {
 
 // TestAddress_ReadingAndWriting checks the reading and writing contract
 // shared by the normalizing types: every reading path stores a valid
-// address normalized and an invalid one unchanged, Value refuses an invalid
-// address, and fmt prints the stored address.
+// address trimmed and an invalid one written after that trim,
+// and fmt prints the stored address.
 func TestAddress_ReadingAndWriting(t *testing.T) {
 	normtest.Run(t, normtest.Spec[Address]{
 		Canonical: `"John Doe" <john@example.com>`,

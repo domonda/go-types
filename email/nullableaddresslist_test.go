@@ -326,8 +326,11 @@ func TestNullableAddressList_UnmarshalText(t *testing.T) {
 	require.NoError(t, n.UnmarshalText(nil))
 	assert.True(t, n.IsNull(), "empty text must be NULL")
 
-	require.NoError(t, n.UnmarshalText([]byte("a@example.com, b@example.com")))
+	require.NoError(t, n.UnmarshalText([]byte(" a@example.com, b@example.com\n")))
 	assert.Equal(t, NullableAddressList("a@example.com, b@example.com"), n)
+
+	require.NoError(t, n.UnmarshalText([]byte(" \t ")))
+	assert.True(t, n.IsNull(), "whitespace-only text must be NULL")
 }
 
 func TestNullableAddressList_MarshalXMLAttr(t *testing.T) {

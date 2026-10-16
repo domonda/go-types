@@ -562,8 +562,8 @@ func TestID_JSONSchema(t *testing.T) {
 
 // TestID_ReadingAndWriting checks the reading and writing contract shared
 // by the normalizing types: every reading path stores a valid ID normalized
-// and an invalid one unchanged, Value refuses an invalid ID with an error
-// wrapping ErrInvalidID, and fmt prints the stored ID.
+// trimmed and uppercased, spaces kept, an invalid ID written that way,
+// and fmt prints the stored ID. Normalized still returns ErrInvalidID.
 func TestID_ReadingAndWriting(t *testing.T) {
 	normtest.Run(t, normtest.Spec[ID]{
 		Canonical: "ATU10223006",

@@ -140,8 +140,9 @@ func (n NullableDate) Validate() error {
 
 // ScanString implements the strfmt.Scannable interface.
 // The strings "NULL", "null" and "nil" set the NullableDate to null.
-// Without validate it stores source like Scan, with validate it stores
-// the normalized date or returns the error of Normalized.
+// Without validate it stores source with surrounding whitespace trimmed,
+// including a zero date. With validate it stores the normalized date or
+// returns the error of Normalized.
 func (n *NullableDate) ScanString(source string, validate bool) error {
 	if validate {
 		return internal.ScanStringNormalized(n, source, true, true, NullableDate.Normalized, NullableDate.IsNull)

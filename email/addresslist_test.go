@@ -393,6 +393,12 @@ func TestAddressList_XML(t *testing.T) {
 	require.NoError(t, xml.Unmarshal(data, &got))
 	assert.Equal(t, in.To, got.To)
 	assert.Equal(t, in.Cc, got.Cc)
+
+	var padded doc
+	raw := `<doc cc=" a@example.com "><to>` + "\n b@example.com \n" + `</to></doc>`
+	require.NoError(t, xml.Unmarshal([]byte(raw), &padded))
+	assert.Equal(t, AddressList("b@example.com"), padded.To)
+	assert.Equal(t, NullableAddressList("a@example.com"), padded.Cc)
 }
 
 func TestAddressList_MarshalXMLAttr(t *testing.T) {

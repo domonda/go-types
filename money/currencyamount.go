@@ -186,6 +186,8 @@ func (ca CurrencyAmount) Value() (driver.Value, error) {
 	if err != nil {
 		return nil, err
 	}
-	// MinorUnits would normalize the normalized currency again
-	return ca.format(string(currency), true, 0, '.', defaultPrecision(currency.minorUnitsOfNormalized())), nil
+	// Decimals follow the original currency, which MinorUnits still
+	// normalizes, so "Kuwaiti Dinar" keeps 3 decimals. The written
+	// code is only trimmed and uppercased.
+	return ca.format(string(currency), true, 0, '.', defaultPrecision(ca.Currency.MinorUnits())), nil
 }

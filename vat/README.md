@@ -146,17 +146,17 @@ var IDFinder idFinder
 | Value                         | SQL `Value()`                 | JSON (`json.Marshal`) | `MarshalText`, XML | `fmt`           |
 |-------------------------------|-------------------------------|-----------------------|--------------------|-----------------|
 | `ID("")`, `ID("  ")`          | `NULL`                        | `""`                  | `""`               | as stored       |
-| `ID("atu 1022 3006")` (valid) | `"ATU10223006"`               | `"ATU10223006"`       | `"ATU10223006"`    | `atu 1022 3006` |
-| `ID("ATU10223006")`           | `"ATU10223006"`               | `"ATU10223006"`       | `"ATU10223006"`    | `ATU10223006`   |
-| `ID("bad")` (invalid)         | error wrapping `ErrInvalidID` | `"bad"`               | `"bad"`            | `bad`           |
+| `ID("atu 1022 3006")` (valid) | `"ATU 1022 3006"`             | `"ATU 1022 3006"`     | `ATU 1022 3006`    | `atu 1022 3006` |
+| `ID("ATU10223006")`           | `"ATU10223006"`               | `"ATU10223006"`       | `ATU10223006`      | `ATU10223006`   |
+| `ID("bad")` (invalid)         | `"BAD"`                       | `"BAD"`               | `BAD`              | `bad`           |
 | `NullableID` `Null`, `"  "`   | `NULL`                        | `null`                | `""`               | as stored       |
-| `NullableID("atu 1022 3006")` | `"ATU10223006"`               | `"ATU10223006"`       | `"ATU10223006"`    | `atu 1022 3006` |
-| `NullableID("bad")` (invalid) | error wrapping `ErrInvalidID` | `"bad"`               | `"bad"`            | `bad`           |
+| `NullableID("atu 1022 3006")` | `"ATU 1022 3006"`             | `"ATU 1022 3006"`     | `ATU 1022 3006`    | `atu 1022 3006` |
+| `NullableID("bad")` (invalid) | `"BAD"`                       | `"BAD"`               | `BAD`              | `bad`           |
 
 | Input                                              | `ID`                                               | `NullableID`          |
 |----------------------------------------------------|----------------------------------------------------|-----------------------|
 | `Scan(nil)`                                        | `""`                                               | `Null`                |
-| `Scan` of a string or `[]byte`, JSON string, XML element or attribute | normalized if valid, `""` if blank, else as is, without error | same, `Null` if blank |
+| `Scan` of a string or `[]byte`, JSON string, XML element or attribute | trimmed and uppercased, spaces and punctuation kept, `""` if blank | same, `Null` if blank |
 | `Scan` of other types                              | error                                              | error                 |
 | JSON `null`                                        | field left unchanged                               | `Null`                |
 | other JSON values                                  | error                                              | error                 |
@@ -170,8 +170,8 @@ var IDFinder idFinder
 - **The length limit applies after normalization.** `"AT - U - 1022 - 3006"` (20 characters) is valid. That's why the JSON schema has no `maxLength`: it would reject formatted JSON input that `Normalized` accepts.
 - **`"No."` is not Norway.** Input starting with `"No."` or `"no."` is rejected, because it is far more often the English abbreviation for number.
 - **`ID` is not nullable.** `ID("")` is invalid, `Value` writes it as SQL NULL, and `Scan(nil)` reads `""`, so a `NOT NULL` column rejects it. Use `NullableID` for nullable columns.
-- **`Value` refuses invalid IDs.** It returns the error of `Normalized`, wrapping `ErrInvalidID`, so the insert fails. `MarshalJSON` and `MarshalText` write an invalid ID unchanged.
-- **A VAT ID built in Go keeps its spelling.** `Scan`, JSON and XML decoding store valid IDs canonical, but `vat.ID("atu 1022 3006")` stays as written, and `fmt` prints it so, until it is normalized or written.
+- **`Value` writes invalid IDs.** It trims and uppercases, including `"bad"` as `"BAD"`, and does not return `ErrInvalidID`. `Normalized()` still does.
+- **A VAT ID built in Go keeps its spelling until it is read or written.** `Scan`, JSON and XML trim and uppercase but do not strip spaces or punctuation: `"atu 1022 3006"` becomes `"ATU 1022 3006"`, not `"ATU10223006"`. `fmt` prints the stored ID. Call `Normalized()` for the canonical form.
 - **The finder reads at most three words.** `"DE 167 015 661"` spans four words and is not found; `"DE 167015661"` is.
 
 ## Examples

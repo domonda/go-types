@@ -78,7 +78,7 @@ and returning its error, and `Valid` agrees with it:
 
 The reasoning: a valid value in another spelling is still the same value, so
 rejecting it would only reject real-world input. Leniency is safe because
-reading stores and writing writes the normalized form, see
+reading and writing only prettify, see
 [Reading and writing](#reading-and-writing). A value built in Go with a
 conversion like `money.Currency("eur")` keeps its spelling, so where a
 contract requires the canonical form, like a map key or a comparison with
@@ -245,10 +245,11 @@ January 2025: **on error, return the receiver unchanged together with the
 error**. The error message names the original input, like
 `invalid country.Code: 'XX'`. `date.Date("foo").Normalized()` returns `"foo"`
 and `money.Currency("  ").Normalized()` returns `"  "`, each with its error.
-The writing methods rely on it: they write the result of `Normalized`
-whether it succeeded or not. A zero date like `date.Date("0001-01-01")` has
-no canonical form, its `Normalized` returns an error, and
-`date.NullableDate` normalizes it to null.
+Reading and writing do not use that result. They trim, or trim and
+uppercase, and write an invalid value back. `date.Date` on SQL is the
+exception: `Value` returns the error of `Normalized`. A zero date like
+`date.Date("0001-01-01")` has no canonical form, its `Normalized` returns
+an error, and `date.NullableDate.Normalized` returns null.
 
 When an invalid value should simply become null, use `NormalizedOrNull`. It
 exists on `bank.IBAN`, `bank.BIC`, their nullable types, `country.NullableCode`,
@@ -304,16 +305,17 @@ pointer and panic, like it does for a `*time.Time` attribute.
 
 ### Collections keep their elements as given
 
-`types.Set`, `email.AddressSet`, `email.AddressList` and
-`email.NullableAddressList` read and write their elements unchanged in
-every format, because normalizing could merge two elements:
+`types.Set` and `email.AddressSet` read and write their keys as stored,
+because normalizing could merge two elements:
 `{"John@Example.com", "john@example.com"}` would be written as one address
-and read back as a set with one element. `Normalized()` and
-`email.AddressSet.NormalizedAddressList()` normalize explicitly. `Value` of
-the email collections still refuses an invalid address, and
-`AddressSet.MarshalText` also one that would not read back as one entry of
-an address list. The `String()` of `email.AddressSet`, `types.Set`,
-`uu.IDSet` and `strutil.StringSet` lists the elements as given too.
+and read back as a set with one element. An address list trims the list
+string. PostgreSQL array elements are trimmed too. JSON array elements are
+kept, then joined. It does not parse or lowercase the addresses. `Value` writes that text and does not reject an invalid
+address or list. `AddressSet.MarshalText` returns an error when the keys
+would not read back as the same address list. `Normalized()` and
+`email.AddressSet.NormalizedAddressList()` normalize explicitly. The
+`String()` of `email.AddressSet`, `types.Set`, `uu.IDSet` and
+`strutil.StringSet` lists the elements as given too.
 
 ## Related
 

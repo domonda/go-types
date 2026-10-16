@@ -132,7 +132,10 @@ func (a *Account) UnmarshalJSON(j []byte) (err error) {
 		if err != nil {
 			return fmt.Errorf("can't unmarshal `%s` for bank.Account: %w", j, err)
 		}
-	} else if beg == '{' || beg == '[' || beg == '"' {
+	} else if beg == '{' || beg == '[' || beg == '"' || json.Valid(j) {
+		// A JSON boolean, number, array, or truncated value is not an
+		// account. Bare text that is not JSON, such as an IBAN from Scan
+		// or UnmarshalText, is trimmed and uppercased below.
 		return fmt.Errorf("can't unmarshal `%s` as bank.Account", j)
 	} else {
 		trimmed, _ := internal.TrimUpper(IBAN(j))

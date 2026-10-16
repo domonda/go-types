@@ -130,8 +130,11 @@ The [docs index](docs/README.md) lists everything. By what you need:
   are true. `ValidAndNormalized()` reports whether a value is already in
   canonical form. See
   [validation and normalization](docs/explanation-validation-and-normalization.md).
-- Reading normalizes, `Value()` refuses invalid values, and `fmt` prints the
-  stored value, see [Reading and writing values](#reading-and-writing-values).
+- Reading and writing trim, and uppercase IBAN, BIC, VAT, currency and
+  year-quarter. Country codes, language codes, email addresses and
+  year-months are only trimmed. `Value()` writes an invalid value back.
+  `date.Date` on SQL still fully normalizes. `fmt` prints the stored value,
+  see [Reading and writing values](#reading-and-writing-values).
   How each type is written to and read from SQL, JSON and XML, including its
   zero and null values, is in the Serialization section of its package README.
 - `types.Validate` and `types.DeepValidate` work with any type that implements
@@ -251,10 +254,12 @@ types gets resolved. Types that don't follow a rule yet are tracked in
 - **Show what is stored.** `fmt`, templates and `String` print a value as it
   is stored, never normalized, so a log can't show a non-canonical or invalid
   value as if it were the canonical one.
-- **Collections keep their elements as given.** Sets and the email address
-  lists read and write their elements unchanged in every format, because
+- **Collections keep their elements as given.** `types.Set` and
+  `email.AddressSet` read and write their keys as stored, because
   normalizing could merge two elements, and a set would read back with fewer
-  elements than it was written with. Normalizing them is an explicit call.
+  elements than it was written with. An address list trims the list string
+  and does not parse or lowercase the addresses. `Value` does not reject an
+  invalid list. Normalizing them is an explicit call.
 - **Empty input is null.** For a nullable type, an empty or whitespace-only
   string from SQL, JSON or text is null, because an empty CSV cell or text
   column means "no value". A non-nullable type reads it as its empty value,

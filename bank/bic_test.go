@@ -445,8 +445,8 @@ func marshalText(t *testing.T, v encoding.TextMarshaler) string {
 
 // TestBIC_ReadingAndWriting checks the reading and writing contract shared
 // by the normalizing types: every reading path stores a valid BIC
-// normalized to 11 characters and an invalid one unchanged, Value refuses
-// an invalid BIC, and fmt prints the stored BIC.
+// trimmed and uppercased, an 8-character BIC kept, an invalid BIC written
+// that way, and fmt prints the stored BIC.
 func TestBIC_ReadingAndWriting(t *testing.T) {
 	normtest.Run(t, normtest.Spec[BIC]{
 		Canonical: "BKAUATWWXXX",

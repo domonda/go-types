@@ -327,9 +327,9 @@ func TestCurrency_SQL(t *testing.T) {
 // Value and MarshalJSON write a Currency normalized, because Validate
 // accepts other spellings like "eur" and "€": without normalization they
 // would reach SQL and JSON as given, where "eur" and "EUR" compare as
-// different currencies. Value refuses a currency that can't be normalized,
-// because the database is where an invalid value would stay; JSON writes
-// it unchanged, so a response that holds one still renders.
+// different currencies. Value and JSON trim and uppercase, without symbol
+// or name lookup, so an invalid currency is written that way and a response
+// that holds one still renders.
 func TestCurrency_ValueAndMarshalJSONNormalize(t *testing.T) {
 	tests := []struct {
 		c    Currency
@@ -627,7 +627,7 @@ func TestCurrency_ZWL(t *testing.T) {
 }
 
 // TestCurrency_MarshalXML protects the use of the value receiver
-// MarshalText with encoding/xml: a currency is written normalized, and a
+// MarshalText with encoding/xml: a currency is trimmed and uppercased, and a
 // nil pointer element or attribute is omitted, the attribute also without
 // omitempty, because encoding/xml would call MarshalText through the nil
 // pointer and panic, like for a *time.Time attribute, if MarshalXMLAttr
@@ -673,8 +673,8 @@ func TestCurrency_NormalizedRejectsAmountsAndSymbols(t *testing.T) {
 
 // TestCurrency_ReadingAndWriting checks the reading and writing contract
 // shared by the normalizing types: every reading path stores a valid
-// currency normalized and an invalid one unchanged, Value refuses an
-// invalid currency, and fmt prints the stored currency.
+// trimmed and uppercased, an invalid currency written that way,
+// and fmt prints the stored currency.
 func TestCurrency_ReadingAndWriting(t *testing.T) {
 	normtest.Run(t, normtest.Spec[Currency]{
 		Canonical:    EUR,

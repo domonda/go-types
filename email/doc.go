@@ -9,10 +9,11 @@
 //   - [NullableAddress] and [NullableAddressList]: the empty string
 //     is the null value and is written as SQL NULL and JSON null
 //
-// Address and NullableAddress are normalized when read and written, the
-// collections AddressList, NullableAddressList and AddressSet are read and
-// written as stored, because normalizing rewrites their entries and could
-// merge two elements of a set. Value refuses an invalid address or list.
+// Address and NullableAddress only trim when read and written. AddressList
+// and NullableAddressList trim the list string. AddressSet keeps its keys
+// as stored, because trimming or normalizing could merge two elements.
+// Value writes an invalid address or list after that trim. Validate still
+// refuses header-breaking runes in a list or set.
 // The collections also store an unquoted display name as written, whose
 // words some mail stacks read as recipients: Python's smtplib sends
 // `admin, John <ceo@corp.com>` also to admin, so store Normalized, which
@@ -29,8 +30,9 @@
 //
 // The address types are made for the recipients of a message, a form
 // field or a database column, not for mailing lists with millions of
-// addresses: every Validate, Normalized and Value call parses the whole
-// list. Store such a list one address per row or as []string.
+// addresses: every Validate and Normalized call parses the whole
+// list. Value only trims a list and writes set keys as stored.
+// Store such a list one address per row or as []string.
 //
 // [Message] holds the headers, bodies, and [Attachment] values of one email.
 // [ParseMessage] detects and parses JSON, Microsoft TNEF (winmail.dat),

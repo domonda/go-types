@@ -304,7 +304,7 @@ func TestYearMonth_AddYears(t *testing.T) {
 		{name: "subtract 1 year", ym: "2023-03", years: -1, want: "2022-03"},
 		{name: "add 0 years", ym: "2023-03", years: 0, want: "2023-03"},
 		{name: "to the last year", ym: "2023-03", years: 9999 - 2023, want: "9999-03"},
-		// Past the years of Date the result is invalid, so that Value refuses it
+		// Past the years of Date the result is invalid. Value writes the trimmed text.
 		{name: "after the last year", ym: "9999-03", years: 1, want: "10000-03"},
 		// An invalid year-month has no year to add to. It must stay
 		// unchanged, so it stays invalid and Validate reports the original
@@ -567,7 +567,7 @@ func TestYearMonth_UnmarshalJSON(t *testing.T) {
 // TestYearMonth_ReadingAndWriting checks the reading and writing contract
 // shared by the normalizing types, like for Date: every reading path stores
 // a valid year-month normalized, a zero one as "" and an invalid one
-// unchanged, Value refuses an invalid year-month, and fmt prints it as stored.
+// trimmed, a zero period is kept, an invalid year-month is written, and fmt prints it as stored.
 func TestYearMonth_ReadingAndWriting(t *testing.T) {
 	normtest.Run(t, normtest.Spec[YearMonth]{
 		Canonical:    "2023-07",

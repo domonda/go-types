@@ -418,8 +418,8 @@ func TestIBAN_isCheckSumValid(t *testing.T) {
 
 // TestIBAN_ReadingAndWriting checks the reading and writing contract shared
 // by the normalizing types: every reading path stores a valid IBAN
-// normalized and an invalid one unchanged, Value refuses an invalid IBAN,
-// and fmt prints the stored IBAN.
+// trimmed and uppercased, internal spaces kept, an invalid IBAN written
+// that way, and fmt prints the stored IBAN.
 func TestIBAN_ReadingAndWriting(t *testing.T) {
 	normtest.Run(t, normtest.Spec[IBAN]{
 		Canonical: "DE89370400440532013000",

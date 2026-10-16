@@ -194,8 +194,8 @@ func TestCode_EnumsMatchCodeNames(t *testing.T) {
 // Valid and Validate carry a #custom marker because they normalize first,
 // like country.Code and money.Currency, so input that types.Validate and
 // DeepValidate receive from users ("EN", "eng", "en-US") is not rejected,
-// and the error of Validate names the offending input. That is safe
-// because reading stores and Value writes the normalized code. The strict
+// and the error of Validate names the offending input. Reading and Value
+// only trim, so those spellings stay until Normalized. The strict
 // exact-match methods that go-enum would generate instead reject all of
 // them. String is the one go-enum generates: it returns the code as stored,
 // so fmt shows what a Code holds. Null is marked //#exclude so that go-enum
@@ -322,9 +322,8 @@ func TestCode_ScanValue(t *testing.T) {
 // Value and MarshalJSON write a Code normalized, because Validate accepts
 // every spelling that Normalized accepts: without normalization "EN" and
 // "en-US" would reach SQL and JSON as given and fail the JSON schema
-// pattern ^[a-z]{2}$. Value refuses a code that can't be normalized,
-// because the database is where an invalid value would stay; JSON writes
-// it unchanged, so a response that holds one still renders.
+// pattern ^[a-z]{2}$. Value and JSON only trim, so they can write "EN"
+// and an invalid code, and a response that holds one still renders.
 func TestCode_ValueAndMarshalJSONNormalize(t *testing.T) {
 	tests := []struct {
 		c    Code
@@ -376,7 +375,7 @@ func TestCode_JSONSchema(t *testing.T) {
 
 // TestCode_ReadingAndWriting checks the reading and writing contract shared
 // by the normalizing types: every reading path stores a valid code
-// normalized and an invalid one unchanged, Value refuses an invalid code,
+// trimmed, case kept, an invalid code written that way,
 // and fmt prints the stored code.
 func TestCode_ReadingAndWriting(t *testing.T) {
 	normtest.Run(t, normtest.Spec[Code]{

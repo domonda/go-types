@@ -537,8 +537,9 @@ func TestCollectionsValidateRefusesWhatValueKeeps(t *testing.T) {
 		"\"x\xff\" <a@example.com>",
 	} {
 		require.Error(t, AddressList(addr).Validate(), "AddressList %q", addr)
-		_, err := AddressList(addr).Value()
+		v, err := AddressList(addr).Value()
 		require.NoError(t, err, "AddressList %q", addr)
+		assert.Equal(t, string(addr), v, "AddressList %q", addr)
 
 		require.Error(t, NullableAddressList(addr).Validate(), "NullableAddressList %q", addr)
 		_, err = NullableAddressList(addr).Value()

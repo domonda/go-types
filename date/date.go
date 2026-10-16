@@ -411,8 +411,9 @@ const zeroDate Date = "0001-01-01"
 // "0001-01-01T00:00:00Z", "00.00.0000" or "0000-00-00 00:00:00".
 // "0001-01-01" is the zero value of time.Time, "0000-00-00" may be the zero
 // value of other date implementations, like MySQL.
-// A zero date has no practical use as a date: reading stores it as "",
-// Value writes it as SQL NULL, and it is not a valid Date.
+// A zero date has no practical use as a date and is not a valid Date.
+// SQL Scan stores it as "" and Value writes SQL NULL. JSON and XML keep
+// the trimmed text. IsNull is still true for that text, so Get panics.
 func (date Date) IsZero() bool {
 	switch date {
 	case "", zeroDate, "0000-00-00":

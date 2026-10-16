@@ -37,7 +37,7 @@ func TestMoneyFormat_FormatCurrencyAmount(t *testing.T) {
 	f := GermanMoneyFormat(true)
 	assert.Equal(t, "1.234,50", f.FormatCurrencyAmount(noCurrency))
 
-	// The currency is written normalized like money.Currency.String
+	// FormatCurrencyAmount still writes the normalized currency code
 	assert.Equal(t, "EUR 1.234,50", f.FormatCurrencyAmount(money.CurrencyAmount{Currency: "eur", Amount: 1234.5}))
 }
 

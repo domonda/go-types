@@ -298,10 +298,9 @@ func TestNullableAddress_JSON(t *testing.T) {
 	})
 }
 
-// A non-null NullableAddress is written normalized like Address, see
-// TestAddress_ValueAndMarshalJSONNormalize, and null stays SQL NULL and
-// JSON null, including the whitespace-only null. Value refuses an invalid
-// address, JSON writes it unchanged.
+// A non-null NullableAddress is only trimmed, and null stays SQL NULL and
+// JSON null, including the whitespace-only null. An invalid address is
+// written after that trim.
 func TestNullableAddress_ValueAndMarshalJSONNormalize(t *testing.T) {
 	tests := []struct {
 		n        NullableAddress

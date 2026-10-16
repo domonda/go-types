@@ -235,8 +235,10 @@ Other differences:
   a JSON array or object from a `json` or `jsonb` column, and a plain string
   that is not an array literal as address list, split with
   `email.SplitAddressList`.
-- `email.AddressSet.Value` and `MarshalText` return an error for an invalid
-  address, `MarshalJSON` writes every set and round-trips it exactly.
+- `email.AddressSet.Value` writes the keys as stored and does not reject an
+  invalid address. `MarshalText` returns an error when the keys would not
+  read back as the same address list. `MarshalJSON` writes every set and
+  round-trips it exactly.
 - `types.Set.UnmarshalJSON` and `uu.IDSet.UnmarshalJSON` always assign a new
   map. Refilling the existing map would rewrite every other variable that
   shares it, like a default permission set copied into a struct field; the test

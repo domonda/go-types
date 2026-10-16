@@ -226,7 +226,7 @@ func TestNullableID_ScanString(t *testing.T) {
 
 	var n NullableID
 	require.NoError(t, n.ScanString("de 167-015-661", true))
-	assert.Equal(t, NullableID("DE167015661"), n, "valid input is stored normalized")
+	assert.Equal(t, NullableID("DE167015661"), n, "validating ScanString stores the canonical ID")
 
 	err := n.ScanString("ATU12345678", true)
 	assert.ErrorIs(t, err, ErrInvalidID)
@@ -340,8 +340,7 @@ func TestNullableID_UnmarshalJSON(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(`{"vat":null}`), &d))
 	assert.Equal(t, Null, d.VAT)
 
-	// A JSON string is stored normalized if it is a valid ID and
-	// unchanged without an error if not, so Validate can report it.
+	// A JSON string is trimmed and uppercased, including an invalid ID.
 	for str, want := range map[string]NullableID{"ATU10223006": "ATU10223006", "atu 1022 3006": "ATU 1022 3006", "bad": "BAD", "": Null} {
 		d := doc{VAT: "DE167015661"}
 		data, err := json.Marshal(map[string]string{"vat": str})

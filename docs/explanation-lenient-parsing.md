@@ -31,12 +31,13 @@ The methods follow one pattern, which [Validation and normalization](explanation
 
 - `Normalized()` returns the canonical form or an error.
 - `Valid()` and `Validate()` accept every spelling that normalizes.
-- `Scan`, JSON and XML decoding and `ScanString` store a valid value in the canonical form and an invalid one unchanged.
-- `Value()` writes the canonical form and refuses an invalid value, `MarshalJSON()` and `MarshalText()` write the canonical form of a valid value.
+- `Scan`, JSON and XML decoding, and `ScanString` without validate, trim surrounding whitespace. IBAN, BIC, VAT IDs, currency codes and year-quarters are also uppercased. Country and language codes, email addresses and year-months are only trimmed. An invalid value is kept after that, without an error. `date.Date` on SQL is the exception: `Scan` stores the canonical form.
+- `Value()`, `MarshalJSON()` and `MarshalText()` write that same prettification. `Value` writes an invalid value back, except `date.Date.Value`, which returns the error of `Normalized`.
+- `ScanString` with validate stores `Normalized` or returns its error.
 - `ValidAndNormalized()` accepts only the canonical form.
 - `fmt` and `String()` show the value as stored.
 
-So the data is normalized where it enters your system from SQL, JSON or XML. Normalize values that you build in Go from other strings, like `money.Currency(s)`, yourself.
+Call `Normalized()` when you store, compare or index a value. SQL, JSON and XML do not, except `date.Date` on SQL. An address list only trims its string. An address set keeps its keys as stored.
 
 When two readings are possible, a fixed rule decides, and the caller can override it with context: a list of accepted decimal counts for numbers, a language hint for dates. The rules below are the ones that make that decision.
 
@@ -156,7 +157,7 @@ A numeric date with the year last is ambiguous when both numbers can be the mont
 
 The hint is the first `lang` argument, normalized with `language.Code.Normalized`, so `language.EN`, `"en-US"` and `"eng"` all mean English. A hint that can't be normalized is ignored like no hint. The hint only decides dates with slashes, the one separator written in both orders, month first in the US and day first in Britain: English reads them month first and every other language day first. Dots, dashes and spaces have no month first convention and are read day first also with `language.EN`, so a German `05.06.2024` in an English document stays 5 June, and an ambiguous US date written with dashes, like `05-06-2024`, can't be read month first. British English has no hint of its own: `en-GB` is English too and reads slashes month first, so pass a day first language like `language.DE` for British dates with slashes. An ordinal suffix decides before the separators and the hint, so `1st 02 2003` is 2003-02-01 also with `language.EN`. The ordinal suffix, the hint and the separators only decide ambiguous dates, but a number with an ordinal suffix is never read as the month, so `13 1st 2024` is an error and not 2024-01-13. A date with one valid reading, like `15.06.2024` or `15/06/2024`, gives 2024-06-15 with any hint.
 
-Slashes are month first without a hint, because the reading methods of `Date` and `NullableDate` have none: `Scan`, JSON and XML decoding and `strfmt.Scan` would read a US date like `03/04/2024` as 3 April and store a wrong date without an error. Slashes are the usual separator of US dates and dots of German dates, while dashes and spaces have no such convention and keep the day first reading.
+Slashes are month first without a hint. `Normalized`, SQL `Scan` and `ScanString` with validate have no hint, so they read a US date like `03/04/2024` as 3 April. JSON and XML only trim, so they keep `03/04/2024`. The default `strfmt.Scan` validates, so it reads the date the same way as `ScanString` with validate. Slashes are the usual separator of US dates and dots of German dates, while dashes and spaces have no such convention and keep the day first reading.
 
 ### Detecting the date order of a whole document
 
@@ -250,7 +251,7 @@ English country names are not part of `country.Code.Normalized`. `country.ParseC
 
 ## Formatting and parsing don't always round-trip
 
-`Normalized` and `String` write the canonical form, and the canonical form always parses back to itself. A localized form can lose the information the parser needs:
+`Normalized` returns the canonical form, and that form always parses back to itself. `String` and `fmt` show the stored value. A localized form can lose the information the parser needs:
 
 ```go
 package main
@@ -291,7 +292,7 @@ The `strfmt` presets avoid both traps. Their money formats always write two deci
 - **Leniency against ambiguity.** Every extra spelling accepted is a chance that a string has two readings. The parsers resolve them with fixed rules: a single separator is decimal, numeric dates are month first with slashes and day first with other separators. When the rule is wrong for your input, the caller has to supply the context. Use `acceptedDecimals` for numbers, a language hint for dates with slashes, `ScanStringWithLang` to detect the date order of a whole document, and `ParseCode` instead of `Normalized` for country and language names.
 - **Leniency against false matches.** The finders that search free text, like `bank.BICFinder` and `money.AmountFinder`, can't accept as much as the parsers, or ordinary words and numbers would match. They require upper-case BICs and amounts with exactly two decimals, and still find words like `RECHNUNG` that happen to have BIC syntax. See [Extract identifiers from text](howto-extract-identifiers-from-text.md).
 - **Offline checks only.** A valid VAT ID or IBAN has the right format and check digit. Whether it is registered or belongs to the vendor needs an online check like VIES.
-- **Unvalidated input.** Reading never fails because of the text itself: `Scan`, JSON and XML decoding store an invalid value unchanged, so one bad row doesn't fail a whole query. Validate after decoding, see the [tutorial](tutorial-invoice-record.md); `Value` refuses an invalid value when it is written.
+- **Unvalidated input.** Reading never fails because of the text itself: `Scan`, JSON and XML decoding keep an invalid value after trimming, or trimming and uppercasing, so one bad row doesn't fail a whole query. Validate after decoding, see the [tutorial](tutorial-invoice-record.md). `Value` writes that value, except `date.Date.Value`, which returns the error of `Normalized`.
 
 ## Related
 

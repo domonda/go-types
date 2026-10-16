@@ -509,7 +509,7 @@ func TestCode_Nullable(t *testing.T) {
 
 // TestCode_ReadingAndWriting checks the reading and writing contract shared
 // by the normalizing types: every reading path stores a valid code
-// normalized and an invalid one unchanged, Value refuses an invalid code,
+// trimmed, case and names kept, an invalid code written that way,
 // and fmt prints the stored code.
 func TestCode_ReadingAndWriting(t *testing.T) {
 	normtest.Run(t, normtest.Spec[Code]{

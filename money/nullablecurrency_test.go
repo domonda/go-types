@@ -228,10 +228,9 @@ func TestNullableCurrency_JSON(t *testing.T) {
 	}
 }
 
-// A non-null NullableCurrency is written normalized like Currency, see
-// TestCurrency_ValueAndMarshalJSONNormalize, and null stays SQL NULL and
-// JSON null, including the whitespace-only null. Value refuses an invalid
-// currency, JSON writes it unchanged.
+// A non-null NullableCurrency is trimmed and uppercased, and null stays
+// SQL NULL and JSON null, including the whitespace-only null. An invalid
+// currency is written that way.
 func TestNullableCurrency_ValueAndMarshalJSONNormalize(t *testing.T) {
 	tests := []struct {
 		n        NullableCurrency
@@ -264,9 +263,8 @@ func TestNullableCurrency_ValueAndMarshalJSONNormalize(t *testing.T) {
 // TestNullableCurrency_UnmarshalJSON pins that JSON null resets a field
 // that holds a value, like for uu.NullableID and email.NullableAddress,
 // else decoding a partial update with null into an existing struct keeps
-// the old currency. A JSON string is stored normalized if it is a valid
-// currency and unchanged without an error if not, so Validate can report
-// it, and any other JSON value is an error.
+// the old currency. A JSON string is trimmed and uppercased, without
+// symbol or name lookup, and any other JSON value is an error.
 func TestNullableCurrency_UnmarshalJSON(t *testing.T) {
 	type doc struct {
 		Currency NullableCurrency `json:"currency"`

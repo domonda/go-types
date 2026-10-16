@@ -193,8 +193,8 @@ func (YearQuarter) JSONSchema() *jsonschema.Schema {
 // also with surrounding whitespace or a lower case "q".
 // "0001-Q1" is treated as zero because "0001-01-01" is the zero value of time.Time.
 // "0000-Q0" may be the zero value of other date implementations.
-// A zero year-quarter has no practical use like a zero Date: reading stores it
-// as "", Value writes it as SQL NULL, and it is not a valid YearQuarter.
+// A zero year-quarter is not a valid YearQuarter. Reading and Value keep the
+// trimmed and uppercased text, including "0001-Q1". IsNull is still true for it, so Get panics.
 func (yq YearQuarter) IsZero() bool {
 	switch strings.ToUpper(string(strutil.TrimSpace(yq))) {
 	case "", "0000-Q0", "0001-Q1":
@@ -275,8 +275,8 @@ func (yq YearQuarter) Nullable() NullableYearQuarter {
 
 // AddYears returns a new year-quarter with the specified number of years added.
 // Returns the year-quarter unchanged if it is not valid.
-// A result outside the years 1 to 9999, like "10000-Q4", is not valid,
-// so that Value returns an error for it.
+// A result outside the years 1 to 9999, like "10000-Q4", is not valid.
+// Value writes that text after trimming and uppercasing. It does not return an error.
 func (yq YearQuarter) AddYears(years int) YearQuarter {
 	if !yq.Valid() {
 		return yq

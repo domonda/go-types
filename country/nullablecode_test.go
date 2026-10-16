@@ -223,7 +223,7 @@ func TestNullableCode_Scan(t *testing.T) {
 			t.Errorf(`Scan("") = %q, want Null`, string(n))
 		}
 	})
-	t.Run("string is stored normalized", func(t *testing.T) {
+	t.Run("string is stored trimmed", func(t *testing.T) {
 		var n NullableCode
 		if err := n.Scan("de"); err != nil {
 			t.Fatal(err)
@@ -346,8 +346,7 @@ func TestNullableCode_UnmarshalJSON(t *testing.T) {
 		t.Errorf("json.Unmarshal of null kept %q, want Null", string(d.Country))
 	}
 
-	// A JSON string is stored normalized if it is a valid code,
-	// unchanged without an error if not, so Validate can report it.
+	// A JSON string is only trimmed, so case and names stay.
 	for str, want := range map[string]NullableCode{"AT": "AT", "at": "at", "XX": "XX", "": Null} {
 		d := doc{Country: "DE"}
 		data, _ := json.Marshal(map[string]string{"country": str})
@@ -424,7 +423,7 @@ func TestNullableCode_ScanString(t *testing.T) {
 		t.Fatal(err)
 	}
 	if n != "AT" {
-		t.Errorf("valid input must be stored normalized, got %q", string(n))
+		t.Errorf("valid input must be stored trimmed, got %q", string(n))
 	}
 
 	if err := n.ScanString("Atlantis", true); err == nil {

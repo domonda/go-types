@@ -374,8 +374,8 @@ func TestCurrencyAmount_SQL(t *testing.T) {
 // Value and JSON write the currency of a CurrencyAmount normalized like
 // Currency.Value, so the same amount can't reach SQL and JSON in different
 // spellings of its currency, while String shows the currency as stored.
-// Value refuses a currency that can't be normalized, JSON writes it
-// unchanged.
+// Value and JSON trim and uppercase the currency. An invalid currency
+// is written that way. Decimals still follow MinorUnits of the original currency.
 func TestCurrencyAmount_NormalizedCurrencyOutput(t *testing.T) {
 	tests := []struct {
 		ca         CurrencyAmount
@@ -386,6 +386,7 @@ func TestCurrencyAmount_NormalizedCurrencyOutput(t *testing.T) {
 		{ca: CurrencyAmount{Currency: "eur", Amount: 1.5}, wantSQL: "EUR 1.50", wantString: "eur 1.50", wantJSON: `{"Currency":"EUR","Amount":1.5}`},
 		{ca: CurrencyAmount{Currency: "€", Amount: 1.5}, wantSQL: "€ 1.50", wantString: "€ 1.50", wantJSON: `{"Currency":"€","Amount":1.5}`},
 		{ca: CurrencyAmount{Currency: "jpy", Amount: 1234.5}, wantSQL: "JPY 1234.50", wantString: "jpy 1234.50", wantJSON: `{"Currency":"JPY","Amount":1234.5}`},
+		{ca: CurrencyAmount{Currency: "Kuwaiti Dinar", Amount: 1.2345}, wantSQL: "KUWAITI DINAR 1.235", wantString: "Kuwaiti Dinar 1.235", wantJSON: `{"Currency":"KUWAITI DINAR","Amount":1.2345}`},
 		{ca: CurrencyAmount{Amount: 1.5}, wantSQL: "1.50", wantString: "1.50", wantJSON: `{"Currency":"","Amount":1.5}`},
 	}
 	for _, tt := range tests {

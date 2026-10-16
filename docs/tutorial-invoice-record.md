@@ -240,7 +240,7 @@ func main() {
 
 `DeepValidate` calls the `Validate` or `Valid` method of every exported field it can reach, also in nested structs, slices and maps, and prefixes each error with the path to the field. It returns a slice of errors. Pass it to `errors.Join` if you need a single error.
 
-The validation methods normalize before they check, so `DeepValidate` accepts `atu 1022 3006` as a valid VAT ID. It tells you whether a value is valid, not whether it is in canonical form. That's why `parseInvoice` stores the normalized values. Values read with `Scan` or from JSON and XML don't need that step: reading stores a valid value normalized.
+The validation methods normalize before they check, so `DeepValidate` accepts `atu 1022 3006` as a valid VAT ID. It tells you whether a value is valid, not whether it is in canonical form. That's why `parseInvoice` stores the normalized values. Reading does not do that, except `date.Date` on SQL. JSON and XML only trim, or trim and uppercase. Call `Normalized()` when the canonical form is what you store.
 
 ## Step 6: Write the invoice as JSON
 
@@ -314,7 +314,7 @@ Three things to notice:
 
 - `dueDate` is `null`, because `date.NullableDate` writes `null` for `date.Null`. A plain `date.Date` would write `""`.
 - `total` is the JSON number `1234.50` with both decimals. A `money.Amount` (a `float64`) would write `1234.5`.
-- The identifier types write their normalized form, like their `Value` method, so the output would be canonical even for a value stored as `money.Currency("eur")`, which is written as `"EUR"`. A value that can't be normalized is written unchanged, so the response still renders.
+- The identifier types trim, and uppercase where that is how they are written, like their `Value` method. `money.Currency("eur")` is written as `"EUR"`. A symbol such as `"€"` stays `"€"`. An invalid value is written after that prettification. `date.Date` JSON only trims. Call `Normalized()` for the canonical form.
 
 ## Step 7: See what goes to SQL
 
@@ -400,7 +400,7 @@ CREATE TABLE invoice (
 
 - The null due date is sent as SQL `NULL`.
 - The total is sent as the decimal string `"1234.50"`, so a `numeric` column stores it exactly. A `float64` would be rounded to binary.
-- Every `Value` method here sends the normalized form, so `bank.IBAN("AT61 1904 3002 3457 3201")` and `money.Currency("€")` would also be sent as `"AT611904300234573201"` and `"EUR"`. A value that can't be normalized makes `Value` return an error, so the insert fails instead of storing it.
+- `Value` trims and uppercases. `bank.IBAN("AT61 1904 3002 3457 3201")` is sent with its spaces, and `money.Currency("€")` is sent as `"€"`. An invalid value is written that way. `date.Date.Value` still writes `YYYY-MM-DD` and returns an error when the date cannot be normalized.
 
 ## Step 8: Split the total into installments
 
