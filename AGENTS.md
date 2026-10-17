@@ -41,7 +41,7 @@ These rules override conflicting /ship steps:
 - **Generated tests** carry the comments a maintainer would write; gstack `Value:` cards go in the PR body.
 - **TODOS.md**: skip creating one.
 - **PR body**: open with a summary of at most five sentences; omit sections that don't apply to a Go library (Design Review, Eval Results, Greptile).
-- **Release**: when the /ship arguments ask to merge, tag or release, continue after the PR: squash-merge only on green CI (red: stop and ask), tag every released module in lockstep on the base branch (with the repo's tag script if it has one), then create the GitHub release from the CHANGELOG entry.
+- **Release**: when the /ship arguments ask to merge, tag or release, continue after the PR: squash-merge only on green CI (red: stop and ask), tag only the root module as `vX.Y.Z` on the base branch (the `tools` module stays untagged; use the repo's tag script if it has one), then create the GitHub release from the CHANGELOG entry.
 
 ## Test Coverage
 
